@@ -244,7 +244,7 @@ server.tool(
         method = stateResult.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
         break;
       case "brightness":
-        method = "BrightnessSetInternal";
+        method = "AmznSetBrightness";
         params = [brightness ?? 50];
         break;
     }
