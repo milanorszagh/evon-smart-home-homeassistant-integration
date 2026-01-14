@@ -1,9 +1,10 @@
 # Evon Smart Home Integration
 
-This repository contains two integrations for [Evon Smart Home](https://www.evon-smarthome.com/) systems:
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-ha.svg)](https://github.com/milanorszagh/evon-ha/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-1. **MCP Server** - A Model Context Protocol server for AI assistants (Claude, etc.)
-2. **Home Assistant Custom Integration** - Native Home Assistant integration
+Home Assistant custom integration and MCP server for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 
 ## Supported Devices
 
@@ -13,17 +14,65 @@ This repository contains two integrations for [Evon Smart Home](https://www.evon
 | **Blinds** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
 | **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
 
-## MCP Server
+---
 
-The MCP server allows AI assistants to control your Evon Smart Home devices directly.
+## Home Assistant Integration
+
+### Installation via HACS (Recommended)
+
+1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant
+2. Add this repository as a custom repository:
+   - Go to **HACS** → **Integrations** → **⋮** (menu) → **Custom repositories**
+   - Add URL: `https://github.com/milanorszagh/evon-ha`
+   - Category: **Integration**
+3. Click **Install**
+4. Restart Home Assistant
+5. Go to **Settings** → **Devices & Services** → **Add Integration**
+6. Search for "Evon Smart Home"
+7. Enter your connection details:
+   - **Host URL**: Your Evon system URL (e.g., `http://192.168.1.4`)
+   - **Username**: Your Evon username
+   - **Password**: Your Evon password (plain text)
+
+### Manual Installation
+
+1. Copy the `custom_components/evon` folder to your Home Assistant's `custom_components` directory:
+   ```bash
+   cp -r custom_components/evon /config/custom_components/
+   ```
+2. Restart Home Assistant
+3. Follow steps 5-7 above
+
+### Supported Platforms
+
+#### Light
+- Turn on/off
+- Brightness control (0-100%)
+
+#### Cover (Blinds)
+- Open/close/stop
+- Position control (0-100%)
+- Tilt angle control (0-100%)
+
+#### Climate
+- Temperature control
+- Preset modes:
+  - `comfort` - Day mode, normal heating
+  - `energy_saving` - Night mode, reduced heating
+  - `freeze_protection` - Minimum heating to prevent freezing
+
+---
+
+## MCP Server (for AI Assistants)
+
+The MCP server allows AI assistants like Claude to control your Evon Smart Home devices directly.
 
 ### Installation
 
 ```bash
-# Install dependencies
+git clone https://github.com/milanorszagh/evon-ha.git
+cd evon-ha
 npm install
-
-# Build
 npm run build
 ```
 
@@ -63,48 +112,7 @@ Add to your Claude Code configuration (`.claude.json`):
 | `climate_control` | Control a single climate zone |
 | `climate_control_all` | Control all climate zones at once |
 
-## Home Assistant Custom Integration
-
-Native Home Assistant integration for Evon Smart Home.
-
-### Installation
-
-1. Copy the `custom_components/evon` folder to your Home Assistant's `custom_components` directory:
-   ```bash
-   cp -r custom_components/evon /config/custom_components/
-   ```
-
-2. Restart Home Assistant
-
-3. Go to **Settings** → **Devices & Services** → **Add Integration**
-
-4. Search for "Evon Smart Home"
-
-5. Enter your connection details:
-   - **Host URL**: Your Evon system URL (e.g., `http://192.168.1.4`)
-   - **Username**: Your Evon username
-   - **Password**: Your Evon password
-
-### Supported Platforms
-
-#### Light (`light.py`)
-- Turn on/off
-- Set brightness (0-255, converted from Evon's 0-100)
-- Reports current brightness state
-
-#### Cover (`cover.py`)
-- Open/close/stop blinds
-- Set position (0-100%, inverted from Evon's convention)
-- Set tilt position (0-100%)
-- Reports current position and tilt
-
-#### Climate (`climate.py`)
-- Set target temperature
-- Preset modes:
-  - `comfort` - Day mode, normal heating
-  - `energy_saving` - Night mode, reduced heating
-  - `freeze_protection` - Minimum heating to prevent freezing
-- Reports current and target temperature
+---
 
 ## Evon API Reference
 
@@ -209,32 +217,16 @@ Cookie: token=<token>
 | `MinSetValueHeat` | Minimum allowed temperature |
 | `MaxSetValueHeat` | Maximum allowed temperature |
 
-## Project Structure
+---
 
-```
-evon-ha/
-├── src/
-│   └── index.ts          # MCP server source
-├── dist/
-│   └── index.js          # Compiled MCP server
-├── custom_components/
-│   └── evon/
-│       ├── manifest.json # HA integration manifest
-│       ├── const.py      # Constants
-│       ├── api.py        # Evon API client
-│       ├── coordinator.py# Data update coordinator
-│       ├── __init__.py   # Integration setup
-│       ├── config_flow.py# UI configuration
-│       ├── light.py      # Light platform
-│       ├── cover.py      # Cover platform
-│       ├── climate.py    # Climate platform
-│       └── translations/
-│           └── en.json   # English translations
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Disclaimer
+
+This project is not affiliated with or endorsed by Evon Smart Home. Use at your own risk.

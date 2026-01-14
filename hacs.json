@@ -1,0 +1,7 @@
+{
+  "name": "Evon Smart Home",
+  "homeassistant": "2024.1.0",
+  "render_readme": true,
+  "iot_class": "local_polling",
+  "content_in_root": false
+}
