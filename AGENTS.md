@@ -96,7 +96,25 @@ When filtering devices from the API, use these class names:
 ```
 EVON_HOST=http://192.168.1.4    # Evon system URL
 EVON_USERNAME=User              # Username
-EVON_PASSWORD=<encrypted>       # Encrypted password
+EVON_PASSWORD=<password>        # Plain text OR encoded password (auto-detected)
+```
+
+## Password Encoding
+
+The Evon API requires `x-elocs-password` which is NOT plain text. The encoding is:
+
+```
+x-elocs-password = Base64(SHA512(username + password))
+```
+
+**Both integrations now handle this automatically:**
+- MCP Server: Auto-detects if password is already encoded (88 chars ending with `==`)
+- Home Assistant: Encodes plain text password in the `EvonApi` class
+
+**To manually encode (if needed):**
+```python
+import hashlib, base64
+encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest()).decode()
 ```
 
 ## Adding New Device Types

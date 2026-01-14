@@ -1,13 +1,24 @@
 """Evon Smart Home API client."""
 from __future__ import annotations
 
-import asyncio
+import base64
+import hashlib
 import logging
 from typing import Any
 
 import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def encode_password(username: str, password: str) -> str:
+    """Encode password for Evon API.
+
+    The x-elocs-password is computed as: Base64(SHA512(username + password))
+    """
+    combined = username + password
+    sha512_hash = hashlib.sha512(combined.encode("utf-8")).digest()
+    return base64.b64encode(sha512_hash).decode("utf-8")
 
 
 class EvonApiError(Exception):
@@ -27,11 +38,24 @@ class EvonApi:
         username: str,
         password: str,
         session: aiohttp.ClientSession | None = None,
+        password_is_encoded: bool = False,
     ) -> None:
-        """Initialize the API client."""
+        """Initialize the API client.
+
+        Args:
+            host: The Evon system URL
+            username: The username
+            password: The password (plain text or pre-encoded)
+            session: Optional aiohttp session
+            password_is_encoded: If True, password is already encoded (x-elocs-password).
+                                If False (default), password will be encoded automatically.
+        """
         self._host = host.rstrip("/")
         self._username = username
-        self._password = password
+        if password_is_encoded:
+            self._password = password
+        else:
+            self._password = encode_password(username, password)
         self._session = session
         self._token: str | None = None
         self._own_session = False

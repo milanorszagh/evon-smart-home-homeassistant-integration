@@ -40,12 +40,14 @@ Add to your Claude Code configuration (`.claude.json`):
       "env": {
         "EVON_HOST": "http://192.168.1.4",
         "EVON_USERNAME": "User",
-        "EVON_PASSWORD": "your-encrypted-password"
+        "EVON_PASSWORD": "your-plain-text-password"
       }
     }
   }
 }
 ```
+
+**Note**: You can use either your plain text password or the encoded `x-elocs-password`. The server automatically detects and handles both formats.
 
 ### Available Tools
 
@@ -112,11 +114,37 @@ Native Home Assistant integration for Evon Smart Home.
 POST /login
 Headers:
   x-elocs-username: <username>
-  x-elocs-password: <password>
+  x-elocs-password: <encoded-password>
 
 Response Headers:
   x-elocs-token: <token>
 ```
+
+#### Password Encoding
+
+The `x-elocs-password` is NOT the plain text password. It's encoded as:
+
+```
+x-elocs-password = Base64(SHA512(username + password))
+```
+
+**Example (Python):**
+```python
+import hashlib, base64
+encoded = base64.b64encode(
+    hashlib.sha512((username + password).encode()).digest()
+).decode()
+```
+
+**Example (JavaScript/Node.js):**
+```javascript
+import { createHash } from "crypto";
+const encoded = createHash("sha512")
+    .update(username + password, "utf8")
+    .digest("base64");
+```
+
+Both the MCP server and Home Assistant integration handle this encoding automatically - just provide your plain text password.
 
 ### API Endpoints
 

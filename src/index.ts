@@ -3,11 +3,36 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { createHash } from "crypto";
+
+/**
+ * Encode password for Evon API.
+ * The x-elocs-password is computed as: Base64(SHA512(username + password))
+ */
+function encodePassword(username: string, password: string): string {
+  const combined = username + password;
+  const hash = createHash("sha512").update(combined, "utf8").digest("base64");
+  return hash;
+}
+
+/**
+ * Check if a password looks like it's already encoded.
+ * Encoded passwords are Base64-encoded SHA512 hashes (88 chars, ends with ==).
+ */
+function isPasswordEncoded(password: string): boolean {
+  // SHA512 produces 64 bytes, Base64 encoding = 88 characters ending with ==
+  return password.length === 88 && password.endsWith("==");
+}
 
 // Configuration from environment
 const EVON_HOST = process.env.EVON_HOST || "http://192.168.1.4";
 const EVON_USERNAME = process.env.EVON_USERNAME || "";
-const EVON_PASSWORD = process.env.EVON_PASSWORD || "";
+const EVON_PASSWORD_RAW = process.env.EVON_PASSWORD || "";
+
+// Auto-detect if password is encoded, or encode it if it's plain text
+const EVON_PASSWORD = isPasswordEncoded(EVON_PASSWORD_RAW)
+  ? EVON_PASSWORD_RAW
+  : encodePassword(EVON_USERNAME, EVON_PASSWORD_RAW);
 
 // Token management
 let currentToken: string | null = null;
