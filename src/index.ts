@@ -262,6 +262,54 @@ server.tool(
   }
 );
 
+// Light control for all lights
+server.tool(
+  "light_control_all",
+  "Control all lights at once (turn off all, or turn on all)",
+  {
+    action: z
+      .enum(["off", "on"])
+      .describe("Action: 'off' to turn all lights off, 'on' to turn all lights on"),
+  },
+  async ({ action }) => {
+    // Get all light instances
+    const result = (await apiRequest("/instances")) as {
+      statusCode: number;
+      data: Array<{ ID: string; ClassName: string; Name: string }>;
+    };
+
+    // Filter to actual dimmable lights with names
+    const lights = result.data.filter(
+      (i) =>
+        i.ClassName === "SmartCOM.Light.LightDim" &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    const method = action === "off" ? "AmznTurnOff" : "AmznTurnOn";
+
+    // Apply to all lights
+    const results: string[] = [];
+    for (const light of lights) {
+      try {
+        await callInstanceMethod(light.ID, method, []);
+        results.push(`${light.Name}: success`);
+      } catch (err) {
+        results.push(`${light.Name}: failed`);
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Turned ${action} ${lights.length} lights:\n${results.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
 // Blind control
 server.tool(
   "blind_control",
