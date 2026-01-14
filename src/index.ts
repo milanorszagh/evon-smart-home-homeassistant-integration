@@ -293,7 +293,7 @@ server.tool(
         method = "Stop";
         break;
       case "position":
-        method = "SetPosition";
+        method = "AmznSetPercentage";
         params = [position ?? 50];
         break;
     }
