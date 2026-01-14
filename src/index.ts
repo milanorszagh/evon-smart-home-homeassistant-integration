@@ -556,6 +556,66 @@ server.tool(
   }
 );
 
+// Climate control for all rooms
+server.tool(
+  "climate_control_all",
+  "Set climate mode for all rooms at once",
+  {
+    action: z
+      .enum(["comfort", "energy_saving", "freeze_protection"])
+      .describe("Action: 'comfort' (day mode), 'energy_saving' (night mode), or 'freeze_protection'"),
+  },
+  async ({ action }) => {
+    // Get all climate control instances
+    const result = (await apiRequest("/instances")) as {
+      statusCode: number;
+      data: Array<{ ID: string; ClassName: string; Name: string }>;
+    };
+
+    // Filter to actual room climate controls (exclude base classes and templates)
+    const climates = result.data.filter(
+      (i) =>
+        (i.ClassName === "SmartCOM.Clima.ClimateControl" ||
+          i.ClassName.includes("ClimateControlUniversal")) &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    let method: string;
+    switch (action) {
+      case "comfort":
+        method = "WriteDayMode";
+        break;
+      case "energy_saving":
+        method = "WriteNightMode";
+        break;
+      case "freeze_protection":
+        method = "WriteFreezeMode";
+        break;
+    }
+
+    // Apply to all climate controls
+    const results: string[] = [];
+    for (const climate of climates) {
+      try {
+        await callInstanceMethod(climate.ID, method, []);
+        results.push(`${climate.Name}: success`);
+      } catch (err) {
+        results.push(`${climate.Name}: failed`);
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Set ${climates.length} rooms to ${action}:\n${results.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
 // Start the server
 async function main() {
   if (!EVON_USERNAME || !EVON_PASSWORD) {
