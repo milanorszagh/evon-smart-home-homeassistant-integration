@@ -369,6 +369,87 @@ server.tool(
   }
 );
 
+// Blind control for all blinds
+server.tool(
+  "blind_control_all",
+  "Control all blinds at once (set position or angle)",
+  {
+    action: z
+      .enum(["up", "down", "stop", "position", "angle"])
+      .describe("Action: 'up', 'down', 'stop', 'position' (set all to same position), or 'angle' (set all to same angle)"),
+    position: z
+      .number()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("Position (0=open, 100=closed), required for 'position' action"),
+    angle: z
+      .number()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("Slat angle (0-100), required for 'angle' action"),
+  },
+  async ({ action, position, angle }) => {
+    // Get all blind instances
+    const result = (await apiRequest("/instances")) as {
+      statusCode: number;
+      data: Array<{ ID: string; ClassName: string; Name: string }>;
+    };
+
+    // Filter to actual blinds with names
+    const blinds = result.data.filter(
+      (i) =>
+        i.ClassName === "SmartCOM.Blind.Blind" &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    let method: string;
+    let params: unknown[] = [];
+
+    switch (action) {
+      case "up":
+        method = "MoveUp";
+        break;
+      case "down":
+        method = "MoveDown";
+        break;
+      case "stop":
+        method = "Stop";
+        break;
+      case "position":
+        method = "AmznSetPercentage";
+        params = [position ?? 50];
+        break;
+      case "angle":
+        method = "SetAngle";
+        params = [angle ?? 50];
+        break;
+    }
+
+    // Apply to all blinds
+    const results: string[] = [];
+    for (const blind of blinds) {
+      try {
+        await callInstanceMethod(blind.ID, method, params);
+        results.push(`${blind.Name}: success`);
+      } catch (err) {
+        results.push(`${blind.Name}: failed`);
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Set ${blinds.length} blinds to ${action}${params.length > 0 ? ` (${params[0]})` : ""}:\n${results.join("\n")}`,
+        },
+      ],
+    };
+  }
+);
+
 // List lights
 server.tool(
   "list_lights",
