@@ -265,20 +265,26 @@ server.tool(
 // Blind control
 server.tool(
   "blind_control",
-  "Control a blind/shutter (move up, down, stop, set position)",
+  "Control a blind/shutter (move up, down, stop, set position, set angle/tilt)",
   {
     blind_id: z.string().describe("The blind instance ID"),
     action: z
-      .enum(["up", "down", "stop", "position"])
+      .enum(["up", "down", "stop", "position", "angle"])
       .describe("Action to perform"),
     position: z
       .number()
       .min(0)
       .max(100)
       .optional()
-      .describe("Position (0=closed, 100=open), required for 'position' action"),
+      .describe("Position (0=open, 100=closed), required for 'position' action"),
+    angle: z
+      .number()
+      .min(0)
+      .max(100)
+      .optional()
+      .describe("Slat angle (0-100), required for 'angle' action"),
   },
-  async ({ blind_id, action, position }) => {
+  async ({ blind_id, action, position, angle }) => {
     let method: string;
     let params: unknown[] = [];
 
@@ -295,6 +301,10 @@ server.tool(
       case "position":
         method = "AmznSetPercentage";
         params = [position ?? 50];
+        break;
+      case "angle":
+        method = "SetAngle";
+        params = [angle ?? 50];
         break;
     }
 
