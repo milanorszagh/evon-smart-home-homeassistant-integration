@@ -345,13 +345,13 @@ server.tool(
       lights.slice(0, 50).map(async (light) => {
         try {
           const details = (await apiRequest(`/instances/${light.ID}`)) as {
-            data: { IsOn?: boolean; Brightness?: number; Name?: string };
+            data: { IsOn?: boolean; ScaledBrightness?: number; Name?: string };
           };
           return {
             id: light.ID,
             name: details.data.Name || light.Name,
             isOn: details.data.IsOn ?? false,
-            brightness: details.data.Brightness ?? 0,
+            brightness: details.data.ScaledBrightness ?? 0,
           };
         } catch {
           return {
