@@ -5,14 +5,64 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { createHash } from "crypto";
 
+// =============================================================================
+// Types
+// =============================================================================
+
+interface EvonInstance {
+  ID: string;
+  ClassName: string;
+  Name: string;
+  Group: string;
+}
+
+interface ApiResponse<T> {
+  statusCode: number;
+  statusText: string;
+  data: T;
+}
+
+interface LightState {
+  IsOn?: boolean;
+  ScaledBrightness?: number;
+  Name?: string;
+}
+
+interface BlindState {
+  Position?: number;
+  Angle?: number;
+  Name?: string;
+  IsMoving?: boolean;
+}
+
+interface ClimateState {
+  Name?: string;
+  SetTemperature?: number;
+  ActualTemperature?: number;
+}
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+const DEVICE_CLASSES = {
+  LIGHT: "SmartCOM.Light.LightDim",
+  BLIND: "SmartCOM.Blind.Blind",
+  CLIMATE: "SmartCOM.Clima.ClimateControl",
+  CLIMATE_UNIVERSAL: "ClimateControlUniversal",
+} as const;
+
+// =============================================================================
+// Password Encoding
+// =============================================================================
+
 /**
  * Encode password for Evon API.
  * The x-elocs-password is computed as: Base64(SHA512(username + password))
  */
 function encodePassword(username: string, password: string): string {
   const combined = username + password;
-  const hash = createHash("sha512").update(combined, "utf8").digest("base64");
-  return hash;
+  return createHash("sha512").update(combined, "utf8").digest("base64");
 }
 
 /**
@@ -20,26 +70,29 @@ function encodePassword(username: string, password: string): string {
  * Encoded passwords are Base64-encoded SHA512 hashes (88 chars, ends with ==).
  */
 function isPasswordEncoded(password: string): boolean {
-  // SHA512 produces 64 bytes, Base64 encoding = 88 characters ending with ==
   return password.length === 88 && password.endsWith("==");
 }
 
-// Configuration from environment
+// =============================================================================
+// Configuration
+// =============================================================================
+
 const EVON_HOST = process.env.EVON_HOST || "http://192.168.1.4";
 const EVON_USERNAME = process.env.EVON_USERNAME || "";
 const EVON_PASSWORD_RAW = process.env.EVON_PASSWORD || "";
 
-// Auto-detect if password is encoded, or encode it if it's plain text
 const EVON_PASSWORD = isPasswordEncoded(EVON_PASSWORD_RAW)
   ? EVON_PASSWORD_RAW
   : encodePassword(EVON_USERNAME, EVON_PASSWORD_RAW);
 
-// Token management
+// =============================================================================
+// API Client
+// =============================================================================
+
 let currentToken: string | null = null;
 let tokenExpiry: number = 0;
 
 async function login(): Promise<string> {
-  // Check if we have a valid token
   if (currentToken && Date.now() < tokenExpiry - 60000) {
     return currentToken;
   }
@@ -62,88 +115,118 @@ async function login(): Promise<string> {
   }
 
   currentToken = token;
-  // Token valid for ~28 days, refresh after 27 days
-  tokenExpiry = Date.now() + 27 * 24 * 60 * 60 * 1000;
+  tokenExpiry = Date.now() + 27 * 24 * 60 * 60 * 1000; // 27 days
 
   return token;
 }
 
-async function apiRequest(
+async function apiRequest<T>(
   endpoint: string,
   method: "GET" | "POST" = "GET",
   body?: unknown
-): Promise<unknown> {
+): Promise<ApiResponse<T>> {
   const token = await login();
 
-  const response = await fetch(`${EVON_HOST}/api${endpoint}`, {
+  const fetchOptions: RequestInit = {
     method,
     headers: {
       Cookie: `token=${token}`,
       "Content-Type": "application/json",
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  };
+
+  let response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
+
+  // Handle token expiry with retry
+  if (response.status === 302 || response.status === 401) {
+    currentToken = null;
+    const newToken = await login();
+    fetchOptions.headers = {
+      Cookie: `token=${newToken}`,
+      "Content-Type": "application/json",
+    };
+    response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
+  }
 
   if (!response.ok) {
-    // Token might be expired, try re-login
-    if (response.status === 302 || response.status === 401) {
-      currentToken = null;
-      const newToken = await login();
-      const retryResponse = await fetch(`${EVON_HOST}/api${endpoint}`, {
-        method,
-        headers: {
-          Cookie: `token=${newToken}`,
-          "Content-Type": "application/json",
-        },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
-      if (!retryResponse.ok) {
-        throw new Error(`API request failed: ${retryResponse.status}`);
-      }
-      return retryResponse.json();
-    }
     throw new Error(`API request failed: ${response.status}`);
   }
 
   return response.json();
 }
 
-// Helper to call instance methods with parameters as JSON array
-async function callInstanceMethod(
+async function callMethod(
   instanceId: string,
   methodName: string,
-  params?: unknown[]
-): Promise<{ statusCode: number; statusText: string }> {
-  return apiRequest(
-    `/instances/${instanceId}/${methodName}`,
-    "POST",
-    params ?? []
-  ) as Promise<{ statusCode: number; statusText: string }>;
+  params: unknown[] = []
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/instances/${instanceId}/${methodName}`, "POST", params);
 }
 
-// Create MCP Server
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+async function getInstances(): Promise<EvonInstance[]> {
+  const result = await apiRequest<EvonInstance[]>("/instances");
+  return result.data;
+}
+
+function filterByClass(instances: EvonInstance[], className: string): EvonInstance[] {
+  return instances.filter(
+    (i) => i.ClassName === className && i.Name && i.Name.length > 0
+  );
+}
+
+function filterByClassIncludes(instances: EvonInstance[], classNamePart: string): EvonInstance[] {
+  return instances.filter(
+    (i) => i.ClassName.includes(classNamePart) && i.Name && i.Name.length > 0
+  );
+}
+
+async function controlAllDevices(
+  devices: EvonInstance[],
+  method: string,
+  params: unknown[] = []
+): Promise<string[]> {
+  const results: string[] = [];
+  for (const device of devices) {
+    try {
+      await callMethod(device.ID, method, params);
+      results.push(`${device.Name}: success`);
+    } catch {
+      results.push(`${device.Name}: failed`);
+    }
+  }
+  return results;
+}
+
+// =============================================================================
+// MCP Server
+// =============================================================================
+
 const server = new McpServer({
   name: "evon-smarthome",
   version: "1.0.0",
 });
 
-// List all apps
+// -----------------------------------------------------------------------------
+// Generic Tools
+// -----------------------------------------------------------------------------
+
 server.tool(
   "list_apps",
   "List all available apps in the Evon Smart Home system",
   {},
   async () => {
-    const result = (await apiRequest("/apps")) as {
-      statusCode: number;
-      data: Array<{ fullName: string; displayName?: string; autoStart: boolean }>;
-    };
+    const result = await apiRequest<Array<{ fullName: string; displayName?: string; autoStart: boolean }>>("/apps");
     return {
       content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
     };
   }
 );
 
-// List all instances
 server.tool(
   "list_instances",
   "List all instances (devices, sensors, logic blocks) in the system",
@@ -151,20 +234,17 @@ server.tool(
     filter: z
       .string()
       .optional()
-      .describe("Filter instances by class name (e.g., 'Light', 'Blind', 'Sensor')"),
+      .describe("Filter instances by class name or device name"),
   },
   async ({ filter }) => {
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
-    };
+    let instances = await getInstances();
 
-    let instances = result.data;
     if (filter) {
+      const lowerFilter = filter.toLowerCase();
       instances = instances.filter(
         (i) =>
-          i.ClassName.toLowerCase().includes(filter.toLowerCase()) ||
-          i.Name.toLowerCase().includes(filter.toLowerCase())
+          i.ClassName.toLowerCase().includes(lowerFilter) ||
+          i.Name.toLowerCase().includes(lowerFilter)
       );
     }
 
@@ -174,7 +254,6 @@ server.tool(
   }
 );
 
-// Get instance details
 server.tool(
   "get_instance",
   "Get detailed information about a specific instance",
@@ -182,73 +261,85 @@ server.tool(
     instance_id: z.string().describe("The instance ID (e.g., 'SC1_M01.Light1')"),
   },
   async ({ instance_id }) => {
-    const result = (await apiRequest(`/instances/${instance_id}`)) as {
-      statusCode: number;
-      data: Record<string, unknown>;
-    };
+    const result = await apiRequest<Record<string, unknown>>(`/instances/${instance_id}`);
     return {
       content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
     };
   }
 );
 
-// Get instance property
 server.tool(
   "get_property",
   "Get a specific property value of an instance",
   {
     instance_id: z.string().describe("The instance ID"),
-    property: z.string().describe("The property name (e.g., 'IsOn', 'Brightness', 'Position')"),
+    property: z.string().describe("The property name (e.g., 'IsOn', 'ScaledBrightness', 'Position')"),
   },
   async ({ instance_id, property }) => {
-    const result = (await apiRequest(`/instances/${instance_id}/${property}`)) as {
-      statusCode: number;
-      data: unknown;
-    };
+    const result = await apiRequest<unknown>(`/instances/${instance_id}/${property}`);
     return {
       content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
     };
   }
 );
 
-// Call instance method
 server.tool(
   "call_method",
-  "Call a method on an instance (e.g., turn on/off lights, move blinds). Parameters must be passed as an array in the correct order.",
+  "Call a method on an instance. Use specific tools (light_control, blind_control, climate_control) for common operations.",
   {
     instance_id: z.string().describe("The instance ID"),
-    method: z.string().describe("The method name (e.g., 'AmznTurnOn', 'AmznTurnOff', 'BrightnessSetInternal', 'MoveUp', 'MoveDown', 'Stop')"),
-    params: z.array(z.unknown()).optional().describe("Optional parameters for the method as an array (e.g., [50] for brightness)"),
+    method: z.string().describe("The method name"),
+    params: z.array(z.unknown()).optional().describe("Parameters as an array"),
   },
   async ({ instance_id, method, params }) => {
-    const result = await callInstanceMethod(instance_id, method, params);
-
+    const result = await callMethod(instance_id, method, params);
     return {
-      content: [
-        {
-          type: "text",
-          text: `Method ${method} called on ${instance_id}: ${result.statusText}`,
-        },
-      ],
+      content: [{ type: "text", text: `Method ${method} called on ${instance_id}: ${result.statusText}` }],
     };
   }
 );
 
-// Light control
+// -----------------------------------------------------------------------------
+// Light Tools
+// -----------------------------------------------------------------------------
+
+server.tool(
+  "list_lights",
+  "List all lights with their current state",
+  {},
+  async () => {
+    const instances = await getInstances();
+    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+
+    const lightsWithState = await Promise.all(
+      lights.map(async (light) => {
+        try {
+          const details = await apiRequest<LightState>(`/instances/${light.ID}`);
+          return {
+            id: light.ID,
+            name: details.data.Name || light.Name,
+            isOn: details.data.IsOn ?? false,
+            brightness: details.data.ScaledBrightness ?? 0,
+          };
+        } catch {
+          return { id: light.ID, name: light.Name, isOn: false, brightness: 0 };
+        }
+      })
+    );
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(lightsWithState, null, 2) }],
+    };
+  }
+);
+
 server.tool(
   "light_control",
-  "Control a light (turn on, off, toggle, set brightness)",
+  "Control a light (turn on, off, toggle, or set brightness)",
   {
     light_id: z.string().describe("The light instance ID"),
-    action: z
-      .enum(["on", "off", "toggle", "brightness"])
-      .describe("Action to perform"),
-    brightness: z
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("Brightness level (0-100), required for 'brightness' action"),
+    action: z.enum(["on", "off", "toggle", "brightness"]).describe("Action to perform"),
+    brightness: z.number().min(0).max(100).optional().describe("Brightness level (0-100)"),
   },
   async ({ light_id, action, brightness }) => {
     let method: string;
@@ -262,11 +353,8 @@ server.tool(
         method = "AmznTurnOff";
         break;
       case "toggle":
-        // Toggle by checking current state and switching
-        const stateResult = (await apiRequest(`/instances/${light_id}`)) as {
-          data: { IsOn?: boolean };
-        };
-        method = stateResult.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
+        const state = await apiRequest<LightState>(`/instances/${light_id}`);
+        method = state.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
         break;
       case "brightness":
         method = "AmznSetBrightness";
@@ -274,295 +362,56 @@ server.tool(
         break;
     }
 
-    const result = await callInstanceMethod(light_id, method, params);
-
+    await callMethod(light_id, method, params);
     return {
-      content: [
-        {
-          type: "text",
-          text: `Light ${light_id}: ${action} - ${result.statusText}`,
-        },
-      ],
+      content: [{ type: "text", text: `Light ${light_id}: ${action}${brightness !== undefined ? ` (${brightness}%)` : ""}` }],
     };
   }
 );
 
-// Light control for all lights
 server.tool(
   "light_control_all",
-  "Control all lights at once (turn off all, or turn on all)",
+  "Control all lights at once",
   {
-    action: z
-      .enum(["off", "on"])
-      .describe("Action: 'off' to turn all lights off, 'on' to turn all lights on"),
+    action: z.enum(["on", "off"]).describe("Turn all lights on or off"),
   },
   async ({ action }) => {
-    // Get all light instances
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string }>;
-    };
-
-    // Filter to actual dimmable lights with names
-    const lights = result.data.filter(
-      (i) =>
-        i.ClassName === "SmartCOM.Light.LightDim" &&
-        i.Name &&
-        i.Name.length > 0
-    );
-
+    const instances = await getInstances();
+    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
     const method = action === "off" ? "AmznTurnOff" : "AmznTurnOn";
-
-    // Apply to all lights
-    const results: string[] = [];
-    for (const light of lights) {
-      try {
-        await callInstanceMethod(light.ID, method, []);
-        results.push(`${light.Name}: success`);
-      } catch (err) {
-        results.push(`${light.Name}: failed`);
-      }
-    }
+    const results = await controlAllDevices(lights, method);
 
     return {
-      content: [
-        {
-          type: "text",
-          text: `Turned ${action} ${lights.length} lights:\n${results.join("\n")}`,
-        },
-      ],
+      content: [{ type: "text", text: `Turned ${action} ${lights.length} lights:\n${results.join("\n")}` }],
     };
   }
 );
 
-// Blind control
-server.tool(
-  "blind_control",
-  "Control a blind/shutter (move up, down, stop, set position, set angle/tilt)",
-  {
-    blind_id: z.string().describe("The blind instance ID"),
-    action: z
-      .enum(["up", "down", "stop", "position", "angle"])
-      .describe("Action to perform"),
-    position: z
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("Position (0=open, 100=closed), required for 'position' action"),
-    angle: z
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("Slat angle (0-100), required for 'angle' action"),
-  },
-  async ({ blind_id, action, position, angle }) => {
-    let method: string;
-    let params: unknown[] = [];
+// -----------------------------------------------------------------------------
+// Blind Tools
+// -----------------------------------------------------------------------------
 
-    switch (action) {
-      case "up":
-        method = "MoveUp";
-        break;
-      case "down":
-        method = "MoveDown";
-        break;
-      case "stop":
-        method = "Stop";
-        break;
-      case "position":
-        method = "AmznSetPercentage";
-        params = [position ?? 50];
-        break;
-      case "angle":
-        method = "SetAngle";
-        params = [angle ?? 50];
-        break;
-    }
-
-    const result = await callInstanceMethod(blind_id, method, params);
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Blind ${blind_id}: ${action} - ${result.statusText}`,
-        },
-      ],
-    };
-  }
-);
-
-// Blind control for all blinds
-server.tool(
-  "blind_control_all",
-  "Control all blinds at once (set position or angle)",
-  {
-    action: z
-      .enum(["up", "down", "stop", "position", "angle"])
-      .describe("Action: 'up', 'down', 'stop', 'position' (set all to same position), or 'angle' (set all to same angle)"),
-    position: z
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("Position (0=open, 100=closed), required for 'position' action"),
-    angle: z
-      .number()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe("Slat angle (0-100), required for 'angle' action"),
-  },
-  async ({ action, position, angle }) => {
-    // Get all blind instances
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string }>;
-    };
-
-    // Filter to actual blinds with names
-    const blinds = result.data.filter(
-      (i) =>
-        i.ClassName === "SmartCOM.Blind.Blind" &&
-        i.Name &&
-        i.Name.length > 0
-    );
-
-    let method: string;
-    let params: unknown[] = [];
-
-    switch (action) {
-      case "up":
-        method = "MoveUp";
-        break;
-      case "down":
-        method = "MoveDown";
-        break;
-      case "stop":
-        method = "Stop";
-        break;
-      case "position":
-        method = "AmznSetPercentage";
-        params = [position ?? 50];
-        break;
-      case "angle":
-        method = "SetAngle";
-        params = [angle ?? 50];
-        break;
-    }
-
-    // Apply to all blinds
-    const results: string[] = [];
-    for (const blind of blinds) {
-      try {
-        await callInstanceMethod(blind.ID, method, params);
-        results.push(`${blind.Name}: success`);
-      } catch (err) {
-        results.push(`${blind.Name}: failed`);
-      }
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Set ${blinds.length} blinds to ${action}${params.length > 0 ? ` (${params[0]})` : ""}:\n${results.join("\n")}`,
-        },
-      ],
-    };
-  }
-);
-
-// List lights
-server.tool(
-  "list_lights",
-  "List all lights in the system with their current state",
-  {},
-  async () => {
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
-    };
-
-    const lights = result.data.filter(
-      (i) =>
-        i.ClassName.includes("Light") &&
-        !i.ClassName.includes("LightCOM") &&
-        !i.ClassName.includes("StairLight") &&
-        !i.ID.includes(".LightCOM")
-    );
-
-    // Get detailed info for each light
-    const lightsWithState = await Promise.all(
-      lights.slice(0, 50).map(async (light) => {
-        try {
-          const details = (await apiRequest(`/instances/${light.ID}`)) as {
-            data: { IsOn?: boolean; ScaledBrightness?: number; Name?: string };
-          };
-          return {
-            id: light.ID,
-            name: details.data.Name || light.Name,
-            isOn: details.data.IsOn ?? false,
-            brightness: details.data.ScaledBrightness ?? 0,
-          };
-        } catch {
-          return {
-            id: light.ID,
-            name: light.Name,
-            isOn: false,
-            brightness: 0,
-          };
-        }
-      })
-    );
-
-    return {
-      content: [{ type: "text", text: JSON.stringify(lightsWithState, null, 2) }],
-    };
-  }
-);
-
-// List blinds
 server.tool(
   "list_blinds",
-  "List all blinds/shutters in the system with their current state",
+  "List all blinds/shutters with their current state",
   {},
   async () => {
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
-    };
+    const instances = await getInstances();
+    const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
 
-    const blinds = result.data.filter(
-      (i) =>
-        i.ClassName.includes("Blind") &&
-        !i.ClassName.includes("BlindGroup") &&
-        !i.ID.includes("bBlind") &&
-        !i.ID.includes("ehBlind")
-    );
-
-    // Get detailed info for each blind
     const blindsWithState = await Promise.all(
-      blinds.slice(0, 50).map(async (blind) => {
+      blinds.map(async (blind) => {
         try {
-          const details = (await apiRequest(`/instances/${blind.ID}`)) as {
-            data: { Position?: number; Name?: string; IsMoving?: boolean };
-          };
+          const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
           return {
             id: blind.ID,
             name: details.data.Name || blind.Name,
             position: details.data.Position ?? 0,
+            angle: details.data.Angle ?? 0,
             isMoving: details.data.IsMoving ?? false,
           };
         } catch {
-          return {
-            id: blind.ID,
-            name: blind.Name,
-            position: 0,
-            isMoving: false,
-          };
+          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false };
         }
       })
     );
@@ -573,73 +422,84 @@ server.tool(
   }
 );
 
-// Get sensors
 server.tool(
-  "list_sensors",
-  "List sensors (temperature, humidity, etc.) with their current values",
+  "blind_control",
+  "Control a blind/shutter (move up, down, stop, set position, or set tilt angle)",
   {
-    type: z
-      .string()
-      .optional()
-      .describe("Filter by sensor type (e.g., 'Temperature', 'Humidity', 'Motion')"),
+    blind_id: z.string().describe("The blind instance ID"),
+    action: z.enum(["up", "down", "stop", "position", "angle"]).describe("Action to perform"),
+    position: z.number().min(0).max(100).optional().describe("Position (0=open, 100=closed)"),
+    angle: z.number().min(0).max(100).optional().describe("Slat angle (0-100)"),
   },
-  async ({ type }) => {
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
+  async ({ blind_id, action, position, angle }) => {
+    const methodMap: Record<string, { method: string; params: unknown[] }> = {
+      up: { method: "MoveUp", params: [] },
+      down: { method: "MoveDown", params: [] },
+      stop: { method: "Stop", params: [] },
+      position: { method: "AmznSetPercentage", params: [position ?? 50] },
+      angle: { method: "SetAngle", params: [angle ?? 50] },
     };
 
-    let sensors = result.data.filter(
-      (i) =>
-        i.ClassName.includes("Sensor") ||
-        i.ClassName.includes("Detector") ||
-        i.ClassName.includes("Temperature") ||
-        i.ClassName.includes("Humidity")
-    );
-
-    if (type) {
-      sensors = sensors.filter(
-        (s) =>
-          s.ClassName.toLowerCase().includes(type.toLowerCase()) ||
-          s.Name.toLowerCase().includes(type.toLowerCase())
-      );
-    }
+    const { method, params } = methodMap[action];
+    await callMethod(blind_id, method, params);
 
     return {
-      content: [{ type: "text", text: JSON.stringify(sensors, null, 2) }],
+      content: [{ type: "text", text: `Blind ${blind_id}: ${action}${params.length > 0 ? ` (${params[0]})` : ""}` }],
     };
   }
 );
 
-// List climate controls
 server.tool(
-  "list_climate",
-  "List all climate control (heating/cooling) instances with their current state",
-  {},
-  async () => {
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
+  "blind_control_all",
+  "Control all blinds at once",
+  {
+    action: z.enum(["up", "down", "stop", "position", "angle"]).describe("Action to perform"),
+    position: z.number().min(0).max(100).optional().describe("Position (0=open, 100=closed)"),
+    angle: z.number().min(0).max(100).optional().describe("Slat angle (0-100)"),
+  },
+  async ({ action, position, angle }) => {
+    const instances = await getInstances();
+    const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
+
+    const methodMap: Record<string, { method: string; params: unknown[] }> = {
+      up: { method: "MoveUp", params: [] },
+      down: { method: "MoveDown", params: [] },
+      stop: { method: "Stop", params: [] },
+      position: { method: "AmznSetPercentage", params: [position ?? 50] },
+      angle: { method: "SetAngle", params: [angle ?? 50] },
     };
 
-    const climates = result.data.filter(
+    const { method, params } = methodMap[action];
+    const results = await controlAllDevices(blinds, method, params);
+
+    return {
+      content: [{ type: "text", text: `Set ${blinds.length} blinds to ${action}${params.length > 0 ? ` (${params[0]})` : ""}:\n${results.join("\n")}` }],
+    };
+  }
+);
+
+// -----------------------------------------------------------------------------
+// Climate Tools
+// -----------------------------------------------------------------------------
+
+server.tool(
+  "list_climate",
+  "List all climate controls with their current state",
+  {},
+  async () => {
+    const instances = await getInstances();
+    const climates = instances.filter(
       (i) =>
-        i.ClassName.includes("Climate") ||
-        i.ClassName.includes("Thermostat")
+        (i.ClassName === DEVICE_CLASSES.CLIMATE ||
+          i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
+        i.Name &&
+        i.Name.length > 0
     );
 
-    // Get detailed info for each climate control
     const climatesWithState = await Promise.all(
-      climates.slice(0, 20).map(async (climate) => {
+      climates.map(async (climate) => {
         try {
-          const details = (await apiRequest(`/instances/${climate.ID}`)) as {
-            data: {
-              Name?: string;
-              SetTemperature?: number;
-              ActualTemperature?: number;
-              Mode?: number;
-            };
-          };
+          const details = await apiRequest<ClimateState>(`/instances/${climate.ID}`);
           return {
             id: climate.ID,
             name: details.data.Name || climate.Name,
@@ -647,12 +507,7 @@ server.tool(
             actualTemperature: details.data.ActualTemperature ?? 0,
           };
         } catch {
-          return {
-            id: climate.ID,
-            name: climate.Name,
-            setTemperature: 0,
-            actualTemperature: 0,
-          };
+          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0 };
         }
       })
     );
@@ -663,119 +518,103 @@ server.tool(
   }
 );
 
-// Climate control
 server.tool(
   "climate_control",
-  "Control climate/heating for a room (set mode or temperature)",
+  "Control climate/heating for a room",
   {
     climate_id: z.string().describe("The climate control instance ID"),
-    action: z
-      .enum(["comfort", "energy_saving", "freeze_protection", "set_temperature"])
-      .describe("Action: 'comfort' (day mode), 'energy_saving' (night mode), 'freeze_protection', or 'set_temperature'"),
-    temperature: z
-      .number()
-      .optional()
-      .describe("Target temperature, required for 'set_temperature' action"),
+    action: z.enum(["comfort", "energy_saving", "freeze_protection", "set_temperature"]).describe("Action to perform"),
+    temperature: z.number().optional().describe("Target temperature (for set_temperature action)"),
   },
   async ({ climate_id, action, temperature }) => {
-    let method: string;
-    let params: unknown[] = [];
+    const methodMap: Record<string, { method: string; params: unknown[] }> = {
+      comfort: { method: "WriteDayMode", params: [] },
+      energy_saving: { method: "WriteNightMode", params: [] },
+      freeze_protection: { method: "WriteFreezeMode", params: [] },
+      set_temperature: { method: "WriteCurrentSetTemperature", params: [temperature ?? 21] },
+    };
 
-    switch (action) {
-      case "comfort":
-        method = "WriteDayMode";
-        break;
-      case "energy_saving":
-        method = "WriteNightMode";
-        break;
-      case "freeze_protection":
-        method = "WriteFreezeMode";
-        break;
-      case "set_temperature":
-        method = "WriteCurrentSetTemperature";
-        params = [temperature ?? 21];
-        break;
-    }
-
-    const result = await callInstanceMethod(climate_id, method, params);
+    const { method, params } = methodMap[action];
+    await callMethod(climate_id, method, params);
 
     return {
-      content: [
-        {
-          type: "text",
-          text: `Climate ${climate_id}: ${action} - ${result.statusText}`,
-        },
-      ],
+      content: [{ type: "text", text: `Climate ${climate_id}: ${action}${params.length > 0 ? ` (${params[0]}°C)` : ""}` }],
     };
   }
 );
 
-// Climate control for all rooms
 server.tool(
   "climate_control_all",
   "Set climate mode for all rooms at once",
   {
-    action: z
-      .enum(["comfort", "energy_saving", "freeze_protection"])
-      .describe("Action: 'comfort' (day mode), 'energy_saving' (night mode), or 'freeze_protection'"),
+    action: z.enum(["comfort", "energy_saving", "freeze_protection"]).describe("Climate mode to set"),
   },
   async ({ action }) => {
-    // Get all climate control instances
-    const result = (await apiRequest("/instances")) as {
-      statusCode: number;
-      data: Array<{ ID: string; ClassName: string; Name: string }>;
-    };
-
-    // Filter to actual room climate controls (exclude base classes and templates)
-    const climates = result.data.filter(
+    const instances = await getInstances();
+    const climates = instances.filter(
       (i) =>
-        (i.ClassName === "SmartCOM.Clima.ClimateControl" ||
-          i.ClassName.includes("ClimateControlUniversal")) &&
+        (i.ClassName === DEVICE_CLASSES.CLIMATE ||
+          i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
         i.Name &&
         i.Name.length > 0
     );
 
-    let method: string;
-    switch (action) {
-      case "comfort":
-        method = "WriteDayMode";
-        break;
-      case "energy_saving":
-        method = "WriteNightMode";
-        break;
-      case "freeze_protection":
-        method = "WriteFreezeMode";
-        break;
-    }
+    const methodMap: Record<string, string> = {
+      comfort: "WriteDayMode",
+      energy_saving: "WriteNightMode",
+      freeze_protection: "WriteFreezeMode",
+    };
 
-    // Apply to all climate controls
-    const results: string[] = [];
-    for (const climate of climates) {
-      try {
-        await callInstanceMethod(climate.ID, method, []);
-        results.push(`${climate.Name}: success`);
-      } catch (err) {
-        results.push(`${climate.Name}: failed`);
-      }
-    }
+    const results = await controlAllDevices(climates, methodMap[action]);
 
     return {
-      content: [
-        {
-          type: "text",
-          text: `Set ${climates.length} rooms to ${action}:\n${results.join("\n")}`,
-        },
-      ],
+      content: [{ type: "text", text: `Set ${climates.length} rooms to ${action}:\n${results.join("\n")}` }],
     };
   }
 );
 
-// Start the server
+// -----------------------------------------------------------------------------
+// Sensor Tools
+// -----------------------------------------------------------------------------
+
+server.tool(
+  "list_sensors",
+  "List sensors (temperature, humidity, motion, etc.)",
+  {
+    type: z.string().optional().describe("Filter by sensor type"),
+  },
+  async ({ type }) => {
+    const instances = await getInstances();
+    let sensors = instances.filter(
+      (i) =>
+        i.ClassName.includes("Sensor") ||
+        i.ClassName.includes("Detector") ||
+        i.ClassName.includes("Temperature") ||
+        i.ClassName.includes("Humidity")
+    );
+
+    if (type) {
+      const lowerType = type.toLowerCase();
+      sensors = sensors.filter(
+        (s) =>
+          s.ClassName.toLowerCase().includes(lowerType) ||
+          s.Name.toLowerCase().includes(lowerType)
+      );
+    }
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(sensors, null, 2) }],
+    };
+  }
+);
+
+// =============================================================================
+// Main
+// =============================================================================
+
 async function main() {
   if (!EVON_USERNAME || !EVON_PASSWORD) {
-    console.error(
-      "Error: EVON_USERNAME and EVON_PASSWORD environment variables must be set"
-    );
+    console.error("Error: EVON_USERNAME and EVON_PASSWORD environment variables must be set");
     process.exit(1);
   }
 

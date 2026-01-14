@@ -11,9 +11,6 @@ CONF_PASSWORD = "password"
 DEFAULT_HOST = "http://192.168.1.4"
 DEFAULT_SCAN_INTERVAL = 30
 
-# Platforms
-PLATFORMS = ["light", "cover", "climate"]
-
 # Climate modes
 CLIMATE_MODE_COMFORT = "comfort"
 CLIMATE_MODE_ENERGY_SAVING = "energy_saving"

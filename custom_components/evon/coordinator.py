@@ -1,7 +1,6 @@
 """Data update coordinator for Evon Smart Home."""
 from __future__ import annotations
 
-import asyncio
 from datetime import timedelta
 import logging
 from typing import Any
