@@ -1,0 +1,24 @@
+{
+  "name": "evon-ha",
+  "version": "1.0.0",
+  "description": "MCP server for Evon Smart Home",
+  "main": "dist/index.js",
+  "bin": {
+    "evon-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": ["mcp", "evon", "smart-home"],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@types/node": "^25.0.8",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.5"
+  }
+}

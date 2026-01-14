@@ -1,0 +1,8 @@
+node_modules/
+dist/
+logs/
+*.log
+.DS_Store
+.claude.json
+.claude/
+test-api.mjs
