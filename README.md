@@ -1,7 +1,7 @@
 # Evon Smart Home Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-ha.svg)](https://github.com/milanorszagh/evon-ha/releases)
+[![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Home Assistant custom integration and MCP server for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
@@ -23,7 +23,7 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant
 2. Add this repository as a custom repository:
    - Go to **HACS** → **Integrations** → **⋮** (menu) → **Custom repositories**
-   - Add URL: `https://github.com/milanorszagh/evon-ha`
+   - Add URL: `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`
    - Category: **Integration**
 3. Click **Install**
 4. Restart Home Assistant
@@ -70,7 +70,7 @@ The MCP server allows AI assistants like Claude to control your Evon Smart Home 
 ### Installation
 
 ```bash
-git clone https://github.com/milanorszagh/evon-ha.git
+git clone https://github.com/milanorszagh/evon-smart-home-homeassistant-integration.git
 cd evon-ha
 npm install
 npm run build
