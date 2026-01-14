@@ -457,6 +457,105 @@ server.tool(
   }
 );
 
+// List climate controls
+server.tool(
+  "list_climate",
+  "List all climate control (heating/cooling) instances with their current state",
+  {},
+  async () => {
+    const result = (await apiRequest("/instances")) as {
+      statusCode: number;
+      data: Array<{ ID: string; ClassName: string; Name: string; Group: string }>;
+    };
+
+    const climates = result.data.filter(
+      (i) =>
+        i.ClassName.includes("Climate") ||
+        i.ClassName.includes("Thermostat")
+    );
+
+    // Get detailed info for each climate control
+    const climatesWithState = await Promise.all(
+      climates.slice(0, 20).map(async (climate) => {
+        try {
+          const details = (await apiRequest(`/instances/${climate.ID}`)) as {
+            data: {
+              Name?: string;
+              SetTemperature?: number;
+              ActualTemperature?: number;
+              Mode?: number;
+            };
+          };
+          return {
+            id: climate.ID,
+            name: details.data.Name || climate.Name,
+            setTemperature: details.data.SetTemperature ?? 0,
+            actualTemperature: details.data.ActualTemperature ?? 0,
+          };
+        } catch {
+          return {
+            id: climate.ID,
+            name: climate.Name,
+            setTemperature: 0,
+            actualTemperature: 0,
+          };
+        }
+      })
+    );
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(climatesWithState, null, 2) }],
+    };
+  }
+);
+
+// Climate control
+server.tool(
+  "climate_control",
+  "Control climate/heating for a room (set mode or temperature)",
+  {
+    climate_id: z.string().describe("The climate control instance ID"),
+    action: z
+      .enum(["comfort", "energy_saving", "freeze_protection", "set_temperature"])
+      .describe("Action: 'comfort' (day mode), 'energy_saving' (night mode), 'freeze_protection', or 'set_temperature'"),
+    temperature: z
+      .number()
+      .optional()
+      .describe("Target temperature, required for 'set_temperature' action"),
+  },
+  async ({ climate_id, action, temperature }) => {
+    let method: string;
+    let params: unknown[] = [];
+
+    switch (action) {
+      case "comfort":
+        method = "WriteDayMode";
+        break;
+      case "energy_saving":
+        method = "WriteNightMode";
+        break;
+      case "freeze_protection":
+        method = "WriteFreezeMode";
+        break;
+      case "set_temperature":
+        method = "WriteCurrentSetTemperature";
+        params = [temperature ?? 21];
+        break;
+    }
+
+    const result = await callInstanceMethod(climate_id, method, params);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Climate ${climate_id}: ${action} - ${result.statusText}`,
+        },
+      ],
+    };
+  }
+);
+
 // Start the server
 async function main() {
   if (!EVON_USERNAME || !EVON_PASSWORD) {
