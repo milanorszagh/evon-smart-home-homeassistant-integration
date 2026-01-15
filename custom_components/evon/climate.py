@@ -86,6 +86,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_climate_{instance_id}"
+        # Optimistic state to prevent UI flicker during updates
+        self._optimistic_preset: str | None = None
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -153,6 +155,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def preset_mode(self) -> str | None:
         """Return the current preset mode based on Evon's ModeSaved property."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_preset is not None:
+            return self._optimistic_preset
+
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if not data:
             return CLIMATE_MODE_COMFORT
@@ -191,6 +197,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
+        # Set optimistic value immediately to prevent UI flicker
+        self._optimistic_preset = preset_mode
+        self.async_write_ha_state()
+
         if preset_mode == CLIMATE_MODE_COMFORT:
             await self._api.set_climate_comfort_mode(self._instance_id)
         elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
@@ -198,3 +208,15 @@ class EvonClimate(EvonEntity, ClimateEntity):
         elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
             await self._api.set_climate_freeze_protection_mode(self._instance_id)
         await self.coordinator.async_request_refresh()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Only clear optimistic state when coordinator data matches expected value
+        if self._optimistic_preset is not None:
+            data = self.coordinator.get_entity_data("climates", self._instance_id)
+            if data:
+                mode_saved = data.get("mode_saved", 4)
+                actual_preset = EVON_MODE_SAVED_TO_PRESET.get(mode_saved, CLIMATE_MODE_COMFORT)
+                if actual_preset == self._optimistic_preset:
+                    self._optimistic_preset = None
+        super()._handle_coordinator_update()
