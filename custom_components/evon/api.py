@@ -123,7 +123,6 @@ class EvonApi:
         session = await self._get_session()
 
         url = f"{self._host}/api{endpoint}"
-        _LOGGER.debug("API request: %s %s data=%s", method, url, data)
         headers = {
             "Cookie": f"token={token}",
             "Content-Type": "application/json",
@@ -143,8 +142,6 @@ class EvonApi:
                     return await self._request(method, endpoint, data, retry=False)
 
                 if response.status != 200:
-                    body = await response.text()
-                    _LOGGER.error("API error %s: %s", response.status, body[:500])
                     raise EvonApiError(f"API request failed: {response.status}")
 
                 try:
