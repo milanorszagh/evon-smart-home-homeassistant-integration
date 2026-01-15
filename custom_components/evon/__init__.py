@@ -7,6 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi
@@ -72,10 +73,74 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Clean up stale entities
+    await _async_cleanup_stale_entities(hass, entry, coordinator)
+
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
+
+
+async def _async_cleanup_stale_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: EvonDataUpdateCoordinator,
+) -> None:
+    """Remove entities that no longer exist in Evon."""
+    if not coordinator.data:
+        return
+
+    # Collect all current device IDs from coordinator data
+    current_device_ids: set[str] = set()
+    for entity_type in ["lights", "blinds", "climates", "switches", "smart_meters", "air_quality", "valves"]:
+        if entity_type in coordinator.data:
+            for device in coordinator.data[entity_type]:
+                current_device_ids.add(device["id"])
+
+    # Home states use a different entity (select), add those IDs too
+    if "home_states" in coordinator.data and coordinator.data["home_states"]:
+        # The home state select entity uses a fixed ID pattern
+        current_device_ids.add("home_state_selector")
+
+    # Get entity registry
+    entity_registry = er.async_get(hass)
+
+    # Find entities belonging to this config entry
+    entities_to_remove: list[str] = []
+    for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+        # Extract device ID from the entity's unique_id
+        # Our entities use unique_id format: "{entry_id}_{instance_id}" or "{entry_id}_{instance_id}_{suffix}"
+        unique_id = entity_entry.unique_id
+        if not unique_id:
+            continue
+
+        # Remove entry_id prefix to get the device identifier
+        prefix = f"{entry.entry_id}_"
+        if not unique_id.startswith(prefix):
+            continue
+
+        device_part = unique_id[len(prefix):]
+
+        # Check if this device still exists
+        # Handle suffixes like "_power", "_energy", "_co2", etc.
+        device_exists = False
+        for current_id in current_device_ids:
+            if device_part == current_id or device_part.startswith(f"{current_id}_"):
+                device_exists = True
+                break
+
+        if not device_exists:
+            entities_to_remove.append(entity_entry.entity_id)
+            _LOGGER.debug("Marking stale entity for removal: %s (unique_id: %s)", entity_entry.entity_id, unique_id)
+
+    # Remove stale entities
+    for entity_id in entities_to_remove:
+        _LOGGER.info("Removing stale entity: %s", entity_id)
+        entity_registry.async_remove(entity_id)
+
+    if entities_to_remove:
+        _LOGGER.info("Cleaned up %d stale entities from Evon integration", len(entities_to_remove))
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
