@@ -22,8 +22,8 @@ class TestPasswordEncoding:
             return base64.b64encode(sha512_hash).decode("utf-8")
 
         # Test with known values
-        username = "User"
-        password = "REDACTED_PASSWORD"
+        username = "TestUser"
+        password = "test_password_123"
         encoded = encode_password(username, password)
 
         # Should be 88 characters (base64 encoded SHA512)

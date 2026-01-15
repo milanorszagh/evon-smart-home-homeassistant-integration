@@ -12,8 +12,8 @@ class TestPasswordEncoding:
     def test_encode_password(self):
         """Test that password encoding works correctly."""
         # Test with known values
-        username = "User"
-        password = "REDACTED_PASSWORD"
+        username = "TestUser"
+        password = "test_password_123"
         encoded = encode_password(username, password)
 
         # The encoded password should be a base64 string
