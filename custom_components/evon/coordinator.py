@@ -14,6 +14,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EVON_CLASS_AIR_QUALITY,
+    EVON_CLASS_BATHROOM_RADIATOR,
     EVON_CLASS_BLIND,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
@@ -77,6 +78,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             air_quality = await self._process_air_quality(instances)
             valves = await self._process_valves(instances)
             home_states = await self._process_home_states(instances)
+            bathroom_radiators = await self._process_bathroom_radiators(instances)
 
             return {
                 "lights": lights,
@@ -87,6 +89,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "air_quality": air_quality,
                 "valves": valves,
                 "home_states": home_states,
+                "bathroom_radiators": bathroom_radiators,
                 "rooms": self._rooms_cache if self._sync_areas else {},
             }
 
@@ -335,6 +338,35 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for home state %s", instance_id)
         return home_states
 
+    async def _process_bathroom_radiators(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Process bathroom radiator (electric heater) instances."""
+        radiators = []
+        for instance in instances:
+            if instance.get("ClassName") != EVON_CLASS_BATHROOM_RADIATOR:
+                continue
+            if not instance.get("Name"):
+                continue
+
+            instance_id = instance.get("ID", "")
+            try:
+                details = await self.api.get_instance(instance_id)
+                radiators.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "is_on": details.get("Output", False),
+                        "time_remaining": details.get("NextSwitchPoint", -1),
+                        "duration_mins": details.get("EnableForMins", 30),
+                        "permanently_on": details.get("PermanentlyOn", False),
+                        "permanently_off": details.get("PermanentlyOff", False),
+                        "deactivated": details.get("Deactivated", False),
+                    }
+                )
+            except EvonApiError:
+                _LOGGER.warning("Failed to get details for bathroom radiator %s", instance_id)
+        return radiators
+
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity.
 
@@ -384,6 +416,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_home_state_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific home state."""
         return self.get_entity_data("home_states", instance_id)
+
+    def get_bathroom_radiator_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific bathroom radiator."""
+        return self.get_entity_data("bathroom_radiators", instance_id)
 
     def get_active_home_state(self) -> str | None:
         """Get the currently active home state ID."""

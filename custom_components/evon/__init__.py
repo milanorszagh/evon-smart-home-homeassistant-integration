@@ -93,7 +93,7 @@ async def _async_cleanup_stale_entities(
 
     # Collect all current device IDs from coordinator data
     current_device_ids: set[str] = set()
-    for entity_type in ["lights", "blinds", "climates", "switches", "smart_meters", "air_quality", "valves"]:
+    for entity_type in ["lights", "blinds", "climates", "switches", "smart_meters", "air_quality", "valves", "bathroom_radiators"]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:
                 current_device_ids.add(device["id"])

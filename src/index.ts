@@ -47,6 +47,16 @@ interface HomeStateState {
   ActiveInstance?: string;
 }
 
+interface BathroomRadiatorState {
+  Name?: string;
+  Output?: boolean;
+  NextSwitchPoint?: number;
+  EnableForMins?: number;
+  PermanentlyOn?: boolean;
+  PermanentlyOff?: boolean;
+  Deactivated?: boolean;
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -57,6 +67,7 @@ const DEVICE_CLASSES = {
   CLIMATE: "SmartCOM.Clima.ClimateControl",
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",
   HOME_STATE: "System.HomeState",
+  BATHROOM_RADIATOR: "Heating.BathroomRadiator",
 } as const;
 
 // Method mappings for device control
@@ -647,6 +658,83 @@ server.tool(
   }
 );
 
+// -----------------------------------------------------------------------------
+// Bathroom Radiator Tools
+// -----------------------------------------------------------------------------
+
+server.tool(
+  "list_bathroom_radiators",
+  "List all bathroom radiators (electric heaters) with their current state",
+  {},
+  async () => {
+    const instances = await getInstances();
+    const radiators = filterByClass(instances, DEVICE_CLASSES.BATHROOM_RADIATOR);
+
+    const radiatorsWithState = await Promise.all(
+      radiators.map(async (radiator) => {
+        try {
+          const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
+          const timeRemaining = details.data.NextSwitchPoint ?? -1;
+          return {
+            id: radiator.ID,
+            name: details.data.Name || radiator.Name,
+            isOn: details.data.Output ?? false,
+            timeRemaining: timeRemaining > 0 ? `${Math.floor(timeRemaining)}:${Math.floor((timeRemaining % 1) * 60).toString().padStart(2, '0')}` : null,
+            timeRemainingMins: timeRemaining > 0 ? Math.round(timeRemaining * 10) / 10 : null,
+            durationMins: details.data.EnableForMins ?? 30,
+            permanentlyOn: details.data.PermanentlyOn ?? false,
+            permanentlyOff: details.data.PermanentlyOff ?? false,
+          };
+        } catch {
+          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30, permanentlyOn: false, permanentlyOff: false };
+        }
+      })
+    );
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(radiatorsWithState, null, 2) }],
+    };
+  }
+);
+
+server.tool(
+  "bathroom_radiator_control",
+  "Control a bathroom radiator (electric heater) - toggle on/off. When turned on, it runs for the configured duration (default 30 min).",
+  {
+    radiator_id: z.string().describe("The radiator instance ID (e.g., 'BathroomRadiator9506')"),
+    action: z.enum(["on", "off", "toggle"]).describe("Action to perform"),
+  },
+  async ({ radiator_id, action }) => {
+    // Get current state
+    const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator_id}`);
+    const isCurrentlyOn = details.data.Output ?? false;
+
+    let shouldToggle = false;
+    switch (action) {
+      case "on":
+        shouldToggle = !isCurrentlyOn;
+        break;
+      case "off":
+        shouldToggle = isCurrentlyOn;
+        break;
+      case "toggle":
+        shouldToggle = true;
+        break;
+    }
+
+    if (shouldToggle) {
+      await callMethod(radiator_id, "Switch");
+    }
+
+    const newState = action === "toggle" ? !isCurrentlyOn : (action === "on");
+    const durationInfo = newState ? ` for ${details.data.EnableForMins ?? 30} minutes` : "";
+
+    return {
+      content: [{ type: "text", text: `Bathroom radiator ${radiator_id}: turned ${newState ? "on" : "off"}${durationInfo}` }],
+    };
+  }
+);
+
 // =============================================================================
 // MCP Resources
 // =============================================================================
@@ -806,6 +894,43 @@ server.resource(
   }
 );
 
+// Resource: All bathroom radiators state
+server.resource(
+  "evon://bathroom_radiators",
+  "All Evon bathroom radiators (electric heaters) with current state",
+  async () => {
+    const instances = await getInstances();
+    const radiators = filterByClass(instances, DEVICE_CLASSES.BATHROOM_RADIATOR);
+
+    const radiatorsWithState = await Promise.all(
+      radiators.map(async (radiator) => {
+        try {
+          const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
+          const timeRemaining = details.data.NextSwitchPoint ?? -1;
+          return {
+            id: radiator.ID,
+            name: details.data.Name || radiator.Name,
+            isOn: details.data.Output ?? false,
+            timeRemaining: timeRemaining > 0 ? `${Math.floor(timeRemaining)}:${Math.floor((timeRemaining % 1) * 60).toString().padStart(2, '0')}` : null,
+            timeRemainingMins: timeRemaining > 0 ? Math.round(timeRemaining * 10) / 10 : null,
+            durationMins: details.data.EnableForMins ?? 30,
+          };
+        } catch {
+          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30 };
+        }
+      })
+    );
+
+    return {
+      contents: [{
+        uri: "evon://bathroom_radiators",
+        mimeType: "application/json",
+        text: JSON.stringify(radiatorsWithState, null, 2),
+      }],
+    };
+  }
+);
+
 // Resource: Home summary
 server.resource(
   "evon://summary",
@@ -879,6 +1004,18 @@ server.resource(
       }
     }
 
+    // Count bathroom radiators on
+    const radiators = filterByClass(instances, DEVICE_CLASSES.BATHROOM_RADIATOR);
+    let radiatorsOn = 0;
+    for (const radiator of radiators) {
+      try {
+        const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
+        if (details.data.Output) radiatorsOn++;
+      } catch {
+        // Ignore errors
+      }
+    }
+
     const summary = {
       homeState: currentHomeState,
       lights: { total: lights.length, on: lightsOn },
@@ -887,6 +1024,7 @@ server.resource(
         total: climates.length,
         averageTemperature: tempCount > 0 ? Math.round((totalTemp / tempCount) * 10) / 10 : null,
       },
+      bathroomRadiators: { total: radiators.length, on: radiatorsOn },
     };
 
     return {

@@ -292,6 +292,40 @@ class EvonApi:
         """Activate a home state."""
         await self.call_method(instance_id, "Activate")
 
+    # Bathroom radiator methods
+    async def toggle_bathroom_radiator(self, instance_id: str) -> None:
+        """Toggle a bathroom radiator (electric heater) on/off.
+
+        This uses the Switch method which toggles the current state.
+        If off, turns on for the configured duration (default 30 min).
+        If on, turns off immediately.
+        """
+        await self.call_method(instance_id, "Switch")
+
+    async def get_bathroom_radiators(self, radiator_class: str = "Heating.BathroomRadiator") -> list[dict[str, Any]]:
+        """Get all bathroom radiators with their current state.
+
+        Returns:
+            List of radiator dictionaries with id, name, is_on, time_remaining, etc.
+        """
+        instances = await self.get_instances()
+        radiators = []
+        for instance in instances:
+            class_name = instance.get("ClassName", "")
+            if class_name == radiator_class:
+                instance_id = instance.get("ID", "")
+                details = await self.get_instance(instance_id)
+                radiators.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name", instance_id),
+                        "is_on": details.get("Output", False),
+                        "time_remaining": details.get("NextSwitchPoint", -1),
+                        "duration_mins": details.get("EnableForMins", 30),
+                    }
+                )
+        return radiators
+
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""
         try:

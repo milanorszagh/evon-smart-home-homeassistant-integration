@@ -1,6 +1,6 @@
 [project]
 name = "evon-smart-home"
-version = "1.6.0"
+version = "1.7.0"
 description = "Home Assistant custom integration for Evon Smart Home"
 readme = "README.md"
 license = {text = "MIT"}

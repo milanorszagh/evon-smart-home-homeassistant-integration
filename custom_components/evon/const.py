@@ -31,6 +31,7 @@ EVON_CLASS_SMART_METER = "Energy.SmartMeter"
 EVON_CLASS_AIR_QUALITY = "System.Location.AirQuality"
 EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
 EVON_CLASS_HOME_STATE = "System.HomeState"
+EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
 
 # Event types
 EVENT_SINGLE_CLICK = "single_click"
