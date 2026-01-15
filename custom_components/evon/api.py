@@ -139,7 +139,10 @@ class EvonApi:
                 if response.status != 200:
                     raise EvonApiError(f"API request failed: {response.status}")
 
-                return await response.json()
+                try:
+                    return await response.json()
+                except (ValueError, aiohttp.ContentTypeError) as err:
+                    raise EvonApiError(f"Invalid JSON response: {err}") from err
 
         except aiohttp.ClientError as err:
             raise EvonApiError(f"Connection error: {err}") from err
@@ -237,3 +240,6 @@ class EvonApi:
             raise  # Re-raise auth errors to be handled by caller
         except EvonApiError:
             return False
+        except Exception as err:
+            # Wrap any unexpected errors
+            raise EvonApiError(f"Unexpected error: {err}") from err
