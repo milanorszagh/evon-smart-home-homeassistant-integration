@@ -133,6 +133,13 @@ Switches support device triggers for automations. You can create automations usi
 3. Choose your Evon switch
 4. Select trigger: **Single click**, **Double click**, or **Long press**
 
+### Logbook
+
+Switch click events are automatically logged in the Home Assistant logbook with human-readable descriptions:
+- "Living Room Switch **was clicked**"
+- "Bedroom Switch **was double-clicked**"
+- "Kitchen Switch **was long-pressed**"
+
 ### Automations with Click Events
 
 Listen for switch click events in automations:
@@ -356,6 +363,7 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.3.2** | Added logbook integration for switch click events |
 | **1.3.1** | Best practices: Entity categories for diagnostic sensors, availability detection, HomeAssistantError exceptions, EntityDescription refactoring |
 | **1.3.0** | Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support. |
 | **1.2.1** | Added German translations for DACH region customers |

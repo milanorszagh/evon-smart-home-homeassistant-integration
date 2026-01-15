@@ -148,6 +148,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Reload Support**: Reload without HA restart
 - **Click Events**: Switches fire `evon_event` on event bus for automations
 - **Device Triggers**: Switches support device triggers for automations UI
+- **Logbook**: Human-readable switch event descriptions in HA logbook
 - **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
 - **Energy Sensors**: Smart meter power, energy, voltage sensors
@@ -217,6 +218,7 @@ pytest
 
 ## Version History
 
+- **v1.3.2**: Added logbook integration for switch click events
 - **v1.3.1**: Best practices: Entity categories, availability detection, HomeAssistantError exceptions, EntityDescription refactoring
 - **v1.3.0**: Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support.
 - **v1.2.1**: Added German translations for DACH region customers
