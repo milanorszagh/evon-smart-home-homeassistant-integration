@@ -210,5 +210,8 @@ pytest
 
 ## Version History
 
+- **v1.1.3**: Fixed config flow "Unexpected error" by adding strings.json and fixing auth error handling
+- **v1.1.2**: Fixed switch detection (corrected class name to `SmartCOM.Switch`)
+- **v1.1.1**: Documentation and branding updates, HACS buttons
 - **v1.1.0**: Added sensors, switches with click events, options flow, reconfigure flow, MCP resources and scenes
 - **v1.0.0**: Initial release with lights, blinds, and climate support

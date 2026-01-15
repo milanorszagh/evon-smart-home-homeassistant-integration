@@ -233,5 +233,7 @@ class EvonApi:
             await self.login()
             await self.get_instances()
             return True
+        except EvonAuthError:
+            raise  # Re-raise auth errors to be handled by caller
         except EvonApiError:
             return False

@@ -60,6 +60,94 @@ class TestPasswordEncoding:
         assert encoded1 != encoded2
 
 
+class TestHostNormalization:
+    """Test host URL normalization."""
+
+    def test_ip_only(self):
+        """Test IP address without protocol."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("192.168.1.4") == "http://192.168.1.4"
+        print("IP only: 192.168.1.4 -> http://192.168.1.4")
+
+    def test_ip_with_port(self):
+        """Test IP address with port."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("192.168.1.4:8080") == "http://192.168.1.4:8080"
+        print("IP with port: 192.168.1.4:8080 -> http://192.168.1.4:8080")
+
+    def test_full_url(self):
+        """Test full URL passes through."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("http://192.168.1.4") == "http://192.168.1.4"
+        print("Full URL: http://192.168.1.4 -> http://192.168.1.4")
+
+    def test_trailing_slash(self):
+        """Test trailing slash is removed."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("http://192.168.1.4/") == "http://192.168.1.4"
+        print("Trailing slash: http://192.168.1.4/ -> http://192.168.1.4")
+
+    def test_https(self):
+        """Test HTTPS is preserved."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("https://192.168.1.4") == "https://192.168.1.4"
+        print("HTTPS: https://192.168.1.4 -> https://192.168.1.4")
+
+    def test_whitespace(self):
+        """Test whitespace is trimmed."""
+        from urllib.parse import urlparse
+
+        def normalize_host(host: str) -> str:
+            host = host.strip()
+            if not host.startswith(("http://", "https://")):
+                host = f"http://{host}"
+            parsed = urlparse(host)
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+        assert normalize_host("  192.168.1.4  ") == "http://192.168.1.4"
+        print("Whitespace: '  192.168.1.4  ' -> http://192.168.1.4")
+
+
 class TestEvonConstants:
     """Test constants are properly defined."""
 
@@ -188,6 +276,7 @@ if __name__ == "__main__":
 
     tests = [
         TestPasswordEncoding(),
+        TestHostNormalization(),
         TestEvonConstants(),
         TestMCPServer(),
         TestIntegrationFiles(),

@@ -1,0 +1,45 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Evon Smart Home",
+        "description": "Enter your Evon Smart Home connection details.",
+        "data": {
+          "host": "Host URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Evon Smart Home",
+        "description": "Update your connection details.",
+        "data": {
+          "host": "Host URL",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Evon Smart Home",
+      "invalid_auth": "Invalid username or password",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This Evon system is already configured",
+      "reconfigure_successful": "Configuration updated successfully",
+      "reconfigure_failed": "Reconfiguration failed"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Evon Smart Home Options",
+        "description": "Configure integration settings.",
+        "data": {
+          "scan_interval": "Poll interval (seconds)"
+        }
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import voluptuous as vol
 
@@ -16,6 +17,30 @@ from .api import EvonApi, EvonApiError, EvonAuthError
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def normalize_host(host: str) -> str:
+    """Normalize host input to a proper URL.
+
+    Handles various input formats:
+    - "192.168.1.4" -> "http://192.168.1.4"
+    - "192.168.1.4:8080" -> "http://192.168.1.4:8080"
+    - "http://192.168.1.4" -> "http://192.168.1.4"
+    - "http://192.168.1.4/" -> "http://192.168.1.4"
+    """
+    host = host.strip()
+
+    # If no scheme, add http://
+    if not host.startswith(("http://", "https://")):
+        host = f"http://{host}"
+
+    # Parse and reconstruct to normalize
+    parsed = urlparse(host)
+
+    # Reconstruct URL without trailing slash
+    normalized = f"{parsed.scheme}://{parsed.netloc}"
+
+    return normalized
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -50,6 +75,9 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # Normalize the host URL
+            user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+
             # Test connection
             session = async_get_clientsession(self.hass)
             api = EvonApi(
@@ -98,6 +126,9 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # Normalize the host URL
+            user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+
             # Test connection with new credentials
             session = async_get_clientsession(self.hass)
             api = EvonApi(
