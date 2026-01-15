@@ -356,6 +356,7 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.3.1** | Best practices: Entity categories for diagnostic sensors, availability detection, HomeAssistantError exceptions, EntityDescription refactoring |
 | **1.3.0** | Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support. |
 | **1.2.1** | Added German translations for DACH region customers |
 | **1.2.0** | Added optional area sync feature (sync Evon rooms to HA areas) |

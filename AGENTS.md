@@ -217,6 +217,7 @@ pytest
 
 ## Version History
 
+- **v1.3.1**: Best practices: Entity categories, availability detection, HomeAssistantError exceptions, EntityDescription refactoring
 - **v1.3.0**: Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support.
 - **v1.2.1**: Added German translations for DACH region customers
 - **v1.2.0**: Added optional area sync feature (sync Evon rooms to HA areas)

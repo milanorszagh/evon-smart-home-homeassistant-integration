@@ -67,6 +67,11 @@ class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
         self._last_click: str | None = None
 
     @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this switch."""
         info = DeviceInfo(

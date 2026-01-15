@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import aiohttp
+from homeassistant.exceptions import HomeAssistantError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,12 +22,16 @@ def encode_password(username: str, password: str) -> str:
     return base64.b64encode(sha512_hash).decode("utf-8")
 
 
-class EvonApiError(Exception):
+class EvonApiError(HomeAssistantError):
     """Exception for Evon API errors."""
 
 
 class EvonAuthError(EvonApiError):
     """Exception for authentication errors."""
+
+
+class EvonConnectionError(EvonApiError):
+    """Exception for connection errors."""
 
 
 class EvonApi:
@@ -98,7 +103,7 @@ class EvonApi:
                 return token
 
         except aiohttp.ClientError as err:
-            raise EvonApiError(f"Connection error: {err}") from err
+            raise EvonConnectionError(f"Connection error: {err}") from err
 
     async def _ensure_token(self) -> str:
         """Ensure we have a valid token."""
@@ -145,7 +150,7 @@ class EvonApi:
                     raise EvonApiError(f"Invalid JSON response: {err}") from err
 
         except aiohttp.ClientError as err:
-            raise EvonApiError(f"Connection error: {err}") from err
+            raise EvonConnectionError(f"Connection error: {err}") from err
 
     async def get_instances(self) -> list[dict[str, Any]]:
         """Get all instances."""

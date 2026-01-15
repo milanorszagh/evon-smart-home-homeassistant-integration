@@ -70,6 +70,11 @@ class EvonValveSensor(CoordinatorEntity[EvonDataUpdateCoordinator], BinarySensor
         self._entry = entry
 
     @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
         info = DeviceInfo(

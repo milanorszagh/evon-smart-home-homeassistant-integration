@@ -86,6 +86,11 @@ class EvonClimate(CoordinatorEntity[EvonDataUpdateCoordinator], ClimateEntity):
         self._current_preset = PRESET_COMFORT
 
     @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this climate control."""
         info = DeviceInfo(

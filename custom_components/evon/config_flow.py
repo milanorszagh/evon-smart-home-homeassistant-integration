@@ -13,7 +13,7 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult, AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import EvonApi, EvonApiError, EvonAuthError
+from .api import EvonApi, EvonApiError, EvonAuthError, EvonConnectionError
 from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS
 
 _LOGGER = logging.getLogger(__name__)
