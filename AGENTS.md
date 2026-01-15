@@ -210,6 +210,7 @@ pytest
 
 ## Version History
 
+- **v1.1.5**: Fixed AbortFlow exception handling (was causing "Unexpected error" for already configured)
 - **v1.1.4**: Improved error handling in API client (JSON decode, unexpected errors)
 - **v1.1.3**: Fixed config flow "Unexpected error" by adding strings.json and fixing auth error handling
 - **v1.1.2**: Fixed switch detection (corrected class name to `SmartCOM.Switch`)

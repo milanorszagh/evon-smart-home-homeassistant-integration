@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_USERNAME, CONF_PASSWORD
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.data_entry_flow import FlowResult, AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi, EvonApiError, EvonAuthError
@@ -103,6 +103,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except EvonApiError:
                 errors["base"] = "cannot_connect"
+            except AbortFlow:
+                raise  # Re-raise flow control exceptions
             except Exception as ex:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception: %s", ex)
                 errors["base"] = "unknown"
@@ -155,8 +157,10 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except EvonApiError:
                 errors["base"] = "cannot_connect"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during reconfigure")
+            except AbortFlow:
+                raise  # Re-raise flow control exceptions
+            except Exception as ex:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
                 errors["base"] = "unknown"
 
         # Pre-fill with current values
