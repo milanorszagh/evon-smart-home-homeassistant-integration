@@ -21,6 +21,7 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
 | **Sensors** | Temperature sensors from climate devices |
+| **Cameras** | Intercom cameras (2N, Mobotix) via Evon proxy |
 
 ## Known Limitations
 
@@ -134,6 +135,11 @@ The integration supports the following languages:
 #### Binary Sensor (Valves)
 - Climate valve open/closed state
 - Attributes: `valve_type`, `evon_id`
+
+#### Camera (Intercom)
+- Still image from intercom cameras (2N, Mobotix)
+- Images are proxied through Evon (works regardless of camera network accessibility)
+- Attributes: `ip_address`, `direct_url`, `evon_id`
 
 ---
 
@@ -339,6 +345,7 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.5.0** | Added camera support for intercom cameras (2N, Mobotix) via Evon proxy |
 | **1.4.1** | Removed button event entities (not functional due to API limitations) |
 | **1.4.0** | Added event entities for physical buttons (later removed in 1.4.1) |
 | **1.3.3** | Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown` |

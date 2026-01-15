@@ -30,6 +30,7 @@ EVON_CLASS_ROOM = "System.Location.Room"
 EVON_CLASS_SMART_METER = "Energy.SmartMeter"
 EVON_CLASS_AIR_QUALITY = "System.Location.AirQuality"
 EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
+EVON_CLASS_INTERCOM_CAM = "Security.Intercom"  # Matches 2N, Mobotix, etc.
 
 # Event types
 EVENT_SINGLE_CLICK = "single_click"
