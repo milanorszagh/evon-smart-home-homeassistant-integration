@@ -5,6 +5,7 @@ import base64
 import hashlib
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
@@ -159,7 +160,7 @@ class EvonApi:
 
     async def get_instance(self, instance_id: str) -> dict[str, Any]:
         """Get a specific instance."""
-        result = await self._request("GET", f"/instances/{instance_id}")
+        result = await self._request("GET", f"/instances/{quote(instance_id, safe='')}")
         return result.get("data", {})
 
     async def get_rooms(self, room_class: str = "System.Location.Room") -> dict[str, str]:
@@ -190,7 +191,7 @@ class EvonApi:
         """Call a method on an instance."""
         result = await self._request(
             "POST",
-            f"/instances/{instance_id}/{method}",
+            f"/instances/{quote(instance_id, safe='')}/{method}",
             params or [],
         )
         return result
