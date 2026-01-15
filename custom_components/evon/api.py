@@ -5,7 +5,6 @@ import base64
 import hashlib
 import logging
 from typing import Any
-from urllib.parse import quote
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
@@ -124,6 +123,7 @@ class EvonApi:
         session = await self._get_session()
 
         url = f"{self._host}/api{endpoint}"
+        _LOGGER.debug("API request: %s %s data=%s", method, url, data)
         headers = {
             "Cookie": f"token={token}",
             "Content-Type": "application/json",
@@ -143,6 +143,8 @@ class EvonApi:
                     return await self._request(method, endpoint, data, retry=False)
 
                 if response.status != 200:
+                    body = await response.text()
+                    _LOGGER.error("API error %s: %s", response.status, body[:500])
                     raise EvonApiError(f"API request failed: {response.status}")
 
                 try:
@@ -160,7 +162,7 @@ class EvonApi:
 
     async def get_instance(self, instance_id: str) -> dict[str, Any]:
         """Get a specific instance."""
-        result = await self._request("GET", f"/instances/{quote(instance_id, safe='')}")
+        result = await self._request("GET", f"/instances/{instance_id}")
         return result.get("data", {})
 
     async def get_rooms(self, room_class: str = "System.Location.Room") -> dict[str, str]:
@@ -191,7 +193,7 @@ class EvonApi:
         """Call a method on an instance."""
         result = await self._request(
             "POST",
-            f"/instances/{quote(instance_id, safe='')}/{method}",
+            f"/instances/{instance_id}/{method}",
             params or [],
         )
         return result
