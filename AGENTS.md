@@ -81,7 +81,8 @@ When filtering devices from the API, use these class names:
 | Device | Class Name |
 |--------|------------|
 | Dimmable Lights | `SmartCOM.Light.LightDim` |
-| Switches/Non-dimmable | `SmartCOM.Light.Light` |
+| Switches (wall buttons) | `SmartCOM.Switch` |
+| Non-dimmable Lights | `SmartCOM.Light.Light` |
 | Blinds | `SmartCOM.Blind.Blind` |
 | Climate | `SmartCOM.Clima.ClimateControl` |
 | Climate (universal) | Contains `ClimateControlUniversal` |

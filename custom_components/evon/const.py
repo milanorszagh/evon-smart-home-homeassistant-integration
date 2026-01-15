@@ -22,7 +22,7 @@ EVON_CLASS_LIGHT = "SmartCOM.Light.Light"
 EVON_CLASS_BLIND = "SmartCOM.Blind.Blind"
 EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "ClimateControlUniversal"
-EVON_CLASS_SWITCH = "SmartCOM.Switch.Switch"
+EVON_CLASS_SWITCH = "SmartCOM.Switch"
 EVON_CLASS_BUTTON = "SmartCOM.Button.Button"
 
 # Event types
