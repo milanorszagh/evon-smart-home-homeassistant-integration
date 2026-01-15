@@ -15,9 +15,12 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 | Device Type | Features |
 |-------------|----------|
 | **Lights** | On/off, brightness (0-100%) |
-| **Switches** | On/off, click events (single, double, long press) |
+| **Switches** | On/off, click events (single, double, long press), device triggers |
 | **Blinds** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
 | **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
+| **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
+| **Air Quality** | CO2 levels, humidity (if available) |
+| **Valves** | Climate valve open/closed state |
 | **Sensors** | Temperature sensors from climate devices |
 
 ---
@@ -105,6 +108,30 @@ The integration supports the following languages:
 #### Sensor
 - Temperature sensors from climate devices
 - Attributes: `target_temperature`, `evon_id`
+
+#### Smart Meter (Energy)
+- Power consumption (W)
+- Total energy consumption (kWh)
+- Daily energy consumption (kWh)
+- Voltage per phase (L1, L2, L3)
+- Attributes: `feed_in`, `frequency`, `evon_id`
+
+#### Air Quality
+- CO2 levels (ppm) - if sensor available
+- Humidity (%) - if sensor available
+- Attributes: `health_index`, `co2_index`, `humidity_index`, `evon_id`
+
+#### Binary Sensor (Valves)
+- Climate valve open/closed state
+- Attributes: `valve_type`, `evon_id`
+
+### Device Triggers
+
+Switches support device triggers for automations. You can create automations using the UI:
+1. Go to **Settings** → **Automations & Scenes** → **Create Automation**
+2. Select **Device** as trigger type
+3. Choose your Evon switch
+4. Select trigger: **Single click**, **Double click**, or **Long press**
 
 ### Automations with Click Events
 
@@ -329,6 +356,7 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.3.0** | Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support. |
 | **1.2.1** | Added German translations for DACH region customers |
 | **1.2.0** | Added optional area sync feature (sync Evon rooms to HA areas) |
 | **1.1.5** | Fixed AbortFlow exception handling |

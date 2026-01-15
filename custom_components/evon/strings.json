@@ -1,4 +1,11 @@
 {
+  "device_automation": {
+    "trigger_type": {
+      "single_click": "Single click",
+      "double_click": "Double click",
+      "long_press": "Long press"
+    }
+  },
   "config": {
     "step": {
       "user": {

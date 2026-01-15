@@ -86,6 +86,9 @@ When filtering devices from the API, use these class names:
 | Blinds | `SmartCOM.Blind.Blind` |
 | Climate | `SmartCOM.Clima.ClimateControl` |
 | Climate (universal) | Contains `ClimateControlUniversal` |
+| Smart Meter | Contains `Energy.SmartMeter` |
+| Air Quality | `System.Location.AirQuality` |
+| Climate Valve | `SmartCOM.Clima.Valve` |
 
 ## API Authentication Flow
 
@@ -139,12 +142,16 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ## Integration Features
 
 ### Home Assistant
-- **Platforms**: Light, Cover, Climate, Sensor, Switch
-- **Options Flow**: Configure poll interval (5-300 seconds)
+- **Platforms**: Light, Cover, Climate, Sensor, Switch, Binary Sensor
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
 - **Click Events**: Switches fire `evon_event` on event bus for automations
+- **Device Triggers**: Switches support device triggers for automations UI
+- **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
+- **Energy Sensors**: Smart meter power, energy, voltage sensors
+- **Air Quality**: CO2 and humidity sensors (if available)
 
 ### MCP Server
 - **Tools**: Device listing and control (lights, blinds, climate)
@@ -210,6 +217,7 @@ pytest
 
 ## Version History
 
+- **v1.3.0**: Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support.
 - **v1.2.1**: Added German translations for DACH region customers
 - **v1.2.0**: Added optional area sync feature (sync Evon rooms to HA areas)
 - **v1.1.5**: Fixed AbortFlow exception handling (was causing "Unexpected error" for already configured)

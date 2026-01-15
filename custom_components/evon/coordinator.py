@@ -18,6 +18,9 @@ from .const import (
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
     EVON_CLASS_SWITCH,
+    EVON_CLASS_SMART_METER,
+    EVON_CLASS_AIR_QUALITY,
+    EVON_CLASS_VALVE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +77,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blinds = []
             climates = []
             switches = []
+            smart_meters = []
+            air_quality_sensors = []
+            valves = []
 
             for instance in instances:
                 class_name = instance.get("ClassName", "")
@@ -150,11 +156,77 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except EvonApiError:
                         _LOGGER.warning("Failed to get details for switch %s", instance_id)
 
+                elif EVON_CLASS_SMART_METER in class_name:
+                    # Get detailed state for smart meter
+                    try:
+                        details = await self.api.get_instance(instance_id)
+                        smart_meters.append({
+                            "id": instance_id,
+                            "name": name,
+                            "room_name": room_name,
+                            "power": details.get("PowerActual", 0),
+                            "power_unit": details.get("PowerActualUnit", "W"),
+                            "energy": details.get("Energy", 0),
+                            "energy_24h": details.get("Energy24h", 0),
+                            "feed_in": details.get("FeedIn", 0),
+                            "feed_in_energy": details.get("FeedInEnergy", 0),
+                            "frequency": details.get("Frequency", 0),
+                            "voltage_l1": details.get("UL1N", 0),
+                            "voltage_l2": details.get("UL2N", 0),
+                            "voltage_l3": details.get("UL3N", 0),
+                            "current_l1": details.get("IL1", 0),
+                            "current_l2": details.get("IL2", 0),
+                            "current_l3": details.get("IL3", 0),
+                        })
+                    except EvonApiError:
+                        _LOGGER.warning("Failed to get details for smart meter %s", instance_id)
+
+                elif class_name == EVON_CLASS_AIR_QUALITY:
+                    # Get detailed state for air quality sensor
+                    try:
+                        details = await self.api.get_instance(instance_id)
+                        # Only add if sensor has actual data (not -999)
+                        co2 = details.get("CO2Value", -999)
+                        humidity = details.get("Humidity", -999)
+                        temperature = details.get("ActualTemperature", -999)
+                        has_data = co2 != -999 or humidity != -999 or temperature != -999
+                        if has_data:
+                            air_quality_sensors.append({
+                                "id": instance_id,
+                                "name": name,
+                                "room_name": room_name,
+                                "co2": co2 if co2 != -999 else None,
+                                "humidity": humidity if humidity != -999 else None,
+                                "temperature": temperature if temperature != -999 else None,
+                                "health_index": details.get("HealthIndex", 0),
+                                "co2_index": details.get("CO2Index", 0),
+                                "humidity_index": details.get("HumidityIndex", 0),
+                            })
+                    except EvonApiError:
+                        _LOGGER.warning("Failed to get details for air quality %s", instance_id)
+
+                elif class_name == EVON_CLASS_VALVE:
+                    # Get detailed state for valve
+                    try:
+                        details = await self.api.get_instance(instance_id)
+                        valves.append({
+                            "id": instance_id,
+                            "name": name,
+                            "room_name": room_name,
+                            "is_open": details.get("ActValue", False),
+                            "valve_type": details.get("Type", 0),
+                        })
+                    except EvonApiError:
+                        _LOGGER.warning("Failed to get details for valve %s", instance_id)
+
             return {
                 "lights": lights,
                 "blinds": blinds,
                 "climates": climates,
                 "switches": switches,
+                "smart_meters": smart_meters,
+                "air_quality": air_quality_sensors,
+                "valves": valves,
                 "rooms": self._rooms_cache if self._sync_areas else {},
             }
 
@@ -191,4 +263,28 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for switch in self.data["switches"]:
                 if switch["id"] == instance_id:
                     return switch
+        return None
+
+    def get_smart_meter_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific smart meter."""
+        if self.data and "smart_meters" in self.data:
+            for meter in self.data["smart_meters"]:
+                if meter["id"] == instance_id:
+                    return meter
+        return None
+
+    def get_air_quality_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific air quality sensor."""
+        if self.data and "air_quality" in self.data:
+            for sensor in self.data["air_quality"]:
+                if sensor["id"] == instance_id:
+                    return sensor
+        return None
+
+    def get_valve_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific valve."""
+        if self.data and "valves" in self.data:
+            for valve in self.data["valves"]:
+                if valve["id"] == instance_id:
+                    return valve
         return None
