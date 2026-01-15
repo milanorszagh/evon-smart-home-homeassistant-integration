@@ -185,7 +185,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "comfort_temp": details.get("SetValueComfortHeating", 22),
                         "energy_saving_temp": details.get("SetValueEnergySavingHeating", 20),
                         "freeze_protection_temp": details.get("SetValueFreezeProtection", 15),
-                        "mode_saved": details.get("ModeSaved", 4),
+                        # ClimateControlUniversal uses ModeSaved, ClimateControl uses MainState
+                        "mode_saved": details.get("ModeSaved", details.get("MainState", 4)),
                         "is_cooling": details.get("CoolingMode", False),
                         "cooling_enabled": not details.get("DisableCooling", True),
                         "is_on": details.get("IsOn", False),

@@ -41,10 +41,22 @@ Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is nee
 
 ### Climate Preset Mode - IMPORTANT
 
-Climate devices use the `ModeSaved` property to indicate the current preset mode:
-- `ModeSaved: 2` = freeze_protection
-- `ModeSaved: 3` = energy_saving
-- `ModeSaved: 4` = comfort
+Climate devices use different properties depending on type:
+
+| Device Type | Class Name | Preset Property |
+|-------------|------------|-----------------|
+| ClimateControlUniversal | Contains `ClimateControlUniversal` | `ModeSaved` |
+| ClimateControl/Thermostat | `SmartCOM.Clima.ClimateControl` | `MainState` |
+
+Both properties use the same value mapping:
+- `2` = freeze_protection
+- `3` = energy_saving
+- `4` = comfort
+
+**Code should check `ModeSaved` first, then fall back to `MainState`:**
+```python
+mode_saved = details.get("ModeSaved", details.get("MainState", 4))
+```
 
 **DO NOT use the `Mode` property** for preset detection - it indicates heating vs cooling mode (0=heating, 1=cooling), not the preset.
 
