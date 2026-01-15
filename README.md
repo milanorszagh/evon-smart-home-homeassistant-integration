@@ -17,6 +17,7 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 | **Lights** | On/off, brightness (0-100%) |
 | **Blinds/Covers** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
 | **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
+| **Home State** | Select between home modes (At Home, Holiday, Night, Work) |
 | **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
@@ -134,6 +135,16 @@ The integration supports the following languages:
 #### Binary Sensor (Valves)
 - Climate valve open/closed state
 - Attributes: `valve_type`, `evon_id`
+
+#### Select (Home State)
+- Switch between home modes defined in Evon:
+  - `Daheim` (At Home) - Normal home operation
+  - `Urlaub` (Holiday) - Vacation mode
+  - `Nacht` (Night) - Night mode
+  - `Arbeit` (Work) - Away at work mode
+- Attributes: `evon_id`
+
+**Note**: Home states can trigger automations in the Evon system. Changing the state affects how other devices behave according to your Evon configuration.
 
 ---
 
@@ -274,6 +285,7 @@ Cookie: token=<token>
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
 | `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
 | `*ClimateControlUniversal*` | Universal climate control | Yes |
+| `System.HomeState` | Home mode selector | Yes |
 | `SmartCOM.Switch` | Physical input button | **No** (read-only, momentary state) |
 | `Energy.SmartMeter*` | Smart meter | No (sensor only) |
 | `System.Location.AirQuality` | Air quality sensor | No (sensor only) |
@@ -333,12 +345,27 @@ Cookie: token=<token>
 
 **Limitation**: There is no `LastClickType` or event history. The API only provides momentary state.
 
+### Home State Methods
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Activate` | - | Activate this home state |
+
+### Home State Properties
+
+| Property | Description |
+|----------|-------------|
+| `Active` | `true` if this state is currently active |
+| `ActiveInstance` | ID of the currently active home state |
+| `Name` | Display name of the state |
+
 ---
 
 ## Version History
 
 | Version | Changes |
 |---------|---------|
+| **1.5.0** | Added Home State selector (select entity) for switching between home modes |
 | **1.4.1** | Removed button event entities (not functional due to API limitations) |
 | **1.4.0** | Added event entities for physical buttons (later removed in 1.4.1) |
 | **1.3.3** | Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown` |

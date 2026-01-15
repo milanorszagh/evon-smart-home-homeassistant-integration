@@ -17,6 +17,7 @@ from .const import (
     EVON_CLASS_BLIND,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
+    EVON_CLASS_HOME_STATE,
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_SMART_METER,
@@ -75,6 +76,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             smart_meters = await self._process_smart_meters(instances)
             air_quality = await self._process_air_quality(instances)
             valves = await self._process_valves(instances)
+            home_states = await self._process_home_states(instances)
 
             return {
                 "lights": lights,
@@ -84,6 +86,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "smart_meters": smart_meters,
                 "air_quality": air_quality,
                 "valves": valves,
+                "home_states": home_states,
                 "rooms": self._rooms_cache if self._sync_areas else {},
             }
 
@@ -306,12 +309,38 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for valve %s", instance_id)
         return valves
 
+    async def _process_home_states(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Process home state instances."""
+        home_states = []
+        for instance in instances:
+            if instance.get("ClassName") != EVON_CLASS_HOME_STATE:
+                continue
+            # Skip template instances (ID starting with "System.")
+            instance_id = instance.get("ID", "")
+            if instance_id.startswith("System."):
+                continue
+            if not instance.get("Name"):
+                continue
+
+            try:
+                details = await self.api.get_instance(instance_id)
+                home_states.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "active": details.get("Active", False),
+                    }
+                )
+            except EvonApiError:
+                _LOGGER.warning("Failed to get details for home state %s", instance_id)
+        return home_states
+
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity.
 
         Args:
             entity_type: The type of entity (lights, blinds, climates, switches,
-                        smart_meters, air_quality, valves)
+                        smart_meters, air_quality, valves, home_states)
             instance_id: The instance ID to look up
 
         Returns:
@@ -351,3 +380,21 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_valve_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific valve."""
         return self.get_entity_data("valves", instance_id)
+
+    def get_home_state_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific home state."""
+        return self.get_entity_data("home_states", instance_id)
+
+    def get_active_home_state(self) -> str | None:
+        """Get the currently active home state ID."""
+        if self.data and "home_states" in self.data:
+            for state in self.data["home_states"]:
+                if state.get("active"):
+                    return state.get("id")
+        return None
+
+    def get_home_states(self) -> list[dict[str, Any]]:
+        """Get all home states."""
+        if self.data and "home_states" in self.data:
+            return self.data["home_states"]
+        return []

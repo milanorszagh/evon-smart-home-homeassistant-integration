@@ -1,8 +1,9 @@
 """Tests for Evon data coordinator."""
+
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -112,9 +113,7 @@ class TestEvonDataUpdateCoordinator:
                 {"ID": "light_2", "ClassName": "SmartCOM.Light.LightDim", "Name": ""},  # No name
             ]
         )
-        api.get_instance = AsyncMock(
-            return_value={"IsOn": True, "ScaledBrightness": 50}
-        )
+        api.get_instance = AsyncMock(return_value={"IsOn": True, "ScaledBrightness": 50})
 
         coordinator = EvonDataUpdateCoordinator(hass, api)
         data = await coordinator._async_update_data()

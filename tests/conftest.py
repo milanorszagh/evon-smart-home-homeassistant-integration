@@ -1,13 +1,11 @@
 """Pytest fixtures for Evon Smart Home tests."""
+
 from __future__ import annotations
 
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from custom_components.evon.api import EvonApi
-from custom_components.evon.const import DOMAIN
 
 # Test constants - these are placeholders, not real credentials
 TEST_HOST = "http://192.168.1.100"
@@ -18,9 +16,7 @@ TEST_PASSWORD = "testpass"
 @pytest.fixture
 def mock_api() -> Generator[AsyncMock]:
     """Create a mock EvonApi."""
-    with patch(
-        "custom_components.evon.api.EvonApi", autospec=True
-    ) as mock_api_class:
+    with patch("custom_components.evon.api.EvonApi", autospec=True) as mock_api_class:
         api = mock_api_class.return_value
         api.test_connection = AsyncMock(return_value=True)
         api.login = AsyncMock(return_value="test_token")

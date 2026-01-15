@@ -252,6 +252,46 @@ class EvonApi:
         """Turn off a switch."""
         await self.call_method(instance_id, "AmznTurnOff")
 
+    # Home state methods
+    async def get_home_states(self, home_state_class: str = "System.HomeState") -> list[dict[str, Any]]:
+        """Get all home states.
+
+        Args:
+            home_state_class: The class name for home state instances
+
+        Returns:
+            List of home state dictionaries with id, name, and active status
+        """
+        instances = await self.get_instances()
+        home_states = []
+        for instance in instances:
+            class_name = instance.get("ClassName", "")
+            instance_id = instance.get("ID", "")
+            # Skip template instances
+            if class_name == home_state_class and not instance_id.startswith("System."):
+                # Get detailed info to check active status
+                details = await self.get_instance(instance_id)
+                home_states.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name", instance_id),
+                        "active": details.get("Active", False),
+                    }
+                )
+        return home_states
+
+    async def get_active_home_state(self) -> str | None:
+        """Get the currently active home state ID."""
+        home_states = await self.get_home_states()
+        for state in home_states:
+            if state.get("active"):
+                return state.get("id")
+        return None
+
+    async def activate_home_state(self, instance_id: str) -> None:
+        """Activate a home state."""
+        await self.call_method(instance_id, "Activate")
+
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""
         try:

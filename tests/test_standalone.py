@@ -1,11 +1,12 @@
 """Standalone tests that don't require Home Assistant."""
+
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 # Add custom_components to path for direct import
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 class TestPasswordEncoding:
@@ -13,8 +14,8 @@ class TestPasswordEncoding:
 
     def test_encode_password(self):
         """Test password encoding matches expected format."""
-        import hashlib
         import base64
+        import hashlib
 
         def encode_password(username: str, password: str) -> str:
             combined = username + password
@@ -33,8 +34,8 @@ class TestPasswordEncoding:
 
     def test_encoding_consistency(self):
         """Test that encoding is consistent."""
-        import hashlib
         import base64
+        import hashlib
 
         def encode_password(username: str, password: str) -> str:
             combined = username + password
@@ -47,8 +48,8 @@ class TestPasswordEncoding:
 
     def test_different_inputs_different_outputs(self):
         """Test that different inputs produce different outputs."""
-        import hashlib
         import base64
+        import hashlib
 
         def encode_password(username: str, password: str) -> str:
             combined = username + password
@@ -162,13 +163,7 @@ class TestEvonConstants:
         }
 
         # Read const.py to verify
-        const_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "custom_components",
-            "evon",
-            "const.py"
-        )
+        const_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "const.py")
 
         with open(const_path) as f:
             content = f.read()
@@ -183,12 +178,7 @@ class TestMCPServer:
 
     def test_typescript_compiled(self):
         """Test that TypeScript is compiled."""
-        dist_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "dist",
-            "index.js"
-        )
+        dist_path = os.path.join(os.path.dirname(__file__), "..", "dist", "index.js")
         assert os.path.exists(dist_path), "dist/index.js not found - run npm run build"
 
         # Check file is not empty
@@ -198,12 +188,7 @@ class TestMCPServer:
 
     def test_source_exists(self):
         """Test source file exists."""
-        src_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "src",
-            "index.ts"
-        )
+        src_path = os.path.join(os.path.dirname(__file__), "..", "src", "index.ts")
         assert os.path.exists(src_path), "src/index.ts not found"
 
         with open(src_path) as f:
@@ -221,12 +206,7 @@ class TestIntegrationFiles:
 
     def test_all_platform_files_exist(self):
         """Test all platform files exist."""
-        base_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "custom_components",
-            "evon"
-        )
+        base_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon")
 
         required_files = [
             "__init__.py",
@@ -254,17 +234,11 @@ class TestIntegrationFiles:
 
     def test_translations_exist(self):
         """Test translations exist."""
-        en_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "custom_components",
-            "evon",
-            "translations",
-            "en.json"
-        )
+        en_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "translations", "en.json")
         assert os.path.exists(en_path), "Missing English translations"
 
         import json
+
         with open(en_path) as f:
             translations = json.load(f)
 
@@ -295,14 +269,14 @@ if __name__ == "__main__":
     for test_class in tests:
         print(f"\n{'=' * 60}")
         print(f"Running: {test_class.__class__.__name__}")
-        print('=' * 60)
+        print("=" * 60)
 
         for method_name in dir(test_class):
             if method_name.startswith("test_"):
                 try:
                     print(f"\n  {method_name}...")
                     getattr(test_class, method_name)()
-                    print(f"  ✓ PASSED")
+                    print("  ✓ PASSED")
                     passed += 1
                 except Exception as e:
                     print(f"  ✗ FAILED: {e}")
@@ -311,6 +285,6 @@ if __name__ == "__main__":
 
     print(f"\n{'=' * 60}")
     print(f"Results: {passed} passed, {failed} failed")
-    print('=' * 60)
+    print("=" * 60)
 
     sys.exit(0 if failed == 0 else 1)

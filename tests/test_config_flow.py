@@ -1,12 +1,12 @@
 """Tests for Evon config flow."""
+
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from custom_components.evon.const import DOMAIN, DEFAULT_SCAN_INTERVAL
-from tests.conftest import TEST_HOST, TEST_USERNAME, TEST_PASSWORD
+from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME
 
 
 class TestConfigFlow:
@@ -42,11 +42,10 @@ class TestConfigFlow:
         flow.async_set_unique_id = AsyncMock()
         flow._abort_if_unique_id_configured = MagicMock()
 
-        with patch(
-            "custom_components.evon.config_flow.async_get_clientsession"
-        ) as mock_session, patch(
-            "custom_components.evon.config_flow.EvonApi"
-        ) as mock_api_class:
+        with (
+            patch("custom_components.evon.config_flow.async_get_clientsession") as mock_session,
+            patch("custom_components.evon.config_flow.EvonApi") as mock_api_class,
+        ):
             mock_api = mock_api_class.return_value
             mock_api.test_connection = AsyncMock(return_value=True)
 
@@ -72,11 +71,10 @@ class TestConfigFlow:
         flow = EvonConfigFlow()
         flow.hass = MagicMock()
 
-        with patch(
-            "custom_components.evon.config_flow.async_get_clientsession"
-        ), patch(
-            "custom_components.evon.config_flow.EvonApi"
-        ) as mock_api_class:
+        with (
+            patch("custom_components.evon.config_flow.async_get_clientsession"),
+            patch("custom_components.evon.config_flow.EvonApi") as mock_api_class,
+        ):
             mock_api = mock_api_class.return_value
             mock_api.test_connection = AsyncMock(return_value=False)
 
@@ -94,17 +92,16 @@ class TestConfigFlow:
     @pytest.mark.asyncio
     async def test_auth_error(self):
         """Test authentication error shows error."""
-        from custom_components.evon.config_flow import EvonConfigFlow
         from custom_components.evon.api import EvonAuthError
+        from custom_components.evon.config_flow import EvonConfigFlow
 
         flow = EvonConfigFlow()
         flow.hass = MagicMock()
 
-        with patch(
-            "custom_components.evon.config_flow.async_get_clientsession"
-        ), patch(
-            "custom_components.evon.config_flow.EvonApi"
-        ) as mock_api_class:
+        with (
+            patch("custom_components.evon.config_flow.async_get_clientsession"),
+            patch("custom_components.evon.config_flow.EvonApi") as mock_api_class,
+        ):
             mock_api = mock_api_class.return_value
             mock_api.test_connection = AsyncMock(side_effect=EvonAuthError("Invalid"))
 
@@ -148,9 +145,7 @@ class TestOptionsFlow:
 
         flow = EvonOptionsFlow(config_entry)
 
-        result = await flow.async_step_init(
-            user_input={"scan_interval": 60}
-        )
+        result = await flow.async_step_init(user_input={"scan_interval": 60})
 
         assert result["type"] == "create_entry"
         assert result["data"]["scan_interval"] == 60

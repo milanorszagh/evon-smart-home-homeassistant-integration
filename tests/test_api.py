@@ -1,10 +1,9 @@
 """Tests for Evon API client."""
+
 from __future__ import annotations
 
-import pytest
-
-from custom_components.evon.api import encode_password, EvonApi, EvonApiError, EvonAuthError
-from tests.conftest import TEST_HOST, TEST_USERNAME, TEST_PASSWORD
+from custom_components.evon.api import EvonApi, EvonApiError, EvonAuthError, encode_password
+from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME
 
 
 class TestPasswordEncoding:
