@@ -239,7 +239,12 @@ class TestIntegrationFiles:
             "climate.py",
             "sensor.py",
             "switch.py",
+            "binary_sensor.py",
+            "device_trigger.py",
+            "diagnostics.py",
+            "logbook.py",
             "manifest.json",
+            "strings.json",
         ]
 
         for filename in required_files:
@@ -265,9 +270,11 @@ class TestIntegrationFiles:
 
         assert "config" in translations
         assert "options" in translations
+        assert "device_automation" in translations
         assert "step" in translations["config"]
         assert "reconfigure" in translations["config"]["step"]
-        print("Translations include config, options, and reconfigure")
+        assert "trigger_type" in translations["device_automation"]
+        print("Translations include config, options, device_automation, and reconfigure")
 
 
 if __name__ == "__main__":
