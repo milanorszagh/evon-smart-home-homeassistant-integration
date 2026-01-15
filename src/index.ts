@@ -573,6 +573,185 @@ server.tool(
   }
 );
 
+// =============================================================================
+// MCP Resources
+// =============================================================================
+
+// Resource: All lights state
+server.resource(
+  "evon://lights",
+  "All Evon lights with current state",
+  async () => {
+    const instances = await getInstances();
+    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+
+    const lightsWithState = await Promise.all(
+      lights.map(async (light) => {
+        try {
+          const details = await apiRequest<LightState>(`/instances/${light.ID}`);
+          return {
+            id: light.ID,
+            name: details.data.Name || light.Name,
+            isOn: details.data.IsOn ?? false,
+            brightness: details.data.ScaledBrightness ?? 0,
+          };
+        } catch {
+          return { id: light.ID, name: light.Name, isOn: false, brightness: 0 };
+        }
+      })
+    );
+
+    return {
+      contents: [{
+        uri: "evon://lights",
+        mimeType: "application/json",
+        text: JSON.stringify(lightsWithState, null, 2),
+      }],
+    };
+  }
+);
+
+// Resource: All blinds state
+server.resource(
+  "evon://blinds",
+  "All Evon blinds with current state",
+  async () => {
+    const instances = await getInstances();
+    const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
+
+    const blindsWithState = await Promise.all(
+      blinds.map(async (blind) => {
+        try {
+          const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
+          return {
+            id: blind.ID,
+            name: details.data.Name || blind.Name,
+            position: details.data.Position ?? 0,
+            angle: details.data.Angle ?? 0,
+            isMoving: details.data.IsMoving ?? false,
+          };
+        } catch {
+          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false };
+        }
+      })
+    );
+
+    return {
+      contents: [{
+        uri: "evon://blinds",
+        mimeType: "application/json",
+        text: JSON.stringify(blindsWithState, null, 2),
+      }],
+    };
+  }
+);
+
+// Resource: All climate controls state
+server.resource(
+  "evon://climate",
+  "All Evon climate controls with current state",
+  async () => {
+    const instances = await getInstances();
+    const climates = instances.filter(
+      (i) =>
+        (i.ClassName === DEVICE_CLASSES.CLIMATE ||
+          i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    const climatesWithState = await Promise.all(
+      climates.map(async (climate) => {
+        try {
+          const details = await apiRequest<ClimateState>(`/instances/${climate.ID}`);
+          return {
+            id: climate.ID,
+            name: details.data.Name || climate.Name,
+            setTemperature: details.data.SetTemperature ?? 0,
+            actualTemperature: details.data.ActualTemperature ?? 0,
+          };
+        } catch {
+          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0 };
+        }
+      })
+    );
+
+    return {
+      contents: [{
+        uri: "evon://climate",
+        mimeType: "application/json",
+        text: JSON.stringify(climatesWithState, null, 2),
+      }],
+    };
+  }
+);
+
+// Resource: Home summary
+server.resource(
+  "evon://summary",
+  "Summary of all Evon devices and their current state",
+  async () => {
+    const instances = await getInstances();
+    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+    const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
+    const climates = instances.filter(
+      (i) =>
+        (i.ClassName === DEVICE_CLASSES.CLIMATE ||
+          i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    // Count on lights
+    let lightsOn = 0;
+    for (const light of lights) {
+      try {
+        const details = await apiRequest<LightState>(`/instances/${light.ID}`);
+        if (details.data.IsOn) lightsOn++;
+      } catch {}
+    }
+
+    // Count open blinds
+    let blindsOpen = 0;
+    for (const blind of blinds) {
+      try {
+        const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
+        if ((details.data.Position ?? 0) < 50) blindsOpen++;
+      } catch {}
+    }
+
+    // Get average temperature
+    let totalTemp = 0;
+    let tempCount = 0;
+    for (const climate of climates) {
+      try {
+        const details = await apiRequest<ClimateState>(`/instances/${climate.ID}`);
+        if (details.data.ActualTemperature) {
+          totalTemp += details.data.ActualTemperature;
+          tempCount++;
+        }
+      } catch {}
+    }
+
+    const summary = {
+      lights: { total: lights.length, on: lightsOn },
+      blinds: { total: blinds.length, open: blindsOpen },
+      climate: {
+        total: climates.length,
+        averageTemperature: tempCount > 0 ? Math.round((totalTemp / tempCount) * 10) / 10 : null,
+      },
+    };
+
+    return {
+      contents: [{
+        uri: "evon://summary",
+        mimeType: "application/json",
+        text: JSON.stringify(summary, null, 2),
+      }],
+    };
+  }
+);
+
 // -----------------------------------------------------------------------------
 // Sensor Tools
 // -----------------------------------------------------------------------------
