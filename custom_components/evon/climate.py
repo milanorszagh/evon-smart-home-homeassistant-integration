@@ -12,6 +12,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -40,7 +41,7 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "climates" in coordinator.data:
         for climate in coordinator.data["climates"]:
-            entities.append(EvonClimate(coordinator, api, climate["id"], climate["name"]))
+            entities.append(EvonClimate(coordinator, api, climate["id"], climate["name"], entry))
 
     async_add_entities(entities)
 
@@ -63,14 +64,28 @@ class EvonClimate(CoordinatorEntity[EvonDataUpdateCoordinator], ClimateEntity):
         api,
         instance_id: str,
         name: str,
+        entry: ConfigEntry,
     ) -> None:
         """Initialize the climate entity."""
         super().__init__(coordinator)
         self._api = api
         self._instance_id = instance_id
-        self._attr_name = name
+        self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_climate_{instance_id}"
+        self._device_name = name
+        self._entry = entry
         self._current_preset = PRESET_COMFORT
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this climate control."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._instance_id)},
+            name=self._device_name,
+            manufacturer="Evon",
+            model="Climate Control",
+            via_device=(DOMAIN, self._entry.entry_id),
+        )
 
     @property
     def hvac_mode(self) -> HVACMode:

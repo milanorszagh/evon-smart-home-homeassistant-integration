@@ -11,6 +11,7 @@ from homeassistant.components.light import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -32,7 +33,7 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "lights" in coordinator.data:
         for light in coordinator.data["lights"]:
-            entities.append(EvonLight(coordinator, api, light["id"], light["name"]))
+            entities.append(EvonLight(coordinator, api, light["id"], light["name"], entry))
 
     async_add_entities(entities)
 
@@ -50,13 +51,27 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
         api,
         instance_id: str,
         name: str,
+        entry: ConfigEntry,
     ) -> None:
         """Initialize the light."""
         super().__init__(coordinator)
         self._api = api
         self._instance_id = instance_id
-        self._attr_name = name
+        self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_light_{instance_id}"
+        self._device_name = name
+        self._entry = entry
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this light."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._instance_id)},
+            name=self._device_name,
+            manufacturer="Evon",
+            model="Dimmable Light",
+            via_device=(DOMAIN, self._entry.entry_id),
+        )
 
     @property
     def is_on(self) -> bool:

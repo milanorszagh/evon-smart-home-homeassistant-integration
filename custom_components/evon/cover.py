@@ -13,6 +13,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -34,7 +35,7 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "blinds" in coordinator.data:
         for blind in coordinator.data["blinds"]:
-            entities.append(EvonCover(coordinator, api, blind["id"], blind["name"]))
+            entities.append(EvonCover(coordinator, api, blind["id"], blind["name"], entry))
 
     async_add_entities(entities)
 
@@ -60,13 +61,27 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
         api,
         instance_id: str,
         name: str,
+        entry: ConfigEntry,
     ) -> None:
         """Initialize the cover."""
         super().__init__(coordinator)
         self._api = api
         self._instance_id = instance_id
-        self._attr_name = name
+        self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_cover_{instance_id}"
+        self._device_name = name
+        self._entry = entry
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this cover."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._instance_id)},
+            name=self._device_name,
+            manufacturer="Evon",
+            model="Blind",
+            via_device=(DOMAIN, self._entry.entry_id),
+        )
 
     @property
     def current_cover_position(self) -> int | None:
