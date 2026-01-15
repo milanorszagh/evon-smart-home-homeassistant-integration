@@ -20,17 +20,39 @@ Similarly, when **reading** brightness:
 - `Brightness` property = internal value (incorrect)
 - `ScaledBrightness` property = actual physical brightness (correct)
 
-### Blind Position Control
+### Blind Control Methods - CRITICAL
 
-**DO NOT use `SetPosition`** - this may not work correctly.
+**Movement methods:**
+- **USE `Open`** - moves blind up (opens)
+- **USE `Close`** - moves blind down (closes)
+- **USE `Stop`** - stops movement
+- **DO NOT use `MoveUp` or `MoveDown`** - these methods DO NOT EXIST and will return 404
 
-**USE `AmznSetPercentage`** - this correctly sets the blind position.
+**Position control:**
+- **USE `AmznSetPercentage`** - sets blind position (0-100)
+- **USE `SetAngle`** - sets tilt angle (0-100)
+- **DO NOT use `SetPosition`** - may not work correctly
 
 Position convention in Evon:
 - `0` = fully open (blind up)
 - `100` = fully closed (blind down)
 
 Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is needed.
+
+### Physical Buttons (SmartCOM.Switch) - CANNOT BE MONITORED
+
+**CRITICAL**: Physical wall buttons (`SmartCOM.Switch` class) **cannot be reliably monitored** by external systems:
+
+1. **Momentary state only**: The `IsOn` property is `true` ONLY while the button is physically pressed (milliseconds)
+2. **No event history**: There is NO `LastClickType`, click log, or event history
+3. **No push notifications**: Evon API has NO WebSocket or event streaming support
+4. **Polling is ineffective**: Even 100ms polling intervals miss button presses
+
+**What this means for agents:**
+- Do NOT create event entities, binary sensors, or triggers for `SmartCOM.Switch` devices
+- Do NOT attempt to implement button press detection - it will not work
+- The buttons work within Evon's internal system but cannot be observed externally
+- Only `SmartCOM.Light.Light` (controllable relay outputs) should be exposed as switches
 
 ### Method Naming Pattern
 
@@ -78,17 +100,18 @@ For live testing:
 
 When filtering devices from the API, use these class names:
 
-| Device | Class Name |
-|--------|------------|
-| Dimmable Lights | `SmartCOM.Light.LightDim` |
-| Switches (wall buttons) | `SmartCOM.Switch` |
-| Non-dimmable Lights | `SmartCOM.Light.Light` |
-| Blinds | `SmartCOM.Blind.Blind` |
-| Climate | `SmartCOM.Clima.ClimateControl` |
-| Climate (universal) | Contains `ClimateControlUniversal` |
-| Smart Meter | Contains `Energy.SmartMeter` |
-| Air Quality | `System.Location.AirQuality` |
-| Climate Valve | `SmartCOM.Clima.Valve` |
+| Device | Class Name | Controllable |
+|--------|------------|--------------|
+| Dimmable Lights | `SmartCOM.Light.LightDim` | Yes |
+| Relay Outputs (Switches) | `SmartCOM.Light.Light` | Yes |
+| Blinds | `SmartCOM.Blind.Blind` | Yes |
+| Climate | `SmartCOM.Clima.ClimateControl` | Yes |
+| Climate (universal) | Contains `ClimateControlUniversal` | Yes |
+| Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
+| Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
+| Air Quality | `System.Location.AirQuality` | No (sensor only) |
+| Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
+| Room/Area | `System.Location.Room` | No (used for area sync) |
 
 ## API Authentication Flow
 
@@ -106,11 +129,30 @@ When filtering devices from the API, use these class names:
 
 ## Environment Variables (MCP Server)
 
+Configure via Claude Code's `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "evon": {
+      "command": "node",
+      "args": ["/path/to/evon-ha/dist/index.js"],
+      "env": {
+        "EVON_HOST": "http://192.168.x.x",
+        "EVON_USERNAME": "<username>",
+        "EVON_PASSWORD": "<password>"
+      }
+    }
+  }
+}
 ```
-EVON_HOST=http://192.168.x.x    # Evon system URL (your local IP)
-EVON_USERNAME=<username>        # Your Evon username
-EVON_PASSWORD=<password>        # Plain text OR encoded password (auto-detected)
-```
+
+**Required variables:**
+- `EVON_HOST` - Evon system URL (your local IP)
+- `EVON_USERNAME` - Your Evon username
+- `EVON_PASSWORD` - Plain text OR encoded password (auto-detected)
+
+**Security**: `.claude.json` is in `.gitignore` - never commit credentials.
 
 ## Password Encoding
 
@@ -146,13 +188,11 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Options Flow**: Configure poll interval (5-300 seconds), area sync
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
-- **Click Events**: Switches fire `evon_event` on event bus for automations
-- **Device Triggers**: Switches support device triggers for automations UI
-- **Logbook**: Human-readable switch event descriptions in HA logbook
 - **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
 - **Energy Sensors**: Smart meter power, energy, voltage sensors
 - **Air Quality**: CO2 and humidity sensors (if available)
+- **Valve Sensors**: Binary sensors for climate valve state
 
 ### MCP Server
 - **Tools**: Device listing and control (lights, blinds, climate)
@@ -178,16 +218,33 @@ Pre-defined scenes:
 - `morning` - Open blinds, lights to 70%, comfort mode
 - `night` - Lights off, energy saving mode
 
-## Event Bus (Home Assistant)
+## Linting
 
-Switches fire events on state change:
+### Python (ruff)
+```bash
+# Install ruff
+pip install ruff
 
-```yaml
-event_type: evon_event
-event_data:
-  device_id: "SC1_M01.Switch1"
-  device_name: "Living Room Switch"
-  event_type: "double_click"  # single_click, double_click, long_press
+# Check for issues
+ruff check custom_components/evon/
+
+# Auto-fix issues
+ruff check custom_components/evon/ --fix
+
+# Format code
+ruff format custom_components/evon/
+```
+
+### TypeScript (eslint)
+```bash
+# Install dependencies
+npm install
+
+# Check for issues
+npm run lint
+
+# Auto-fix issues
+npm run lint:fix
 ```
 
 ## Unit Tests
@@ -218,9 +275,12 @@ pytest
 
 ## Version History
 
+- **v1.4.1**: Removed button event entities (not functional due to Evon API limitations)
+- **v1.4.0**: Added event entities for physical buttons (later removed in 1.4.1)
+- **v1.3.3**: Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown`
 - **v1.3.2**: Added logbook integration for switch click events
 - **v1.3.1**: Best practices: Entity categories, availability detection, HomeAssistantError exceptions, EntityDescription refactoring
-- **v1.3.0**: Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support.
+- **v1.3.0**: Added smart meter, air quality, and valve sensors. Added diagnostics support.
 - **v1.2.1**: Added German translations for DACH region customers
 - **v1.2.0**: Added optional area sync feature (sync Evon rooms to HA areas)
 - **v1.1.5**: Fixed AbortFlow exception handling (was causing "Unexpected error" for already configured)
@@ -228,5 +288,5 @@ pytest
 - **v1.1.3**: Fixed config flow "Unexpected error" by adding strings.json and fixing auth error handling
 - **v1.1.2**: Fixed switch detection (corrected class name to `SmartCOM.Switch`)
 - **v1.1.1**: Documentation and branding updates, HACS buttons
-- **v1.1.0**: Added sensors, switches with click events, options flow, reconfigure flow, MCP resources and scenes
+- **v1.1.0**: Added sensors, switches, options flow, reconfigure flow, MCP resources and scenes
 - **v1.0.0**: Initial release with lights, blinds, and climate support

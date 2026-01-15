@@ -1,9 +1,8 @@
 """Device triggers for Evon Smart Home switches."""
+
 from __future__ import annotations
 
 from typing import Any
-
-import voluptuous as vol
 
 from homeassistant.components.device_automation import DEVICE_TRIGGER_BASE_SCHEMA
 from homeassistant.components.homeassistant.triggers import event as event_trigger
@@ -12,12 +11,13 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol
 
 from .const import (
     DOMAIN,
-    EVENT_SINGLE_CLICK,
     EVENT_DOUBLE_CLICK,
     EVENT_LONG_PRESS,
+    EVENT_SINGLE_CLICK,
 )
 
 TRIGGER_TYPES = {EVENT_SINGLE_CLICK, EVENT_DOUBLE_CLICK, EVENT_LONG_PRESS}
@@ -29,9 +29,7 @@ TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
 )
 
 
-async def async_get_triggers(
-    hass: HomeAssistant, device_id: str
-) -> list[dict[str, Any]]:
+async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[str, Any]]:
     """List device triggers for Evon switches."""
     device_registry = dr.async_get(hass)
     device = device_registry.async_get(device_id)
@@ -104,6 +102,4 @@ async def async_attach_trigger(
         },
     }
 
-    return await event_trigger.async_attach_trigger(
-        hass, event_config, action, trigger_info, platform_type="device"
-    )
+    return await event_trigger.async_attach_trigger(hass, event_config, action, trigger_info, platform_type="device")

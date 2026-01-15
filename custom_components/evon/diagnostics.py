@@ -1,4 +1,5 @@
 """Diagnostics support for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -8,14 +9,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, CONF_HOST
+from .const import CONF_HOST, DOMAIN
 
 TO_REDACT = {CONF_PASSWORD, CONF_USERNAME, CONF_HOST, "token", "x-elocs-token", "x-elocs-password"}
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 

@@ -1,4 +1,5 @@
 """Switch platform for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
@@ -30,14 +31,16 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "switches" in coordinator.data:
         for switch in coordinator.data["switches"]:
-            entities.append(EvonSwitch(
-                coordinator,
-                switch["id"],
-                switch["name"],
-                switch.get("room_name", ""),
-                entry,
-                api,
-            ))
+            entities.append(
+                EvonSwitch(
+                    coordinator,
+                    switch["id"],
+                    switch["name"],
+                    switch.get("room_name", ""),
+                    entry,
+                    api,
+                )
+            )
 
     async_add_entities(entities)
 

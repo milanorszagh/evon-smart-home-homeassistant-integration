@@ -1,7 +1,6 @@
 """Base entity for Evon Smart Home integration."""
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback

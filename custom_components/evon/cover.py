@@ -1,4 +1,5 @@
 """Cover platform for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
@@ -36,14 +37,16 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "blinds" in coordinator.data:
         for blind in coordinator.data["blinds"]:
-            entities.append(EvonCover(
-                coordinator,
-                blind["id"],
-                blind["name"],
-                blind.get("room_name", ""),
-                entry,
-                api,
-            ))
+            entities.append(
+                EvonCover(
+                    coordinator,
+                    blind["id"],
+                    blind["name"],
+                    blind.get("room_name", ""),
+                    entry,
+                    api,
+                )
+            )
 
     async_add_entities(entities)
 

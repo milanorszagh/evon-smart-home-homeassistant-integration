@@ -1,20 +1,20 @@
 """Config flow for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 from urllib.parse import urlparse
 
+from homeassistant import config_entries
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
-from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_USERNAME, CONF_PASSWORD
-from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult, AbortFlow
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-from .api import EvonApi, EvonApiError, EvonAuthError, EvonConnectionError
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS
+from .api import EvonApi, EvonApiError, EvonAuthError
+from .const import CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SCAN_INTERVAL, DEFAULT_SYNC_AREAS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ def normalize_host(host: str) -> str:
 
     return normalized
 
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
@@ -68,9 +69,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return EvonOptionsFlow(config_entry)
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -115,13 +114,9 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle reconfiguration."""
-        self._reconfig_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        self._reconfig_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if not self._reconfig_entry:
             return self.async_abort(reason="reconfigure_failed")
 
@@ -147,9 +142,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._reconfig_entry,
                         data=user_input,
                     )
-                    await self.hass.config_entries.async_reload(
-                        self._reconfig_entry.entry_id
-                    )
+                    await self.hass.config_entries.async_reload(self._reconfig_entry.entry_id)
                     return self.async_abort(reason="reconfigure_successful")
                 else:
                     errors["base"] = "cannot_connect"
@@ -187,19 +180,13 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
         self.config_entry = config_entry
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_interval = self.config_entry.options.get(
-            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-        )
-        current_sync_areas = self.config_entry.options.get(
-            CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS
-        )
+        current_interval = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        current_sync_areas = self.config_entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
 
         return self.async_show_form(
             step_id="init",

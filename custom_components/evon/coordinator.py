@@ -1,4 +1,5 @@
 """Data update coordinator for Evon Smart Home."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -10,16 +11,15 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import EvonApi, EvonApiError
 from .const import (
-    DOMAIN,
     DEFAULT_SCAN_INTERVAL,
-    EVON_CLASS_LIGHT_DIM,
-    EVON_CLASS_LIGHT,
+    DOMAIN,
+    EVON_CLASS_AIR_QUALITY,
     EVON_CLASS_BLIND,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
-    EVON_CLASS_SWITCH,
+    EVON_CLASS_LIGHT,
+    EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_SMART_METER,
-    EVON_CLASS_AIR_QUALITY,
     EVON_CLASS_VALVE,
 )
 
@@ -115,13 +115,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                lights.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "is_on": details.get("IsOn", False),
-                    "brightness": details.get("ScaledBrightness", 0),
-                })
+                lights.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "is_on": details.get("IsOn", False),
+                        "brightness": details.get("ScaledBrightness", 0),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for light %s", instance_id)
         return lights
@@ -138,14 +140,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                blinds.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "position": details.get("Position", 0),
-                    "angle": details.get("Angle", 0),
-                    "is_moving": details.get("IsMoving", False),
-                })
+                blinds.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "position": details.get("Position", 0),
+                        "angle": details.get("Angle", 0),
+                        "is_moving": details.get("IsMoving", False),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for blind %s", instance_id)
         return blinds
@@ -163,18 +167,20 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                climates.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "current_temperature": details.get("ActualTemperature", 0),
-                    "target_temperature": details.get("SetTemperature", 0),
-                    "min_temp": details.get("MinSetValueHeat", 15),
-                    "max_temp": details.get("MaxSetValueHeat", 25),
-                    "comfort_temp": details.get("SetValueComfortHeating", 22),
-                    "energy_saving_temp": details.get("SetValueEnergySavingHeating", 20),
-                    "freeze_protection_temp": details.get("SetValueFreezeProtection", 15),
-                })
+                climates.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "current_temperature": details.get("ActualTemperature", 0),
+                        "target_temperature": details.get("SetTemperature", 0),
+                        "min_temp": details.get("MinSetValueHeat", 15),
+                        "max_temp": details.get("MaxSetValueHeat", 25),
+                        "comfort_temp": details.get("SetValueComfortHeating", 22),
+                        "energy_saving_temp": details.get("SetValueEnergySavingHeating", 20),
+                        "freeze_protection_temp": details.get("SetValueFreezeProtection", 15),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for climate %s", instance_id)
         return climates
@@ -192,12 +198,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                switches.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "is_on": details.get("IsOn", False),
-                })
+                switches.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "is_on": details.get("IsOn", False),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for switch %s", instance_id)
         return switches
@@ -214,24 +222,26 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                smart_meters.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "power": details.get("PowerActual", 0),
-                    "power_unit": details.get("PowerActualUnit", "W"),
-                    "energy": details.get("Energy", 0),
-                    "energy_24h": details.get("Energy24h", 0),
-                    "feed_in": details.get("FeedIn", 0),
-                    "feed_in_energy": details.get("FeedInEnergy", 0),
-                    "frequency": details.get("Frequency", 0),
-                    "voltage_l1": details.get("UL1N", 0),
-                    "voltage_l2": details.get("UL2N", 0),
-                    "voltage_l3": details.get("UL3N", 0),
-                    "current_l1": details.get("IL1", 0),
-                    "current_l2": details.get("IL2", 0),
-                    "current_l3": details.get("IL3", 0),
-                })
+                smart_meters.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "power": details.get("PowerActual", 0),
+                        "power_unit": details.get("PowerActualUnit", "W"),
+                        "energy": details.get("Energy", 0),
+                        "energy_24h": details.get("Energy24h", 0),
+                        "feed_in": details.get("FeedIn", 0),
+                        "feed_in_energy": details.get("FeedInEnergy", 0),
+                        "frequency": details.get("Frequency", 0),
+                        "voltage_l1": details.get("UL1N", 0),
+                        "voltage_l2": details.get("UL2N", 0),
+                        "voltage_l3": details.get("UL3N", 0),
+                        "current_l1": details.get("IL1", 0),
+                        "current_l2": details.get("IL2", 0),
+                        "current_l3": details.get("IL3", 0),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for smart meter %s", instance_id)
         return smart_meters
@@ -254,17 +264,19 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 temperature = details.get("ActualTemperature", -999)
                 has_data = co2 != -999 or humidity != -999 or temperature != -999
                 if has_data:
-                    air_quality_sensors.append({
-                        "id": instance_id,
-                        "name": instance.get("Name"),
-                        "room_name": self._get_room_name(instance.get("Group", "")),
-                        "co2": co2 if co2 != -999 else None,
-                        "humidity": humidity if humidity != -999 else None,
-                        "temperature": temperature if temperature != -999 else None,
-                        "health_index": details.get("HealthIndex", 0),
-                        "co2_index": details.get("CO2Index", 0),
-                        "humidity_index": details.get("HumidityIndex", 0),
-                    })
+                    air_quality_sensors.append(
+                        {
+                            "id": instance_id,
+                            "name": instance.get("Name"),
+                            "room_name": self._get_room_name(instance.get("Group", "")),
+                            "co2": co2 if co2 != -999 else None,
+                            "humidity": humidity if humidity != -999 else None,
+                            "temperature": temperature if temperature != -999 else None,
+                            "health_index": details.get("HealthIndex", 0),
+                            "co2_index": details.get("CO2Index", 0),
+                            "humidity_index": details.get("HumidityIndex", 0),
+                        }
+                    )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for air quality %s", instance_id)
         return air_quality_sensors
@@ -281,13 +293,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
-                valves.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "is_open": details.get("ActValue", False),
-                    "valve_type": details.get("Type", 0),
-                })
+                valves.append(
+                    {
+                        "id": instance_id,
+                        "name": instance.get("Name"),
+                        "room_name": self._get_room_name(instance.get("Group", "")),
+                        "is_open": details.get("ActValue", False),
+                        "valve_type": details.get("Type", 0),
+                    }
+                )
             except EvonApiError:
                 _LOGGER.warning("Failed to get details for valve %s", instance_id)
         return valves

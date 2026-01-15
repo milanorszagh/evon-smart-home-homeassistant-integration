@@ -15,13 +15,29 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 | Device Type | Features |
 |-------------|----------|
 | **Lights** | On/off, brightness (0-100%) |
-| **Switches** | On/off, click events (single, double, long press), device triggers |
-| **Blinds** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
+| **Blinds/Covers** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
 | **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
 | **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
 | **Sensors** | Temperature sensors from climate devices |
+
+## Known Limitations
+
+### Physical Buttons (SmartCOM.Switch)
+
+Physical wall buttons/switches **cannot be monitored** by Home Assistant due to Evon API limitations:
+
+- They only track **momentary state** (`IsOn` is `true` only while physically pressed)
+- No event log or click history is stored
+- No WebSocket/push notification support in Evon API
+- With polling, button presses (which last milliseconds) are missed
+
+**The buttons still work normally within Evon** - they directly trigger their assigned lights/blinds at the hardware level. They just can't be observed by external systems like Home Assistant.
+
+### Controllable Switches
+
+The integration supports **controllable switches** (`SmartCOM.Light.Light`) which are relay outputs that can be turned on/off. However, if your Evon system doesn't have these devices configured, the switch platform will be empty.
 
 ---
 
@@ -83,19 +99,13 @@ The integration supports the following languages:
 - Brightness control (0-100%)
 - Attributes: `brightness_pct`, `evon_id`
 
-#### Switch
-- Turn on/off
-- Click event detection (fires `evon_event` on the event bus)
-  - `single_click`
-  - `double_click`
-  - `long_press`
-- Attributes: `last_click_type`, `evon_id`
-
 #### Cover (Blinds)
 - Open/close/stop
 - Position control (0-100%)
 - Tilt angle control (0-100%)
 - Attributes: `evon_position`, `tilt_angle`, `evon_id`
+
+**Note**: In Evon, position 0 = open and 100 = closed. Home Assistant uses the opposite convention, so the integration automatically converts between them.
 
 #### Climate
 - Temperature control
@@ -125,40 +135,6 @@ The integration supports the following languages:
 - Climate valve open/closed state
 - Attributes: `valve_type`, `evon_id`
 
-### Device Triggers
-
-Switches support device triggers for automations. You can create automations using the UI:
-1. Go to **Settings** → **Automations & Scenes** → **Create Automation**
-2. Select **Device** as trigger type
-3. Choose your Evon switch
-4. Select trigger: **Single click**, **Double click**, or **Long press**
-
-### Logbook
-
-Switch click events are automatically logged in the Home Assistant logbook with human-readable descriptions:
-- "Living Room Switch **was clicked**"
-- "Bedroom Switch **was double-clicked**"
-- "Kitchen Switch **was long-pressed**"
-
-### Automations with Click Events
-
-Listen for switch click events in automations:
-
-```yaml
-automation:
-  - alias: "Double click - movie mode"
-    trigger:
-      - platform: event
-        event_type: evon_event
-        event_data:
-          event_type: double_click
-          device_name: "Living Room Switch"
-    action:
-      - service: scene.turn_on
-        target:
-          entity_id: scene.movie_mode
-```
-
 ---
 
 ## MCP Server (for AI Assistants)
@@ -176,7 +152,7 @@ npm run build
 
 ### Configuration
 
-Add to your Claude Code configuration (`.claude.json`):
+Add to your Claude Code configuration (`~/.claude.json`):
 
 ```json
 {
@@ -236,23 +212,6 @@ Resources allow Claude to read device state without calling tools:
 
 ---
 
-## Development
-
-### Running Tests
-
-```bash
-pip install -r requirements-test.txt
-pytest
-```
-
-### Building MCP Server
-
-```bash
-npm run build
-```
-
----
-
 ## Evon API Reference
 
 ### Authentication
@@ -308,13 +267,17 @@ Cookie: token=<token>
 
 ### Device Classes
 
-| Class Name | Type |
-|------------|------|
-| `SmartCOM.Light.LightDim` | Dimmable light |
-| `SmartCOM.Light.Light` | Non-dimmable light/switch |
-| `SmartCOM.Blind.Blind` | Blind/shutter |
-| `SmartCOM.Clima.ClimateControl` | Climate control |
-| `*ClimateControlUniversal*` | Universal climate control |
+| Class Name | Type | Controllable |
+|------------|------|--------------|
+| `SmartCOM.Light.LightDim` | Dimmable light | Yes |
+| `SmartCOM.Light.Light` | Non-dimmable light/relay | Yes |
+| `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
+| `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
+| `*ClimateControlUniversal*` | Universal climate control | Yes |
+| `SmartCOM.Switch` | Physical input button | **No** (read-only, momentary state) |
+| `Energy.SmartMeter*` | Smart meter | No (sensor only) |
+| `System.Location.AirQuality` | Air quality sensor | No (sensor only) |
+| `SmartCOM.Clima.Valve` | Climate valve | No (sensor only) |
 
 ### Light Methods
 
@@ -330,11 +293,13 @@ Cookie: token=<token>
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
-| `MoveUp` | - | Open blind |
-| `MoveDown` | - | Close blind |
+| `Open` | - | Open blind (move up) |
+| `Close` | - | Close blind (move down) |
 | `Stop` | - | Stop movement |
 | `AmznSetPercentage` | `[position]` (0-100) | Set position (0=open, 100=closed) |
 | `SetAngle` | `[angle]` (0-100) | Set tilt angle |
+
+**Note**: `MoveUp` and `MoveDown` methods do NOT exist - use `Open` and `Close` instead.
 
 ### Climate Methods
 
@@ -357,17 +322,31 @@ Cookie: token=<token>
 | `MinSetValueHeat` | Minimum allowed temperature |
 | `MaxSetValueHeat` | Maximum allowed temperature |
 
+### Physical Button Properties (SmartCOM.Switch)
+
+| Property | Description |
+|----------|-------------|
+| `IsOn` | `true` only while button is physically pressed (momentary) |
+| `ActValue` | Same as IsOn |
+| `CanBeSimulated` | Whether simulation mode is available |
+| `IsSimulation` | Whether currently in simulation mode |
+
+**Limitation**: There is no `LastClickType` or event history. The API only provides momentary state.
+
 ---
 
 ## Version History
 
 | Version | Changes |
 |---------|---------|
+| **1.4.1** | Removed button event entities (not functional due to API limitations) |
+| **1.4.0** | Added event entities for physical buttons (later removed in 1.4.1) |
+| **1.3.3** | Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown` |
 | **1.3.2** | Added logbook integration for switch click events |
-| **1.3.1** | Best practices: Entity categories for diagnostic sensors, availability detection, HomeAssistantError exceptions, EntityDescription refactoring |
-| **1.3.0** | Added smart meter, air quality, and valve sensors. Added device triggers for switches. Added diagnostics support. |
-| **1.2.1** | Added German translations for DACH region customers |
-| **1.2.0** | Added optional area sync feature (sync Evon rooms to HA areas) |
+| **1.3.1** | Best practices: Entity categories, availability detection, HomeAssistantError, EntityDescription |
+| **1.3.0** | Added smart meter, air quality, valve sensors. Added device triggers. Added diagnostics. |
+| **1.2.1** | Added German translations |
+| **1.2.0** | Added optional area sync feature |
 | **1.1.5** | Fixed AbortFlow exception handling |
 | **1.1.4** | Improved error handling in API client |
 | **1.1.3** | Fixed config flow errors, added host URL normalization |
@@ -380,7 +359,7 @@ Cookie: token=<token>
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please see [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details and development guidelines.
 
 ## License
 

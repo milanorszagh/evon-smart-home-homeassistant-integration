@@ -1,4 +1,5 @@
 """Climate platform for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
@@ -18,10 +19,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import EvonApi
 from .base_entity import EvonEntity
 from .const import (
-    DOMAIN,
     CLIMATE_MODE_COMFORT,
     CLIMATE_MODE_ENERGY_SAVING,
     CLIMATE_MODE_FREEZE_PROTECTION,
+    DOMAIN,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -43,14 +44,16 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "climates" in coordinator.data:
         for climate in coordinator.data["climates"]:
-            entities.append(EvonClimate(
-                coordinator,
-                climate["id"],
-                climate["name"],
-                climate.get("room_name", ""),
-                entry,
-                api,
-            ))
+            entities.append(
+                EvonClimate(
+                    coordinator,
+                    climate["id"],
+                    climate["name"],
+                    climate.get("room_name", ""),
+                    entry,
+                    api,
+                )
+            )
 
     async_add_entities(entities)
 
@@ -60,9 +63,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
-    )
+    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_preset_modes = PRESET_MODES
     _enable_turn_on_off_backwards_compat = False
 
@@ -156,9 +157,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
         if ATTR_TEMPERATURE in kwargs:
-            await self._api.set_climate_temperature(
-                self._instance_id, kwargs[ATTR_TEMPERATURE]
-            )
+            await self._api.set_climate_temperature(self._instance_id, kwargs[ATTR_TEMPERATURE])
             await self.coordinator.async_request_refresh()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:

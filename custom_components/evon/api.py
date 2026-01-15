@@ -1,4 +1,5 @@
 """Evon Smart Home API client."""
+
 from __future__ import annotations
 
 import base64
@@ -91,9 +92,7 @@ class EvonApi:
                 },
             ) as response:
                 if response.status != 200:
-                    raise EvonAuthError(
-                        f"Login failed: {response.status} {response.reason}"
-                    )
+                    raise EvonAuthError(f"Login failed: {response.status} {response.reason}")
 
                 token = response.headers.get("x-elocs-token")
                 if not token:
@@ -184,9 +183,7 @@ class EvonApi:
                     rooms[room_id] = room_name
         return rooms
 
-    async def call_method(
-        self, instance_id: str, method: str, params: list | None = None
-    ) -> dict[str, Any]:
+    async def call_method(self, instance_id: str, method: str, params: list | None = None) -> dict[str, Any]:
         """Call a method on an instance."""
         result = await self._request(
             "POST",
@@ -242,9 +239,7 @@ class EvonApi:
         """Set climate to freeze protection mode."""
         await self.call_method(instance_id, "WriteFreezeMode")
 
-    async def set_climate_temperature(
-        self, instance_id: str, temperature: float
-    ) -> None:
+    async def set_climate_temperature(self, instance_id: str, temperature: float) -> None:
         """Set climate target temperature."""
         await self.call_method(instance_id, "WriteCurrentSetTemperature", [temperature])
 

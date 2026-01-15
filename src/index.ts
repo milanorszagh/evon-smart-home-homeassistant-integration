@@ -193,12 +193,6 @@ function filterByClass(instances: EvonInstance[], className: string): EvonInstan
   );
 }
 
-function filterByClassIncludes(instances: EvonInstance[], classNamePart: string): EvonInstance[] {
-  return instances.filter(
-    (i) => i.ClassName.includes(classNamePart) && i.Name && i.Name.length > 0
-  );
-}
-
 async function controlAllDevices(
   devices: EvonInstance[],
   method: string,
@@ -366,10 +360,11 @@ server.tool(
       case "off":
         method = "AmznTurnOff";
         break;
-      case "toggle":
+      case "toggle": {
         const state = await apiRequest<LightState>(`/instances/${light_id}`);
         method = state.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
         break;
+      }
       case "brightness":
         method = "AmznSetBrightness";
         params = [brightness ?? 50];
@@ -709,7 +704,9 @@ server.resource(
       try {
         const details = await apiRequest<LightState>(`/instances/${light.ID}`);
         if (details.data.IsOn) lightsOn++;
-      } catch {}
+      } catch {
+        // Ignore errors - just skip unresponsive devices in count
+      }
     }
 
     // Count open blinds
@@ -718,7 +715,9 @@ server.resource(
       try {
         const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
         if ((details.data.Position ?? 0) < 50) blindsOpen++;
-      } catch {}
+      } catch {
+        // Ignore errors - just skip unresponsive devices in count
+      }
     }
 
     // Get average temperature
@@ -731,7 +730,9 @@ server.resource(
           totalTemp += details.data.ActualTemperature;
           tempCount++;
         }
-      } catch {}
+      } catch {
+        // Ignore errors - just skip unresponsive devices in count
+      }
     }
 
     const summary = {

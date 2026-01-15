@@ -1,4 +1,5 @@
 """Light platform for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
@@ -34,14 +35,16 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "lights" in coordinator.data:
         for light in coordinator.data["lights"]:
-            entities.append(EvonLight(
-                coordinator,
-                light["id"],
-                light["name"],
-                light.get("room_name", ""),
-                entry,
-                api,
-            ))
+            entities.append(
+                EvonLight(
+                    coordinator,
+                    light["id"],
+                    light["name"],
+                    light.get("room_name", ""),
+                    entry,
+                    api,
+                )
+            )
 
     async_add_entities(entities)
 

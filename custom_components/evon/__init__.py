@@ -1,4 +1,5 @@
 """The Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
@@ -10,20 +11,27 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi
 from .const import (
-    DOMAIN,
     CONF_HOST,
-    CONF_USERNAME,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
-    DEFAULT_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
+    CONF_USERNAME,
+    DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
+    DOMAIN,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.COVER, Platform.CLIMATE, Platform.SENSOR, Platform.SWITCH, Platform.BINARY_SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.LIGHT,
+    Platform.COVER,
+    Platform.CLIMATE,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.BINARY_SENSOR,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

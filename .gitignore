@@ -1,8 +1,19 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Logs
 logs/
 *.log
+
+# OS files
 .DS_Store
+
+# Sensitive files - NEVER commit these
 .claude.json
 .claude/
+
+# Test files
 test-api.mjs

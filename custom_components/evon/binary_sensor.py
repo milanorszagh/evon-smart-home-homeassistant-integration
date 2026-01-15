@@ -1,4 +1,5 @@
 """Binary sensor platform for Evon Smart Home integration."""
+
 from __future__ import annotations
 
 import logging
