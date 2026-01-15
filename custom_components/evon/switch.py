@@ -6,13 +6,13 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import DOMAIN, EVENT_SINGLE_CLICK, EVENT_DOUBLE_CLICK, EVENT_LONG_PRESS
+from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ async def async_setup_entry(
 
 
 class EvonSwitch(EvonEntity, SwitchEntity):
-    """Representation of an Evon switch."""
+    """Representation of an Evon controllable switch (relay)."""
 
     def __init__(
         self,
@@ -58,7 +58,6 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_switch_{instance_id}"
-        self._last_click: str | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -76,13 +75,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_entity_data("switches", self._instance_id)
-        attrs = {"evon_id": self._instance_id}
-        if data:
-            last_click = data.get("last_click")
-            if last_click:
-                attrs["last_click_type"] = last_click
-        return attrs
+        return {"evon_id": self._instance_id}
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
@@ -93,41 +86,3 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         """Turn off the switch."""
         await self._api.turn_off_switch(self._instance_id)
         await self.coordinator.async_request_refresh()
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        # Check for click events
-        data = self.coordinator.get_entity_data("switches", self._instance_id)
-        if data:
-            new_click = data.get("last_click")
-            if new_click and new_click != self._last_click:
-                self._last_click = new_click
-                # Fire event for button press
-                event_type = self._map_click_event(new_click)
-                if event_type:
-                    self.hass.bus.async_fire(
-                        f"{DOMAIN}_event",
-                        {
-                            "device_id": self._instance_id,
-                            "device_name": self._device_name,
-                            "event_type": event_type,
-                        },
-                    )
-                    _LOGGER.debug(
-                        "Fired %s event for %s", event_type, self._device_name
-                    )
-        self.async_write_ha_state()
-
-    def _map_click_event(self, click_type: str | None) -> str | None:
-        """Map Evon click type to event type."""
-        if not click_type:
-            return None
-        click_lower = click_type.lower()
-        if "double" in click_lower:
-            return EVENT_DOUBLE_CLICK
-        elif "long" in click_lower:
-            return EVENT_LONG_PRESS
-        elif "single" in click_lower or "click" in click_lower:
-            return EVENT_SINGLE_CLICK
-        return click_type
