@@ -116,9 +116,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle reconfiguration."""
-        self._reconfig_entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        if not self._reconfig_entry:
-            return self.async_abort(reason="reconfigure_failed")
+        # Get the config entry being reconfigured
+        self._reconfig_entry = self._get_reconfigure_entry()
 
         errors: dict[str, str] = {}
 
