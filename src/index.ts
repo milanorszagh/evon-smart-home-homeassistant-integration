@@ -54,8 +54,8 @@ const DEVICE_CLASSES = {
 
 // Method mappings for device control
 const BLIND_METHODS = {
-  up: { method: "MoveUp", params: [] as unknown[] },
-  down: { method: "MoveDown", params: [] as unknown[] },
+  up: { method: "Open", params: [] as unknown[] },
+  down: { method: "Close", params: [] as unknown[] },
   stop: { method: "Stop", params: [] as unknown[] },
 } as const;
 

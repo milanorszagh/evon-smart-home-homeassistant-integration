@@ -214,11 +214,11 @@ class EvonApi:
     # Blind methods
     async def open_blind(self, instance_id: str) -> None:
         """Open a blind (move up)."""
-        await self.call_method(instance_id, "MoveUp")
+        await self.call_method(instance_id, "Open")
 
     async def close_blind(self, instance_id: str) -> None:
         """Close a blind (move down)."""
-        await self.call_method(instance_id, "MoveDown")
+        await self.call_method(instance_id, "Close")
 
     async def stop_blind(self, instance_id: str) -> None:
         """Stop a blind."""
