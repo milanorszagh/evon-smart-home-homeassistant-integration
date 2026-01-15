@@ -11,8 +11,10 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 | Device Type | Features |
 |-------------|----------|
 | **Lights** | On/off, brightness (0-100%) |
+| **Switches** | On/off, click events (single, double, long press) |
 | **Blinds** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
 | **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
+| **Sensors** | Temperature sensors from climate devices |
 
 ---
 
@@ -43,16 +45,34 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 2. Restart Home Assistant
 3. Follow steps 5-7 above
 
+### Configuration Options
+
+After installation, you can configure the integration via **Settings** → **Devices & Services** → **Evon Smart Home** → **Configure**:
+
+- **Poll interval**: How often to fetch device states (5-300 seconds, default: 30)
+
+To change your connection credentials, use the **Reconfigure** option from the integration menu.
+
 ### Supported Platforms
 
 #### Light
 - Turn on/off
 - Brightness control (0-100%)
+- Attributes: `brightness_pct`, `evon_id`
+
+#### Switch
+- Turn on/off
+- Click event detection (fires `evon_event` on the event bus)
+  - `single_click`
+  - `double_click`
+  - `long_press`
+- Attributes: `last_click_type`, `evon_id`
 
 #### Cover (Blinds)
 - Open/close/stop
 - Position control (0-100%)
 - Tilt angle control (0-100%)
+- Attributes: `evon_position`, `tilt_angle`, `evon_id`
 
 #### Climate
 - Temperature control
@@ -60,6 +80,30 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
   - `comfort` - Day mode, normal heating
   - `energy_saving` - Night mode, reduced heating
   - `freeze_protection` - Minimum heating to prevent freezing
+- Attributes: `comfort_temperature`, `energy_saving_temperature`, `freeze_protection_temperature`, `evon_id`
+
+#### Sensor
+- Temperature sensors from climate devices
+- Attributes: `target_temperature`, `evon_id`
+
+### Automations with Click Events
+
+Listen for switch click events in automations:
+
+```yaml
+automation:
+  - alias: "Double click - movie mode"
+    trigger:
+      - platform: event
+        event_type: evon_event
+        event_data:
+          event_type: double_click
+          device_name: "Living Room Switch"
+    action:
+      - service: scene.turn_on
+        target:
+          entity_id: scene.movie_mode
+```
 
 ---
 
@@ -111,6 +155,47 @@ Add to your Claude Code configuration (`.claude.json`):
 | `list_climate` | List all climate controls with current state |
 | `climate_control` | Control a single climate zone |
 | `climate_control_all` | Control all climate zones at once |
+| `list_sensors` | List temperature and other sensors |
+| `list_scenes` | List available scenes |
+| `activate_scene` | Activate a scene (all_off, movie_mode, morning, night) |
+| `create_scene` | Create a custom scene |
+
+### Available Resources
+
+Resources allow Claude to read device state without calling tools:
+
+| Resource URI | Description |
+|--------------|-------------|
+| `evon://lights` | All lights with current state |
+| `evon://blinds` | All blinds with current state |
+| `evon://climate` | All climate controls with current state |
+| `evon://summary` | Home summary (device counts, average temp) |
+
+### Pre-defined Scenes
+
+| Scene | Description |
+|-------|-------------|
+| `all_off` | Turn off all lights and close all blinds |
+| `movie_mode` | Dim lights to 10% and close blinds |
+| `morning` | Open blinds, set lights to 70%, comfort mode |
+| `night` | Turn off lights, set climate to energy saving |
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+pip install -r requirements-test.txt
+pytest
+```
+
+### Building MCP Server
+
+```bash
+npm run build
+```
 
 ---
 
@@ -172,6 +257,7 @@ Cookie: token=<token>
 | Class Name | Type |
 |------------|------|
 | `SmartCOM.Light.LightDim` | Dimmable light |
+| `SmartCOM.Light.Light` | Non-dimmable light/switch |
 | `SmartCOM.Blind.Blind` | Blind/shutter |
 | `SmartCOM.Clima.ClimateControl` | Climate control |
 | `*ClimateControlUniversal*` | Universal climate control |

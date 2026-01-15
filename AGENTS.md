@@ -35,7 +35,7 @@ Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is nee
 ### Method Naming Pattern
 
 Evon uses "Amzn" prefix for methods that were designed for Alexa integration. These are the reliable methods for device control:
-- `AmznTurnOn` / `AmznTurnOff` - lights
+- `AmznTurnOn` / `AmznTurnOff` - lights and switches
 - `AmznSetBrightness` - light brightness
 - `AmznSetPercentage` - blind position
 
@@ -51,7 +51,8 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 - Entry point: `__init__.py`
 - API client: `api.py`
 - Data coordinator: `coordinator.py`
-- Platforms: `light.py`, `cover.py`, `climate.py`
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`
+- Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
 
@@ -62,8 +63,15 @@ npm run build
 ```
 
 ### Home Assistant Integration
+```bash
+# Run unit tests
+pip install -r requirements-test.txt
+pytest
+```
+
+For live testing:
 1. Copy files to HA's `custom_components/evon/`
-2. Restart Home Assistant
+2. Restart Home Assistant (or use reload from integration menu)
 3. Check logs at Settings → System → Logs
 
 ## Device Class Names
@@ -72,7 +80,8 @@ When filtering devices from the API, use these class names:
 
 | Device | Class Name |
 |--------|------------|
-| Lights | `SmartCOM.Light.LightDim` |
+| Dimmable Lights | `SmartCOM.Light.LightDim` |
+| Switches/Non-dimmable | `SmartCOM.Light.Light` |
 | Blinds | `SmartCOM.Blind.Blind` |
 | Climate | `SmartCOM.Clima.ClimateControl` |
 | Climate (universal) | Contains `ClimateControlUniversal` |
@@ -123,5 +132,60 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 2. Add class name constant to `const.py`
 3. Add filtering logic to `coordinator.py` in `_async_update_data()`
 4. Create new platform file (e.g., `sensor.py`)
-5. Add platform to `PLATFORMS_LIST` in `__init__.py`
+5. Add platform to `PLATFORMS` list in `__init__.py`
 6. Update `manifest.json` if needed
+
+## Integration Features
+
+### Home Assistant
+- **Platforms**: Light, Cover, Climate, Sensor, Switch
+- **Options Flow**: Configure poll interval (5-300 seconds)
+- **Reconfigure Flow**: Change host/credentials without removing integration
+- **Reload Support**: Reload without HA restart
+- **Click Events**: Switches fire `evon_event` on event bus for automations
+- **Entity Attributes**: Extra attributes exposed on all entities
+
+### MCP Server
+- **Tools**: Device listing and control (lights, blinds, climate)
+- **Resources**: Read device state via `evon://` URIs
+- **Scenes**: Pre-defined and custom scenes for whole-home control
+
+## MCP Resources
+
+Resources allow reading device state without calling tools:
+
+| URI | Description |
+|-----|-------------|
+| `evon://lights` | All lights with state |
+| `evon://blinds` | All blinds with state |
+| `evon://climate` | All climate controls with state |
+| `evon://summary` | Home summary with counts and averages |
+
+## MCP Scenes
+
+Pre-defined scenes:
+- `all_off` - Turn off lights, close blinds
+- `movie_mode` - Dim to 10%, close blinds
+- `morning` - Open blinds, lights to 70%, comfort mode
+- `night` - Lights off, energy saving mode
+
+## Event Bus (Home Assistant)
+
+Switches fire events on state change:
+
+```yaml
+event_type: evon_event
+event_data:
+  device_id: "SC1_M01.Switch1"
+  device_name: "Living Room Switch"
+  event_type: "double_click"  # single_click, double_click, long_press
+```
+
+## Unit Tests
+
+Tests are in the `tests/` directory:
+- `test_api.py` - API client and password encoding tests
+- `test_config_flow.py` - Config and options flow tests
+- `test_coordinator.py` - Data coordinator tests
+
+Run with: `pytest`
