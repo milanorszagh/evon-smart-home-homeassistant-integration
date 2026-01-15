@@ -13,13 +13,13 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi, EvonApiError, EvonAuthError
-from .const import DOMAIN, DEFAULT_HOST, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL
+from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
+        vol.Required(CONF_HOST): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
     }
@@ -132,7 +132,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current_data = self._reconfig_entry.data
         reconfigure_schema = vol.Schema(
             {
-                vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, DEFAULT_HOST)): str,
+                vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, "")): str,
                 vol.Required(CONF_USERNAME, default=current_data.get(CONF_USERNAME, "")): str,
                 vol.Required(CONF_PASSWORD): str,  # Don't show current password
             }

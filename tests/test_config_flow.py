@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
 from custom_components.evon.const import DOMAIN, DEFAULT_SCAN_INTERVAL
+from tests.conftest import TEST_HOST, TEST_USERNAME, TEST_PASSWORD
 
 
 class TestConfigFlow:
@@ -51,17 +52,17 @@ class TestConfigFlow:
 
             result = await flow.async_step_user(
                 user_input={
-                    "host": "http://192.168.1.4",
-                    "username": "testuser",
-                    "password": "testpass",
+                    "host": TEST_HOST,
+                    "username": TEST_USERNAME,
+                    "password": TEST_PASSWORD,
                 }
             )
 
             assert result["type"] == "create_entry"
-            assert result["title"] == "Evon (http://192.168.1.4)"
-            assert result["data"]["host"] == "http://192.168.1.4"
-            assert result["data"]["username"] == "testuser"
-            assert result["data"]["password"] == "testpass"
+            assert result["title"] == f"Evon ({TEST_HOST})"
+            assert result["data"]["host"] == TEST_HOST
+            assert result["data"]["username"] == TEST_USERNAME
+            assert result["data"]["password"] == TEST_PASSWORD
 
     @pytest.mark.asyncio
     async def test_connection_error(self):
@@ -81,9 +82,9 @@ class TestConfigFlow:
 
             result = await flow.async_step_user(
                 user_input={
-                    "host": "http://192.168.1.4",
-                    "username": "testuser",
-                    "password": "testpass",
+                    "host": TEST_HOST,
+                    "username": TEST_USERNAME,
+                    "password": TEST_PASSWORD,
                 }
             )
 
@@ -109,8 +110,8 @@ class TestConfigFlow:
 
             result = await flow.async_step_user(
                 user_input={
-                    "host": "http://192.168.1.4",
-                    "username": "testuser",
+                    "host": TEST_HOST,
+                    "username": TEST_USERNAME,
                     "password": "wrongpass",
                 }
             )

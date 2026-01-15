@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from custom_components.evon.api import encode_password, EvonApi, EvonApiError, EvonAuthError
+from tests.conftest import TEST_HOST, TEST_USERNAME, TEST_PASSWORD
 
 
 class TestPasswordEncoding:
@@ -40,20 +41,20 @@ class TestEvonApi:
     def test_init_with_plain_password(self):
         """Test API initialization with plain password."""
         api = EvonApi(
-            host="http://192.168.1.4",
-            username="user",
-            password="plainpass",
+            host=TEST_HOST,
+            username=TEST_USERNAME,
+            password=TEST_PASSWORD,
         )
         # Password should be encoded
-        assert api._password != "plainpass"
+        assert api._password != TEST_PASSWORD
         assert len(api._password) == 88
 
     def test_init_with_encoded_password(self):
         """Test API initialization with pre-encoded password."""
-        encoded = encode_password("user", "plainpass")
+        encoded = encode_password(TEST_USERNAME, TEST_PASSWORD)
         api = EvonApi(
-            host="http://192.168.1.4",
-            username="user",
+            host=TEST_HOST,
+            username=TEST_USERNAME,
             password=encoded,
             password_is_encoded=True,
         )
@@ -63,11 +64,11 @@ class TestEvonApi:
     def test_host_trailing_slash_removed(self):
         """Test that trailing slash is removed from host."""
         api = EvonApi(
-            host="http://192.168.1.4/",
-            username="user",
-            password="pass",
+            host=f"{TEST_HOST}/",
+            username=TEST_USERNAME,
+            password=TEST_PASSWORD,
         )
-        assert api._host == "http://192.168.1.4"
+        assert api._host == TEST_HOST
 
 
 class TestEvonApiErrors:

@@ -9,6 +9,11 @@ import pytest
 from custom_components.evon.api import EvonApi
 from custom_components.evon.const import DOMAIN
 
+# Test constants - these are placeholders, not real credentials
+TEST_HOST = "http://192.168.1.100"
+TEST_USERNAME = "testuser"
+TEST_PASSWORD = "testpass"
+
 
 @pytest.fixture
 def mock_api() -> Generator[AsyncMock]:
@@ -81,9 +86,9 @@ def mock_config_entry() -> MagicMock:
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
     entry.data = {
-        "host": "http://192.168.1.4",
-        "username": "testuser",
-        "password": "testpass",
+        "host": TEST_HOST,
+        "username": TEST_USERNAME,
+        "password": TEST_PASSWORD,
     }
     entry.options = {"scan_interval": 30}
     return entry

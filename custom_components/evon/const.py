@@ -9,7 +9,6 @@ CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 # Default values
-DEFAULT_HOST = "http://192.168.1.4"
 DEFAULT_SCAN_INTERVAL = 30
 
 # Climate modes
