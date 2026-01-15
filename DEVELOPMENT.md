@@ -10,6 +10,7 @@ This document provides architecture details, API findings, and development guide
 custom_components/evon/
 ├── __init__.py          # Entry point, platform setup
 ├── api.py               # Evon API client
+├── base_entity.py       # Base entity class with common functionality
 ├── config_flow.py       # Configuration UI flows
 ├── const.py             # Constants and device classes
 ├── coordinator.py       # Data update coordinator
@@ -18,6 +19,7 @@ custom_components/evon/
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality)
 ├── switch.py            # Switch platform (controllable relays)
+├── select.py            # Select platform (home states)
 ├── binary_sensor.py     # Binary sensor platform (valves)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
@@ -79,6 +81,7 @@ src/
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes | Use `Open`/`Close`, NOT `MoveUp`/`MoveDown` |
 | `SmartCOM.Clima.ClimateControl` | Climate | Yes | |
 | `*ClimateControlUniversal*` | Climate | Yes | Match by substring |
+| `System.HomeState` | Home mode | Yes | Use `Activate` method to switch |
 | `SmartCOM.Switch` | Physical button | **No** | Read-only, momentary state |
 | `Energy.SmartMeter*` | Smart meter | No | Sensor only |
 | `System.Location.AirQuality` | Air quality | No | Sensor only |
@@ -119,6 +122,29 @@ src/
 | `WriteNightMode` | - | Set energy saving mode |
 | `WriteFreezeMode` | - | Set freeze protection mode |
 | `WriteCurrentSetTemperature` | `[temperature]` | Set target temperature |
+
+#### Home State (`System.HomeState`)
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Activate` | - | Activate this home state |
+
+**Properties:**
+| Property | Description |
+|----------|-------------|
+| `Active` | `true` if this state is currently active |
+| `ActiveInstance` | ID of the currently active home state |
+| `Name` | Display name of the state |
+
+**Available states:**
+| ID | German Name | English |
+|----|-------------|---------|
+| `HomeStateAtHome` | Daheim | At Home |
+| `HomeStateHoliday` | Urlaub | Holiday |
+| `HomeStateNight` | Nacht | Night |
+| `HomeStateWork` | Arbeit | Work |
+
+**Important**: Skip instances where ID starts with `System.` - these are templates.
 
 ## Known Limitations
 
@@ -285,6 +311,8 @@ ln -s /path/to/evon-ha/custom_components/evon /config/custom_components/evon
 | `list_climate` | List climate devices |
 | `climate_control` | Control single climate |
 | `climate_control_all` | Control all climate |
+| `list_home_states` | List home states with active status |
+| `set_home_state` | Set active home state (at_home/holiday/night/work) |
 | `list_sensors` | List temperature sensors |
 | `list_scenes` | List available scenes |
 | `activate_scene` | Activate a scene |
@@ -297,7 +325,8 @@ ln -s /path/to/evon-ha/custom_components/evon /config/custom_components/evon
 | `evon://lights` | All lights with state |
 | `evon://blinds` | All blinds with state |
 | `evon://climate` | All climate devices |
-| `evon://summary` | Home summary stats |
+| `evon://home_state` | Current home state and available states |
+| `evon://summary` | Home summary (counts, avg temp, home state) |
 
 ## Version Compatibility
 

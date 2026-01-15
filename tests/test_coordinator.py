@@ -208,3 +208,94 @@ class TestEvonDataUpdateCoordinator:
         switch_data = coordinator.get_switch_data("switch_1")
         assert switch_data["id"] == "switch_1"
         assert switch_data["is_on"] is True
+
+    def test_get_home_state_data(self):
+        """Test getting home state data."""
+        from custom_components.evon.coordinator import EvonDataUpdateCoordinator
+
+        hass = MagicMock()
+        api = MagicMock()
+
+        coordinator = EvonDataUpdateCoordinator(hass, api)
+        coordinator.data = {
+            "home_states": [
+                {"id": "HomeStateAtHome", "name": "Daheim", "active": True},
+                {"id": "HomeStateHoliday", "name": "Urlaub", "active": False},
+                {"id": "HomeStateNight", "name": "Nacht", "active": False},
+                {"id": "HomeStateWork", "name": "Arbeit", "active": False},
+            ]
+        }
+
+        state_data = coordinator.get_home_state_data("HomeStateAtHome")
+        assert state_data["id"] == "HomeStateAtHome"
+        assert state_data["name"] == "Daheim"
+        assert state_data["active"] is True
+
+    def test_get_active_home_state(self):
+        """Test getting the active home state."""
+        from custom_components.evon.coordinator import EvonDataUpdateCoordinator
+
+        hass = MagicMock()
+        api = MagicMock()
+
+        coordinator = EvonDataUpdateCoordinator(hass, api)
+        coordinator.data = {
+            "home_states": [
+                {"id": "HomeStateAtHome", "name": "Daheim", "active": False},
+                {"id": "HomeStateHoliday", "name": "Urlaub", "active": True},
+                {"id": "HomeStateNight", "name": "Nacht", "active": False},
+            ]
+        }
+
+        active_state = coordinator.get_active_home_state()
+        assert active_state == "HomeStateHoliday"
+
+    def test_get_home_states(self):
+        """Test getting all home states."""
+        from custom_components.evon.coordinator import EvonDataUpdateCoordinator
+
+        hass = MagicMock()
+        api = MagicMock()
+
+        coordinator = EvonDataUpdateCoordinator(hass, api)
+        coordinator.data = {
+            "home_states": [
+                {"id": "HomeStateAtHome", "name": "Daheim", "active": True},
+                {"id": "HomeStateHoliday", "name": "Urlaub", "active": False},
+            ]
+        }
+
+        home_states = coordinator.get_home_states()
+        assert len(home_states) == 2
+        assert home_states[0]["id"] == "HomeStateAtHome"
+
+    @pytest.mark.asyncio
+    async def test_update_data_includes_home_states(self):
+        """Test that update data includes home states."""
+        from custom_components.evon.coordinator import EvonDataUpdateCoordinator
+
+        hass = MagicMock()
+        api = AsyncMock()
+        api.get_instances = AsyncMock(
+            return_value=[
+                {"ID": "HomeStateAtHome", "ClassName": "System.HomeState", "Name": "Daheim"},
+                {"ID": "HomeStateHoliday", "ClassName": "System.HomeState", "Name": "Urlaub"},
+                {"ID": "System.HomeState", "ClassName": "System.HomeState", "Name": ""},  # Template - skip
+            ]
+        )
+        api.get_instance = AsyncMock(
+            side_effect=lambda id: {
+                "HomeStateAtHome": {"Active": True},
+                "HomeStateHoliday": {"Active": False},
+            }.get(id, {})
+        )
+
+        coordinator = EvonDataUpdateCoordinator(hass, api)
+        data = await coordinator._async_update_data()
+
+        assert "home_states" in data
+        assert len(data["home_states"]) == 2
+        assert data["home_states"][0]["id"] == "HomeStateAtHome"
+        assert data["home_states"][0]["active"] is True
+        assert data["home_states"][1]["id"] == "HomeStateHoliday"
+        assert data["home_states"][1]["active"] is False

@@ -198,7 +198,8 @@ class TestMCPServer:
         assert "server.tool" in content, "No tools defined"
         assert "server.resource" in content, "No resources defined"
         assert "scenes" in content.lower(), "No scenes support"
-        print("MCP server has tools, resources, and scenes")
+        assert "home_state" in content.lower() or "homestate" in content.lower(), "No home state support"
+        print("MCP server has tools, resources, scenes, and home states")
 
 
 class TestIntegrationFiles:
@@ -211,6 +212,7 @@ class TestIntegrationFiles:
         required_files = [
             "__init__.py",
             "api.py",
+            "base_entity.py",
             "config_flow.py",
             "const.py",
             "coordinator.py",
@@ -219,6 +221,7 @@ class TestIntegrationFiles:
             "climate.py",
             "sensor.py",
             "switch.py",
+            "select.py",
             "binary_sensor.py",
             "device_trigger.py",
             "diagnostics.py",

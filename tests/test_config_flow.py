@@ -43,7 +43,7 @@ class TestConfigFlow:
         flow._abort_if_unique_id_configured = MagicMock()
 
         with (
-            patch("custom_components.evon.config_flow.async_get_clientsession") as mock_session,
+            patch("custom_components.evon.config_flow.async_get_clientsession"),
             patch("custom_components.evon.config_flow.EvonApi") as mock_api_class,
         ):
             mock_api = mock_api_class.return_value

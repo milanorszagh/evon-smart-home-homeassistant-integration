@@ -39,6 +39,20 @@ Position convention in Evon:
 
 Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is needed.
 
+### Home State Control - SIMPLE AND RELIABLE
+
+The `System.HomeState` class controls home-wide modes. Key points:
+
+1. **Finding states**: Filter by `ClassName === "System.HomeState"` and skip IDs starting with `System.`
+2. **Reading active state**: Check the `Active` property on each state instance
+3. **Changing state**: Call `Activate` method on the desired state instance
+4. **State IDs are fixed**: `HomeStateAtHome`, `HomeStateHoliday`, `HomeStateNight`, `HomeStateWork`
+
+```javascript
+// Example: Switch to night mode
+await callMethod("HomeStateNight", "Activate");
+```
+
 ### Physical Buttons (SmartCOM.Switch) - CANNOT BE MONITORED
 
 **CRITICAL**: Physical wall buttons (`SmartCOM.Switch` class) **cannot be reliably monitored** by external systems:
@@ -72,8 +86,9 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 - All files in: `custom_components/evon/`
 - Entry point: `__init__.py`
 - API client: `api.py`
+- Base entity: `base_entity.py`
 - Data coordinator: `coordinator.py`
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py`
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
@@ -107,6 +122,7 @@ When filtering devices from the API, use these class names:
 | Blinds | `SmartCOM.Blind.Blind` | Yes |
 | Climate | `SmartCOM.Clima.ClimateControl` | Yes |
 | Climate (universal) | Contains `ClimateControlUniversal` | Yes |
+| Home State | `System.HomeState` | Yes (use `Activate` method) |
 | Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
 | Air Quality | `System.Location.AirQuality` | No (sensor only) |
@@ -184,7 +200,8 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ## Integration Features
 
 ### Home Assistant
-- **Platforms**: Light, Cover, Climate, Sensor, Switch, Binary Sensor
+- **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor
+- **Select Entity**: Home state selector (At Home, Holiday, Night, Work)
 - **Options Flow**: Configure poll interval (5-300 seconds), area sync
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -195,9 +212,10 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Valve Sensors**: Binary sensors for climate valve state
 
 ### MCP Server
-- **Tools**: Device listing and control (lights, blinds, climate)
+- **Tools**: Device listing and control (lights, blinds, climate, home states)
 - **Resources**: Read device state via `evon://` URIs
 - **Scenes**: Pre-defined and custom scenes for whole-home control
+- **Home State**: Read and change home modes (at_home, holiday, night, work)
 
 ## MCP Resources
 
@@ -208,7 +226,8 @@ Resources allow reading device state without calling tools:
 | `evon://lights` | All lights with state |
 | `evon://blinds` | All blinds with state |
 | `evon://climate` | All climate controls with state |
-| `evon://summary` | Home summary with counts and averages |
+| `evon://home_state` | Current home state and available states |
+| `evon://summary` | Home summary (counts, averages, home state) |
 
 ## MCP Scenes
 
@@ -275,6 +294,7 @@ pytest
 
 ## Version History
 
+- **v1.5.0**: Added Home State selector (select entity) for switching between home modes. Added MCP tools (`list_home_states`, `set_home_state`) and resource (`evon://home_state`).
 - **v1.4.1**: Removed button event entities (not functional due to Evon API limitations)
 - **v1.4.0**: Added event entities for physical buttons (later removed in 1.4.1)
 - **v1.3.3**: Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown`

@@ -83,3 +83,23 @@ class TestEvonApiErrors:
         error = EvonAuthError("Auth failed")
         assert isinstance(error, EvonApiError)
         assert str(error) == "Auth failed"
+
+
+class TestEvonApiHomeStateMethods:
+    """Test home state related API methods."""
+
+    def test_api_has_home_state_methods(self):
+        """Test that API has home state methods."""
+        api = EvonApi(
+            host=TEST_HOST,
+            username=TEST_USERNAME,
+            password=TEST_PASSWORD,
+        )
+        # Check methods exist
+        assert hasattr(api, "get_home_states")
+        assert hasattr(api, "get_active_home_state")
+        assert hasattr(api, "activate_home_state")
+        # Check they are callable
+        assert callable(api.get_home_states)
+        assert callable(api.get_active_home_state)
+        assert callable(api.activate_home_state)
