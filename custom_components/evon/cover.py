@@ -125,6 +125,18 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
             return data.get("is_moving", False)
         return False
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        data = self.coordinator.get_blind_data(self._instance_id)
+        attrs = {}
+        if data:
+            # Evon native position (0=open, 100=closed)
+            attrs["evon_position"] = data.get("position", 0)
+            attrs["tilt_angle"] = data.get("angle", 0)
+            attrs["evon_id"] = self._instance_id
+        return attrs
+
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
         await self._api.open_blind(self._instance_id)

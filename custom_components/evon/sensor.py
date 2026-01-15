@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -87,6 +88,15 @@ class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Sensor
         if data:
             return data.get("current_temperature")
         return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        data = self.coordinator.get_climate_data(self._instance_id)
+        attrs = {"evon_id": self._instance_id}
+        if data:
+            attrs["target_temperature"] = data.get("target_temperature")
+        return attrs
 
     @callback
     def _handle_coordinator_update(self) -> None:

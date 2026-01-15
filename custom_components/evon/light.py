@@ -91,6 +91,16 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
             return int(evon_brightness * 255 / 100)
         return None
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        data = self.coordinator.get_light_data(self._instance_id)
+        attrs = {}
+        if data:
+            attrs["brightness_pct"] = data.get("brightness", 0)
+            attrs["evon_id"] = self._instance_id
+        return attrs
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
         if ATTR_BRIGHTNESS in kwargs:

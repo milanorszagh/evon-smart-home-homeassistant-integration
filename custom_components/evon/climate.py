@@ -132,6 +132,18 @@ class EvonClimate(CoordinatorEntity[EvonDataUpdateCoordinator], ClimateEntity):
         """Return the current preset mode."""
         return self._current_preset
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        data = self.coordinator.get_climate_data(self._instance_id)
+        attrs = {}
+        if data:
+            attrs["comfort_temperature"] = data.get("comfort_temp")
+            attrs["energy_saving_temperature"] = data.get("energy_saving_temp")
+            attrs["freeze_protection_temperature"] = data.get("freeze_protection_temp")
+            attrs["evon_id"] = self._instance_id
+        return attrs
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target HVAC mode."""
         if hvac_mode == HVACMode.OFF:
