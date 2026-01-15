@@ -41,7 +41,14 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "climates" in coordinator.data:
         for climate in coordinator.data["climates"]:
-            entities.append(EvonClimate(coordinator, api, climate["id"], climate["name"], entry))
+            entities.append(EvonClimate(
+                coordinator,
+                api,
+                climate["id"],
+                climate["name"],
+                climate.get("room_name", ""),
+                entry,
+            ))
 
     async_add_entities(entities)
 
@@ -64,6 +71,7 @@ class EvonClimate(CoordinatorEntity[EvonDataUpdateCoordinator], ClimateEntity):
         api,
         instance_id: str,
         name: str,
+        room_name: str,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the climate entity."""
@@ -73,19 +81,23 @@ class EvonClimate(CoordinatorEntity[EvonDataUpdateCoordinator], ClimateEntity):
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_climate_{instance_id}"
         self._device_name = name
+        self._room_name = room_name
         self._entry = entry
         self._current_preset = PRESET_COMFORT
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this climate control."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model="Climate Control",
             via_device=(DOMAIN, self._entry.entry_id),
         )
+        if self._room_name:
+            info["suggested_area"] = self._room_name
+        return info
 
     @property
     def hvac_mode(self) -> HVACMode:

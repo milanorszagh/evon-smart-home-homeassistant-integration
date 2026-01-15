@@ -33,7 +33,14 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "lights" in coordinator.data:
         for light in coordinator.data["lights"]:
-            entities.append(EvonLight(coordinator, api, light["id"], light["name"], entry))
+            entities.append(EvonLight(
+                coordinator,
+                api,
+                light["id"],
+                light["name"],
+                light.get("room_name", ""),
+                entry,
+            ))
 
     async_add_entities(entities)
 
@@ -51,6 +58,7 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
         api,
         instance_id: str,
         name: str,
+        room_name: str,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the light."""
@@ -60,18 +68,22 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_light_{instance_id}"
         self._device_name = name
+        self._room_name = room_name
         self._entry = entry
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this light."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model="Dimmable Light",
             via_device=(DOMAIN, self._entry.entry_id),
         )
+        if self._room_name:
+            info["suggested_area"] = self._room_name
+        return info
 
     @property
     def is_on(self) -> bool:

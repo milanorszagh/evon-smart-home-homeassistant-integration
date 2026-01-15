@@ -29,7 +29,14 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "switches" in coordinator.data:
         for switch in coordinator.data["switches"]:
-            entities.append(EvonSwitch(coordinator, api, switch["id"], switch["name"], entry))
+            entities.append(EvonSwitch(
+                coordinator,
+                api,
+                switch["id"],
+                switch["name"],
+                switch.get("room_name", ""),
+                entry,
+            ))
 
     async_add_entities(entities)
 
@@ -45,6 +52,7 @@ class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
         api,
         instance_id: str,
         name: str,
+        room_name: str,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the switch."""
@@ -54,19 +62,23 @@ class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_switch_{instance_id}"
         self._device_name = name
+        self._room_name = room_name
         self._entry = entry
         self._last_click: str | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this switch."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model="Switch",
             via_device=(DOMAIN, self._entry.entry_id),
         )
+        if self._room_name:
+            info["suggested_area"] = self._room_name
+        return info
 
     @property
     def is_on(self) -> bool:

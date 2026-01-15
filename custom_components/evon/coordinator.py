@@ -27,7 +27,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Class to manage fetching Evon data."""
 
     def __init__(
-        self, hass: HomeAssistant, api: EvonApi, scan_interval: int = DEFAULT_SCAN_INTERVAL
+        self,
+        hass: HomeAssistant,
+        api: EvonApi,
+        scan_interval: int = DEFAULT_SCAN_INTERVAL,
+        sync_areas: bool = False,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -38,10 +42,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.api = api
         self._instances_cache: list[dict[str, Any]] = []
+        self._sync_areas = sync_areas
+        self._rooms_cache: dict[str, str] = {}
 
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
         self.update_interval = timedelta(seconds=scan_interval)
+
+    def set_sync_areas(self, sync_areas: bool) -> None:
+        """Update the sync areas setting."""
+        self._sync_areas = sync_areas
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Evon API."""
@@ -49,6 +59,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Get all instances
             instances = await self.api.get_instances()
             self._instances_cache = instances
+
+            # Fetch rooms if area sync is enabled
+            if self._sync_areas:
+                try:
+                    self._rooms_cache = await self.api.get_rooms()
+                    _LOGGER.debug("Fetched %d rooms from Evon", len(self._rooms_cache))
+                except EvonApiError:
+                    _LOGGER.warning("Failed to fetch rooms, area sync disabled for this update")
+                    self._rooms_cache = {}
 
             # Filter and organize by type
             lights = []
@@ -60,10 +79,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 class_name = instance.get("ClassName", "")
                 name = instance.get("Name", "")
                 instance_id = instance.get("ID", "")
+                group = instance.get("Group", "")
 
                 # Skip instances without names (templates/base classes)
                 if not name:
                     continue
+
+                # Look up room name if area sync is enabled
+                room_name = self._rooms_cache.get(group, "") if self._sync_areas else ""
 
                 if class_name == EVON_CLASS_LIGHT_DIM:
                     # Get detailed state for light
@@ -72,6 +95,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         lights.append({
                             "id": instance_id,
                             "name": name,
+                            "room_name": room_name,
                             "is_on": details.get("IsOn", False),
                             "brightness": details.get("ScaledBrightness", 0),
                         })
@@ -85,6 +109,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         blinds.append({
                             "id": instance_id,
                             "name": name,
+                            "room_name": room_name,
                             "position": details.get("Position", 0),
                             "angle": details.get("Angle", 0),
                             "is_moving": details.get("IsMoving", False),
@@ -99,6 +124,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         climates.append({
                             "id": instance_id,
                             "name": name,
+                            "room_name": room_name,
                             "current_temperature": details.get("ActualTemperature", 0),
                             "target_temperature": details.get("SetTemperature", 0),
                             "min_temp": details.get("MinSetValueHeat", 15),
@@ -117,6 +143,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         switches.append({
                             "id": instance_id,
                             "name": name,
+                            "room_name": room_name,
                             "is_on": details.get("IsOn", False),
                             "last_click": details.get("LastClickType", None),
                         })
@@ -128,6 +155,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "blinds": blinds,
                 "climates": climates,
                 "switches": switches,
+                "rooms": self._rooms_cache if self._sync_areas else {},
             }
 
         except EvonApiError as err:

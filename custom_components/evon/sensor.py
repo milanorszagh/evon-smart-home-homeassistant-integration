@@ -40,6 +40,7 @@ async def async_setup_entry(
                     coordinator,
                     climate["id"],
                     climate["name"],
+                    climate.get("room_name", ""),
                     entry,
                 )
             )
@@ -60,6 +61,7 @@ class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Sensor
         coordinator: EvonDataUpdateCoordinator,
         instance_id: str,
         name: str,
+        room_name: str,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the sensor."""
@@ -68,18 +70,22 @@ class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Sensor
         self._attr_name = "Temperature"
         self._attr_unique_id = f"evon_temp_{instance_id}"
         self._device_name = name
+        self._room_name = room_name
         self._entry = entry
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model="Climate Control",
             via_device=(DOMAIN, self._entry.entry_id),
         )
+        if self._room_name:
+            info["suggested_area"] = self._room_name
+        return info
 
     @property
     def native_value(self) -> float | None:

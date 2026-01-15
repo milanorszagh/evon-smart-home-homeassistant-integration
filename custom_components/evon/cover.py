@@ -35,7 +35,14 @@ async def async_setup_entry(
     entities = []
     if coordinator.data and "blinds" in coordinator.data:
         for blind in coordinator.data["blinds"]:
-            entities.append(EvonCover(coordinator, api, blind["id"], blind["name"], entry))
+            entities.append(EvonCover(
+                coordinator,
+                api,
+                blind["id"],
+                blind["name"],
+                blind.get("room_name", ""),
+                entry,
+            ))
 
     async_add_entities(entities)
 
@@ -61,6 +68,7 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
         api,
         instance_id: str,
         name: str,
+        room_name: str,
         entry: ConfigEntry,
     ) -> None:
         """Initialize the cover."""
@@ -70,18 +78,22 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_cover_{instance_id}"
         self._device_name = name
+        self._room_name = room_name
         self._entry = entry
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this cover."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model="Blind",
             via_device=(DOMAIN, self._entry.entry_id),
         )
+        if self._room_name:
+            info["suggested_area"] = self._room_name
+        return info
 
     @property
     def current_cover_position(self) -> int | None:

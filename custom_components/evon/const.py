@@ -7,9 +7,11 @@ CONF_HOST = "host"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
+CONF_SYNC_AREAS = "sync_areas"
 
 # Default values
 DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_SYNC_AREAS = False
 
 # Climate modes
 CLIMATE_MODE_COMFORT = "comfort"
@@ -24,6 +26,7 @@ EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "ClimateControlUniversal"
 EVON_CLASS_SWITCH = "SmartCOM.Switch"
 EVON_CLASS_BUTTON = "SmartCOM.Button.Button"
+EVON_CLASS_ROOM = "System.Location.Room"
 
 # Event types
 EVENT_SINGLE_CLICK = "single_click"

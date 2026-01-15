@@ -14,7 +14,7 @@ from homeassistant.data_entry_flow import FlowResult, AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi, EvonApiError, EvonAuthError
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL
+from .const import DOMAIN, DEFAULT_SCAN_INTERVAL, CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -197,6 +197,9 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         current_interval = self.config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
         )
+        current_sync_areas = self.config_entry.options.get(
+            CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -206,6 +209,10 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                         CONF_SCAN_INTERVAL,
                         default=current_interval,
                     ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
+                    vol.Required(
+                        CONF_SYNC_AREAS,
+                        default=current_sync_areas,
+                    ): bool,
                 }
             ),
         )

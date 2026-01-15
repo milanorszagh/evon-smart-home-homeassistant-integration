@@ -157,6 +157,28 @@ class EvonApi:
         result = await self._request("GET", f"/instances/{instance_id}")
         return result.get("data", {})
 
+    async def get_rooms(self, room_class: str = "System.Location.Room") -> dict[str, str]:
+        """Get all rooms as a mapping of room_id -> room_name.
+
+        Args:
+            room_class: The class name for room instances (default: System.Location.Room)
+
+        Returns:
+            Dictionary mapping room IDs to room names
+        """
+        instances = await self.get_instances()
+        rooms = {}
+        for instance in instances:
+            class_name = instance.get("ClassName", "")
+            if class_name == room_class:
+                room_id = instance.get("ID", "")
+                room_name = instance.get("Name", "")
+                # Only include rooms with valid ID and name
+                # Skip template rooms (IDs starting with "System.Location")
+                if room_id and room_name and not room_id.startswith("System.Location."):
+                    rooms[room_id] = room_name
+        return rooms
+
     async def call_method(
         self, instance_id: str, method: str, params: list | None = None
     ) -> dict[str, Any]:
