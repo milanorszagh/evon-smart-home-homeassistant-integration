@@ -63,8 +63,15 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 After installation, you can configure the integration via **Settings** → **Devices & Services** → **Evon Smart Home** → **Configure**:
 
 - **Poll interval**: How often to fetch device states (5-300 seconds, default: 30)
+- **Sync areas from Evon**: Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system (default: off)
 
 To change your connection credentials, use the **Reconfigure** option from the integration menu.
+
+### Translations
+
+The integration supports the following languages:
+- English (default)
+- German (Deutsch) - for DACH region customers
 
 ### Supported Platforms
 
@@ -315,6 +322,22 @@ Cookie: token=<token>
 | `SetValueFreezeProtection` | Freeze protection temperature |
 | `MinSetValueHeat` | Minimum allowed temperature |
 | `MaxSetValueHeat` | Maximum allowed temperature |
+
+---
+
+## Version History
+
+| Version | Changes |
+|---------|---------|
+| **1.2.1** | Added German translations for DACH region customers |
+| **1.2.0** | Added optional area sync feature (sync Evon rooms to HA areas) |
+| **1.1.5** | Fixed AbortFlow exception handling |
+| **1.1.4** | Improved error handling in API client |
+| **1.1.3** | Fixed config flow errors, added host URL normalization |
+| **1.1.2** | Fixed switch detection |
+| **1.1.1** | Documentation and branding updates |
+| **1.1.0** | Added sensors, switches, options flow, reconfigure flow, MCP resources and scenes |
+| **1.0.0** | Initial release with lights, blinds, and climate support |
 
 ---
 
