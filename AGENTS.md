@@ -210,6 +210,7 @@ pytest
 
 ## Version History
 
+- **v1.2.1**: Added German translations for DACH region customers
 - **v1.2.0**: Added optional area sync feature (sync Evon rooms to HA areas)
 - **v1.1.5**: Fixed AbortFlow exception handling (was causing "Unexpected error" for already configured)
 - **v1.1.4**: Improved error handling in API client (JSON decode, unexpected errors)
