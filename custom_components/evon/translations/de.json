@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Mit Evon Smart Home verbinden",
+        "description": "Geben Sie Ihre Evon Smart Home Verbindungsdaten ein.",
+        "data": {
+          "host": "Host-URL",
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      },
+      "reconfigure": {
+        "title": "Evon Smart Home neu konfigurieren",
+        "description": "Aktualisieren Sie Ihre Verbindungsdaten.",
+        "data": {
+          "host": "Host-URL",
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zu Evon Smart Home fehlgeschlagen",
+      "invalid_auth": "Ungültiger Benutzername oder Passwort",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "abort": {
+      "already_configured": "Dieses Evon-System ist bereits konfiguriert",
+      "reconfigure_successful": "Konfiguration erfolgreich aktualisiert",
+      "reconfigure_failed": "Neukonfiguration fehlgeschlagen"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Evon Smart Home Einstellungen",
+        "description": "Integrationseinstellungen konfigurieren.",
+        "data": {
+          "scan_interval": "Abfrageintervall (Sekunden)",
+          "sync_areas": "Bereiche von Evon synchronisieren"
+        },
+        "data_description": {
+          "sync_areas": "Geräte automatisch Home Assistant Bereichen zuweisen, basierend auf ihrer Raumzuordnung im Evon-System. Hinweis: Das Ändern dieser Option lädt die Integration neu."
+        }
+      }
+    }
+  }
+}
