@@ -16,20 +16,20 @@ from homeassistant.const import (
     CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     EntityCategory,
-    UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,
-    UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -113,8 +113,6 @@ AIR_QUALITY_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
     ),
 )
 
-_LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -174,10 +172,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+class EvonTemperatureSensor(EvonEntity, SensorEntity):
     """Representation of an Evon temperature sensor."""
 
-    _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
@@ -191,37 +188,19 @@ class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Sensor
         entry: ConfigEntry,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._instance_id = instance_id
+        super().__init__(coordinator, instance_id, name, room_name, entry)
         self._attr_name = "Temperature"
         self._attr_unique_id = f"evon_temp_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Climate Control",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Climate Control")
 
     @property
     def native_value(self) -> float | None:
         """Return the current temperature."""
-        data = self.coordinator.get_climate_data(self._instance_id)
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
             return data.get("current_temperature")
         return None
@@ -229,22 +208,16 @@ class EvonTemperatureSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Sensor
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_climate_data(self._instance_id)
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
         attrs = {"evon_id": self._instance_id}
         if data:
             attrs["target_temperature"] = data.get("target_temperature")
         return attrs
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
 
-
-class EvonSmartMeterSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+class EvonSmartMeterSensor(EvonEntity, SensorEntity):
     """Representation of an Evon smart meter sensor."""
 
-    _attr_has_entity_name = True
     entity_description: EvonSensorEntityDescription
 
     def __init__(
@@ -257,37 +230,19 @@ class EvonSmartMeterSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorE
         description: EvonSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, instance_id, name, room_name, entry)
         self.entity_description = description
-        self._instance_id = instance_id
         self._attr_unique_id = f"evon_meter_{description.key}_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Smart Meter",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Smart Meter")
 
     @property
     def native_value(self) -> float | None:
         """Return the sensor value."""
-        data = self.coordinator.get_smart_meter_data(self._instance_id)
+        data = self.coordinator.get_entity_data("smart_meters", self._instance_id)
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -298,22 +253,16 @@ class EvonSmartMeterSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorE
         attrs = {"evon_id": self._instance_id}
         # Add feed_in and frequency for power sensor
         if self.entity_description.key == "power":
-            data = self.coordinator.get_smart_meter_data(self._instance_id)
+            data = self.coordinator.get_entity_data("smart_meters", self._instance_id)
             if data:
                 attrs["feed_in"] = data.get("feed_in")
                 attrs["frequency"] = data.get("frequency")
         return attrs
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
 
-
-class EvonAirQualitySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+class EvonAirQualitySensor(EvonEntity, SensorEntity):
     """Representation of an Evon air quality sensor."""
 
-    _attr_has_entity_name = True
     entity_description: EvonSensorEntityDescription
 
     def __init__(
@@ -326,37 +275,19 @@ class EvonAirQualitySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorE
         description: EvonSensorEntityDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, instance_id, name, room_name, entry)
         self.entity_description = description
-        self._instance_id = instance_id
         self._attr_unique_id = f"evon_{description.key}_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Air Quality Sensor",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Air Quality Sensor")
 
     @property
     def native_value(self) -> float | int | None:
         """Return the sensor value."""
-        data = self.coordinator.get_air_quality_data(self._instance_id)
+        data = self.coordinator.get_entity_data("air_quality", self._instance_id)
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -364,7 +295,7 @@ class EvonAirQualitySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorE
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_air_quality_data(self._instance_id)
+        data = self.coordinator.get_entity_data("air_quality", self._instance_id)
         attrs = {"evon_id": self._instance_id}
         if data:
             if self.entity_description.key == "co2":
@@ -373,8 +304,3 @@ class EvonAirQualitySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorE
             elif self.entity_description.key == "humidity":
                 attrs["humidity_index"] = data.get("humidity_index")
         return attrs
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()

@@ -10,11 +10,12 @@ from homeassistant.components.light import (
     LightEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import EvonApi
+from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -28,72 +29,52 @@ async def async_setup_entry(
 ) -> None:
     """Set up Evon lights from a config entry."""
     coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    api = hass.data[DOMAIN][entry.entry_id]["api"]
+    api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
     entities = []
     if coordinator.data and "lights" in coordinator.data:
         for light in coordinator.data["lights"]:
             entities.append(EvonLight(
                 coordinator,
-                api,
                 light["id"],
                 light["name"],
                 light.get("room_name", ""),
                 entry,
+                api,
             ))
 
     async_add_entities(entities)
 
 
-class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
+class EvonLight(EvonEntity, LightEntity):
     """Representation of an Evon light."""
 
-    _attr_has_entity_name = True
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
     def __init__(
         self,
         coordinator: EvonDataUpdateCoordinator,
-        api,
         instance_id: str,
         name: str,
         room_name: str,
         entry: ConfigEntry,
+        api: EvonApi,
     ) -> None:
         """Initialize the light."""
-        super().__init__(coordinator)
-        self._api = api
-        self._instance_id = instance_id
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_light_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this light."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Dimmable Light",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Dimmable Light")
 
     @property
     def is_on(self) -> bool:
         """Return true if the light is on."""
-        data = self.coordinator.get_light_data(self._instance_id)
+        data = self.coordinator.get_entity_data("lights", self._instance_id)
         if data:
             return data.get("is_on", False)
         return False
@@ -101,7 +82,7 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
     @property
     def brightness(self) -> int | None:
         """Return the brightness of the light (0-255)."""
-        data = self.coordinator.get_light_data(self._instance_id)
+        data = self.coordinator.get_entity_data("lights", self._instance_id)
         if data:
             # Evon uses 0-100, Home Assistant uses 0-255
             evon_brightness = data.get("brightness", 0)
@@ -111,7 +92,7 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_light_data(self._instance_id)
+        data = self.coordinator.get_entity_data("lights", self._instance_id)
         attrs = {}
         if data:
             attrs["brightness_pct"] = data.get("brightness", 0)
@@ -132,8 +113,3 @@ class EvonLight(CoordinatorEntity[EvonDataUpdateCoordinator], LightEntity):
         """Turn off the light."""
         await self._api.turn_off_light(self._instance_id)
         await self.coordinator.async_request_refresh()
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()

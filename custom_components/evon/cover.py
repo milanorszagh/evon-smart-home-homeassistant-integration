@@ -12,11 +12,12 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import EvonApi
+from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -30,27 +31,26 @@ async def async_setup_entry(
 ) -> None:
     """Set up Evon covers from a config entry."""
     coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    api = hass.data[DOMAIN][entry.entry_id]["api"]
+    api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
     entities = []
     if coordinator.data and "blinds" in coordinator.data:
         for blind in coordinator.data["blinds"]:
             entities.append(EvonCover(
                 coordinator,
-                api,
                 blind["id"],
                 blind["name"],
                 blind.get("room_name", ""),
                 entry,
+                api,
             ))
 
     async_add_entities(entities)
 
 
-class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
+class EvonCover(EvonEntity, CoverEntity):
     """Representation of an Evon blind/cover."""
 
-    _attr_has_entity_name = True
     _attr_device_class = CoverDeviceClass.BLIND
     _attr_supported_features = (
         CoverEntityFeature.OPEN
@@ -65,45 +65,26 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
     def __init__(
         self,
         coordinator: EvonDataUpdateCoordinator,
-        api,
         instance_id: str,
         name: str,
         room_name: str,
         entry: ConfigEntry,
+        api: EvonApi,
     ) -> None:
         """Initialize the cover."""
-        super().__init__(coordinator)
-        self._api = api
-        self._instance_id = instance_id
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_cover_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this cover."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Blind",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Blind")
 
     @property
     def current_cover_position(self) -> int | None:
         """Return current position of cover (0=closed, 100=open in HA)."""
-        data = self.coordinator.get_blind_data(self._instance_id)
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             # Evon: 0=open, 100=closed
             # Home Assistant: 0=closed, 100=open
@@ -113,7 +94,7 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return current tilt position of cover."""
-        data = self.coordinator.get_blind_data(self._instance_id)
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("angle", 0)
         return None
@@ -129,7 +110,7 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
     @property
     def is_opening(self) -> bool:
         """Return if the cover is opening."""
-        data = self.coordinator.get_blind_data(self._instance_id)
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("is_moving", False)
         return False
@@ -137,7 +118,7 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
     @property
     def is_closing(self) -> bool:
         """Return if the cover is closing."""
-        data = self.coordinator.get_blind_data(self._instance_id)
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("is_moving", False)
         return False
@@ -145,7 +126,7 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_blind_data(self._instance_id)
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
         attrs = {}
         if data:
             # Evon native position (0=open, 100=closed)
@@ -192,8 +173,3 @@ class EvonCover(CoordinatorEntity[EvonDataUpdateCoordinator], CoverEntity):
         if ATTR_TILT_POSITION in kwargs:
             await self._api.set_blind_tilt(self._instance_id, kwargs[ATTR_TILT_POSITION])
             await self.coordinator.async_request_refresh()
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()

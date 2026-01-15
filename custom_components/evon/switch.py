@@ -9,8 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import EvonApi
+from .base_entity import EvonEntity
 from .const import DOMAIN, EVENT_SINGLE_CLICK, EVENT_DOUBLE_CLICK, EVENT_LONG_PRESS
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -24,71 +25,50 @@ async def async_setup_entry(
 ) -> None:
     """Set up Evon switches from a config entry."""
     coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    api = hass.data[DOMAIN][entry.entry_id]["api"]
+    api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
     entities = []
     if coordinator.data and "switches" in coordinator.data:
         for switch in coordinator.data["switches"]:
             entities.append(EvonSwitch(
                 coordinator,
-                api,
                 switch["id"],
                 switch["name"],
                 switch.get("room_name", ""),
                 entry,
+                api,
             ))
 
     async_add_entities(entities)
 
 
-class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
+class EvonSwitch(EvonEntity, SwitchEntity):
     """Representation of an Evon switch."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self,
         coordinator: EvonDataUpdateCoordinator,
-        api,
         instance_id: str,
         name: str,
         room_name: str,
         entry: ConfigEntry,
+        api: EvonApi,
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator)
-        self._api = api
-        self._instance_id = instance_id
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_switch_{instance_id}"
-        self._device_name = name
-        self._room_name = room_name
-        self._entry = entry
         self._last_click: str | None = None
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this switch."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, self._instance_id)},
-            name=self._device_name,
-            manufacturer="Evon",
-            model="Switch",
-            via_device=(DOMAIN, self._entry.entry_id),
-        )
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
+        return self._build_device_info("Switch")
 
     @property
     def is_on(self) -> bool:
         """Return true if the switch is on."""
-        data = self.coordinator.get_switch_data(self._instance_id)
+        data = self.coordinator.get_entity_data("switches", self._instance_id)
         if data:
             return data.get("is_on", False)
         return False
@@ -96,8 +76,8 @@ class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        data = self.coordinator.get_switch_data(self._instance_id)
-        attrs = {}
+        data = self.coordinator.get_entity_data("switches", self._instance_id)
+        attrs = {"evon_id": self._instance_id}
         if data:
             last_click = data.get("last_click")
             if last_click:
@@ -118,7 +98,7 @@ class EvonSwitch(CoordinatorEntity[EvonDataUpdateCoordinator], SwitchEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Check for click events
-        data = self.coordinator.get_switch_data(self._instance_id)
+        data = self.coordinator.get_entity_data("switches", self._instance_id)
         if data:
             new_click = data.get("last_click")
             if new_click and new_click != self._last_click:

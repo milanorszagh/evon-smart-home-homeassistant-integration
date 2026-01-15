@@ -52,6 +52,20 @@ const DEVICE_CLASSES = {
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",
 } as const;
 
+// Method mappings for device control
+const BLIND_METHODS = {
+  up: { method: "MoveUp", params: [] as unknown[] },
+  down: { method: "MoveDown", params: [] as unknown[] },
+  stop: { method: "Stop", params: [] as unknown[] },
+} as const;
+
+const CLIMATE_METHODS = {
+  comfort: "WriteDayMode",
+  energy_saving: "WriteNightMode",
+  freeze_protection: "WriteFreezeMode",
+  set_temperature: "WriteCurrentSetTemperature",
+} as const;
+
 // =============================================================================
 // Password Encoding
 // =============================================================================
@@ -432,10 +446,9 @@ server.tool(
     angle: z.number().min(0).max(100).optional().describe("Slat angle (0-100)"),
   },
   async ({ blind_id, action, position, angle }) => {
+    // Use constants for static methods, compute params for position/angle
     const methodMap: Record<string, { method: string; params: unknown[] }> = {
-      up: { method: "MoveUp", params: [] },
-      down: { method: "MoveDown", params: [] },
-      stop: { method: "Stop", params: [] },
+      ...BLIND_METHODS,
       position: { method: "AmznSetPercentage", params: [position ?? 50] },
       angle: { method: "SetAngle", params: [angle ?? 50] },
     };
@@ -461,10 +474,9 @@ server.tool(
     const instances = await getInstances();
     const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
 
+    // Use constants for static methods, compute params for position/angle
     const methodMap: Record<string, { method: string; params: unknown[] }> = {
-      up: { method: "MoveUp", params: [] },
-      down: { method: "MoveDown", params: [] },
-      stop: { method: "Stop", params: [] },
+      ...BLIND_METHODS,
       position: { method: "AmznSetPercentage", params: [position ?? 50] },
       angle: { method: "SetAngle", params: [angle ?? 50] },
     };
@@ -527,14 +539,9 @@ server.tool(
     temperature: z.number().optional().describe("Target temperature (for set_temperature action)"),
   },
   async ({ climate_id, action, temperature }) => {
-    const methodMap: Record<string, { method: string; params: unknown[] }> = {
-      comfort: { method: "WriteDayMode", params: [] },
-      energy_saving: { method: "WriteNightMode", params: [] },
-      freeze_protection: { method: "WriteFreezeMode", params: [] },
-      set_temperature: { method: "WriteCurrentSetTemperature", params: [temperature ?? 21] },
-    };
+    const method = CLIMATE_METHODS[action];
+    const params: unknown[] = action === "set_temperature" ? [temperature ?? 21] : [];
 
-    const { method, params } = methodMap[action];
     await callMethod(climate_id, method, params);
 
     return {
@@ -559,13 +566,7 @@ server.tool(
         i.Name.length > 0
     );
 
-    const methodMap: Record<string, string> = {
-      comfort: "WriteDayMode",
-      energy_saving: "WriteNightMode",
-      freeze_protection: "WriteFreezeMode",
-    };
-
-    const results = await controlAllDevices(climates, methodMap[action]);
+    const results = await controlAllDevices(climates, CLIMATE_METHODS[action]);
 
     return {
       content: [{ type: "text", text: `Set ${climates.length} rooms to ${action}:\n${results.join("\n")}` }],
