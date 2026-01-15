@@ -14,7 +14,7 @@ from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.COVER, Platform.CLIMATE, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.COVER, Platform.CLIMATE, Platform.SENSOR, Platform.SWITCH]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

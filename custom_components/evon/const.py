@@ -19,6 +19,14 @@ CLIMATE_MODE_FREEZE_PROTECTION = "freeze_protection"
 
 # Evon class names
 EVON_CLASS_LIGHT_DIM = "SmartCOM.Light.LightDim"
+EVON_CLASS_LIGHT = "SmartCOM.Light.Light"
 EVON_CLASS_BLIND = "SmartCOM.Blind.Blind"
 EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "ClimateControlUniversal"
+EVON_CLASS_SWITCH = "SmartCOM.Switch.Switch"
+EVON_CLASS_BUTTON = "SmartCOM.Button.Button"
+
+# Event types
+EVENT_SINGLE_CLICK = "single_click"
+EVENT_DOUBLE_CLICK = "double_click"
+EVENT_LONG_PRESS = "long_press"

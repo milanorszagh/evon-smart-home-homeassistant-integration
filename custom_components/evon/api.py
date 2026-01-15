@@ -218,6 +218,15 @@ class EvonApi:
         """Set climate target temperature."""
         await self.call_method(instance_id, "WriteCurrentSetTemperature", [temperature])
 
+    # Switch methods
+    async def turn_on_switch(self, instance_id: str) -> None:
+        """Turn on a switch."""
+        await self.call_method(instance_id, "AmznTurnOn")
+
+    async def turn_off_switch(self, instance_id: str) -> None:
+        """Turn off a switch."""
+        await self.call_method(instance_id, "AmznTurnOff")
+
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""
         try:

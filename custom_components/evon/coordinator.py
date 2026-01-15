@@ -13,9 +13,11 @@ from .const import (
     DOMAIN,
     DEFAULT_SCAN_INTERVAL,
     EVON_CLASS_LIGHT_DIM,
+    EVON_CLASS_LIGHT,
     EVON_CLASS_BLIND,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
+    EVON_CLASS_SWITCH,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,6 +54,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             lights = []
             blinds = []
             climates = []
+            switches = []
 
             for instance in instances:
                 class_name = instance.get("ClassName", "")
@@ -107,10 +110,24 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except EvonApiError:
                         _LOGGER.warning("Failed to get details for climate %s", instance_id)
 
+                elif class_name == EVON_CLASS_LIGHT or class_name == EVON_CLASS_SWITCH:
+                    # Get detailed state for non-dimmable light / switch
+                    try:
+                        details = await self.api.get_instance(instance_id)
+                        switches.append({
+                            "id": instance_id,
+                            "name": name,
+                            "is_on": details.get("IsOn", False),
+                            "last_click": details.get("LastClickType", None),
+                        })
+                    except EvonApiError:
+                        _LOGGER.warning("Failed to get details for switch %s", instance_id)
+
             return {
                 "lights": lights,
                 "blinds": blinds,
                 "climates": climates,
+                "switches": switches,
             }
 
         except EvonApiError as err:
@@ -138,4 +155,12 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for climate in self.data["climates"]:
                 if climate["id"] == instance_id:
                     return climate
+        return None
+
+    def get_switch_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific switch."""
+        if self.data and "switches" in self.data:
+            for switch in self.data["switches"]:
+                if switch["id"] == instance_id:
+                    return switch
         return None
