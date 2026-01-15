@@ -72,7 +72,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             blinds = await self._process_blinds(instances)
             climates = await self._process_climates(instances)
             switches = await self._process_switches(instances)
-            buttons = await self._process_buttons(instances)
             smart_meters = await self._process_smart_meters(instances)
             air_quality = await self._process_air_quality(instances)
             valves = await self._process_valves(instances)
@@ -82,7 +81,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "blinds": blinds,
                 "climates": climates,
                 "switches": switches,
-                "buttons": buttons,
                 "smart_meters": smart_meters,
                 "air_quality": air_quality,
                 "valves": valves,
@@ -204,30 +202,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for switch %s", instance_id)
         return switches
 
-    async def _process_buttons(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Process physical button instances (input switches)."""
-        buttons = []
-        for instance in instances:
-            # Only process SmartCOM.Switch (physical input buttons)
-            if instance.get("ClassName") != EVON_CLASS_SWITCH:
-                continue
-            if not instance.get("Name"):
-                continue
-
-            instance_id = instance.get("ID", "")
-            try:
-                details = await self.api.get_instance(instance_id)
-                buttons.append({
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": self._get_room_name(instance.get("Group", "")),
-                    "is_on": details.get("IsOn", False),
-                    "last_click": details.get("LastClickType", None),
-                })
-            except EvonApiError:
-                _LOGGER.warning("Failed to get details for button %s", instance_id)
-        return buttons
-
     async def _process_smart_meters(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Process smart meter instances."""
         smart_meters = []
@@ -323,7 +297,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Args:
             entity_type: The type of entity (lights, blinds, climates, switches,
-                        buttons, smart_meters, air_quality, valves)
+                        smart_meters, air_quality, valves)
             instance_id: The instance ID to look up
 
         Returns:
