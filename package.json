@@ -1,6 +1,6 @@
 {
   "name": "evon-ha",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "MCP server and Home Assistant integration for Evon Smart Home",
   "main": "dist/index.js",
   "bin": {

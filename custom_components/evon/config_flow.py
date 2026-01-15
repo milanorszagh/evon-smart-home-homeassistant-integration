@@ -7,9 +7,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import AbortFlow, FlowResult
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -57,19 +58,15 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    def __init__(self) -> None:
-        """Initialize config flow."""
-        self._reconfig_entry: config_entries.ConfigEntry | None = None
-
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> EvonOptionsFlow:
         """Get the options flow for this handler."""
-        return EvonOptionsFlow(config_entry)
+        return EvonOptionsFlow()
 
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -114,11 +111,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration."""
-        # Get the config entry being reconfigured
-        self._reconfig_entry = self._get_reconfigure_entry()
-
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -136,13 +130,11 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             try:
                 if await api.test_connection():
-                    # Update the config entry
-                    self.hass.config_entries.async_update_entry(
-                        self._reconfig_entry,
-                        data=user_input,
+                    # Update and reload the config entry
+                    return self.async_update_reload_and_abort(
+                        self._get_reconfigure_entry(),
+                        data_updates=user_input,
                     )
-                    await self.hass.config_entries.async_reload(self._reconfig_entry.entry_id)
-                    return self.async_abort(reason="reconfigure_successful")
                 else:
                     errors["base"] = "cannot_connect"
             except EvonAuthError:
@@ -156,7 +148,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
         # Pre-fill with current values
-        current_data = self._reconfig_entry.data
+        reconfigure_entry = self._get_reconfigure_entry()
+        current_data = reconfigure_entry.data
         reconfigure_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, "")): str,
@@ -175,11 +168,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class EvonOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Evon Smart Home."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
