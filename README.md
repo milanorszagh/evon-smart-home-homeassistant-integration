@@ -196,6 +196,8 @@ Add to your Claude Code configuration (`~/.claude.json`):
 | `list_climate` | List all climate controls with current state |
 | `climate_control` | Control a single climate zone |
 | `climate_control_all` | Control all climate zones at once |
+| `list_home_states` | List all home states with current active state |
+| `set_home_state` | Set the active home state (at_home/holiday/night/work) |
 | `list_sensors` | List temperature and other sensors |
 | `list_scenes` | List available scenes |
 | `activate_scene` | Activate a scene (all_off, movie_mode, morning, night) |
@@ -210,7 +212,8 @@ Resources allow Claude to read device state without calling tools:
 | `evon://lights` | All lights with current state |
 | `evon://blinds` | All blinds with current state |
 | `evon://climate` | All climate controls with current state |
-| `evon://summary` | Home summary (device counts, average temp) |
+| `evon://home_state` | Current home state and available states |
+| `evon://summary` | Home summary (device counts, average temp, home state) |
 
 ### Pre-defined Scenes
 

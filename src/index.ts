@@ -41,6 +41,12 @@ interface ClimateState {
   ActualTemperature?: number;
 }
 
+interface HomeStateState {
+  Name?: string;
+  Active?: boolean;
+  ActiveInstance?: string;
+}
+
 // =============================================================================
 // Constants
 // =============================================================================
@@ -50,6 +56,7 @@ const DEVICE_CLASSES = {
   BLIND: "SmartCOM.Blind.Blind",
   CLIMATE: "SmartCOM.Clima.ClimateControl",
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",
+  HOME_STATE: "System.HomeState",
 } as const;
 
 // Method mappings for device control
@@ -569,6 +576,77 @@ server.tool(
   }
 );
 
+// -----------------------------------------------------------------------------
+// Home State Tools
+// -----------------------------------------------------------------------------
+
+server.tool(
+  "list_home_states",
+  "List all home states (At Home, Holiday, Night, Work) with current active state",
+  {},
+  async () => {
+    const instances = await getInstances();
+    const homeStates = instances.filter(
+      (i) =>
+        i.ClassName === DEVICE_CLASSES.HOME_STATE &&
+        i.ID &&
+        !i.ID.startsWith("System.") &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    const statesWithInfo = await Promise.all(
+      homeStates.map(async (state) => {
+        try {
+          const details = await apiRequest<HomeStateState>(`/instances/${state.ID}`);
+          return {
+            id: state.ID,
+            name: state.Name,
+            active: details.data.Active ?? false,
+          };
+        } catch {
+          return { id: state.ID, name: state.Name, active: false };
+        }
+      })
+    );
+
+    // Find the active one
+    const activeState = statesWithInfo.find((s) => s.active);
+
+    return {
+      content: [{
+        type: "text",
+        text: `Current home state: ${activeState?.name || "unknown"}\n\nAvailable states:\n${JSON.stringify(statesWithInfo, null, 2)}`,
+      }],
+    };
+  }
+);
+
+server.tool(
+  "set_home_state",
+  "Set the active home state (switches between At Home, Holiday, Night, Work modes)",
+  {
+    state: z
+      .enum(["at_home", "holiday", "night", "work"])
+      .describe("The home state to activate"),
+  },
+  async ({ state }) => {
+    const stateIdMap: Record<string, string> = {
+      at_home: "HomeStateAtHome",
+      holiday: "HomeStateHoliday",
+      night: "HomeStateNight",
+      work: "HomeStateWork",
+    };
+
+    const instanceId = stateIdMap[state];
+    await callMethod(instanceId, "Activate");
+
+    return {
+      content: [{ type: "text", text: `Home state set to: ${state}` }],
+    };
+  }
+);
+
 // =============================================================================
 // MCP Resources
 // =============================================================================
@@ -682,6 +760,52 @@ server.resource(
   }
 );
 
+// Resource: Home state
+server.resource(
+  "evon://home_state",
+  "Current home state (At Home, Holiday, Night, Work)",
+  async () => {
+    const instances = await getInstances();
+    const homeStates = instances.filter(
+      (i) =>
+        i.ClassName === DEVICE_CLASSES.HOME_STATE &&
+        i.ID &&
+        !i.ID.startsWith("System.") &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    const statesWithInfo = await Promise.all(
+      homeStates.map(async (state) => {
+        try {
+          const details = await apiRequest<HomeStateState>(`/instances/${state.ID}`);
+          return {
+            id: state.ID,
+            name: state.Name,
+            active: details.data.Active ?? false,
+          };
+        } catch {
+          return { id: state.ID, name: state.Name, active: false };
+        }
+      })
+    );
+
+    const activeState = statesWithInfo.find((s) => s.active);
+
+    return {
+      contents: [{
+        uri: "evon://home_state",
+        mimeType: "application/json",
+        text: JSON.stringify({
+          current: activeState?.name || "unknown",
+          currentId: activeState?.id || null,
+          available: statesWithInfo,
+        }, null, 2),
+      }],
+    };
+  }
+);
+
 // Resource: Home summary
 server.resource(
   "evon://summary",
@@ -735,7 +859,28 @@ server.resource(
       }
     }
 
+    // Get current home state
+    let currentHomeState = "unknown";
+    const homeStates = instances.filter(
+      (i) =>
+        i.ClassName === DEVICE_CLASSES.HOME_STATE &&
+        i.ID &&
+        !i.ID.startsWith("System.")
+    );
+    for (const state of homeStates) {
+      try {
+        const details = await apiRequest<HomeStateState>(`/instances/${state.ID}`);
+        if (details.data.Active) {
+          currentHomeState = state.Name;
+          break;
+        }
+      } catch {
+        // Ignore errors
+      }
+    }
+
     const summary = {
+      homeState: currentHomeState,
       lights: { total: lights.length, on: lightsOn },
       blinds: { total: blinds.length, open: blindsOpen },
       climate: {
