@@ -103,8 +103,8 @@ When filtering devices from the API, use these class names:
 ## Environment Variables (MCP Server)
 
 ```
-EVON_HOST=http://192.168.1.4    # Evon system URL
-EVON_USERNAME=User              # Username
+EVON_HOST=http://192.168.x.x    # Evon system URL (your local IP)
+EVON_USERNAME=<username>        # Your Evon username
 EVON_PASSWORD=<password>        # Plain text OR encoded password (auto-detected)
 ```
 
@@ -184,8 +184,30 @@ event_data:
 ## Unit Tests
 
 Tests are in the `tests/` directory:
+- `test_standalone.py` - Standalone tests (no HA dependency)
 - `test_api.py` - API client and password encoding tests
 - `test_config_flow.py` - Config and options flow tests
 - `test_coordinator.py` - Data coordinator tests
 
-Run with: `pytest`
+Test constants are defined in `tests/conftest.py`:
+```python
+TEST_HOST = "http://192.168.1.100"
+TEST_USERNAME = "testuser"
+TEST_PASSWORD = "testpass"
+```
+
+Run standalone tests (no HA required):
+```bash
+python3 tests/test_standalone.py
+```
+
+Run all tests with pytest:
+```bash
+pip install -r requirements-test.txt
+pytest
+```
+
+## Version History
+
+- **v1.1.0**: Added sensors, switches with click events, options flow, reconfigure flow, MCP resources and scenes
+- **v1.0.0**: Initial release with lights, blinds, and climate support

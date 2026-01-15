@@ -6,6 +6,8 @@
 
 Home Assistant custom integration and MCP server for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
+
 ## Supported Devices
 
 | Device Type | Features |
@@ -23,16 +25,25 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 ### Installation via HACS (Recommended)
 
 1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant
-2. Add this repository as a custom repository:
+2. Click the button below to add the repository:
+
+   [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
+
+   Or manually add the repository:
    - Go to **HACS** → **Integrations** → **⋮** (menu) → **Custom repositories**
    - Add URL: `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`
    - Category: **Integration**
-3. Click **Install**
+3. Click **Download**
 4. Restart Home Assistant
-5. Go to **Settings** → **Devices & Services** → **Add Integration**
-6. Search for "Evon Smart Home"
-7. Enter your connection details:
-   - **Host URL**: Your Evon system URL (e.g., `http://192.168.1.4`)
+5. Click the button below to add the integration:
+
+   [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=evon)
+
+   Or manually add:
+   - Go to **Settings** → **Devices & Services** → **Add Integration**
+   - Search for "Evon Smart Home"
+6. Enter your connection details:
+   - **Host URL**: Your Evon system URL (e.g., `http://192.168.x.x`)
    - **Username**: Your Evon username
    - **Password**: Your Evon password (plain text)
 
@@ -131,9 +142,9 @@ Add to your Claude Code configuration (`.claude.json`):
       "command": "node",
       "args": ["/path/to/evon-ha/dist/index.js"],
       "env": {
-        "EVON_HOST": "http://192.168.1.4",
-        "EVON_USERNAME": "User",
-        "EVON_PASSWORD": "your-plain-text-password"
+        "EVON_HOST": "http://192.168.x.x",
+        "EVON_USERNAME": "your-username",
+        "EVON_PASSWORD": "your-password"
       }
     }
   }
