@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi
-from .const import DOMAIN, CONF_HOST, CONF_USERNAME, CONF_PASSWORD
+from .const import DOMAIN, CONF_HOST, CONF_USERNAME, CONF_PASSWORD, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,8 +35,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to connect to Evon Smart Home")
         return False
 
+    # Get scan interval from options
+    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
     # Create coordinator
-    coordinator = EvonDataUpdateCoordinator(hass, api)
+    coordinator = EvonDataUpdateCoordinator(hass, api, scan_interval)
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -50,7 +53,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Register update listener for options changes
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle options update."""
+    coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    coordinator.set_update_interval(scan_interval)
+    _LOGGER.debug("Updated scan interval to %s seconds", scan_interval)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
