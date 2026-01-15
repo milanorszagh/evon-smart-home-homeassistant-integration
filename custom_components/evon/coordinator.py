@@ -17,7 +17,6 @@ from .const import (
     EVON_CLASS_BLIND,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
-    EVON_CLASS_INTERCOM_CAM,
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_SMART_METER,
@@ -76,7 +75,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             smart_meters = await self._process_smart_meters(instances)
             air_quality = await self._process_air_quality(instances)
             valves = await self._process_valves(instances)
-            cameras = await self._process_cameras(instances)
 
             return {
                 "lights": lights,
@@ -86,7 +84,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "smart_meters": smart_meters,
                 "air_quality": air_quality,
                 "valves": valves,
-                "cameras": cameras,
                 "rooms": self._rooms_cache if self._sync_areas else {},
             }
 
@@ -309,38 +306,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for valve %s", instance_id)
         return valves
 
-    async def _process_cameras(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Process intercom camera instances."""
-        cameras = []
-        for instance in instances:
-            class_name = instance.get("ClassName", "")
-            # Match intercom camera classes (e.g., Security.Intercom.2N.Intercom2NCam)
-            if EVON_CLASS_INTERCOM_CAM not in class_name:
-                continue
-            if "Cam" not in class_name:
-                continue
-            if not instance.get("Name"):
-                continue
-
-            instance_id = instance.get("ID", "")
-            try:
-                details = await self.api.get_instance(instance_id)
-                # Only add cameras that have an image URL
-                if details.get("Image") or details.get("JPEGUrl"):
-                    cameras.append(
-                        {
-                            "id": instance_id,
-                            "name": instance.get("Name"),
-                            "room_name": self._get_room_name(instance.get("Group", "")),
-                            "image_path": details.get("Image", ""),
-                            "jpeg_url": details.get("JPEGUrl", ""),
-                            "ip_address": details.get("IPAddress", ""),
-                        }
-                    )
-            except EvonApiError:
-                _LOGGER.warning("Failed to get details for camera %s", instance_id)
-        return cameras
-
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity.
 
@@ -386,7 +351,3 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def get_valve_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific valve."""
         return self.get_entity_data("valves", instance_id)
-
-    def get_camera_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific camera."""
-        return self.get_entity_data("cameras", instance_id)

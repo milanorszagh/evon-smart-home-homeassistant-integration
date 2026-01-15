@@ -252,33 +252,6 @@ class EvonApi:
         """Turn off a switch."""
         await self.call_method(instance_id, "AmznTurnOff")
 
-    # Camera methods
-    async def get_camera_image(self, camera_id: str) -> bytes | None:
-        """Get camera image bytes.
-
-        Args:
-            camera_id: The camera instance ID (e.g., 'Intercom2N1000.Cam')
-
-        Returns:
-            Image bytes (JPEG) or None if failed
-        """
-        token = await self._ensure_token()
-        session = await self._get_session()
-
-        # Evon caches camera images at /temp/{camera_id}_img.jpg
-        url = f"{self._host}/temp/{camera_id}_img.jpg"
-        headers = {"Cookie": f"token={token}"}
-
-        try:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 200:
-                    return await response.read()
-                _LOGGER.warning("Failed to get camera image: %s", response.status)
-                return None
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Error fetching camera image: %s", err)
-            return None
-
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""
         try:
