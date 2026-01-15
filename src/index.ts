@@ -788,6 +788,248 @@ server.tool(
 );
 
 // =============================================================================
+// Scenes
+// =============================================================================
+
+interface SceneAction {
+  deviceType: "light" | "blind" | "climate";
+  deviceId: string;
+  action: string;
+  params?: unknown[];
+}
+
+interface Scene {
+  name: string;
+  description?: string;
+  actions: SceneAction[];
+}
+
+const scenes: Map<string, Scene> = new Map();
+
+// Pre-defined scenes
+scenes.set("all_off", {
+  name: "All Off",
+  description: "Turn off all lights and close all blinds",
+  actions: [], // Special handling in activate_scene
+});
+
+scenes.set("movie_mode", {
+  name: "Movie Mode",
+  description: "Dim lights to 10% and close blinds",
+  actions: [], // Will be dynamically populated
+});
+
+scenes.set("morning", {
+  name: "Morning",
+  description: "Open blinds and set lights to 70%",
+  actions: [],
+});
+
+scenes.set("night", {
+  name: "Night",
+  description: "Turn off lights and set climate to energy saving",
+  actions: [],
+});
+
+server.tool(
+  "list_scenes",
+  "List all available scenes",
+  {},
+  async () => {
+    const sceneList = Array.from(scenes.entries()).map(([id, scene]) => ({
+      id,
+      name: scene.name,
+      description: scene.description,
+    }));
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(sceneList, null, 2) }],
+    };
+  }
+);
+
+server.tool(
+  "activate_scene",
+  "Activate a pre-defined scene",
+  {
+    scene_id: z.string().describe("Scene ID (all_off, movie_mode, morning, night)"),
+  },
+  async ({ scene_id }) => {
+    const scene = scenes.get(scene_id);
+    if (!scene) {
+      return {
+        content: [{ type: "text", text: `Scene '${scene_id}' not found. Use list_scenes to see available scenes.` }],
+      };
+    }
+
+    const instances = await getInstances();
+    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+    const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
+    const climates = instances.filter(
+      (i) =>
+        (i.ClassName === DEVICE_CLASSES.CLIMATE ||
+          i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
+        i.Name &&
+        i.Name.length > 0
+    );
+
+    const results: string[] = [];
+
+    switch (scene_id) {
+      case "all_off":
+        // Turn off all lights
+        for (const light of lights) {
+          try {
+            await callMethod(light.ID, "AmznTurnOff");
+            results.push(`${light.Name}: light off`);
+          } catch {
+            results.push(`${light.Name}: failed`);
+          }
+        }
+        // Close all blinds
+        for (const blind of blinds) {
+          try {
+            await callMethod(blind.ID, "AmznSetPercentage", [100]);
+            results.push(`${blind.Name}: closed`);
+          } catch {
+            results.push(`${blind.Name}: failed`);
+          }
+        }
+        break;
+
+      case "movie_mode":
+        // Dim lights to 10%
+        for (const light of lights) {
+          try {
+            await callMethod(light.ID, "AmznSetBrightness", [10]);
+            results.push(`${light.Name}: dimmed to 10%`);
+          } catch {
+            results.push(`${light.Name}: failed`);
+          }
+        }
+        // Close blinds
+        for (const blind of blinds) {
+          try {
+            await callMethod(blind.ID, "AmznSetPercentage", [100]);
+            results.push(`${blind.Name}: closed`);
+          } catch {
+            results.push(`${blind.Name}: failed`);
+          }
+        }
+        break;
+
+      case "morning":
+        // Open blinds
+        for (const blind of blinds) {
+          try {
+            await callMethod(blind.ID, "AmznSetPercentage", [0]);
+            results.push(`${blind.Name}: opened`);
+          } catch {
+            results.push(`${blind.Name}: failed`);
+          }
+        }
+        // Set lights to 70%
+        for (const light of lights) {
+          try {
+            await callMethod(light.ID, "AmznSetBrightness", [70]);
+            results.push(`${light.Name}: set to 70%`);
+          } catch {
+            results.push(`${light.Name}: failed`);
+          }
+        }
+        // Set climate to comfort mode
+        for (const climate of climates) {
+          try {
+            await callMethod(climate.ID, "WriteDayMode");
+            results.push(`${climate.Name}: comfort mode`);
+          } catch {
+            results.push(`${climate.Name}: failed`);
+          }
+        }
+        break;
+
+      case "night":
+        // Turn off lights
+        for (const light of lights) {
+          try {
+            await callMethod(light.ID, "AmznTurnOff");
+            results.push(`${light.Name}: off`);
+          } catch {
+            results.push(`${light.Name}: failed`);
+          }
+        }
+        // Set climate to energy saving
+        for (const climate of climates) {
+          try {
+            await callMethod(climate.ID, "WriteNightMode");
+            results.push(`${climate.Name}: energy saving`);
+          } catch {
+            results.push(`${climate.Name}: failed`);
+          }
+        }
+        break;
+    }
+
+    return {
+      content: [{ type: "text", text: `Activated scene '${scene.name}':\n${results.join("\n")}` }],
+    };
+  }
+);
+
+server.tool(
+  "create_scene",
+  "Create a custom scene with specific device settings",
+  {
+    name: z.string().describe("Scene name"),
+    description: z.string().optional().describe("Scene description"),
+    light_brightness: z.number().min(0).max(100).optional().describe("Set all lights to this brightness (0=off)"),
+    blind_position: z.number().min(0).max(100).optional().describe("Set all blinds to this position (0=open, 100=closed)"),
+    climate_mode: z.enum(["comfort", "energy_saving", "freeze_protection"]).optional().describe("Set all climate to this mode"),
+  },
+  async ({ name, description, light_brightness, blind_position, climate_mode }) => {
+    const sceneId = name.toLowerCase().replace(/\s+/g, "_");
+    const actions: SceneAction[] = [];
+
+    // Note: This creates a template scene - actual device IDs would be populated on activation
+    if (light_brightness !== undefined) {
+      actions.push({
+        deviceType: "light",
+        deviceId: "*",
+        action: light_brightness === 0 ? "off" : "brightness",
+        params: light_brightness > 0 ? [light_brightness] : [],
+      });
+    }
+
+    if (blind_position !== undefined) {
+      actions.push({
+        deviceType: "blind",
+        deviceId: "*",
+        action: "position",
+        params: [blind_position],
+      });
+    }
+
+    if (climate_mode !== undefined) {
+      actions.push({
+        deviceType: "climate",
+        deviceId: "*",
+        action: climate_mode,
+      });
+    }
+
+    scenes.set(sceneId, {
+      name,
+      description,
+      actions,
+    });
+
+    return {
+      content: [{ type: "text", text: `Created scene '${name}' (id: ${sceneId}) with ${actions.length} actions` }],
+    };
+  }
+);
+
+// =============================================================================
 // Main
 // =============================================================================
 
