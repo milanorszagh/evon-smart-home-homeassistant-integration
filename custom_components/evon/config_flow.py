@@ -31,6 +31,10 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize config flow."""
+        self._reconfig_entry: config_entries.ConfigEntry | None = None
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -78,6 +82,65 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration."""
+        self._reconfig_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        if not self._reconfig_entry:
+            return self.async_abort(reason="reconfigure_failed")
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Test connection with new credentials
+            session = async_get_clientsession(self.hass)
+            api = EvonApi(
+                host=user_input[CONF_HOST],
+                username=user_input[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+                session=session,
+            )
+
+            try:
+                if await api.test_connection():
+                    # Update the config entry
+                    self.hass.config_entries.async_update_entry(
+                        self._reconfig_entry,
+                        data=user_input,
+                    )
+                    await self.hass.config_entries.async_reload(
+                        self._reconfig_entry.entry_id
+                    )
+                    return self.async_abort(reason="reconfigure_successful")
+                else:
+                    errors["base"] = "cannot_connect"
+            except EvonAuthError:
+                errors["base"] = "invalid_auth"
+            except EvonApiError:
+                errors["base"] = "cannot_connect"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "unknown"
+
+        # Pre-fill with current values
+        current_data = self._reconfig_entry.data
+        reconfigure_schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, DEFAULT_HOST)): str,
+                vol.Required(CONF_USERNAME, default=current_data.get(CONF_USERNAME, "")): str,
+                vol.Required(CONF_PASSWORD): str,  # Don't show current password
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=reconfigure_schema,
             errors=errors,
         )
 

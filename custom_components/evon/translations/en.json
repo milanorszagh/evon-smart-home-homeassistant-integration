@@ -9,6 +9,15 @@
           "username": "Username",
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Evon Smart Home",
+        "description": "Update your connection details.",
+        "data": {
+          "host": "Host URL",
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -17,7 +26,9 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This Evon system is already configured"
+      "already_configured": "This Evon system is already configured",
+      "reconfigure_successful": "Configuration updated successfully",
+      "reconfigure_failed": "Reconfiguration failed"
     }
   },
   "options": {
