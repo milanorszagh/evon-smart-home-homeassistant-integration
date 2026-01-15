@@ -31,6 +31,13 @@ _LOGGER = logging.getLogger(__name__)
 # Preset modes list
 PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ENERGY_SAVING, CLIMATE_MODE_FREEZE_PROTECTION]
 
+# Evon ModeSaved to preset mapping
+EVON_MODE_SAVED_TO_PRESET = {
+    2: CLIMATE_MODE_FREEZE_PROTECTION,
+    3: CLIMATE_MODE_ENERGY_SAVING,
+    4: CLIMATE_MODE_COMFORT,
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -62,7 +69,6 @@ class EvonClimate(EvonEntity, ClimateEntity):
     """Representation of an Evon climate control."""
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_preset_modes = PRESET_MODES
     _enable_turn_on_off_backwards_compat = False
@@ -80,7 +86,14 @@ class EvonClimate(EvonEntity, ClimateEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_climate_{instance_id}"
-        self._current_preset = CLIMATE_MODE_COMFORT
+
+    @property
+    def hvac_modes(self) -> list[HVACMode]:
+        """Return the list of available HVAC modes."""
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        if data and data.get("cooling_enabled"):
+            return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
+        return [HVACMode.HEAT, HVACMode.OFF]
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -90,9 +103,19 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
-        # Evon climate is always heating, use preset for freeze protection as "off-like"
-        if self._current_preset == CLIMATE_MODE_FREEZE_PROTECTION:
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        if not data:
             return HVACMode.OFF
+
+        # Check if climate is actively running
+        is_on = data.get("is_on", False)
+        if not is_on:
+            return HVACMode.OFF
+
+        # Check if in cooling or heating mode
+        is_cooling = data.get("is_cooling", False)
+        if is_cooling:
+            return HVACMode.COOL
         return HVACMode.HEAT
 
     @property
@@ -129,8 +152,13 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
-        """Return the current preset mode."""
-        return self._current_preset
+        """Return the current preset mode based on Evon's ModeSaved property."""
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        if not data:
+            return CLIMATE_MODE_COMFORT
+
+        mode_saved = data.get("mode_saved", 4)
+        return EVON_MODE_SAVED_TO_PRESET.get(mode_saved, CLIMATE_MODE_COMFORT)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -141,6 +169,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
             attrs["comfort_temperature"] = data.get("comfort_temp")
             attrs["energy_saving_temperature"] = data.get("energy_saving_temp")
             attrs["freeze_protection_temperature"] = data.get("freeze_protection_temp")
+            attrs["evon_mode_saved"] = data.get("mode_saved")
+            attrs["is_cooling"] = data.get("is_cooling")
+            attrs["cooling_enabled"] = data.get("cooling_enabled")
             attrs["evon_id"] = self._instance_id
         return attrs
 
@@ -148,10 +179,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Set new target HVAC mode."""
         if hvac_mode == HVACMode.OFF:
             await self._api.set_climate_freeze_protection_mode(self._instance_id)
-            self._current_preset = CLIMATE_MODE_FREEZE_PROTECTION
         else:
             await self._api.set_climate_comfort_mode(self._instance_id)
-            self._current_preset = CLIMATE_MODE_COMFORT
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -168,6 +197,4 @@ class EvonClimate(EvonEntity, ClimateEntity):
             await self._api.set_climate_energy_saving_mode(self._instance_id)
         elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
             await self._api.set_climate_freeze_protection_mode(self._instance_id)
-
-        self._current_preset = preset_mode
         await self.coordinator.async_request_refresh()

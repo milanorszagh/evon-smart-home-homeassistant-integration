@@ -16,12 +16,14 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 |-------------|----------|
 | **Lights** | On/off, brightness (0-100%) |
 | **Blinds/Covers** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
-| **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection) |
+| **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection), heating/cooling mode |
 | **Home State** | Select between home modes (At Home, Holiday, Night, Work) |
 | **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
 | **Sensors** | Temperature sensors from climate devices |
+| **Switches** | Controllable relay outputs (on/off) |
+| **Bathroom Radiators** | Electric heater on/off control with timer |
 
 ## Known Limitations
 
@@ -76,7 +78,7 @@ The integration supports **controllable switches** (`SmartCOM.Light.Light`) whic
    cp -r custom_components/evon /config/custom_components/
    ```
 2. Restart Home Assistant
-3. Follow steps 5-7 above
+3. Follow steps 5-6 above
 
 ### Configuration Options
 
@@ -110,11 +112,12 @@ The integration supports the following languages:
 
 #### Climate
 - Temperature control
+- HVAC modes: Heat, Cool (if supported), Off
 - Preset modes:
   - `comfort` - Day mode, normal heating
   - `energy_saving` - Night mode, reduced heating
   - `freeze_protection` - Minimum heating to prevent freezing
-- Attributes: `comfort_temperature`, `energy_saving_temperature`, `freeze_protection_temperature`, `evon_id`
+- Attributes: `comfort_temperature`, `energy_saving_temperature`, `freeze_protection_temperature`, `is_cooling`, `cooling_enabled`, `evon_mode_saved`, `evon_id`
 
 #### Sensor
 - Temperature sensors from climate devices
@@ -145,6 +148,19 @@ The integration supports the following languages:
 - Attributes: `evon_id`
 
 **Note**: Home states can trigger automations in the Evon system. Changing the state affects how other devices behave according to your Evon configuration.
+
+#### Switch
+Two types of switches are supported:
+
+**Controllable Relays** (`SmartCOM.Light.Light`)
+- Simple on/off relay outputs
+- Attributes: `evon_id`
+
+**Bathroom Radiators** (`Heating.BathroomRadiator`)
+- Electric bathroom heaters with timer functionality
+- Turn on/off control (toggle)
+- When turned on, runs for configured duration (default: 30 minutes)
+- Attributes: `time_remaining`, `time_remaining_mins`, `duration_mins`, `evon_id`
 
 ---
 
@@ -199,6 +215,8 @@ Add to your Claude Code configuration (`~/.claude.json`):
 | `list_home_states` | List all home states with current active state |
 | `set_home_state` | Set the active home state (at_home/holiday/night/work) |
 | `list_sensors` | List temperature and other sensors |
+| `list_bathroom_radiators` | List all bathroom radiators with current state |
+| `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
 | `list_scenes` | List available scenes |
 | `activate_scene` | Activate a scene (all_off, movie_mode, morning, night) |
 | `create_scene` | Create a custom scene |
@@ -213,6 +231,7 @@ Resources allow Claude to read device state without calling tools:
 | `evon://blinds` | All blinds with current state |
 | `evon://climate` | All climate controls with current state |
 | `evon://home_state` | Current home state and available states |
+| `evon://bathroom_radiators` | All bathroom radiators with current state |
 | `evon://summary` | Home summary (device counts, average temp, home state) |
 
 ### Pre-defined Scenes
@@ -288,6 +307,7 @@ Cookie: token=<token>
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
 | `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
 | `*ClimateControlUniversal*` | Universal climate control | Yes |
+| `Heating.BathroomRadiator` | Bathroom radiator | Yes |
 | `System.HomeState` | Home mode selector | Yes |
 | `SmartCOM.Switch` | Physical input button | **No** (read-only, momentary state) |
 | `Energy.SmartMeter*` | Smart meter | No (sensor only) |
@@ -336,6 +356,30 @@ Cookie: token=<token>
 | `SetValueFreezeProtection` | Freeze protection temperature |
 | `MinSetValueHeat` | Minimum allowed temperature |
 | `MaxSetValueHeat` | Maximum allowed temperature |
+| `ModeSaved` | Current preset mode (2=freeze, 3=energy_saving, 4=comfort) |
+| `Mode` | Heating/cooling mode (0=heating, 1=cooling) |
+| `CoolingMode` | Whether currently in cooling mode |
+| `CoolingModeWriteable` | Whether cooling mode can be changed via API (usually false) |
+| `DisableCooling` | Whether cooling is disabled for this device |
+| `IsOn` | Whether the climate control is actively running |
+
+**Note**: The `Mode`/`CoolingMode` is typically controlled by seasonal schedules in Evon and cannot be changed via the API (`CoolingModeWriteable: false`). The integration displays the current mode but doesn't allow switching between heating and cooling.
+
+### Bathroom Radiator Methods
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Switch` | - | Toggle radiator on/off |
+
+### Bathroom Radiator Properties
+
+| Property | Description |
+|----------|-------------|
+| `Output` | Current on/off state |
+| `NextSwitchPoint` | Minutes remaining until auto-off |
+| `EnableForMins` | Configured run duration in minutes |
+| `PermanentlyOn` | Whether permanently enabled |
+| `PermanentlyOff` | Whether permanently disabled |
 
 ### Physical Button Properties (SmartCOM.Switch)
 
@@ -368,6 +412,10 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.7.1** | Fixed climate preset mode detection (uses ModeSaved property), added cooling/heating mode display |
+| **1.7.0** | Added bathroom radiator (electric heater) support with timer functionality |
+| **1.6.0** | Added automatic cleanup of stale/orphaned entities on integration reload |
+| **1.5.2** | Fixed reconfigure flow 500 error with modern HA config flow patterns |
 | **1.5.0** | Added Home State selector (select entity) for switching between home modes |
 | **1.4.1** | Removed button event entities (not functional due to API limitations) |
 | **1.4.0** | Added event entities for physical buttons (later removed in 1.4.1) |

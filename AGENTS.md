@@ -39,6 +39,39 @@ Position convention in Evon:
 
 Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is needed.
 
+### Climate Preset Mode - IMPORTANT
+
+Climate devices use the `ModeSaved` property to indicate the current preset mode:
+- `ModeSaved: 2` = freeze_protection
+- `ModeSaved: 3` = energy_saving
+- `ModeSaved: 4` = comfort
+
+**DO NOT use the `Mode` property** for preset detection - it indicates heating vs cooling mode (0=heating, 1=cooling), not the preset.
+
+**Note**: The heating/cooling mode (`Mode`/`CoolingMode`) is typically read-only. Most Evon installations have `CoolingModeWriteable: false`, meaning the mode is controlled by seasonal schedules in Evon and cannot be changed via the API.
+
+To set preset modes, use these methods:
+- `WriteDayMode` - sets comfort mode
+- `WriteNightMode` - sets energy saving mode
+- `WriteFreezeMode` - sets freeze protection mode
+
+### Bathroom Radiators - TOGGLE CONTROL
+
+Bathroom radiators (`Heating.BathroomRadiator`) are electric heaters with timer functionality:
+
+1. **Control method**: Use `Switch` method to toggle on/off
+2. **No separate on/off methods**: Only toggle is available
+3. **Timer-based**: When turned on, runs for `EnableForMins` duration (default 30 minutes)
+4. **State properties**:
+   - `Output` - current on/off state
+   - `NextSwitchPoint` - minutes remaining until auto-off
+   - `EnableForMins` - configured duration
+
+```javascript
+// Toggle bathroom radiator
+await callMethod("BathroomRadiator1", "Switch");
+```
+
 ### Home State Control - SIMPLE AND RELIABLE
 
 The `System.HomeState` class controls home-wide modes. Key points:
@@ -111,6 +144,86 @@ For live testing:
 2. Restart Home Assistant (or use reload from integration menu)
 3. Check logs at Settings → System → Logs
 
+## Using Evon MCP Server for Debugging
+
+The Evon MCP server can be used to directly query the Evon API for debugging and verification. This is useful for:
+- **Discovering properties**: See all available properties on a device instance
+- **Verifying HA changes**: Check if changes made in Home Assistant are reflected in Evon
+- **Debugging issues**: Compare what HA shows vs what Evon actually reports
+- **Testing API methods**: Call methods directly to understand their behavior
+
+### MCP Server Configuration
+
+The Evon MCP server is configured in `.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "evon": {
+      "command": "node",
+      "args": ["/path/to/evon-ha/dist/index.js"],
+      "env": {
+        "EVON_HOST": "http://192.168.x.x",
+        "EVON_USERNAME": "<username>",
+        "EVON_PASSWORD": "<password>"
+      }
+    }
+  }
+}
+```
+
+### Useful MCP Tools for Debugging
+
+| Tool | Purpose |
+|------|---------|
+| `get_instance` | Get all properties of a specific device instance |
+| `get_property` | Get a specific property value |
+| `call_method` | Call any method on an instance to test behavior |
+| `list_climates` | List all climate devices with current state |
+| `list_lights` | List all lights with current state |
+
+### Direct API Queries via Bash
+
+If the MCP server is not available, you can query the Evon API directly:
+
+```bash
+# Generate password hash
+PASS_HASH=$(node -e "
+const crypto = require('crypto');
+const hash = crypto.createHash('sha512').update('username' + 'password').digest('base64');
+console.log(hash);
+")
+
+# Login and get token
+TOKEN=$(curl -s -X POST "http://192.168.x.x/login" \
+  -H "x-elocs-username: username" \
+  -H "x-elocs-password: $PASS_HASH" \
+  -D - 2>/dev/null | grep -i "x-elocs-token" | cut -d' ' -f2 | tr -d '\r\n')
+
+# Query an instance (e.g., climate device)
+curl -s "http://192.168.x.x/api/instances/ClimateControlUniversal1" \
+  -H "Cookie: token=$TOKEN" | python3 -m json.tool
+```
+
+### Example: Debugging Climate Preset Mode
+
+When investigating why climate preset wasn't showing correctly:
+
+1. **Query the device** to see all properties:
+   ```
+   get_instance instance_id=ClimateControlUniversal1
+   ```
+
+2. **Look for relevant properties**:
+   - `Mode` - Found to be 0 for all presets (heating/cooling mode, NOT preset!)
+   - `ModeSaved` - Found to change: 2=freeze, 3=energy_saving, 4=comfort
+
+3. **Test by changing preset in Evon** and re-querying to see which property changes
+
+4. **Verify HA integration** correctly reads the identified property
+
+This approach helped discover that `ModeSaved` (not `Mode`) indicates the preset mode.
+
 ## Device Class Names
 
 When filtering devices from the API, use these class names:
@@ -122,6 +235,7 @@ When filtering devices from the API, use these class names:
 | Blinds | `SmartCOM.Blind.Blind` | Yes |
 | Climate | `SmartCOM.Clima.ClimateControl` | Yes |
 | Climate (universal) | Contains `ClimateControlUniversal` | Yes |
+| Bathroom Radiator | `Heating.BathroomRadiator` | Yes (use `Switch` method to toggle) |
 | Home State | `System.HomeState` | Yes (use `Activate` method) |
 | Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
@@ -202,9 +316,12 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ### Home Assistant
 - **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor
 - **Select Entity**: Home state selector (At Home, Holiday, Night, Work)
+- **Switch Entity**: Bathroom radiators with timer functionality
+- **Climate**: Heating/cooling modes, preset modes (comfort, energy_saving, freeze_protection)
 - **Options Flow**: Configure poll interval (5-300 seconds), area sync
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
+- **Stale Entity Cleanup**: Automatic removal of orphaned entities on reload
 - **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
 - **Energy Sensors**: Smart meter power, energy, voltage sensors
@@ -212,10 +329,11 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Valve Sensors**: Binary sensors for climate valve state
 
 ### MCP Server
-- **Tools**: Device listing and control (lights, blinds, climate, home states)
+- **Tools**: Device listing and control (lights, blinds, climate, home states, bathroom radiators)
 - **Resources**: Read device state via `evon://` URIs
 - **Scenes**: Pre-defined and custom scenes for whole-home control
 - **Home State**: Read and change home modes (at_home, holiday, night, work)
+- **Bathroom Radiators**: List and toggle electric heaters
 
 ## MCP Resources
 
@@ -227,6 +345,7 @@ Resources allow reading device state without calling tools:
 | `evon://blinds` | All blinds with state |
 | `evon://climate` | All climate controls with state |
 | `evon://home_state` | Current home state and available states |
+| `evon://bathroom_radiators` | All bathroom radiators with state |
 | `evon://summary` | Home summary (counts, averages, home state) |
 
 ## MCP Scenes
@@ -292,8 +411,35 @@ pip install -r requirements-test.txt
 pytest
 ```
 
+## Release Process
+
+Before creating a release, ensure the following are up to date:
+
+1. **Version numbers** - Update in all three files:
+   - `package.json`
+   - `pyproject.toml`
+   - `custom_components/evon/manifest.json`
+
+2. **Documentation** - Update these files with any new findings:
+   - `README.md` - User-facing documentation, supported devices, API reference
+   - `AGENTS.md` - AI agent guidelines, debugging tips, API discoveries
+
+3. **Version history** - Add entry to both README.md and AGENTS.md
+
+4. **Linting** - Run linters before committing:
+   ```bash
+   python3 -m ruff check custom_components/evon/
+   npm run lint
+   ```
+
+**Important**: Always document new API findings (properties, methods, behaviors) in both README.md (API Reference section) and AGENTS.md (relevant sections). This helps future debugging and development.
+
 ## Version History
 
+- **v1.7.1**: Fixed climate preset mode detection (uses `ModeSaved` property instead of `Mode`), added cooling/heating mode display.
+- **v1.7.0**: Added bathroom radiator (electric heater) support with timer functionality. Added MCP tools (`list_bathroom_radiators`, `bathroom_radiator_control`) and resource (`evon://bathroom_radiators`).
+- **v1.6.0**: Added automatic cleanup of stale/orphaned entities on integration reload.
+- **v1.5.2**: Fixed reconfigure flow 500 error with modern HA config flow patterns.
 - **v1.5.0**: Added Home State selector (select entity) for switching between home modes. Added MCP tools (`list_home_states`, `set_home_state`) and resource (`evon://home_state`).
 - **v1.4.1**: Removed button event entities (not functional due to Evon API limitations)
 - **v1.4.0**: Added event entities for physical buttons (later removed in 1.4.1)

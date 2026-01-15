@@ -1,6 +1,6 @@
 [project]
 name = "evon-smart-home"
-version = "1.7.0"
+version = "1.7.1"
 description = "Home Assistant custom integration for Evon Smart Home"
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,6 +27,7 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "ARG001", # unused function argument (common in HA for **kwargs)
     "ARG002", # unused method argument
+    "ARG004", # unused static method argument (HA pattern for async_get_options_flow)
 ]
 
 [tool.ruff.lint.per-file-ignores]
