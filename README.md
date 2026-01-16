@@ -412,6 +412,12 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.8.2** | Fixed blind cover optimistic state for group actions |
+| **1.8.1** | Added optimistic updates for all entities and improved preset icons |
+| **1.8.0** | Added optimistic updates for all controllable entities, improved climate preset icons |
+| **1.7.4** | Added optimistic updates for climate target temperature |
+| **1.7.3** | Added optimistic updates for climate preset mode |
+| **1.7.2** | Fixed climate preset detection for Thermostat devices |
 | **1.7.1** | Fixed climate preset mode detection (uses ModeSaved property), added cooling/heating mode display |
 | **1.7.0** | Added bathroom radiator (electric heater) support with timer functionality |
 | **1.6.0** | Added automatic cleanup of stale/orphaned entities on integration reload |

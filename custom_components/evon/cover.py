@@ -122,6 +122,7 @@ class EvonCover(EvonEntity, CoverEntity):
         # Optimistic state to prevent UI flicker during updates (HA scale: 0=closed, 100=open)
         self._optimistic_position: int | None = None
         self._optimistic_tilt: int | None = None
+        self._optimistic_is_moving: bool | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -165,6 +166,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def is_opening(self) -> bool:
         """Return if the cover is opening."""
+        # Return optimistic value if set (prevents UI staying stuck after group stop)
+        if self._optimistic_is_moving is not None:
+            return self._optimistic_is_moving
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("is_moving", False)
@@ -173,6 +177,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def is_closing(self) -> bool:
         """Return if the cover is closing."""
+        # Return optimistic value if set (prevents UI staying stuck after group stop)
+        if self._optimistic_is_moving is not None:
+            return self._optimistic_is_moving
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("is_moving", False)
@@ -193,57 +200,77 @@ class EvonCover(EvonEntity, CoverEntity):
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
-        is_moving = data.get("is_moving", False) if data else False
+        coordinator_is_moving = data.get("is_moving", False) if data else False
+        # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
+        is_moving = coordinator_is_moving or self._optimistic_is_moving is True
 
         if is_moving:
             # Blind is moving - this command will stop it (toggle behavior)
             # Clear optimistic values since we don't know final position
             self._optimistic_position = None
             self._optimistic_tilt = None
+            # Optimistically set is_moving to False (same as stop)
+            self._optimistic_is_moving = False
             self.async_write_ha_state()
 
             await self._api.open_blind(self._instance_id)
-            # Small delay for Evon to update is_moving state
-            await asyncio.sleep(0.5)
+
+            # Small delay then update state again to ensure UI reflects stopped state
+            await asyncio.sleep(0.3)
+            self.async_write_ha_state()
         else:
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
+            self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self.async_write_ha_state()
             await self._api.open_blind(self._instance_id)
-
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
-        is_moving = data.get("is_moving", False) if data else False
+        coordinator_is_moving = data.get("is_moving", False) if data else False
+        # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
+        is_moving = coordinator_is_moving or self._optimistic_is_moving is True
 
         if is_moving:
             # Blind is moving - this command will stop it (toggle behavior)
             # Clear optimistic values since we don't know final position
             self._optimistic_position = None
             self._optimistic_tilt = None
+            # Optimistically set is_moving to False (same as stop)
+            self._optimistic_is_moving = False
             self.async_write_ha_state()
 
             await self._api.close_blind(self._instance_id)
-            # Small delay for Evon to update is_moving state
-            await asyncio.sleep(0.5)
+
+            # Small delay then update state again to ensure UI reflects stopped state
+            await asyncio.sleep(0.3)
+            self.async_write_ha_state()
         else:
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
+            self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self.async_write_ha_state()
             await self._api.close_blind(self._instance_id)
-
-        await self.coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
         # Clear optimistic values since we don't know where it will stop
         self._optimistic_position = None
         self._optimistic_tilt = None
+        # Optimistically set is_moving to False immediately
+        # This fixes the issue where group stop actions leave arrows inactive
+        self._optimistic_is_moving = False
+        self.async_write_ha_state()
 
         await self._api.stop_blind(self._instance_id)
-        await self.coordinator.async_request_refresh()
+
+        # Small delay then update state again to ensure UI reflects stopped state
+        # This helps when multiple blinds are stopped via group action
+        await asyncio.sleep(0.3)
+        self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""
@@ -318,5 +345,10 @@ class EvonCover(EvonEntity, CoverEntity):
                 actual_tilt = data.get("angle", 0)
                 if abs(actual_tilt - self._optimistic_tilt) <= 2:
                     self._optimistic_tilt = None
+
+            if self._optimistic_is_moving is not None:
+                actual_is_moving = data.get("is_moving", False)
+                if actual_is_moving == self._optimistic_is_moving:
+                    self._optimistic_is_moving = None
 
         super()._handle_coordinator_update()

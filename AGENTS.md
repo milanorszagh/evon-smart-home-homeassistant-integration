@@ -282,7 +282,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 | Entity | Optimistic Properties |
 |--------|----------------------|
 | Light | `is_on`, `brightness` |
-| Cover | `position`, `tilt_position` |
+| Cover | `position`, `tilt_position`, `is_moving` |
 | Climate | `preset_mode`, `target_temperature`, `hvac_mode` |
 | Switch | `is_on` |
 | Bathroom Radiator | `is_on` |
@@ -502,6 +502,8 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+- **v1.8.2**: Fixed blind cover optimistic state for group actions. Added `is_moving` optimistic tracking so group open/close buttons work correctly when clicking twice to stop.
+- **v1.8.1**: Added optimistic updates for all entities and improved preset icons.
 - **v1.8.0**: Added optimistic updates for all controllable entities (lights, covers, climate, switches, select). Changed climate preset names to use HA built-in presets for better UI icons (`eco` instead of `energy_saving`, `away` instead of `freeze_protection`).
 - **v1.7.4**: Added optimistic updates for climate target temperature when changing presets.
 - **v1.7.3**: Added optimistic updates for climate preset mode to prevent UI flicker.
