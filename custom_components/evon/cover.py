@@ -1,7 +1,48 @@
-"""Cover platform for Evon Smart Home integration."""
+"""Cover platform for Evon Smart Home integration.
+
+EVON BLIND TILT BEHAVIOR - IMPORTANT NOTES
+==========================================
+
+Evon blinds have a hardware quirk where the tilt/slat orientation depends on
+the last movement direction of the blind:
+
+- After moving DOWN: tilt 0 = slats OPEN (horizontal), tilt 100 = slats CLOSED
+- After moving UP: tilt 0 = slats CLOSED, tilt 100 = slats OPEN (inverted!)
+
+This means the same tilt value can produce opposite physical results depending
+on whether the blind last moved up or down. This behavior is inherent to how
+the blind motor controls the slats and cannot be changed.
+
+The Evon API only provides a `SetAngle` method with values 0-100. There are no
+dedicated "open tilt" or "close tilt" commands that would handle direction
+automatically.
+
+CURRENT IMPLEMENTATION
+----------------------
+This integration uses the same convention as the Evon app:
+- Tilt 0 = slats OPEN (horizontal, letting light through)
+- Tilt 100 = slats CLOSED (blocking light)
+
+This is correct when the blind's last movement was DOWN. If the blind last
+moved UP (e.g., via hardware switch or Evon app), the tilt will appear inverted
+until the next downward position change. This matches the Evon app behavior.
+
+ALTERNATIVES CONSIDERED
+-----------------------
+A "normalization" approach was tested where the blind would automatically move
+down slightly before setting tilt to ensure consistent orientation. This was
+rejected because:
+1. Large blinds (e.g., 3m) take significant time to move
+2. The delay would negatively impact user experience
+3. It would cause unexpected position changes
+
+The current behavior matches the Evon app, so users familiar with Evon will
+have the same experience.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -151,20 +192,48 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        # Set optimistic value (100 = fully open in HA)
-        self._optimistic_position = 100
-        self.async_write_ha_state()
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        is_moving = data.get("is_moving", False) if data else False
 
-        await self._api.open_blind(self._instance_id)
+        if is_moving:
+            # Blind is moving - this command will stop it (toggle behavior)
+            # Clear optimistic values since we don't know final position
+            self._optimistic_position = None
+            self._optimistic_tilt = None
+            self.async_write_ha_state()
+
+            await self._api.open_blind(self._instance_id)
+            # Small delay for Evon to update is_moving state
+            await asyncio.sleep(0.5)
+        else:
+            # Blind is stopped - this will start opening
+            self._optimistic_position = 100
+            self.async_write_ha_state()
+            await self._api.open_blind(self._instance_id)
+
         await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        # Set optimistic value (0 = fully closed in HA)
-        self._optimistic_position = 0
-        self.async_write_ha_state()
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        is_moving = data.get("is_moving", False) if data else False
 
-        await self._api.close_blind(self._instance_id)
+        if is_moving:
+            # Blind is moving - this command will stop it (toggle behavior)
+            # Clear optimistic values since we don't know final position
+            self._optimistic_position = None
+            self._optimistic_tilt = None
+            self.async_write_ha_state()
+
+            await self._api.close_blind(self._instance_id)
+            # Small delay for Evon to update is_moving state
+            await asyncio.sleep(0.5)
+        else:
+            # Blind is stopped - this will start closing
+            self._optimistic_position = 0
+            self.async_write_ha_state()
+            await self._api.close_blind(self._instance_id)
+
         await self.coordinator.async_request_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
@@ -190,23 +259,41 @@ class EvonCover(EvonEntity, CoverEntity):
             await self.coordinator.async_request_refresh()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
-        """Open the cover tilt."""
-        self._optimistic_tilt = 100
-        self.async_write_ha_state()
+        """Open the cover tilt (slats horizontal, letting light through).
 
-        await self._api.set_blind_tilt(self._instance_id, 100)
-        await self.coordinator.async_request_refresh()
-
-    async def async_close_cover_tilt(self, **kwargs: Any) -> None:
-        """Close the cover tilt."""
+        Note: Due to Evon hardware behavior, tilt orientation depends on the
+        blind's last movement direction. See module docstring for details.
+        """
+        # Tilt 0 = open slats (when last movement was down, matching Evon app)
         self._optimistic_tilt = 0
         self.async_write_ha_state()
 
         await self._api.set_blind_tilt(self._instance_id, 0)
         await self.coordinator.async_request_refresh()
 
+    async def async_close_cover_tilt(self, **kwargs: Any) -> None:
+        """Close the cover tilt (slats angled to block light).
+
+        Note: Due to Evon hardware behavior, tilt orientation depends on the
+        blind's last movement direction. See module docstring for details.
+        """
+        # Tilt 100 = closed slats (when last movement was down, matching Evon app)
+        self._optimistic_tilt = 100
+        self.async_write_ha_state()
+
+        await self._api.set_blind_tilt(self._instance_id, 100)
+        await self.coordinator.async_request_refresh()
+
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
-        """Set the cover tilt position."""
+        """Set the cover tilt position.
+
+        Convention (matching Evon app, when last movement was down):
+        - Tilt 0 = slats OPEN (horizontal, letting light through)
+        - Tilt 100 = slats CLOSED (blocking light)
+
+        Note: Due to Evon hardware behavior, tilt orientation depends on the
+        blind's last movement direction. See module docstring for details.
+        """
         if ATTR_TILT_POSITION in kwargs:
             tilt = kwargs[ATTR_TILT_POSITION]
             self._optimistic_tilt = tilt
