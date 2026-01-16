@@ -78,6 +78,9 @@ class EvonCover(EvonEntity, CoverEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_cover_{instance_id}"
+        # Optimistic state to prevent UI flicker during updates (HA scale: 0=closed, 100=open)
+        self._optimistic_position: int | None = None
+        self._optimistic_tilt: int | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -87,6 +90,10 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def current_cover_position(self) -> int | None:
         """Return current position of cover (0=closed, 100=open in HA)."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_position is not None:
+            return self._optimistic_position
+
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             # Evon: 0=open, 100=closed
@@ -97,6 +104,10 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return current tilt position of cover."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_tilt is not None:
+            return self._optimistic_tilt
+
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
             return data.get("angle", 0)
@@ -140,39 +151,85 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
+        # Set optimistic value (100 = fully open in HA)
+        self._optimistic_position = 100
+        self.async_write_ha_state()
+
         await self._api.open_blind(self._instance_id)
         await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
+        # Set optimistic value (0 = fully closed in HA)
+        self._optimistic_position = 0
+        self.async_write_ha_state()
+
         await self._api.close_blind(self._instance_id)
         await self.coordinator.async_request_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
+        # Clear optimistic values since we don't know where it will stop
+        self._optimistic_position = None
+        self._optimistic_tilt = None
+
         await self._api.stop_blind(self._instance_id)
         await self.coordinator.async_request_refresh()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""
         if ATTR_POSITION in kwargs:
+            ha_position = kwargs[ATTR_POSITION]
+            # Set optimistic value immediately
+            self._optimistic_position = ha_position
+            self.async_write_ha_state()
+
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
-            position = 100 - kwargs[ATTR_POSITION]
-            await self._api.set_blind_position(self._instance_id, position)
+            evon_position = 100 - ha_position
+            await self._api.set_blind_position(self._instance_id, evon_position)
             await self.coordinator.async_request_refresh()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
         """Open the cover tilt."""
+        self._optimistic_tilt = 100
+        self.async_write_ha_state()
+
         await self._api.set_blind_tilt(self._instance_id, 100)
         await self.coordinator.async_request_refresh()
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
         """Close the cover tilt."""
+        self._optimistic_tilt = 0
+        self.async_write_ha_state()
+
         await self._api.set_blind_tilt(self._instance_id, 0)
         await self.coordinator.async_request_refresh()
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         """Set the cover tilt position."""
         if ATTR_TILT_POSITION in kwargs:
-            await self._api.set_blind_tilt(self._instance_id, kwargs[ATTR_TILT_POSITION])
+            tilt = kwargs[ATTR_TILT_POSITION]
+            self._optimistic_tilt = tilt
+            self.async_write_ha_state()
+
+            await self._api.set_blind_tilt(self._instance_id, tilt)
             await self.coordinator.async_request_refresh()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Only clear optimistic state when coordinator data matches expected value
+        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        if data:
+            if self._optimistic_position is not None:
+                # Convert Evon position to HA position for comparison
+                actual_position = 100 - data.get("position", 0)
+                # Allow small tolerance for rounding
+                if abs(actual_position - self._optimistic_position) <= 2:
+                    self._optimistic_position = None
+
+            if self._optimistic_tilt is not None:
+                actual_tilt = data.get("angle", 0)
+                if abs(actual_tilt - self._optimistic_tilt) <= 2:
+                    self._optimistic_tilt = None
+
+        super()._handle_coordinator_update()

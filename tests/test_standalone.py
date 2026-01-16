@@ -172,6 +172,19 @@ class TestEvonConstants:
             assert value in content, f"Missing class {name} = {value}"
             print(f"Found: {name} = {value}")
 
+    def test_climate_preset_modes(self):
+        """Test climate preset modes use HA built-in names for icons."""
+        const_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "const.py")
+
+        with open(const_path) as f:
+            content = f.read()
+
+        # Should use HA built-in preset names
+        assert 'CLIMATE_MODE_COMFORT = "comfort"' in content, "Missing comfort preset"
+        assert 'CLIMATE_MODE_ENERGY_SAVING = "eco"' in content, "Energy saving should be 'eco' for HA icon"
+        assert 'CLIMATE_MODE_FREEZE_PROTECTION = "away"' in content, "Freeze protection should be 'away' for HA icon"
+        print("Climate presets use HA built-in names: comfort, eco, away")
+
 
 class TestMCPServer:
     """Test MCP server TypeScript compiles."""
@@ -200,6 +213,71 @@ class TestMCPServer:
         assert "scenes" in content.lower(), "No scenes support"
         assert "home_state" in content.lower() or "homestate" in content.lower(), "No home state support"
         print("MCP server has tools, resources, scenes, and home states")
+
+
+class TestOptimisticUpdates:
+    """Test that optimistic updates are implemented in entity files."""
+
+    def test_light_has_optimistic_updates(self):
+        """Test light.py has optimistic update pattern."""
+        light_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "light.py")
+
+        with open(light_path) as f:
+            content = f.read()
+
+        assert "_optimistic_is_on" in content, "Light missing _optimistic_is_on"
+        assert "_optimistic_brightness" in content, "Light missing _optimistic_brightness"
+        assert "_handle_coordinator_update" in content, "Light missing _handle_coordinator_update"
+        print("Light has optimistic updates: is_on, brightness")
+
+    def test_cover_has_optimistic_updates(self):
+        """Test cover.py has optimistic update pattern."""
+        cover_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "cover.py")
+
+        with open(cover_path) as f:
+            content = f.read()
+
+        assert "_optimistic_position" in content, "Cover missing _optimistic_position"
+        assert "_optimistic_tilt" in content, "Cover missing _optimistic_tilt"
+        assert "_handle_coordinator_update" in content, "Cover missing _handle_coordinator_update"
+        print("Cover has optimistic updates: position, tilt")
+
+    def test_climate_has_optimistic_updates(self):
+        """Test climate.py has optimistic update pattern."""
+        climate_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "climate.py")
+
+        with open(climate_path) as f:
+            content = f.read()
+
+        assert "_optimistic_preset" in content, "Climate missing _optimistic_preset"
+        assert "_optimistic_target_temp" in content, "Climate missing _optimistic_target_temp"
+        assert "_optimistic_hvac_mode" in content, "Climate missing _optimistic_hvac_mode"
+        assert "_handle_coordinator_update" in content, "Climate missing _handle_coordinator_update"
+        print("Climate has optimistic updates: preset, target_temp, hvac_mode")
+
+    def test_switch_has_optimistic_updates(self):
+        """Test switch.py has optimistic update pattern."""
+        switch_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "switch.py")
+
+        with open(switch_path) as f:
+            content = f.read()
+
+        assert "_optimistic_is_on" in content, "Switch missing _optimistic_is_on"
+        assert "_handle_coordinator_update" in content, "Switch missing _handle_coordinator_update"
+        # Should have optimistic for both EvonSwitch and EvonBathroomRadiatorSwitch
+        assert content.count("_optimistic_is_on: bool | None = None") >= 2, "Both switch types should have optimistic updates"
+        print("Switch has optimistic updates: is_on (both regular and bathroom radiator)")
+
+    def test_select_has_optimistic_updates(self):
+        """Test select.py has optimistic update pattern."""
+        select_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "select.py")
+
+        with open(select_path) as f:
+            content = f.read()
+
+        assert "_optimistic_option" in content, "Select missing _optimistic_option"
+        assert "_handle_coordinator_update" in content, "Select missing _handle_coordinator_update"
+        print("Select has optimistic updates: option")
 
 
 class TestIntegrationFiles:
@@ -263,6 +341,7 @@ if __name__ == "__main__":
         TestHostNormalization(),
         TestEvonConstants(),
         TestMCPServer(),
+        TestOptimisticUpdates(),
         TestIntegrationFiles(),
     ]
 

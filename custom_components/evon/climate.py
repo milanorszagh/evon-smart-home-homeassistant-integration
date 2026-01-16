@@ -89,6 +89,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_preset: str | None = None
         self._optimistic_target_temp: float | None = None
+        self._optimistic_hvac_mode: HVACMode | None = None
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -106,6 +107,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_hvac_mode is not None:
+            return self._optimistic_hvac_mode
+
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if not data:
             return HVACMode.OFF
@@ -188,6 +193,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target HVAC mode."""
+        # Set optimistic value immediately to prevent UI flicker
+        self._optimistic_hvac_mode = hvac_mode
+        self.async_write_ha_state()
+
         if hvac_mode == HVACMode.OFF:
             await self._api.set_climate_freeze_protection_mode(self._instance_id)
         else:
@@ -245,5 +254,18 @@ class EvonClimate(EvonEntity, ClimateEntity):
                 actual_temp = data.get("target_temperature")
                 if actual_temp == self._optimistic_target_temp:
                     self._optimistic_target_temp = None
+
+            if self._optimistic_hvac_mode is not None:
+                # Determine actual HVAC mode from coordinator data
+                is_on = data.get("is_on", False)
+                if not is_on:
+                    actual_hvac_mode = HVACMode.OFF
+                elif data.get("is_cooling", False):
+                    actual_hvac_mode = HVACMode.COOL
+                else:
+                    actual_hvac_mode = HVACMode.HEAT
+
+                if actual_hvac_mode == self._optimistic_hvac_mode:
+                    self._optimistic_hvac_mode = None
 
         super()._handle_coordinator_update()

@@ -13,10 +13,10 @@ CONF_SYNC_AREAS = "sync_areas"
 DEFAULT_SCAN_INTERVAL = 30
 DEFAULT_SYNC_AREAS = False
 
-# Climate modes
+# Climate preset modes (using HA built-in presets for icons)
 CLIMATE_MODE_COMFORT = "comfort"
-CLIMATE_MODE_ENERGY_SAVING = "energy_saving"
-CLIMATE_MODE_FREEZE_PROTECTION = "freeze_protection"
+CLIMATE_MODE_ENERGY_SAVING = "eco"  # Was "energy_saving" - eco has leaf icon
+CLIMATE_MODE_FREEZE_PROTECTION = "away"  # Was "freeze_protection" - away has door icon
 
 # Evon class names
 EVON_CLASS_LIGHT_DIM = "SmartCOM.Light.LightDim"

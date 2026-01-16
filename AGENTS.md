@@ -49,9 +49,14 @@ Climate devices use different properties depending on type:
 | ClimateControl/Thermostat | `SmartCOM.Clima.ClimateControl` | `MainState` |
 
 Both properties use the same value mapping:
-- `2` = freeze_protection
-- `3` = energy_saving
+- `2` = away (freeze protection)
+- `3` = eco (energy saving)
 - `4` = comfort
+
+**Note**: The HA integration uses standard Home Assistant preset names for better UI (icons):
+- `comfort` - standard HA preset (has icon)
+- `eco` - standard HA preset (🍃 leaf icon) - maps to Evon's energy saving mode
+- `away` - standard HA preset (🚪 door icon) - maps to Evon's freeze protection mode
 
 **Code should check `ModeSaved` first, then fall back to `MainState`:**
 ```python
@@ -262,6 +267,55 @@ When filtering devices from the API, use these class names:
 3. Use token in cookie for all subsequent requests: `Cookie: token=<token>`
 4. On 302 or 401 response, re-authenticate and retry
 
+## Optimistic Updates
+
+All controllable entities implement optimistic updates to prevent UI flicker when changing state. When a user triggers an action (turn on light, change preset, etc.), the UI immediately shows the expected state without waiting for the coordinator to poll Evon.
+
+**How it works:**
+1. User triggers action (e.g., turn on light)
+2. Entity sets optimistic state and calls `async_write_ha_state()`
+3. API call is made to Evon
+4. Coordinator refreshes data from Evon
+5. In `_handle_coordinator_update()`, optimistic state is cleared only when actual state matches expected
+
+**Entities with optimistic updates:**
+| Entity | Optimistic Properties |
+|--------|----------------------|
+| Light | `is_on`, `brightness` |
+| Cover | `position`, `tilt_position` |
+| Climate | `preset_mode`, `target_temperature`, `hvac_mode` |
+| Switch | `is_on` |
+| Bathroom Radiator | `is_on` |
+| Home State Select | `current_option` |
+
+**Implementation pattern:**
+```python
+# In __init__
+self._optimistic_is_on: bool | None = None
+
+# In property
+@property
+def is_on(self) -> bool:
+    if self._optimistic_is_on is not None:
+        return self._optimistic_is_on
+    # ... get from coordinator
+
+# In action method
+async def async_turn_on(self, **kwargs):
+    self._optimistic_is_on = True
+    self.async_write_ha_state()
+    await self._api.turn_on(...)
+    await self.coordinator.async_request_refresh()
+
+# In coordinator update handler
+def _handle_coordinator_update(self):
+    if self._optimistic_is_on is not None:
+        actual = self.coordinator.get_entity_data(...)
+        if actual == self._optimistic_is_on:
+            self._optimistic_is_on = None
+    super()._handle_coordinator_update()
+```
+
 ## Common Pitfalls
 
 1. **Empty device names**: Skip instances where `Name` is empty - these are templates/base classes
@@ -448,6 +502,10 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+- **v1.8.0**: Added optimistic updates for all controllable entities (lights, covers, climate, switches, select). Changed climate preset names to use HA built-in presets for better UI icons (`eco` instead of `energy_saving`, `away` instead of `freeze_protection`).
+- **v1.7.4**: Added optimistic updates for climate target temperature when changing presets.
+- **v1.7.3**: Added optimistic updates for climate preset mode to prevent UI flicker.
+- **v1.7.2**: Fixed climate preset detection for Thermostat devices (uses `MainState` fallback when `ModeSaved` not present).
 - **v1.7.1**: Fixed climate preset mode detection (uses `ModeSaved` property instead of `Mode`), added cooling/heating mode display.
 - **v1.7.0**: Added bathroom radiator (electric heater) support with timer functionality. Added MCP tools (`list_bathroom_radiators`, `bathroom_radiator_control`) and resource (`evon://bathroom_radiators`).
 - **v1.6.0**: Added automatic cleanup of stale/orphaned entities on integration reload.

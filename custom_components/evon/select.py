@@ -60,6 +60,8 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         self._options_map: dict[str, str] = {}
         self._reverse_map: dict[str, str] = {}
         self._update_options()
+        # Optimistic state to prevent UI flicker during updates
+        self._optimistic_option: str | None = None
 
     def _update_options(self) -> None:
         """Update options from coordinator data."""
@@ -82,6 +84,10 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_option is not None:
+            return self._optimistic_option
+
         active_id = self.coordinator.get_active_home_state()
         if active_id and active_id in self._options_map:
             return self._options_map[active_id]
@@ -96,6 +102,10 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if option in self._reverse_map:
+            # Set optimistic value immediately to prevent UI flicker
+            self._optimistic_option = option
+            self.async_write_ha_state()
+
             instance_id = self._reverse_map[option]
             await self._api.activate_home_state(instance_id)
             await self.coordinator.async_request_refresh()
@@ -104,4 +114,13 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._update_options()
+
+        # Only clear optimistic state when coordinator data matches expected value
+        if self._optimistic_option is not None:
+            active_id = self.coordinator.get_active_home_state()
+            if active_id and active_id in self._options_map:
+                actual_option = self._options_map[active_id]
+                if actual_option == self._optimistic_option:
+                    self._optimistic_option = None
+
         self.async_write_ha_state()

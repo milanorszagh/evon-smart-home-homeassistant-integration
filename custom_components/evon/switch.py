@@ -77,6 +77,8 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_switch_{instance_id}"
+        # Optimistic state to prevent UI flicker during updates
+        self._optimistic_is_on: bool | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -86,6 +88,10 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the switch is on."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_is_on is not None:
+            return self._optimistic_is_on
+
         data = self.coordinator.get_entity_data("switches", self._instance_id)
         if data:
             return data.get("is_on", False)
@@ -98,13 +104,30 @@ class EvonSwitch(EvonEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
+        self._optimistic_is_on = True
+        self.async_write_ha_state()
+
         await self._api.turn_on_switch(self._instance_id)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
+        self._optimistic_is_on = False
+        self.async_write_ha_state()
+
         await self._api.turn_off_switch(self._instance_id)
         await self.coordinator.async_request_refresh()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Only clear optimistic state when coordinator data matches expected value
+        if self._optimistic_is_on is not None:
+            data = self.coordinator.get_entity_data("switches", self._instance_id)
+            if data:
+                actual_is_on = data.get("is_on", False)
+                if actual_is_on == self._optimistic_is_on:
+                    self._optimistic_is_on = None
+        super()._handle_coordinator_update()
 
 
 class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
@@ -125,6 +148,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_radiator_{instance_id}"
+        # Optimistic state to prevent UI flicker during updates
+        self._optimistic_is_on: bool | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -134,6 +159,10 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the radiator is on."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_is_on is not None:
+            return self._optimistic_is_on
+
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data:
             return data.get("is_on", False)
@@ -165,6 +194,9 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         # Only toggle if currently off
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data and not data.get("is_on", False):
+            self._optimistic_is_on = True
+            self.async_write_ha_state()
+
             await self._api.toggle_bathroom_radiator(self._instance_id)
             await self.coordinator.async_request_refresh()
 
@@ -173,5 +205,19 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         # Only toggle if currently on
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data and data.get("is_on", False):
+            self._optimistic_is_on = False
+            self.async_write_ha_state()
+
             await self._api.toggle_bathroom_radiator(self._instance_id)
             await self.coordinator.async_request_refresh()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Only clear optimistic state when coordinator data matches expected value
+        if self._optimistic_is_on is not None:
+            data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
+            if data:
+                actual_is_on = data.get("is_on", False)
+                if actual_is_on == self._optimistic_is_on:
+                    self._optimistic_is_on = None
+        super()._handle_coordinator_update()
