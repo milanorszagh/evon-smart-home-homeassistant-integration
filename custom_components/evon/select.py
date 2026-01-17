@@ -18,6 +18,14 @@ from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Translation mapping for German home state names to English
+HOME_STATE_TRANSLATIONS: dict[str, str] = {
+    "Daheim": "At Home",
+    "Urlaub": "Holiday",
+    "Nacht": "Night",
+    "Arbeit": "Work",
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -63,11 +71,21 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
 
+    def _translate_name(self, name: str) -> str:
+        """Translate German home state name to English if available."""
+        return HOME_STATE_TRANSLATIONS.get(name, name)
+
     def _update_options(self) -> None:
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
-        self._options_map = {state["id"]: state["name"] for state in home_states}
-        self._reverse_map = {state["name"]: state["id"] for state in home_states}
+        # Translate names for display (id -> translated_name)
+        self._options_map = {
+            state["id"]: self._translate_name(state["name"]) for state in home_states
+        }
+        # Reverse map uses translated names (translated_name -> id)
+        self._reverse_map = {
+            self._translate_name(state["name"]): state["id"] for state in home_states
+        }
         self._attr_options = list(self._options_map.values())
 
     @property
