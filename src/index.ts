@@ -79,8 +79,8 @@ const BLIND_METHODS = {
 
 const CLIMATE_METHODS = {
   comfort: "WriteDayMode",
-  energy_saving: "WriteNightMode",
-  freeze_protection: "WriteFreezeMode",
+  eco: "WriteNightMode",
+  away: "WriteFreezeMode",
   set_temperature: "WriteCurrentSetTemperature",
 } as const;
 
@@ -548,7 +548,7 @@ server.tool(
   "Control climate/heating for a room",
   {
     climate_id: z.string().describe("The climate control instance ID"),
-    action: z.enum(["comfort", "energy_saving", "freeze_protection", "set_temperature"]).describe("Action to perform"),
+    action: z.enum(["comfort", "eco", "away", "set_temperature"]).describe("Climate action: comfort, eco (energy saving), away (protection), or set_temperature"),
     temperature: z.number().optional().describe("Target temperature (for set_temperature action)"),
   },
   async ({ climate_id, action, temperature }) => {
@@ -567,7 +567,7 @@ server.tool(
   "climate_control_all",
   "Set climate mode for all rooms at once",
   {
-    action: z.enum(["comfort", "energy_saving", "freeze_protection"]).describe("Climate mode to set"),
+    action: z.enum(["comfort", "eco", "away"]).describe("Climate mode: comfort, eco (energy saving), or away (protection)"),
   },
   async ({ action }) => {
     const instances = await getInstances();
@@ -1269,7 +1269,7 @@ server.tool(
     description: z.string().optional().describe("Scene description"),
     light_brightness: z.number().min(0).max(100).optional().describe("Set all lights to this brightness (0=off)"),
     blind_position: z.number().min(0).max(100).optional().describe("Set all blinds to this position (0=open, 100=closed)"),
-    climate_mode: z.enum(["comfort", "energy_saving", "freeze_protection"]).optional().describe("Set all climate to this mode"),
+    climate_mode: z.enum(["comfort", "eco", "away"]).optional().describe("Climate mode: comfort, eco (energy saving), or away (protection)"),
   },
   async ({ name, description, light_brightness, blind_position, climate_mode }) => {
     const sceneId = name.toLowerCase().replace(/\s+/g, "_");

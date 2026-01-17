@@ -326,6 +326,28 @@ class EvonApi:
                 )
         return radiators
 
+    # Season mode methods (global heating/cooling)
+    async def get_season_mode(self) -> bool:
+        """Get the current season mode.
+
+        Returns:
+            True if cooling (summer), False if heating (winter)
+        """
+        details = await self.get_instance("Base.ehThermostat")
+        return details.get("IsCool", False)
+
+    async def set_season_mode(self, is_cooling: bool) -> None:
+        """Set the global season mode.
+
+        Args:
+            is_cooling: True for cooling (summer), False for heating (winter)
+        """
+        await self._request(
+            "PUT",
+            "/instances/Base.ehThermostat/IsCool",
+            {"value": is_cooling},
+        )
+
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""
         try:

@@ -301,9 +301,7 @@ class TestIntegrationFiles:
             "switch.py",
             "select.py",
             "binary_sensor.py",
-            "device_trigger.py",
             "diagnostics.py",
-            "logbook.py",
             "manifest.json",
             "strings.json",
         ]
@@ -325,11 +323,11 @@ class TestIntegrationFiles:
 
         assert "config" in translations
         assert "options" in translations
-        assert "device_automation" in translations
+        assert "entity" in translations
         assert "step" in translations["config"]
         assert "reconfigure" in translations["config"]["step"]
-        assert "trigger_type" in translations["device_automation"]
-        print("Translations include config, options, device_automation, and reconfigure")
+        assert "select" in translations["entity"]
+        print("Translations include config, options, entity, and reconfigure")
 
 
 if __name__ == "__main__":

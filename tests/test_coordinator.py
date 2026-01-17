@@ -1,4 +1,7 @@
-"""Tests for Evon data coordinator."""
+"""Tests for Evon data coordinator.
+
+These tests require homeassistant to be installed.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tests.conftest import requires_homeassistant
 
+
+@requires_homeassistant
 class TestEvonDataUpdateCoordinator:
     """Test EvonDataUpdateCoordinator."""
 

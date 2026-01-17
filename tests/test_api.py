@@ -1,9 +1,50 @@
-"""Tests for Evon API client."""
+"""Tests for Evon API client.
+
+These tests use importlib to load api.py directly, avoiding the __init__.py
+import chain that requires homeassistant. We mock the homeassistant module
+to allow importing api.py without the full HA installation.
+"""
 
 from __future__ import annotations
 
-from custom_components.evon.api import EvonApi, EvonApiError, EvonAuthError, encode_password
+import importlib.util
+import os
+import sys
+from types import ModuleType
+from unittest.mock import MagicMock
+
 from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME
+
+# Create a mock homeassistant module before importing api.py
+mock_ha = ModuleType("homeassistant")
+mock_ha_exceptions = ModuleType("homeassistant.exceptions")
+
+
+class MockHomeAssistantError(Exception):
+    """Mock HomeAssistantError for testing."""
+
+    pass
+
+
+mock_ha_exceptions.HomeAssistantError = MockHomeAssistantError
+mock_ha.exceptions = mock_ha_exceptions
+sys.modules["homeassistant"] = mock_ha
+sys.modules["homeassistant.exceptions"] = mock_ha_exceptions
+
+# Load api.py directly without triggering __init__.py
+api_path = os.path.join(
+    os.path.dirname(__file__), "..", "custom_components", "evon", "api.py"
+)
+spec = importlib.util.spec_from_file_location("evon_api", api_path)
+evon_api = importlib.util.module_from_spec(spec)
+sys.modules["evon_api"] = evon_api
+spec.loader.exec_module(evon_api)
+
+# Import the classes we need
+EvonApi = evon_api.EvonApi
+EvonApiError = evon_api.EvonApiError
+EvonAuthError = evon_api.EvonAuthError
+encode_password = evon_api.encode_password
 
 
 class TestPasswordEncoding:
@@ -103,3 +144,21 @@ class TestEvonApiHomeStateMethods:
         assert callable(api.get_home_states)
         assert callable(api.get_active_home_state)
         assert callable(api.activate_home_state)
+
+
+class TestEvonApiSeasonModeMethods:
+    """Test season mode related API methods."""
+
+    def test_api_has_season_mode_methods(self):
+        """Test that API has season mode methods."""
+        api = EvonApi(
+            host=TEST_HOST,
+            username=TEST_USERNAME,
+            password=TEST_PASSWORD,
+        )
+        # Check methods exist
+        assert hasattr(api, "get_season_mode")
+        assert hasattr(api, "set_season_mode")
+        # Check they are callable
+        assert callable(api.get_season_mode)
+        assert callable(api.set_season_mode)

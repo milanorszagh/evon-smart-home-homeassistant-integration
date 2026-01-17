@@ -1,9 +1,16 @@
 {
-  "device_automation": {
-    "trigger_type": {
-      "single_click": "Einfacher Klick",
-      "double_click": "Doppelklick",
-      "long_press": "Langer Tastendruck"
+  "entity": {
+    "select": {
+      "season_mode": {
+        "name": "Jahreszeit-Modus",
+        "state": {
+          "heating": "Heizen (Winter)",
+          "cooling": "Kühlen (Sommer)"
+        }
+      },
+      "home_state": {
+        "name": "Zuhause-Status"
+      }
     }
   },
   "config": {

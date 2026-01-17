@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
+    HVACAction,
     HVACMode,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -23,6 +24,8 @@ from .const import (
     CLIMATE_MODE_ENERGY_SAVING,
     CLIMATE_MODE_FREEZE_PROTECTION,
     DOMAIN,
+    EVON_PRESET_COOLING,
+    EVON_PRESET_HEATING,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -30,13 +33,6 @@ _LOGGER = logging.getLogger(__name__)
 
 # Preset modes list
 PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ENERGY_SAVING, CLIMATE_MODE_FREEZE_PROTECTION]
-
-# Evon ModeSaved to preset mapping
-EVON_MODE_SAVED_TO_PRESET = {
-    2: CLIMATE_MODE_FREEZE_PROTECTION,
-    3: CLIMATE_MODE_ENERGY_SAVING,
-    4: CLIMATE_MODE_COMFORT,
-}
 
 
 async def async_setup_entry(
@@ -127,6 +123,25 @@ class EvonClimate(EvonEntity, ClimateEntity):
         return HVACMode.HEAT
 
     @property
+    def hvac_action(self) -> HVACAction | None:
+        """Return the current running hvac action (heating, cooling, idle).
+
+        This indicates whether the climate system is actively heating/cooling
+        or idle (target temperature reached). Based on Evon's IsOn property.
+        """
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        if not data:
+            return None
+
+        is_on = data.get("is_on", False)
+        if not is_on:
+            return HVACAction.IDLE
+
+        # Actively heating or cooling based on season mode
+        is_cooling_season = self.coordinator.get_season_mode()
+        return HVACAction.COOLING if is_cooling_season else HVACAction.HEATING
+
+    @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
         data = self.coordinator.get_entity_data("climates", self._instance_id)
@@ -164,7 +179,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     @property
     def preset_mode(self) -> str | None:
-        """Return the current preset mode based on Evon's ModeSaved property."""
+        """Return the current preset mode based on Evon's ModeSaved property.
+
+        Note: ModeSaved values differ based on Season Mode:
+        - HEATING (winter): 2=away, 3=eco, 4=comfort
+        - COOLING (summer): 5=away, 6=eco, 7=comfort
+        """
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_preset is not None:
             return self._optimistic_preset
@@ -174,7 +194,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
             return CLIMATE_MODE_COMFORT
 
         mode_saved = data.get("mode_saved", 4)
-        return EVON_MODE_SAVED_TO_PRESET.get(mode_saved, CLIMATE_MODE_COMFORT)
+
+        # Use appropriate mapping based on season mode
+        is_cooling = self.coordinator.get_season_mode()
+        if is_cooling:
+            return EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
+        return EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -182,11 +207,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         attrs = {}
         if data:
+            is_cooling = self.coordinator.get_season_mode()
             attrs["comfort_temperature"] = data.get("comfort_temp")
-            attrs["energy_saving_temperature"] = data.get("energy_saving_temp")
-            attrs["freeze_protection_temperature"] = data.get("freeze_protection_temp")
+            attrs["eco_temperature"] = data.get("energy_saving_temp")
+            attrs["protection_temperature"] = data.get("protection_temp")
             attrs["evon_mode_saved"] = data.get("mode_saved")
-            attrs["is_cooling"] = data.get("is_cooling")
+            attrs["season_mode"] = "cooling" if is_cooling else "heating"
             attrs["cooling_enabled"] = data.get("cooling_enabled")
             attrs["evon_id"] = self._instance_id
         return attrs
@@ -227,7 +253,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
             elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
                 self._optimistic_target_temp = data.get("energy_saving_temp")
             elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
-                self._optimistic_target_temp = data.get("freeze_protection_temp")
+                self._optimistic_target_temp = data.get("protection_temp")
 
         self.async_write_ha_state()
 
@@ -246,7 +272,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
         if data:
             if self._optimistic_preset is not None:
                 mode_saved = data.get("mode_saved", 4)
-                actual_preset = EVON_MODE_SAVED_TO_PRESET.get(mode_saved, CLIMATE_MODE_COMFORT)
+                # Use appropriate mapping based on season mode
+                is_cooling = self.coordinator.get_season_mode()
+                if is_cooling:
+                    actual_preset = EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
+                else:
+                    actual_preset = EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
                 if actual_preset == self._optimistic_preset:
                     self._optimistic_preset = None
 

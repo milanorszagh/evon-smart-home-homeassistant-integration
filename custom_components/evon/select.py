@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EvonApi
-from .const import DOMAIN
+from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,6 +25,9 @@ HOME_STATE_TRANSLATIONS: dict[str, str] = {
     "Nacht": "Night",
     "Arbeit": "Work",
 }
+
+# Season mode options
+SEASON_MODE_OPTIONS = [SEASON_MODE_HEATING, SEASON_MODE_COOLING]
 
 
 async def async_setup_entry(
@@ -42,6 +45,9 @@ async def async_setup_entry(
     home_states = coordinator.get_home_states()
     if home_states:
         entities.append(EvonHomeStateSelect(coordinator, entry, api))
+
+    # Add season mode select (global heating/cooling switch)
+    entities.append(EvonSeasonModeSelect(coordinator, entry, api))
 
     async_add_entities(entities)
 
@@ -79,13 +85,9 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
         # Translate names for display (id -> translated_name)
-        self._options_map = {
-            state["id"]: self._translate_name(state["name"]) for state in home_states
-        }
+        self._options_map = {state["id"]: self._translate_name(state["name"]) for state in home_states}
         # Reverse map uses translated names (translated_name -> id)
-        self._reverse_map = {
-            self._translate_name(state["name"]): state["id"] for state in home_states
-        }
+        self._reverse_map = {self._translate_name(state["name"]): state["id"] for state in home_states}
         self._attr_options = list(self._options_map.values())
 
     @property
@@ -140,5 +142,86 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
                 actual_option = self._options_map[active_id]
                 if actual_option == self._optimistic_option:
                     self._optimistic_option = None
+
+        self.async_write_ha_state()
+
+
+class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEntity):
+    """Representation of Evon Season Mode selector (global heating/cooling).
+
+    This controls whether the entire house is in heating (winter) or cooling (summer) mode.
+    This is separate from per-room presets (comfort/eco/away).
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "season_mode"
+    _attr_icon = "mdi:sun-snowflake-variant"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        entry: ConfigEntry,
+        api: EvonApi,
+    ) -> None:
+        """Initialize the season mode select."""
+        super().__init__(coordinator)
+        self._api = api
+        self._entry = entry
+        self._attr_unique_id = f"evon_season_mode_{entry.entry_id}"
+        self._attr_name = "Season Mode"
+        self._attr_options = SEASON_MODE_OPTIONS
+        # Optimistic state to prevent UI flicker during updates
+        self._optimistic_option: str | None = None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for season mode."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._entry.entry_id}_season_mode")},
+            name="Evon Season Mode",
+            manufacturer="Evon",
+            model="Season Mode",
+            via_device=(DOMAIN, self._entry.entry_id),
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current selected option."""
+        # Return optimistic value if set (prevents UI flicker during updates)
+        if self._optimistic_option is not None:
+            return self._optimistic_option
+
+        is_cooling = self.coordinator.get_season_mode()
+        return SEASON_MODE_COOLING if is_cooling else SEASON_MODE_HEATING
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        is_cooling = self.coordinator.get_season_mode()
+        return {
+            "is_cooling": is_cooling,
+            "description": "Summer mode (cooling)" if is_cooling else "Winter mode (heating)",
+        }
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected option."""
+        if option in SEASON_MODE_OPTIONS:
+            # Set optimistic value immediately to prevent UI flicker
+            self._optimistic_option = option
+            self.async_write_ha_state()
+
+            is_cooling = option == SEASON_MODE_COOLING
+            await self._api.set_season_mode(is_cooling)
+            await self.coordinator.async_request_refresh()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Only clear optimistic state when coordinator data matches expected value
+        if self._optimistic_option is not None:
+            is_cooling = self.coordinator.get_season_mode()
+            actual_option = SEASON_MODE_COOLING if is_cooling else SEASON_MODE_HEATING
+            if actual_option == self._optimistic_option:
+                self._optimistic_option = None
 
         self.async_write_ha_state()

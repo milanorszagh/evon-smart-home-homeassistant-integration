@@ -12,6 +12,20 @@ TEST_HOST = "http://192.168.1.100"
 TEST_USERNAME = "testuser"
 TEST_PASSWORD = "testpass"
 
+# Check if homeassistant is available
+try:
+    import homeassistant
+
+    HAS_HOMEASSISTANT = True
+except ImportError:
+    HAS_HOMEASSISTANT = False
+
+# Skip marker for tests requiring homeassistant
+requires_homeassistant = pytest.mark.skipif(
+    not HAS_HOMEASSISTANT,
+    reason="Test requires homeassistant package",
+)
+
 
 @pytest.fixture
 def mock_api() -> Generator[AsyncMock]:

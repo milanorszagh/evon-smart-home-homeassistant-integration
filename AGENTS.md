@@ -1,5 +1,7 @@
 # AGENTS.md - AI Agent Guidelines for Evon Smart Home
 
+**IMPORTANT FOR CLAUDE:** This is the primary reference document. Always check this file first when working with this codebase. The Evon MCP server is available for direct API queries - prefer using it over writing scripts.
+
 This document provides critical information for AI agents working with this codebase.
 
 ## Project Overview
@@ -39,38 +41,108 @@ Position convention in Evon:
 
 Note: Home Assistant uses the inverse (0=closed, 100=open), so conversion is needed.
 
-### Climate Preset Mode - IMPORTANT
+### Climate Control - Three Distinct Concepts
 
-Climate devices use different properties depending on type:
+**IMPORTANT**: Climate control involves THREE separate concepts that must not be confused:
 
+| Concept | Name in HA | Scope | Writable | API Property |
+|---------|------------|-------|----------|--------------|
+| **Season Mode** | `select` entity | Whole house | Yes | `Base.ehThermostat.IsCool` |
+| **Preset** | `preset_mode` | Per room | Yes | `ModeSaved` / `MainState` |
+| **Climate Status** | `hvac_action` | Per room | **No** | Read-only |
+
+---
+
+### Season Mode (Global Heating/Cooling) - VERIFIED
+
+The **Season Mode** controls whether the entire house is in heating (winter) or cooling (summer) mode.
+
+**API Endpoint:**
+```
+PUT /api/instances/Base.ehThermostat/IsCool
+Content-Type: application/json
+Body: {"value": false}  // HEATING (winter)
+Body: {"value": true}   // COOLING (summer)
+```
+
+**Reading current state:**
+```
+GET /api/instances/Base.ehThermostat
+→ IsCool: false = heating, true = cooling
+```
+
+**How it works:**
+1. Setting `IsCool` switches ALL climate devices simultaneously
+2. Each device's `CoolingMode` property reflects the global setting
+3. Changes propagate immediately
+4. **Preset values change** when season mode changes (see below)
+
+---
+
+### Preset (Per-Room Temperature Mode)
+
+Each room can be set to one of three presets: **comfort**, **eco**, or **away**.
+
+These preset names match Home Assistant's built-in presets for better UI icons. The actual behavior depends on the current Season Mode.
+
+**CRITICAL**: Preset values in `ModeSaved` differ based on Season Mode!
+
+| Preset | HEATING Mode | COOLING Mode | Description |
+|--------|--------------|--------------|-------------|
+| **comfort** | `4` | `7` | Normal comfortable temperature |
+| **eco** | `3` | `6` | Energy saving (slightly less comfortable) |
+| **away** | `2` | `5` | Protection mode (see below) |
+
+**Temperature targets by preset:**
+| Preset | Heating (Winter) | Cooling (Summer) |
+|--------|------------------|------------------|
+| comfort | 24°C | 25.5°C |
+| eco | 22.5°C | 24.9°C |
+| away | 18°C | 29°C |
+
+**About the `away` preset:**
+The `away` preset provides protection appropriate to the current season:
+- **Heating mode**: Freeze protection - maintains minimum 18°C to prevent pipes from freezing
+- **Cooling mode**: Heat protection - maintains maximum 29°C to prevent overheating
+
+This is the same preset in both seasons, but Evon automatically adjusts its behavior based on what protection is needed.
+
+**API - Setting presets** (works in both modes):
+- `WriteDayMode` → sets comfort
+- `WriteNightMode` → sets eco
+- `WriteFreezeMode` → sets away/protection
+
+**API - Reading preset:**
+```python
+# Check ModeSaved first, fall back to MainState
+mode_saved = details.get("ModeSaved", details.get("MainState", 4))
+
+# Map to preset name (must account for season mode!)
+if is_cooling_mode:
+    preset_map = {5: "away", 6: "eco", 7: "comfort"}
+else:
+    preset_map = {2: "away", 3: "eco", 4: "comfort"}
+```
+
+**Device type differences:**
 | Device Type | Class Name | Preset Property |
 |-------------|------------|-----------------|
 | ClimateControlUniversal | Contains `ClimateControlUniversal` | `ModeSaved` |
 | ClimateControl/Thermostat | `SmartCOM.Clima.ClimateControl` | `MainState` |
 
-Both properties use the same value mapping:
-- `2` = away (freeze protection)
-- `3` = eco (energy saving)
-- `4` = comfort
+---
 
-**Note**: The HA integration uses standard Home Assistant preset names for better UI (icons):
-- `comfort` - standard HA preset (has icon)
-- `eco` - standard HA preset (🍃 leaf icon) - maps to Evon's energy saving mode
-- `away` - standard HA preset (🚪 door icon) - maps to Evon's freeze protection mode
+### Climate Status (Per-Room Activity) - READ-ONLY
 
-**Code should check `ModeSaved` first, then fall back to `MainState`:**
-```python
-mode_saved = details.get("ModeSaved", details.get("MainState", 4))
-```
+The **Climate Status** indicates what the room's climate system is currently doing. This is **read-only** and cannot be changed directly.
 
-**DO NOT use the `Mode` property** for preset detection - it indicates heating vs cooling mode (0=heating, 1=cooling), not the preset.
+| Status | Meaning |
+|--------|---------|
+| `heating` | Actively heating the room |
+| `cooling` | Actively cooling the room |
+| `idle` | Target temperature reached, not actively heating/cooling |
 
-**Note**: The heating/cooling mode (`Mode`/`CoolingMode`) is typically read-only. Most Evon installations have `CoolingModeWriteable: false`, meaning the mode is controlled by seasonal schedules in Evon and cannot be changed via the API.
-
-To set preset modes, use these methods:
-- `WriteDayMode` - sets comfort mode
-- `WriteNightMode` - sets energy saving mode
-- `WriteFreezeMode` - sets freeze protection mode
+**Note**: The exact API property for reading this status needs verification. It may be derived from valve state or a dedicated property.
 
 ### Bathroom Radiators - TOGGLE CONTROL
 
@@ -233,7 +305,7 @@ When investigating why climate preset wasn't showing correctly:
 
 2. **Look for relevant properties**:
    - `Mode` - Found to be 0 for all presets (heating/cooling mode, NOT preset!)
-   - `ModeSaved` - Found to change: 2=freeze, 3=energy_saving, 4=comfort
+   - `ModeSaved` - Found to change: 2=away, 3=eco, 4=comfort (in heating mode)
 
 3. **Test by changing preset in Evon** and re-querying to see which property changes
 
@@ -287,6 +359,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 | Switch | `is_on` |
 | Bathroom Radiator | `is_on` |
 | Home State Select | `current_option` |
+| Season Mode Select | `current_option` |
 
 **Implementation pattern:**
 ```python
@@ -381,9 +454,9 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 
 ### Home Assistant
 - **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor
-- **Select Entity**: Home state selector (At Home, Holiday, Night, Work)
+- **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
-- **Climate**: Heating/cooling modes, preset modes (comfort, energy_saving, freeze_protection)
+- **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
 - **Options Flow**: Configure poll interval (5-300 seconds), area sync
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -420,30 +493,29 @@ Pre-defined scenes:
 - `all_off` - Turn off lights, close blinds
 - `movie_mode` - Dim to 10%, close blinds
 - `morning` - Open blinds, lights to 70%, comfort mode
-- `night` - Lights off, energy saving mode
+- `night` - Lights off, eco mode
 
 ## Linting
 
+**IMPORTANT**: CI runs both `ruff check` AND `ruff format --check`. Code must pass both.
+
 ### Python (ruff)
 ```bash
-# Install ruff
-pip install ruff
-
-# Check for issues
+# Check for linting issues
 ruff check custom_components/evon/
 
-# Auto-fix issues
+# Auto-fix linting issues
 ruff check custom_components/evon/ --fix
 
-# Format code
+# Check formatting (what CI runs)
+ruff format --check custom_components/evon/
+
+# Auto-fix formatting
 ruff format custom_components/evon/
 ```
 
 ### TypeScript (eslint)
 ```bash
-# Install dependencies
-npm install
-
 # Check for issues
 npm run lint
 
@@ -451,30 +523,64 @@ npm run lint
 npm run lint:fix
 ```
 
+### Quick CI Check (run before committing)
+```bash
+ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+```
+
 ## Unit Tests
 
 Tests are in the `tests/` directory:
-- `test_standalone.py` - Standalone tests (no HA dependency)
-- `test_api.py` - API client and password encoding tests
-- `test_config_flow.py` - Config and options flow tests
-- `test_coordinator.py` - Data coordinator tests
+- `test_standalone.py` - Standalone tests (no HA dependency, reads files directly)
+- `test_api.py` - API client tests (mocks homeassistant, works without HA installed)
+- `test_config_flow.py` - Config and options flow tests (requires homeassistant)
+- `test_coordinator.py` - Data coordinator tests (requires homeassistant)
 
-Test constants are defined in `tests/conftest.py`:
-```python
-TEST_HOST = "http://192.168.1.100"
-TEST_USERNAME = "testuser"
-TEST_PASSWORD = "testpass"
-```
+### Test Architecture
 
-Run standalone tests (no HA required):
+**The CI only runs linting, NOT pytest.** This is because many tests require homeassistant which is a heavy dependency.
+
+Tests are split by dependency:
+| Test File | Requires HA | How It Works |
+|-----------|-------------|--------------|
+| `test_standalone.py` | No | Reads files directly, no imports from custom_components |
+| `test_api.py` | No | Mocks `homeassistant` module, uses `importlib` to load `api.py` directly |
+| `test_config_flow.py` | Yes | Uses `@requires_homeassistant` skip marker |
+| `test_coordinator.py` | Yes | Uses `@requires_homeassistant` skip marker |
+
+**Why this matters for agents:**
+- When importing from `custom_components.evon.*`, Python executes `__init__.py` which imports from `homeassistant`
+- To test without HA, either read files directly (like `test_standalone.py`) or mock the homeassistant module before importing (like `test_api.py`)
+
+### Running Tests
+
 ```bash
-python3 tests/test_standalone.py
-```
-
-Run all tests with pytest:
-```bash
+# Install test dependencies
 pip install -r requirements-test.txt
+
+# Run all tests (HA-dependent tests will be skipped if HA not installed)
 pytest
+
+# Run only standalone tests (always works)
+python3 tests/test_standalone.py
+
+# Run with verbose output
+pytest -v
+```
+
+### CI Checks
+
+The CI workflow (`.github/workflows/ci.yml`) runs:
+1. `ruff check` - Python linting
+2. `ruff format --check` - Python formatting
+3. `npm run lint` - TypeScript linting
+4. `npm run build` - TypeScript compilation
+
+**Before committing, always run:**
+```bash
+ruff check custom_components/evon/
+ruff format custom_components/evon/
+npm run lint
 ```
 
 ## Release Process
@@ -492,16 +598,16 @@ Before creating a release, ensure the following are up to date:
 
 3. **Version history** - Add entry to both README.md and AGENTS.md
 
-4. **Linting** - Run linters before committing:
+4. **Linting** - Run all CI checks before committing:
    ```bash
-   python3 -m ruff check custom_components/evon/
-   npm run lint
+   ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
    ```
 
 **Important**: Always document new API findings (properties, methods, behaviors) in both README.md (API Reference section) and AGENTS.md (relevant sections). This helps future debugging and development.
 
 ## Version History
 
+- **v1.9.0**: Added Season Mode select entity for global heating/cooling control via `Base.ehThermostat.IsCool`. Climate presets now correctly map to season-specific `ModeSaved` values (2-4 for heating, 5-7 for cooling). Added `hvac_action` property to climate entities showing current activity (heating/cooling/idle).
 - **v1.8.2**: Fixed blind cover optimistic state for group actions. Added `is_moving` optimistic tracking so group open/close buttons work correctly when clicking twice to stop.
 - **v1.8.1**: Added optimistic updates for all entities and improved preset icons.
 - **v1.8.0**: Added optimistic updates for all controllable entities (lights, covers, climate, switches, select). Changed climate preset names to use HA built-in presets for better UI icons (`eco` instead of `energy_saving`, `away` instead of `freeze_protection`).

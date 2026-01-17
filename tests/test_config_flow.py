@@ -1,4 +1,7 @@
-"""Tests for Evon config flow."""
+"""Tests for Evon config flow.
+
+These tests require homeassistant to be installed.
+"""
 
 from __future__ import annotations
 
@@ -6,9 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME
+from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME, requires_homeassistant
 
 
+@requires_homeassistant
 class TestConfigFlow:
     """Test config flow."""
 
@@ -117,6 +121,7 @@ class TestConfigFlow:
             assert result["errors"]["base"] == "invalid_auth"
 
 
+@requires_homeassistant
 class TestOptionsFlow:
     """Test options flow."""
 

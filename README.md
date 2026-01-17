@@ -16,7 +16,8 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 |-------------|----------|
 | **Lights** | On/off, brightness (0-100%) |
 | **Blinds/Covers** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
-| **Climate** | Temperature control, preset modes (comfort, energy saving, freeze protection), heating/cooling mode |
+| **Climate** | Temperature control, preset modes (comfort, eco, away), heating/cooling status |
+| **Season Mode** | Global heating/cooling switch (winter/summer mode) |
 | **Home State** | Select between home modes (At Home, Holiday, Night, Work) |
 | **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
@@ -113,11 +114,19 @@ The integration supports the following languages:
 #### Climate
 - Temperature control
 - HVAC modes: Heat, Cool (if supported), Off
+- HVAC action: Shows current activity (Heating, Cooling, Idle)
 - Preset modes:
-  - `comfort` - Day mode, normal heating
-  - `energy_saving` - Night mode, reduced heating
-  - `freeze_protection` - Minimum heating to prevent freezing
-- Attributes: `comfort_temperature`, `energy_saving_temperature`, `freeze_protection_temperature`, `is_cooling`, `cooling_enabled`, `evon_mode_saved`, `evon_id`
+  - `comfort` - Normal comfortable temperature
+  - `eco` - Energy saving temperature (slightly less comfortable)
+  - `away` - Protection mode
+- Attributes: `comfort_temperature`, `eco_temperature`, `protection_temperature`, `season_mode`, `cooling_enabled`, `evon_mode_saved`, `evon_id`
+
+**About presets and Season Mode:**
+Preset temperature values differ based on Season Mode. The `away` preset provides protection appropriate to the season:
+- **Heating (winter)**: `away` = 18°C freeze protection (prevents pipes from freezing)
+- **Cooling (summer)**: `away` = 29°C heat protection (prevents overheating)
+
+The `comfort` and `eco` presets also adjust their targets based on season (e.g., comfort is 24°C in winter, 25.5°C in summer).
 
 #### Sensor
 - Temperature sensors from climate devices
@@ -139,12 +148,20 @@ The integration supports the following languages:
 - Climate valve open/closed state
 - Attributes: `valve_type`, `evon_id`
 
-#### Select (Home State)
-- Switch between home modes defined in Evon:
-  - `Daheim` (At Home) - Normal home operation
-  - `Urlaub` (Holiday) - Vacation mode
-  - `Nacht` (Night) - Night mode
-  - `Arbeit` (Work) - Away at work mode
+#### Select
+
+**Season Mode** - Global heating/cooling switch for the entire house:
+- `Heating (Winter)` - House in heating mode
+- `Cooling (Summer)` - House in cooling mode
+- Attributes: `is_cooling`, `description`
+
+**Note**: Season Mode affects ALL climate devices simultaneously. When you switch season mode, the preset values also change (e.g., ModeSaved 4 in heating becomes 7 in cooling for comfort mode).
+
+**Home State** - Switch between home modes defined in Evon:
+- `At Home` (Daheim) - Normal home operation
+- `Holiday` (Urlaub) - Vacation mode
+- `Night` (Nacht) - Night mode
+- `Work` (Arbeit) - Away at work mode
 - Attributes: `evon_id`
 
 **Note**: Home states can trigger automations in the Evon system. Changing the state affects how other devices behave according to your Evon configuration.
@@ -210,8 +227,8 @@ Add to your Claude Code configuration (`~/.claude.json`):
 | `blind_control` | Control a single blind (position/angle/up/down/stop) |
 | `blind_control_all` | Control all blinds at once |
 | `list_climate` | List all climate controls with current state |
-| `climate_control` | Control a single climate zone |
-| `climate_control_all` | Control all climate zones at once |
+| `climate_control` | Control a single climate zone (comfort/eco/away/set_temperature) |
+| `climate_control_all` | Control all climate zones at once (comfort/eco/away) |
 | `list_home_states` | List all home states with current active state |
 | `set_home_state` | Set the active home state (at_home/holiday/night/work) |
 | `list_sensors` | List temperature and other sensors |
@@ -241,7 +258,7 @@ Resources allow Claude to read device state without calling tools:
 | `all_off` | Turn off all lights and close all blinds |
 | `movie_mode` | Dim lights to 10% and close blinds |
 | `morning` | Open blinds, set lights to 70%, comfort mode |
-| `night` | Turn off lights, set climate to energy saving |
+| `night` | Turn off lights, set climate to eco mode |
 
 ---
 
@@ -356,14 +373,19 @@ Cookie: token=<token>
 | `SetValueFreezeProtection` | Freeze protection temperature |
 | `MinSetValueHeat` | Minimum allowed temperature |
 | `MaxSetValueHeat` | Maximum allowed temperature |
-| `ModeSaved` | Current preset mode (2=freeze, 3=energy_saving, 4=comfort) |
-| `Mode` | Heating/cooling mode (0=heating, 1=cooling) |
-| `CoolingMode` | Whether currently in cooling mode |
-| `CoolingModeWriteable` | Whether cooling mode can be changed via API (usually false) |
+| `ModeSaved` | Current preset mode (values depend on season - see below) |
+| `CoolingMode` | Whether currently in cooling mode (reflects global Season Mode) |
 | `DisableCooling` | Whether cooling is disabled for this device |
 | `IsOn` | Whether the climate control is actively running |
 
-**Note**: The `Mode`/`CoolingMode` is typically controlled by seasonal schedules in Evon and cannot be changed via the API (`CoolingModeWriteable: false`). The integration displays the current mode but doesn't allow switching between heating and cooling.
+**ModeSaved Values by Season Mode:**
+| Preset | Heating Mode | Cooling Mode |
+|--------|--------------|--------------|
+| away (protection) | 2 | 5 |
+| eco (energy saving) | 3 | 6 |
+| comfort | 4 | 7 |
+
+**Note**: Season Mode (heating/cooling) is controlled globally via `Base.ehThermostat.IsCool`. When changed, ALL climate devices switch simultaneously and their `ModeSaved` values shift accordingly.
 
 ### Bathroom Radiator Methods
 
@@ -392,6 +414,24 @@ Cookie: token=<token>
 
 **Limitation**: There is no `LastClickType` or event history. The API only provides momentary state.
 
+### Season Mode (Global Heating/Cooling)
+
+Season Mode controls whether the entire house is in heating (winter) or cooling (summer) mode.
+
+**Reading current state:**
+```
+GET /api/instances/Base.ehThermostat
+→ IsCool: false = heating, true = cooling
+```
+
+**Setting season mode:**
+```
+PUT /api/instances/Base.ehThermostat/IsCool
+Content-Type: application/json
+Body: {"value": false}  // HEATING (winter)
+Body: {"value": true}   // COOLING (summer)
+```
+
 ### Home State Methods
 
 | Method | Parameters | Description |
@@ -412,6 +452,7 @@ Cookie: token=<token>
 
 | Version | Changes |
 |---------|---------|
+| **1.9.0** | Added Season Mode select entity for global heating/cooling control. Climate presets now correctly reflect season-specific values. Added `hvac_action` to show current climate activity (heating/cooling/idle). |
 | **1.8.2** | Fixed blind cover optimistic state for group actions |
 | **1.8.1** | Added optimistic updates for all entities and improved preset icons |
 | **1.8.0** | Added optimistic updates for all controllable entities, improved climate preset icons |

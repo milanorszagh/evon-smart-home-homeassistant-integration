@@ -19,7 +19,7 @@ custom_components/evon/
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality)
 ├── switch.py            # Switch platform (controllable relays)
-├── select.py            # Select platform (home states)
+├── select.py            # Select platform (home states, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
@@ -79,9 +79,11 @@ src/
 | `SmartCOM.Light.LightDim` | Dimmable light | Yes | Use `ScaledBrightness` not `Brightness` |
 | `SmartCOM.Light.Light` | Relay output | Yes | Non-dimmable, on/off only |
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes | Use `Open`/`Close`, NOT `MoveUp`/`MoveDown` |
-| `SmartCOM.Clima.ClimateControl` | Climate | Yes | |
+| `SmartCOM.Clima.ClimateControl` | Climate | Yes | Preset via `ModeSaved` (values differ by season) |
 | `*ClimateControlUniversal*` | Climate | Yes | Match by substring |
+| `Base.ehThermostat` | Season mode | Yes | Global heating/cooling via `IsCool` property |
 | `System.HomeState` | Home mode | Yes | Use `Activate` method to switch |
+| `Heating.BathroomRadiator` | Bathroom heater | Yes | Toggle with `Switch` method |
 | `SmartCOM.Switch` | Physical button | **No** | Read-only, momentary state |
 | `Energy.SmartMeter*` | Smart meter | No | Sensor only |
 | `System.Location.AirQuality` | Air quality | No | Sensor only |
@@ -118,10 +120,50 @@ src/
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
-| `WriteDayMode` | - | Set comfort mode |
-| `WriteNightMode` | - | Set energy saving mode |
-| `WriteFreezeMode` | - | Set freeze protection mode |
+| `WriteDayMode` | - | Set comfort preset |
+| `WriteNightMode` | - | Set eco preset |
+| `WriteFreezeMode` | - | Set away/protection preset |
 | `WriteCurrentSetTemperature` | `[temperature]` | Set target temperature |
+
+**Preset values differ by Season Mode:**
+| Preset | Heating Mode | Cooling Mode |
+|--------|--------------|--------------|
+| away | 2 | 5 |
+| eco | 3 | 6 |
+| comfort | 4 | 7 |
+
+#### Season Mode (`Base.ehThermostat`)
+
+Season Mode controls whether the entire house is in heating (winter) or cooling (summer) mode.
+
+**Reading:**
+```
+GET /api/instances/Base.ehThermostat
+→ IsCool: false = heating, true = cooling
+```
+
+**Setting:**
+```
+PUT /api/instances/Base.ehThermostat/IsCool
+Content-Type: application/json
+Body: {"value": false}  // HEATING (winter)
+Body: {"value": true}   // COOLING (summer)
+```
+
+When changed, ALL climate devices switch simultaneously and their preset `ModeSaved` values shift accordingly.
+
+#### Bathroom Radiator (`Heating.BathroomRadiator`)
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Switch` | - | Toggle on/off (timer-based) |
+
+**Properties:**
+| Property | Description |
+|----------|-------------|
+| `Output` | Current on/off state |
+| `NextSwitchPoint` | Minutes remaining until auto-off |
+| `EnableForMins` | Configured run duration |
 
 #### Home State (`System.HomeState`)
 
@@ -309,10 +351,12 @@ ln -s /path/to/evon-ha/custom_components/evon /config/custom_components/evon
 | `blind_control` | Control single blind |
 | `blind_control_all` | Control all blinds |
 | `list_climate` | List climate devices |
-| `climate_control` | Control single climate |
-| `climate_control_all` | Control all climate |
+| `climate_control` | Control single climate (comfort/eco/away/set_temperature) |
+| `climate_control_all` | Control all climate (comfort/eco/away) |
 | `list_home_states` | List home states with active status |
 | `set_home_state` | Set active home state (at_home/holiday/night/work) |
+| `list_bathroom_radiators` | List all bathroom radiators with state |
+| `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
 | `list_sensors` | List temperature sensors |
 | `list_scenes` | List available scenes |
 | `activate_scene` | Activate a scene |
@@ -324,8 +368,9 @@ ln -s /path/to/evon-ha/custom_components/evon /config/custom_components/evon
 |-----|-------------|
 | `evon://lights` | All lights with state |
 | `evon://blinds` | All blinds with state |
-| `evon://climate` | All climate devices |
+| `evon://climate` | All climate devices with season mode |
 | `evon://home_state` | Current home state and available states |
+| `evon://bathroom_radiators` | All bathroom radiators with state |
 | `evon://summary` | Home summary (counts, avg temp, home state) |
 
 ## Version Compatibility

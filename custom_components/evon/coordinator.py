@@ -69,10 +69,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._sync_areas:
                 await self._fetch_rooms()
 
+            # Fetch season mode (global heating/cooling)
+            season_mode = await self._fetch_season_mode()
+
             # Process all device types
             lights = await self._process_lights(instances)
             blinds = await self._process_blinds(instances)
-            climates = await self._process_climates(instances)
+            climates = await self._process_climates(instances, season_mode)
             switches = await self._process_switches(instances)
             smart_meters = await self._process_smart_meters(instances)
             air_quality = await self._process_air_quality(instances)
@@ -91,6 +94,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "home_states": home_states,
                 "bathroom_radiators": bathroom_radiators,
                 "rooms": self._rooms_cache if self._sync_areas else {},
+                "season_mode": season_mode,
             }
 
         except EvonApiError as err:
@@ -104,6 +108,18 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except EvonApiError:
             _LOGGER.warning("Failed to fetch rooms, area sync disabled for this update")
             self._rooms_cache = {}
+
+    async def _fetch_season_mode(self) -> bool:
+        """Fetch the global season mode (heating/cooling).
+
+        Returns:
+            True if cooling (summer), False if heating (winter)
+        """
+        try:
+            return await self.api.get_season_mode()
+        except EvonApiError:
+            _LOGGER.warning("Failed to fetch season mode, defaulting to heating")
+            return False
 
     def _get_room_name(self, group: str) -> str:
         """Get room name for a group ID."""
@@ -160,8 +176,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for blind %s", instance_id)
         return blinds
 
-    async def _process_climates(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Process climate instances."""
+    async def _process_climates(self, instances: list[dict[str, Any]], season_mode: bool) -> list[dict[str, Any]]:
+        """Process climate instances.
+
+        Args:
+            instances: List of all instances
+            season_mode: True if cooling (summer), False if heating (winter)
+        """
         climates = []
         for instance in instances:
             class_name = instance.get("ClassName", "")
@@ -173,6 +194,21 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id = instance.get("ID", "")
             try:
                 details = await self.api.get_instance(instance_id)
+
+                # Get temperature values based on season mode
+                if season_mode:  # Cooling (summer)
+                    comfort_temp = details.get("SetValueComfortCooling", 25)
+                    eco_temp = details.get("SetValueEnergySavingCooling", 24)
+                    protection_temp = details.get("SetValueHeatProtection", 29)
+                    min_temp = details.get("MinSetValueCool", 18)
+                    max_temp = details.get("MaxSetValueCool", 30)
+                else:  # Heating (winter)
+                    comfort_temp = details.get("SetValueComfortHeating", 22)
+                    eco_temp = details.get("SetValueEnergySavingHeating", 20)
+                    protection_temp = details.get("SetValueFreezeProtection", 15)
+                    min_temp = details.get("MinSetValueHeat", 15)
+                    max_temp = details.get("MaxSetValueHeat", 25)
+
                 climates.append(
                     {
                         "id": instance_id,
@@ -180,11 +216,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "room_name": self._get_room_name(instance.get("Group", "")),
                         "current_temperature": details.get("ActualTemperature", 0),
                         "target_temperature": details.get("SetTemperature", 0),
-                        "min_temp": details.get("MinSetValueHeat", 15),
-                        "max_temp": details.get("MaxSetValueHeat", 25),
-                        "comfort_temp": details.get("SetValueComfortHeating", 22),
-                        "energy_saving_temp": details.get("SetValueEnergySavingHeating", 20),
-                        "freeze_protection_temp": details.get("SetValueFreezeProtection", 15),
+                        "min_temp": min_temp,
+                        "max_temp": max_temp,
+                        "comfort_temp": comfort_temp,
+                        "energy_saving_temp": eco_temp,
+                        "protection_temp": protection_temp,
                         # ClimateControlUniversal uses ModeSaved, ClimateControl uses MainState
                         "mode_saved": details.get("ModeSaved", details.get("MainState", 4)),
                         "is_cooling": details.get("CoolingMode", False),
@@ -439,3 +475,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data and "home_states" in self.data:
             return self.data["home_states"]
         return []
+
+    def get_season_mode(self) -> bool:
+        """Get the current season mode.
+
+        Returns:
+            True if cooling (summer), False if heating (winter)
+        """
+        if self.data:
+            return self.data.get("season_mode", False)
+        return False
