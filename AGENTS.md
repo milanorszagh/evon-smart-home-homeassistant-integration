@@ -228,10 +228,64 @@ pip install -r requirements-test.txt
 pytest
 ```
 
-For live testing:
-1. Copy files to HA's `custom_components/evon/`
-2. Restart Home Assistant (or use reload from integration menu)
-3. Check logs at Settings → System → Logs
+For live testing, use the deploy scripts (see Deploy Workflow below).
+
+## Deploy Workflow (Home Assistant Integration)
+
+SSH access to Home Assistant enables quick deployment and log checking.
+
+### Initial Setup
+
+1. **Copy `.env.example` to `.env`** and fill in your values:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your HA IP and user
+   ```
+
+2. **Configure SSH on Home Assistant:**
+   - Install "Terminal & SSH" add-on
+   - Add your public key to authorized_keys in the add-on configuration
+   - Start the add-on
+
+3. **Verify connection:**
+   ```bash
+   ssh root@192.168.1.x  # Replace with your HA IP
+   ```
+
+### Deploy Scripts
+
+| Command | Description |
+|---------|-------------|
+| `./scripts/ha-deploy.sh` | Deploy integration to HA |
+| `./scripts/ha-deploy.sh restart` | Deploy and restart HA |
+| `./scripts/ha-logs.sh` | Fetch evon-related logs (last 100 lines) |
+| `./scripts/ha-logs.sh 50` | Fetch last 50 lines |
+| `./scripts/ha-logs.sh 100 error` | Fetch lines containing "error" |
+
+### Typical Development Session
+
+```bash
+# 1. Make code changes
+# ... edit files in custom_components/evon/
+
+# 2. Deploy to HA
+./scripts/ha-deploy.sh
+
+# 3. Reload integration in HA UI (or restart HA)
+# Settings → Devices & Services → Evon → ⋮ → Reload
+
+# 4. Check logs for errors
+./scripts/ha-logs.sh
+
+# 5. Run linting before committing
+ruff check custom_components/evon/ && ruff format custom_components/evon/
+```
+
+### Security Notes
+
+- **`.env` is in `.gitignore`** - credentials are never committed
+- **Never hardcode IP addresses or credentials** in scripts
+- The `.env.example` file shows required variables without actual values
 
 ## Using Evon MCP Server for Debugging
 
