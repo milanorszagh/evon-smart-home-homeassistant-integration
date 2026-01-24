@@ -18,16 +18,16 @@ from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Translation mapping for German home state names to English
-HOME_STATE_TRANSLATIONS: dict[str, str] = {
-    "Daheim": "At Home",
-    "Urlaub": "Holiday",
-    "Nacht": "Night",
-    "Arbeit": "Work",
-}
-
 # Season mode options
 SEASON_MODE_OPTIONS = [SEASON_MODE_HEATING, SEASON_MODE_COOLING]
+
+# Preferred order for home states (Evon IDs)
+HOME_STATE_ORDER = [
+    "HomeStateAtHome",
+    "HomeStateNight",
+    "HomeStateWork",
+    "HomeStateHoliday",
+]
 
 
 async def async_setup_entry(
@@ -69,26 +69,21 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         self._api = api
         self._entry = entry
         self._attr_unique_id = f"evon_home_state_{entry.entry_id}"
-        self._attr_name = "Home State"
-        # Build options mapping (id -> name)
-        self._options_map: dict[str, str] = {}
-        self._reverse_map: dict[str, str] = {}
+        # Use Evon IDs as options - HA translation system handles display names
         self._update_options()
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
 
-    def _translate_name(self, name: str) -> str:
-        """Translate German home state name to English if available."""
-        return HOME_STATE_TRANSLATIONS.get(name, name)
-
     def _update_options(self) -> None:
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
-        # Translate names for display (id -> translated_name)
-        self._options_map = {state["id"]: self._translate_name(state["name"]) for state in home_states}
-        # Reverse map uses translated names (translated_name -> id)
-        self._reverse_map = {self._translate_name(state["name"]): state["id"] for state in home_states}
-        self._attr_options = list(self._options_map.values())
+        # Use Evon IDs directly as options - translations handle display
+        options = [state["id"] for state in home_states]
+        # Sort by preferred order, unknown states go to the end
+        self._attr_options = sorted(
+            options,
+            key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)
+        )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -103,14 +98,14 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
 
     @property
     def current_option(self) -> str | None:
-        """Return the current selected option."""
+        """Return the current selected option (Evon ID)."""
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_option is not None:
             return self._optimistic_option
 
         active_id = self.coordinator.get_active_home_state()
-        if active_id and active_id in self._options_map:
-            return self._options_map[active_id]
+        if active_id and active_id in self._attr_options:
+            return active_id
         return None
 
     @property
@@ -120,14 +115,13 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         return {"evon_id": active_id}
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
-        if option in self._reverse_map:
+        """Change the selected option (option is the Evon ID)."""
+        if option in self._attr_options:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
             self.async_write_ha_state()
 
-            instance_id = self._reverse_map[option]
-            await self._api.activate_home_state(instance_id)
+            await self._api.activate_home_state(option)
             await self.coordinator.async_request_refresh()
 
     @callback
@@ -138,10 +132,8 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         # Only clear optimistic state when coordinator data matches expected value
         if self._optimistic_option is not None:
             active_id = self.coordinator.get_active_home_state()
-            if active_id and active_id in self._options_map:
-                actual_option = self._options_map[active_id]
-                if actual_option == self._optimistic_option:
-                    self._optimistic_option = None
+            if active_id == self._optimistic_option:
+                self._optimistic_option = None
 
         self.async_write_ha_state()
 

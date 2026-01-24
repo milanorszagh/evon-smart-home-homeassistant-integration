@@ -52,3 +52,11 @@ EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"
+
+# Repair issue IDs
+REPAIR_CONNECTION_FAILED = "connection_failed"
+REPAIR_STALE_ENTITIES_CLEANED = "stale_entities_cleaned"
+REPAIR_CONFIG_MIGRATION = "config_migration_needed"
+
+# Connection failure threshold before creating repair
+CONNECTION_FAILURE_THRESHOLD = 3

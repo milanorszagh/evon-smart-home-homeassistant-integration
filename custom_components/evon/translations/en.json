@@ -1,4 +1,25 @@
 {
+  "issues": {
+    "connection_failed": {
+      "title": "Evon Smart Home connection failed",
+      "description": "The integration has failed to connect to your Evon Smart Home system {failures} times in a row.\n\nLast error: {error}\n\nPlease check:\n- Your Evon system is powered on and connected to the network\n- The host URL in the integration configuration is correct\n- Your network allows connections to the Evon system\n\nThe integration will automatically recover when the connection is restored."
+    },
+    "stale_entities_cleaned": {
+      "title": "Stale entities removed",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Stale entities were removed",
+            "description": "The Evon integration removed {count} entities that no longer exist in your Evon system.\n\nRemoved entities: {entities}\n\nThis can happen when devices are removed or renamed in your Evon configuration. No action is required - this is just an informational notice."
+          }
+        }
+      }
+    },
+    "config_migration_failed": {
+      "title": "Evon configuration migration failed",
+      "description": "Your Evon Smart Home configuration was created with a newer version of the integration (version {current_version}) and cannot be used with the current version (supports up to version {supported_version}).\n\nPlease update the Evon Smart Home integration to the latest version, or remove and re-add the integration."
+    }
+  },
   "entity": {
     "select": {
       "season_mode": {
@@ -9,7 +30,13 @@
         }
       },
       "home_state": {
-        "name": "Home State"
+        "name": "Home State",
+        "state": {
+          "HomeStateAtHome": "At Home",
+          "HomeStateHoliday": "Holiday",
+          "HomeStateNight": "Night",
+          "HomeStateWork": "Work"
+        }
       }
     }
   },

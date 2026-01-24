@@ -80,6 +80,8 @@ class EvonLight(EvonEntity, LightEntity):
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_is_on: bool | None = None
         self._optimistic_brightness: int | None = None  # HA scale 0-255
+        # Store last known brightness for optimistic turn_on (HA scale 0-255)
+        self._last_brightness: int | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -133,6 +135,9 @@ class EvonLight(EvonEntity, LightEntity):
         self._optimistic_is_on = True
         if ATTR_BRIGHTNESS in kwargs:
             self._optimistic_brightness = kwargs[ATTR_BRIGHTNESS]
+        elif self._last_brightness is not None and self._is_dimmable:
+            # Use last known brightness for optimistic display
+            self._optimistic_brightness = self._last_brightness
         self.async_write_ha_state()
 
         if ATTR_BRIGHTNESS in kwargs:
@@ -157,6 +162,12 @@ class EvonLight(EvonEntity, LightEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self.coordinator.get_entity_data("lights", self._instance_id)
         if data:
+            # Save last known brightness when light is on (for optimistic turn_on)
+            if data.get("is_on", False) and self._is_dimmable:
+                evon_brightness = data.get("brightness", 0)
+                if evon_brightness > 0:
+                    self._last_brightness = int(evon_brightness * 255 / 100)
+
             if self._optimistic_is_on is not None:
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:

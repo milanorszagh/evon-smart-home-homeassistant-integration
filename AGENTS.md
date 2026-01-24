@@ -511,10 +511,12 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
-- **Options Flow**: Configure poll interval (5-300 seconds), area sync
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights
+- **Non-dimmable Lights**: Mark lights as on/off only (useful for LED strips with PWM controllers)
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
 - **Stale Entity Cleanup**: Automatic removal of orphaned entities on reload
+- **Repairs**: Connection failure alerts, stale entity notifications, config migration warnings
 - **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
 - **Energy Sensors**: Smart meter power, energy, voltage sensors
@@ -661,6 +663,7 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+- **v1.10.0**: Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failure alerts after 3 failures, stale entity notifications, config migration warnings), improved home state translations using HA's translation system (proper German/English), hub device for device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. Config entry version bumped to 2 with migration support. Added 9 new tests (29 total).
 - **v1.9.0**: Added Season Mode select entity for global heating/cooling control via `Base.ehThermostat.IsCool`. Climate presets now correctly map to season-specific `ModeSaved` values (2-4 for heating, 5-7 for cooling). Added `hvac_action` property to climate entities showing current activity (heating/cooling/idle).
 - **v1.8.2**: Fixed blind cover optimistic state for group actions. Added `is_moving` optimistic tracking so group open/close buttons work correctly when clicking twice to stop.
 - **v1.8.1**: Added optimistic updates for all entities and improved preset icons.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import importlib.util
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,12 +14,7 @@ TEST_USERNAME = "testuser"
 TEST_PASSWORD = "testpass"
 
 # Check if homeassistant is available
-try:
-    import homeassistant
-
-    HAS_HOMEASSISTANT = True
-except ImportError:
-    HAS_HOMEASSISTANT = False
+HAS_HOMEASSISTANT = importlib.util.find_spec("homeassistant") is not None
 
 # Skip marker for tests requiring homeassistant
 requires_homeassistant = pytest.mark.skipif(

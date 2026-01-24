@@ -7,7 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi
@@ -20,6 +20,8 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
+    REPAIR_CONFIG_MIGRATION,
+    REPAIR_STALE_ENTITIES_CLEANED,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -69,6 +71,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api": api,
         "coordinator": coordinator,
     }
+
+    # Create hub device that child devices reference via via_device
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="Evon Smart Home",
+        manufacturer="Evon",
+        model="Smart Home Controller",
+        configuration_url=entry.data[CONF_HOST],
+    )
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -150,6 +163,20 @@ async def _async_cleanup_stale_entities(
 
     if entities_to_remove:
         _LOGGER.info("Cleaned up %d stale entities from Evon integration", len(entities_to_remove))
+        # Create informational repair to notify user
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}",
+            is_fixable=True,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="stale_entities_cleaned",
+            translation_placeholders={
+                "count": str(len(entities_to_remove)),
+                "entities": ", ".join(entities_to_remove[:5]) + ("..." if len(entities_to_remove) > 5 else ""),
+            },
+        )
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -178,3 +205,38 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old config entry to new version."""
+    _LOGGER.debug("Migrating Evon config entry from version %s", config_entry.version)
+
+    if config_entry.version == 1:
+        # Migration from v1 to v2
+        # v2 adds non_dimmable_lights option (defaults to empty list, no action needed)
+        _LOGGER.info("Migrating Evon config entry from version 1 to 2")
+        hass.config_entries.async_update_entry(config_entry, version=2, minor_version=0)
+        _LOGGER.info("Migration to version 2 successful")
+
+    if config_entry.version > 2:
+        # Future version - can't migrate forward
+        _LOGGER.error(
+            "Cannot migrate Evon config entry from version %s (current integration supports up to version 2)",
+            config_entry.version,
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            REPAIR_CONFIG_MIGRATION,
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="config_migration_failed",
+            translation_placeholders={
+                "current_version": str(config_entry.version),
+                "supported_version": "2",
+            },
+        )
+        return False
+
+    return True

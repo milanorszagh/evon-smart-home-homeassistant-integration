@@ -11,7 +11,6 @@ import importlib.util
 import os
 import sys
 from types import ModuleType
-from unittest.mock import MagicMock
 
 from tests.conftest import TEST_HOST, TEST_PASSWORD, TEST_USERNAME
 
@@ -32,9 +31,7 @@ sys.modules["homeassistant"] = mock_ha
 sys.modules["homeassistant.exceptions"] = mock_ha_exceptions
 
 # Load api.py directly without triggering __init__.py
-api_path = os.path.join(
-    os.path.dirname(__file__), "..", "custom_components", "evon", "api.py"
-)
+api_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "api.py")
 spec = importlib.util.spec_from_file_location("evon_api", api_path)
 evon_api = importlib.util.module_from_spec(spec)
 sys.modules["evon_api"] = evon_api

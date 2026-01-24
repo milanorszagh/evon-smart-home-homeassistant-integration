@@ -265,7 +265,9 @@ class TestOptimisticUpdates:
         assert "_optimistic_is_on" in content, "Switch missing _optimistic_is_on"
         assert "_handle_coordinator_update" in content, "Switch missing _handle_coordinator_update"
         # Should have optimistic for both EvonSwitch and EvonBathroomRadiatorSwitch
-        assert content.count("_optimistic_is_on: bool | None = None") >= 2, "Both switch types should have optimistic updates"
+        assert content.count("_optimistic_is_on: bool | None = None") >= 2, (
+            "Both switch types should have optimistic updates"
+        )
         print("Switch has optimistic updates: is_on (both regular and bathroom radiator)")
 
     def test_select_has_optimistic_updates(self):
@@ -278,6 +280,146 @@ class TestOptimisticUpdates:
         assert "_optimistic_option" in content, "Select missing _optimistic_option"
         assert "_handle_coordinator_update" in content, "Select missing _handle_coordinator_update"
         print("Select has optimistic updates: option")
+
+
+class TestRepairsFeature:
+    """Test repairs feature is properly implemented."""
+
+    def test_repair_constants_exist(self):
+        """Test that repair constants are defined."""
+        const_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "const.py")
+
+        with open(const_path) as f:
+            content = f.read()
+
+        assert 'REPAIR_CONNECTION_FAILED = "connection_failed"' in content
+        assert 'REPAIR_STALE_ENTITIES_CLEANED = "stale_entities_cleaned"' in content
+        assert 'REPAIR_CONFIG_MIGRATION = "config_migration_needed"' in content
+        assert "CONNECTION_FAILURE_THRESHOLD = 3" in content
+        print("Repair constants: connection_failed, stale_entities_cleaned, config_migration_needed, threshold=3")
+
+    def test_repairs_flow_import(self):
+        """Test that RepairsFlow is imported from correct module."""
+        config_flow_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "config_flow.py")
+
+        with open(config_flow_path) as f:
+            content = f.read()
+
+        assert "from homeassistant.components.repairs import RepairsFlow" in content
+        assert "class EvonStaleEntitiesRepairFlow(RepairsFlow):" in content
+        assert "async def async_create_fix_flow" in content
+        print("RepairsFlow imported correctly, EvonStaleEntitiesRepairFlow defined")
+
+    def test_coordinator_tracks_failures(self):
+        """Test that coordinator has failure tracking for repairs."""
+        coordinator_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "coordinator.py")
+
+        with open(coordinator_path) as f:
+            content = f.read()
+
+        assert "_consecutive_failures" in content
+        assert "_repair_created" in content
+        assert "CONNECTION_FAILURE_THRESHOLD" in content
+        assert "ir.async_create_issue" in content
+        assert "ir.async_delete_issue" in content
+        print("Coordinator has failure tracking: _consecutive_failures, _repair_created, creates/deletes issues")
+
+    def test_init_has_stale_entity_repair(self):
+        """Test that __init__.py creates stale entity repairs."""
+        init_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "__init__.py")
+
+        with open(init_path) as f:
+            content = f.read()
+
+        assert "_async_cleanup_stale_entities" in content
+        assert "REPAIR_STALE_ENTITIES_CLEANED" in content
+        assert "async_migrate_entry" in content
+        assert "REPAIR_CONFIG_MIGRATION" in content
+        print("__init__.py has stale entity cleanup and config migration repairs")
+
+    def test_hub_device_created(self):
+        """Test that __init__.py creates hub device for via_device references."""
+        init_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "__init__.py")
+
+        with open(init_path) as f:
+            content = f.read()
+
+        assert "device_registry = dr.async_get(hass)" in content
+        assert "device_registry.async_get_or_create(" in content
+        assert "identifiers={(DOMAIN, entry.entry_id)}" in content
+        assert 'name="Evon Smart Home"' in content
+        print("Hub device created with identifier (DOMAIN, entry.entry_id)")
+
+    def test_repair_translations_exist(self):
+        """Test that repair translations exist in both languages."""
+        import json
+
+        for lang in ["en", "de"]:
+            trans_path = os.path.join(
+                os.path.dirname(__file__), "..", "custom_components", "evon", "translations", f"{lang}.json"
+            )
+
+            with open(trans_path) as f:
+                translations = json.load(f)
+
+            assert "issues" in translations, f"Missing issues section in {lang}.json"
+            issues = translations["issues"]
+            assert "connection_failed" in issues, f"Missing connection_failed in {lang}.json"
+            assert "stale_entities_cleaned" in issues, f"Missing stale_entities_cleaned in {lang}.json"
+            assert "config_migration_failed" in issues, f"Missing config_migration_failed in {lang}.json"
+
+        print("Repair translations exist in en.json and de.json")
+
+
+class TestHomeStateTranslations:
+    """Test home state uses HA translation system."""
+
+    def test_no_hardcoded_translations(self):
+        """Test that select.py doesn't have hardcoded HOME_STATE_TRANSLATIONS."""
+        select_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "select.py")
+
+        with open(select_path) as f:
+            content = f.read()
+
+        assert "HOME_STATE_TRANSLATIONS" not in content, "Should not have hardcoded translations"
+        assert '"Daheim"' not in content, "Should not have hardcoded German names"
+        assert '"At Home"' not in content, "Should not have hardcoded English names"
+        print("No hardcoded home state translations in select.py")
+
+    def test_home_state_uses_evon_ids(self):
+        """Test that home state select uses Evon IDs as options."""
+        select_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "evon", "select.py")
+
+        with open(select_path) as f:
+            content = f.read()
+
+        # Should use state["id"] directly as options
+        assert 'self._attr_options = [state["id"] for state in home_states]' in content
+        print("Home state select uses Evon IDs as options")
+
+    def test_home_state_translations_exist(self):
+        """Test that home state translations have state entries."""
+        import json
+
+        for lang, expected_states in [
+            ("en", {"HomeStateAtHome": "At Home", "HomeStateHoliday": "Holiday"}),
+            ("de", {"HomeStateAtHome": "Daheim", "HomeStateHoliday": "Urlaub"}),
+        ]:
+            trans_path = os.path.join(
+                os.path.dirname(__file__), "..", "custom_components", "evon", "translations", f"{lang}.json"
+            )
+
+            with open(trans_path) as f:
+                translations = json.load(f)
+
+            home_state = translations["entity"]["select"]["home_state"]
+            assert "state" in home_state, f"Missing state translations in {lang}.json"
+
+            for evon_id, display_name in expected_states.items():
+                assert evon_id in home_state["state"], f"Missing {evon_id} in {lang}.json"
+                assert home_state["state"][evon_id] == display_name, f"Wrong translation for {evon_id} in {lang}.json"
+
+        print("Home state translations correct: en=English names, de=German names")
 
 
 class TestIntegrationFiles:
@@ -340,6 +482,8 @@ if __name__ == "__main__":
         TestEvonConstants(),
         TestMCPServer(),
         TestOptimisticUpdates(),
+        TestRepairsFeature(),
+        TestHomeStateTranslations(),
         TestIntegrationFiles(),
     ]
 

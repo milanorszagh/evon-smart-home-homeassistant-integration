@@ -18,7 +18,7 @@ custom_components/evon/
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality)
-├── switch.py            # Switch platform (controllable relays)
+├── switch.py            # Switch platform (controllable relays, bathroom radiators)
 ├── select.py            # Select platform (home states, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves)
 ├── diagnostics.py       # Diagnostics data export
@@ -76,7 +76,7 @@ src/
 
 | Class | Type | Controllable | Notes |
 |-------|------|--------------|-------|
-| `SmartCOM.Light.LightDim` | Dimmable light | Yes | Use `ScaledBrightness` not `Brightness` |
+| `SmartCOM.Light.LightDim` | Dimmable light | Yes | Use `ScaledBrightness` not `Brightness`. Can be marked non-dimmable in options. |
 | `SmartCOM.Light.Light` | Relay output | Yes | Non-dimmable, on/off only |
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes | Use `Open`/`Close`, NOT `MoveUp`/`MoveDown` |
 | `SmartCOM.Clima.ClimateControl` | Climate | Yes | Preset via `ModeSaved` (values differ by season) |
@@ -101,6 +101,8 @@ src/
 | `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness (dimmable only) |
 
 **Important**: Read `ScaledBrightness` property for actual brightness percentage, not `Brightness` (internal value).
+
+**Optimistic Brightness**: When turning on without specifying brightness, the integration uses the last known brightness for optimistic display. This prevents the UI from showing 0% while waiting for Evon to report the actual brightness.
 
 #### Blinds (`SmartCOM.Blind.Blind`)
 
@@ -188,6 +190,8 @@ When changed, ALL climate devices switch simultaneously and their preset `ModeSa
 
 **Important**: Skip instances where ID starts with `System.` - these are templates.
 
+**Display Order**: Home states are sorted in preferred order: At Home, Night, Work, Holiday. Unknown states appear at the end. See `HOME_STATE_ORDER` in `select.py`.
+
 ## Known Limitations
 
 ### Physical Buttons (`SmartCOM.Switch`)
@@ -211,6 +215,35 @@ Physical wall buttons **cannot be monitored** by Home Assistant:
 
 - `SmartCOM.Light.Light` = Controllable relay outputs (supported as switches)
 - `SmartCOM.Switch` = Physical input buttons (not supported - see above)
+
+## Repairs Integration
+
+The integration uses Home Assistant's Repairs system to notify users of issues:
+
+### Connection Failed
+- **Trigger**: 3 consecutive API failures
+- **Severity**: Error
+- **Auto-clears**: Yes, when connection restores
+- **Implementation**: `coordinator.py` tracks `_consecutive_failures`
+
+### Stale Entities Cleaned
+- **Trigger**: Orphaned entities removed during reload
+- **Severity**: Warning
+- **Fixable**: Yes (dismissible)
+- **Implementation**: `__init__.py` `_async_cleanup_stale_entities()` with `RepairsFlow` in `config_flow.py`
+
+### Config Migration Failed
+- **Trigger**: Config entry version newer than supported
+- **Severity**: Error
+- **Fixable**: No
+- **Implementation**: `__init__.py` `async_migrate_entry()`
+
+### Key Files
+- `const.py`: `REPAIR_*` constants, `CONNECTION_FAILURE_THRESHOLD`
+- `coordinator.py`: Connection failure tracking and repair creation/deletion
+- `__init__.py`: Stale entity and migration repairs
+- `config_flow.py`: `EvonStaleEntitiesRepairFlow`, `async_create_fix_flow()`
+- `translations/*.json`: `issues` section for repair messages
 
 ## Code Quality
 

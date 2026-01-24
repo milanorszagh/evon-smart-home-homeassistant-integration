@@ -7,15 +7,23 @@ from typing import Any
 from urllib.parse import urlparse
 
 from homeassistant import config_entries
+from homeassistant.components.repairs import RepairsFlow
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
 from .api import EvonApi, EvonApiError, EvonAuthError
-from .const import CONF_NON_DIMMABLE_LIGHTS, CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SCAN_INTERVAL, DEFAULT_SYNC_AREAS, DOMAIN
+from .const import (
+    CONF_NON_DIMMABLE_LIGHTS,
+    CONF_SCAN_INTERVAL,
+    CONF_SYNC_AREAS,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SYNC_AREAS,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +64,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Evon Smart Home."""
 
-    VERSION = 1
+    VERSION = 2
+    MINOR_VERSION = 0
 
     @staticmethod
     @callback
@@ -205,6 +214,7 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                 SelectSelectorConfig,
                 SelectSelectorMode,
             )
+
             schema_dict[vol.Optional(CONF_NON_DIMMABLE_LIGHTS, default=current_non_dimmable)] = SelectSelector(
                 SelectSelectorConfig(
                     options=[{"value": k, "label": v} for k, v in light_options.items()],
@@ -217,3 +227,25 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(schema_dict),
         )
+
+
+class EvonStaleEntitiesRepairFlow(RepairsFlow):
+    """Handler for stale entities repair flow."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the initial step."""
+        return await self.async_step_confirm()
+
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the confirm step."""
+        if user_input is not None:
+            return self.async_create_entry(data={})
+
+        return self.async_show_form(step_id="confirm")
+
+
+async def async_create_fix_flow(hass: HomeAssistant, issue_id: str, data: dict[str, Any] | None) -> RepairsFlow:
+    """Create a repair flow for the given issue."""
+    if issue_id.startswith("stale_entities_cleaned"):
+        return EvonStaleEntitiesRepairFlow()
+    raise ValueError(f"Unknown issue: {issue_id}")

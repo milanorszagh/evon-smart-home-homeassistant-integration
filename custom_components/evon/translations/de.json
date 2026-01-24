@@ -1,4 +1,25 @@
 {
+  "issues": {
+    "connection_failed": {
+      "title": "Evon Smart Home Verbindung fehlgeschlagen",
+      "description": "Die Integration konnte {failures} Mal in Folge keine Verbindung zu Ihrem Evon Smart Home System herstellen.\n\nLetzter Fehler: {error}\n\nBitte überprüfen Sie:\n- Ihr Evon-System ist eingeschaltet und mit dem Netzwerk verbunden\n- Die Host-URL in der Integrationskonfiguration ist korrekt\n- Ihr Netzwerk erlaubt Verbindungen zum Evon-System\n\nDie Integration wird automatisch wiederhergestellt, wenn die Verbindung wiederhergestellt ist."
+    },
+    "stale_entities_cleaned": {
+      "title": "Veraltete Entitäten entfernt",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Veraltete Entitäten wurden entfernt",
+            "description": "Die Evon-Integration hat {count} Entitäten entfernt, die nicht mehr in Ihrem Evon-System existieren.\n\nEntfernte Entitäten: {entities}\n\nDies kann passieren, wenn Geräte in Ihrer Evon-Konfiguration entfernt oder umbenannt werden. Es ist keine Aktion erforderlich - dies ist nur eine informative Benachrichtigung."
+          }
+        }
+      }
+    },
+    "config_migration_failed": {
+      "title": "Evon Konfigurationsmigration fehlgeschlagen",
+      "description": "Ihre Evon Smart Home Konfiguration wurde mit einer neueren Version der Integration erstellt (Version {current_version}) und kann nicht mit der aktuellen Version verwendet werden (unterstützt bis Version {supported_version}).\n\nBitte aktualisieren Sie die Evon Smart Home Integration auf die neueste Version oder entfernen und fügen Sie die Integration erneut hinzu."
+    }
+  },
   "entity": {
     "select": {
       "season_mode": {
@@ -9,7 +30,13 @@
         }
       },
       "home_state": {
-        "name": "Zuhause-Status"
+        "name": "Zuhause-Status",
+        "state": {
+          "HomeStateAtHome": "Daheim",
+          "HomeStateHoliday": "Urlaub",
+          "HomeStateNight": "Nacht",
+          "HomeStateWork": "Arbeit"
+        }
       }
     }
   },
@@ -52,10 +79,12 @@
         "description": "Integrationseinstellungen konfigurieren.",
         "data": {
           "scan_interval": "Abfrageintervall (Sekunden)",
-          "sync_areas": "Bereiche von Evon synchronisieren"
+          "sync_areas": "Bereiche von Evon synchronisieren",
+          "non_dimmable_lights": "Nicht dimmbare Leuchten"
         },
         "data_description": {
-          "sync_areas": "Geräte automatisch Home Assistant Bereichen zuweisen, basierend auf ihrer Raumzuordnung im Evon-System. Hinweis: Das Ändern dieser Option lädt die Integration neu."
+          "sync_areas": "Geräte automatisch Home Assistant Bereichen zuweisen, basierend auf ihrer Raumzuordnung im Evon-System. Hinweis: Das Ändern dieser Option lädt die Integration neu.",
+          "non_dimmable_lights": "Wählen Sie Leuchten, die nur als Ein/Aus behandelt werden sollen (keine Dimmung). Nützlich für LED-Streifen, die über PWM-Dimmer angeschlossen sind und volle Leistung benötigen. Hinweis: Das Ändern dieser Option lädt die Integration neu."
         }
       }
     }

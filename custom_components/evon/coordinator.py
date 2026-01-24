@@ -7,10 +7,12 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import EvonApi, EvonApiError
 from .const import (
+    CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EVON_CLASS_AIR_QUALITY,
@@ -23,6 +25,7 @@ from .const import (
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_SMART_METER,
     EVON_CLASS_VALVE,
+    REPAIR_CONNECTION_FAILED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,6 +52,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._instances_cache: list[dict[str, Any]] = []
         self._sync_areas = sync_areas
         self._rooms_cache: dict[str, str] = {}
+        self._consecutive_failures = 0
+        self._repair_created = False
 
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
@@ -83,6 +88,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             home_states = await self._process_home_states(instances)
             bathroom_radiators = await self._process_bathroom_radiators(instances)
 
+            # Success - reset failure counter and clear any connection repair
+            self._consecutive_failures = 0
+            if self._repair_created:
+                ir.async_delete_issue(self.hass, DOMAIN, REPAIR_CONNECTION_FAILED)
+                self._repair_created = False
+                _LOGGER.info("Connection restored, cleared connection failure repair")
+
             return {
                 "lights": lights,
                 "blinds": blinds,
@@ -98,6 +110,35 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             }
 
         except EvonApiError as err:
+            self._consecutive_failures += 1
+            _LOGGER.warning(
+                "Evon API error (failure %d/%d): %s",
+                self._consecutive_failures,
+                CONNECTION_FAILURE_THRESHOLD,
+                err,
+            )
+
+            # Create repair issue after threshold consecutive failures
+            if self._consecutive_failures >= CONNECTION_FAILURE_THRESHOLD and not self._repair_created:
+                ir.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    REPAIR_CONNECTION_FAILED,
+                    is_fixable=False,
+                    is_persistent=True,
+                    severity=ir.IssueSeverity.ERROR,
+                    translation_key="connection_failed",
+                    translation_placeholders={
+                        "failures": str(self._consecutive_failures),
+                        "error": str(err),
+                    },
+                )
+                self._repair_created = True
+                _LOGGER.error(
+                    "Created repair issue: Evon API connection failed %d times",
+                    self._consecutive_failures,
+                )
+
             raise UpdateFailed(f"Error communicating with Evon API: {err}") from err
 
     async def _fetch_rooms(self) -> None:

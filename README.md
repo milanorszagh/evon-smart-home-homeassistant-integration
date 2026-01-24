@@ -87,8 +87,17 @@ After installation, you can configure the integration via **Settings** → **Dev
 
 - **Poll interval**: How often to fetch device states (5-300 seconds, default: 30)
 - **Sync areas from Evon**: Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system (default: off)
+- **Non-dimmable lights**: Select lights that should be treated as on/off only (no dimming slider). Useful for LED strips connected via PWM dimmers that need full power to operate their controllers.
 
 To change your connection credentials, use the **Reconfigure** option from the integration menu.
+
+### Repairs
+
+The integration creates repair issues in **Settings** → **System** → **Repairs** for:
+
+- **Connection failed**: Alerts after 3 consecutive API failures. Auto-clears when connection restores.
+- **Stale entities cleaned**: Informational notice when orphaned entities are removed (dismissible).
+- **Config migration failed**: Error if configuration was created with a newer incompatible version.
 
 ### Translations
 
@@ -452,6 +461,7 @@ Body: {"value": true}   // COOLING (summer)
 
 | Version | Changes |
 |---------|---------|
+| **1.10.0** | Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failures, stale entities, config migration), improved home state translations using HA's translation system, hub device for proper device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. |
 | **1.9.0** | Added Season Mode select entity for global heating/cooling control. Climate presets now correctly reflect season-specific values. Added `hvac_action` to show current climate activity (heating/cooling/idle). |
 | **1.8.2** | Fixed blind cover optimistic state for group actions |
 | **1.8.1** | Added optimistic updates for all entities and improved preset icons |
