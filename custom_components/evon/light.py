@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import CONF_NON_DIMMABLE_LIGHTS, DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,9 +52,6 @@ async def async_setup_entry(
 class EvonLight(EvonEntity, LightEntity):
     """Representation of an Evon light."""
 
-    _attr_color_mode = ColorMode.BRIGHTNESS
-    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
-
     def __init__(
         self,
         coordinator: EvonDataUpdateCoordinator,
@@ -68,6 +65,18 @@ class EvonLight(EvonEntity, LightEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_light_{instance_id}"
+
+        # Check if this light should be non-dimmable (from options)
+        non_dimmable_lights = entry.options.get(CONF_NON_DIMMABLE_LIGHTS, [])
+        self._is_dimmable = instance_id not in non_dimmable_lights
+
+        if self._is_dimmable:
+            self._attr_color_mode = ColorMode.BRIGHTNESS
+            self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+        else:
+            self._attr_color_mode = ColorMode.ONOFF
+            self._attr_supported_color_modes = {ColorMode.ONOFF}
+
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_is_on: bool | None = None
         self._optimistic_brightness: int | None = None  # HA scale 0-255
@@ -75,7 +84,8 @@ class EvonLight(EvonEntity, LightEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for this light."""
-        return self._build_device_info("Dimmable Light")
+        model = "Dimmable Light" if self._is_dimmable else "Light"
+        return self._build_device_info(model)
 
     @property
     def is_on(self) -> bool:
@@ -92,6 +102,10 @@ class EvonLight(EvonEntity, LightEntity):
     @property
     def brightness(self) -> int | None:
         """Return the brightness of the light (0-255)."""
+        # Non-dimmable lights don't report brightness
+        if not self._is_dimmable:
+            return None
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_brightness is not None:
             return self._optimistic_brightness

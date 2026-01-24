@@ -49,3 +49,6 @@ EVON_CLASS_AIR_QUALITY = "System.Location.AirQuality"
 EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
 EVON_CLASS_HOME_STATE = "System.HomeState"
 EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
+
+# Options keys
+CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"

@@ -15,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
 from .api import EvonApi, EvonApiError, EvonAuthError
-from .const import CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SCAN_INTERVAL, DEFAULT_SYNC_AREAS, DOMAIN
+from .const import CONF_NON_DIMMABLE_LIGHTS, CONF_SCAN_INTERVAL, CONF_SYNC_AREAS, DEFAULT_SCAN_INTERVAL, DEFAULT_SYNC_AREAS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,19 +175,45 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
 
         current_interval = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         current_sync_areas = self.config_entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
+        current_non_dimmable = self.config_entry.options.get(CONF_NON_DIMMABLE_LIGHTS, [])
+
+        # Get available lights from coordinator
+        light_options: dict[str, str] = {}
+        if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
+            coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
+            if coordinator and coordinator.data and "lights" in coordinator.data:
+                for light in coordinator.data["lights"]:
+                    light_id = light["id"]
+                    light_name = light["name"]
+                    light_options[light_id] = light_name
+
+        # Build schema - only show non-dimmable option if lights exist
+        schema_dict: dict[Any, Any] = {
+            vol.Required(
+                CONF_SCAN_INTERVAL,
+                default=current_interval,
+            ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
+            vol.Required(
+                CONF_SYNC_AREAS,
+                default=current_sync_areas,
+            ): bool,
+        }
+
+        if light_options:
+            from homeassistant.helpers.selector import (
+                SelectSelector,
+                SelectSelectorConfig,
+                SelectSelectorMode,
+            )
+            schema_dict[vol.Optional(CONF_NON_DIMMABLE_LIGHTS, default=current_non_dimmable)] = SelectSelector(
+                SelectSelectorConfig(
+                    options=[{"value": k, "label": v} for k, v in light_options.items()],
+                    multiple=True,
+                    mode=SelectSelectorMode.DROPDOWN,
+                )
+            )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_SCAN_INTERVAL,
-                        default=current_interval,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
-                    vol.Required(
-                        CONF_SYNC_AREAS,
-                        default=current_sync_areas,
-                    ): bool,
-                }
-            ),
+            data_schema=vol.Schema(schema_dict),
         )

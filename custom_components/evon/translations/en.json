@@ -52,10 +52,12 @@
         "description": "Configure integration settings.",
         "data": {
           "scan_interval": "Poll interval (seconds)",
-          "sync_areas": "Sync areas from Evon"
+          "sync_areas": "Sync areas from Evon",
+          "non_dimmable_lights": "Non-dimmable lights"
         },
         "data_description": {
-          "sync_areas": "Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system. Note: Changing this option will reload the integration."
+          "sync_areas": "Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system. Note: Changing this option will reload the integration.",
+          "non_dimmable_lights": "Select lights that should be treated as on/off only (no dimming). Useful for LED strips connected via PWM dimmers that need full power. Note: Changing this option will reload the integration."
         }
       }
     }
