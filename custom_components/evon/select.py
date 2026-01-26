@@ -81,8 +81,7 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         options = [state["id"] for state in home_states]
         # Sort by preferred order, unknown states go to the end
         self._attr_options = sorted(
-            options,
-            key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)
+            options, key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)
         )
 
     @property
