@@ -18,3 +18,13 @@ logs/
 
 # Test files
 test-api.mjs
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
