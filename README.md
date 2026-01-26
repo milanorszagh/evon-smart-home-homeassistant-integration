@@ -114,13 +114,14 @@ Supported languages:
 
 ### Climate
 
-- Temperature control with min/max limits
-- HVAC modes: Heat, Cool (if supported), Off
-- Current activity display: Heating, Cooling, or Idle
+- Target temperature control with min/max limits
+- Activity display: Shows when system is actively Heating, Cooling, or Idle
 - Presets:
   - **Comfort** - Normal comfortable temperature
   - **Eco** - Energy saving mode
   - **Away** - Protection mode (freeze protection in winter, heat protection in summer)
+
+The Evon system automatically decides when to heat or cool based on the target temperature and the global Season Mode setting.
 
 ### Season Mode
 
