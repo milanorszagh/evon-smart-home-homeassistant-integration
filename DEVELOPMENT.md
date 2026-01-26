@@ -106,9 +106,6 @@ The server auto-detects plain text or encoded passwords.
 | `list_sensors` | List temperature and other sensors |
 | `list_bathroom_radiators` | List all bathroom radiators |
 | `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
-| `list_scenes` | List available scenes |
-| `activate_scene` | Activate a scene |
-| `create_scene` | Create a custom scene |
 
 ### Available Resources
 
@@ -120,15 +117,6 @@ The server auto-detects plain text or encoded passwords.
 | `evon://home_state` | Current and available home states |
 | `evon://bathroom_radiators` | All bathroom radiators |
 | `evon://summary` | Home summary (counts, avg temp, state) |
-
-### Pre-defined Scenes
-
-| Scene | Description |
-|-------|-------------|
-| `all_off` | Turn off all lights and close all blinds |
-| `movie_mode` | Dim lights to 10% and close blinds |
-| `morning` | Open blinds, set lights to 70%, comfort mode |
-| `night` | Turn off lights, set climate to eco mode |
 
 ---
 
