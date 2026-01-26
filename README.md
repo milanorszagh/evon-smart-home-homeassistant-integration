@@ -140,7 +140,7 @@ Switch between home-wide modes defined in your Evon system:
 - **Work** - Away at work
 - **Holiday** - Vacation mode
 
-These states can trigger automations configured in the Evon system.
+These states trigger automations in the Evon system and can be used in Home Assistant automations as well.
 
 ### Sensors
 
