@@ -10,6 +10,41 @@ This repository contains two integrations for Evon Smart Home systems:
 - **MCP Server** (`src/index.ts`) - TypeScript-based Model Context Protocol server
 - **Home Assistant Integration** (`custom_components/evon/`) - Python-based HA custom component
 
+## Documentation Structure
+
+**IMPORTANT**: When updating documentation, put content in the correct file based on audience:
+
+| File | Audience | Content |
+|------|----------|---------|
+| **README.md** | End users | Installation, features, configuration, platform descriptions (user-friendly, no internal details), version history |
+| **DEVELOPMENT.md** | Developers | Architecture, API reference, device classes, methods, code patterns, testing, MCP server setup |
+| **AGENTS.md** | AI agents | Critical API knowledge, debugging tips, gotchas, implementation patterns, version history (detailed) |
+| **info.md** | HACS | Brief feature summary for HACS integration page |
+
+### What Goes Where
+
+| Content Type | File |
+|--------------|------|
+| How to install/configure | README.md |
+| What features are supported | README.md |
+| API endpoints and methods | DEVELOPMENT.md |
+| Internal property values (e.g., ModeSaved) | DEVELOPMENT.md, AGENTS.md |
+| Password encoding details | DEVELOPMENT.md |
+| Debugging tips and gotchas | AGENTS.md |
+| Code patterns and examples | DEVELOPMENT.md, AGENTS.md |
+| MCP tools/resources tables | DEVELOPMENT.md |
+| Version history (brief) | README.md |
+| Version history (detailed) | AGENTS.md |
+
+### Guidelines
+
+1. **README.md should be user-friendly** - No internal implementation details, no API property names, no code examples
+2. **DEVELOPMENT.md is for developers** - Technical details, API reference, code patterns
+3. **AGENTS.md is for AI agents** - Critical knowledge that prevents mistakes, debugging tips, gotchas
+4. **Keep formatting consistent** - Use tables for structured data, code blocks for examples
+5. **Update version history** - Brief in README.md, detailed in AGENTS.md
+6. **Don't duplicate** - Link to other docs instead of copying content
+
 ## Critical API Knowledge
 
 ### Brightness Control - IMPORTANT

@@ -4,11 +4,14 @@ Control your [Evon Smart Home](https://www.evon-smarthome.com/) system directly 
 
 ## Features
 
-- **Lights**: On/off and brightness control (0-100%)
-- **Switches**: On/off with click event detection (single, double, long press)
-- **Blinds**: Open/close/stop, position and tilt angle control
-- **Climate**: Temperature control with preset modes (comfort, energy saving, freeze protection)
-- **Sensors**: Temperature readings from climate devices
+- **Lights**: On/off and brightness control
+- **Blinds**: Position and tilt angle control
+- **Climate**: Temperature control with presets (comfort, eco, away)
+- **Season Mode**: Global heating/cooling switch
+- **Home State**: Switch between home modes (At Home, Night, Work, Holiday)
+- **Sensors**: Temperature, energy, air quality
+- **Switches**: Controllable relay outputs
+- **Bathroom Radiators**: Electric heater control with timer
 
 ## Configuration
 
@@ -21,24 +24,8 @@ You'll need:
 ## Options
 
 - **Poll interval**: Configure how often device states are updated (5-300 seconds)
-- **Reconfigure**: Change connection credentials without removing the integration
-
-## Automations
-
-Use switch click events in automations:
-
-```yaml
-automation:
-  - trigger:
-      - platform: event
-        event_type: evon_event
-        event_data:
-          event_type: double_click
-    action:
-      - service: scene.turn_on
-        target:
-          entity_id: scene.movie_mode
-```
+- **Area sync**: Automatically assign devices to Home Assistant areas
+- **Non-dimmable lights**: Mark lights as on/off only
 
 ## Support
 

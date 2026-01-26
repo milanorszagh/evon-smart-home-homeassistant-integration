@@ -1,32 +1,36 @@
 # Development Guide
 
-This document provides architecture details, API findings, and development guidelines for contributors and AI agents working on the Evon Smart Home integration.
+This document provides architecture details, API reference, and development guidelines for contributors working on the Evon Smart Home integration.
+
+For AI agents, see [AGENTS.md](AGENTS.md) which contains critical API knowledge and debugging tips.
+
+---
 
 ## Architecture Overview
 
-### Home Assistant Integration (`custom_components/evon/`)
+### Home Assistant Integration
 
 ```
 custom_components/evon/
-├── __init__.py          # Entry point, platform setup
+├── __init__.py          # Entry point, platform setup, stale entity cleanup
 ├── api.py               # Evon API client
 ├── base_entity.py       # Base entity class with common functionality
-├── config_flow.py       # Configuration UI flows
-├── const.py             # Constants and device classes
-├── coordinator.py       # Data update coordinator
+├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
+├── const.py             # Constants, device classes, repair identifiers
+├── coordinator.py       # Data update coordinator with connection failure tracking
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality)
-├── switch.py            # Switch platform (controllable relays, bathroom radiators)
-├── select.py            # Select platform (home states, season mode)
+├── switch.py            # Switch platform (relays, bathroom radiators)
+├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
-└── translations/        # Localization files
+└── translations/        # Localization files (en.json, de.json)
 ```
 
-### MCP Server (`src/`)
+### MCP Server
 
 ```
 src/
@@ -34,36 +38,131 @@ src/
 └── ... (compiled to dist/)
 ```
 
-## Data Flow
+### Data Flow
 
 ```
-1. User adds integration via UI
-2. config_flow.py validates credentials
+1. User adds integration via config flow
+2. config_flow.py validates credentials with API
 3. __init__.py creates API client and coordinator
 4. coordinator.py fetches all device data periodically
-5. Platform files (light.py, cover.py, etc.) create entities
+5. Platform files create entities from coordinator data
 6. Entities read state from coordinator.data
-7. Entities call api methods for control actions
+7. Entities call API methods for control actions
+8. Optimistic updates provide instant UI feedback
 ```
 
-## Evon API Details
+---
 
-### Authentication Flow
+## MCP Server Setup
 
-```
-1. POST /login
-   Headers:
-     x-elocs-username: <username>
-     x-elocs-password: Base64(SHA512(username + password))
+The MCP server allows AI assistants like Claude to control Evon devices directly.
 
-2. Response includes:
-     x-elocs-token: <session-token>
+### Installation
 
-3. All subsequent requests:
-     Cookie: token=<session-token>
+```bash
+git clone https://github.com/milanorszagh/evon-smart-home-homeassistant-integration.git
+cd evon-ha
+npm install
+npm run build
 ```
 
-### Key Endpoints
+### Configuration
+
+Add to your Claude Code configuration (`~/.claude.json`):
+
+```json
+{
+  "mcpServers": {
+    "evon": {
+      "command": "node",
+      "args": ["/path/to/evon-ha/dist/index.js"],
+      "env": {
+        "EVON_HOST": "http://192.168.x.x",
+        "EVON_USERNAME": "your-username",
+        "EVON_PASSWORD": "your-password"
+      }
+    }
+  }
+}
+```
+
+The server auto-detects plain text or encoded passwords.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_lights` | List all lights with current state |
+| `light_control` | Control a single light (on/off/brightness) |
+| `light_control_all` | Control all lights at once |
+| `list_blinds` | List all blinds with current state |
+| `blind_control` | Control a single blind (position/angle/up/down/stop) |
+| `blind_control_all` | Control all blinds at once |
+| `list_climate` | List all climate controls with current state |
+| `climate_control` | Control a single climate zone (comfort/eco/away/set_temperature) |
+| `climate_control_all` | Control all climate zones at once |
+| `list_home_states` | List all home states with active status |
+| `set_home_state` | Set the active home state |
+| `list_sensors` | List temperature and other sensors |
+| `list_bathroom_radiators` | List all bathroom radiators |
+| `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
+| `list_scenes` | List available scenes |
+| `activate_scene` | Activate a scene |
+| `create_scene` | Create a custom scene |
+
+### Available Resources
+
+| Resource URI | Description |
+|--------------|-------------|
+| `evon://lights` | All lights with current state |
+| `evon://blinds` | All blinds with current state |
+| `evon://climate` | All climate controls with state |
+| `evon://home_state` | Current and available home states |
+| `evon://bathroom_radiators` | All bathroom radiators |
+| `evon://summary` | Home summary (counts, avg temp, state) |
+
+### Pre-defined Scenes
+
+| Scene | Description |
+|-------|-------------|
+| `all_off` | Turn off all lights and close all blinds |
+| `movie_mode` | Dim lights to 10% and close blinds |
+| `morning` | Open blinds, set lights to 70%, comfort mode |
+| `night` | Turn off lights, set climate to eco mode |
+
+---
+
+## Evon API Reference
+
+### Authentication
+
+```
+POST /login
+Headers:
+  x-elocs-username: <username>
+  x-elocs-password: <encoded-password>
+
+Response Headers:
+  x-elocs-token: <session-token>
+```
+
+**Password Encoding:**
+```
+x-elocs-password = Base64(SHA512(username + password))
+```
+
+```python
+import hashlib, base64
+encoded = base64.b64encode(
+    hashlib.sha512((username + password).encode()).digest()
+).decode()
+```
+
+Both integrations handle encoding automatically - just provide plain text passwords.
+
+### Endpoints
+
+All requests require: `Cookie: token=<token>`
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -71,40 +170,37 @@ src/
 | `/api/instances` | GET | List all device instances |
 | `/api/instances/{id}` | GET | Get device details |
 | `/api/instances/{id}/{method}` | POST | Call method on device |
+| `/api/instances/{id}/{property}` | PUT | Set property value |
 
 ### Device Classes
 
-| Class | Type | Controllable | Notes |
-|-------|------|--------------|-------|
-| `SmartCOM.Light.LightDim` | Dimmable light | Yes | Use `ScaledBrightness` not `Brightness`. Can be marked non-dimmable in options. |
-| `SmartCOM.Light.Light` | Relay output | Yes | Non-dimmable, on/off only |
-| `SmartCOM.Blind.Blind` | Blind/shutter | Yes | Use `Open`/`Close`, NOT `MoveUp`/`MoveDown` |
-| `SmartCOM.Clima.ClimateControl` | Climate | Yes | Preset via `ModeSaved` (values differ by season) |
-| `*ClimateControlUniversal*` | Climate | Yes | Match by substring |
-| `Base.ehThermostat` | Season mode | Yes | Global heating/cooling via `IsCool` property |
-| `System.HomeState` | Home mode | Yes | Use `Activate` method to switch |
-| `Heating.BathroomRadiator` | Bathroom heater | Yes | Toggle with `Switch` method |
-| `SmartCOM.Switch` | Physical button | **No** | Read-only, momentary state |
-| `Energy.SmartMeter*` | Smart meter | No | Sensor only |
-| `System.Location.AirQuality` | Air quality | No | Sensor only |
-| `SmartCOM.Clima.Valve` | Valve | No | Sensor only |
-| `System.Location.Room` | Room/area | No | Used for area sync |
+| Class Name | Type | Controllable |
+|------------|------|--------------|
+| `SmartCOM.Light.LightDim` | Dimmable light | Yes |
+| `SmartCOM.Light.Light` | Relay output | Yes |
+| `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
+| `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
+| `*ClimateControlUniversal*` | Universal climate | Yes |
+| `Base.ehThermostat` | Season mode | Yes |
+| `System.HomeState` | Home state | Yes |
+| `Heating.BathroomRadiator` | Bathroom heater | Yes |
+| `SmartCOM.Switch` | Physical button | **No** (momentary) |
+| `Energy.SmartMeter*` | Smart meter | No (sensor) |
+| `System.Location.AirQuality` | Air quality | No (sensor) |
+| `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
+| `System.Location.Room` | Room/area | No |
 
-### Control Methods by Device Type
-
-#### Lights (`SmartCOM.Light.LightDim` and `SmartCOM.Light.Light`)
+### Light Methods
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
-| `AmznTurnOn` | - | Turn on |
-| `AmznTurnOff` | - | Turn off |
-| `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness (dimmable only) |
+| `AmznTurnOn` | - | Turn light on |
+| `AmznTurnOff` | - | Turn light off |
+| `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness |
 
-**Important**: Read `ScaledBrightness` property for actual brightness percentage, not `Brightness` (internal value).
+**Important**: Read `ScaledBrightness` property for actual brightness, not `Brightness`.
 
-**Optimistic Brightness**: When turning on without specifying brightness, the integration uses the last known brightness for optimistic display. This prevents the UI from showing 0% while waiting for Evon to report the actual brightness.
-
-#### Blinds (`SmartCOM.Blind.Blind`)
+### Blind Methods
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
@@ -114,312 +210,236 @@ src/
 | `AmznSetPercentage` | `[position]` (0-100) | Set position |
 | `SetAngle` | `[angle]` (0-100) | Set tilt angle |
 
-**Critical**: `MoveUp` and `MoveDown` methods do NOT exist. Always use `Open` and `Close`.
+**Critical**: `MoveUp` and `MoveDown` do NOT exist - use `Open` and `Close`.
 
-**Position convention**: In Evon, 0 = fully open, 100 = fully closed. Home Assistant uses the opposite (0 = closed, 100 = open). The integration converts between them.
+**Position convention**: Evon uses 0=open, 100=closed. Home Assistant uses the opposite.
 
-#### Climate (`SmartCOM.Clima.ClimateControl`)
+### Climate Methods
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
 | `WriteDayMode` | - | Set comfort preset |
 | `WriteNightMode` | - | Set eco preset |
 | `WriteFreezeMode` | - | Set away/protection preset |
-| `WriteCurrentSetTemperature` | `[temperature]` | Set target temperature |
+| `WriteCurrentSetTemperature` | `[temp]` | Set target temperature |
 
-**Preset values differ by Season Mode:**
-| Preset | Heating Mode | Cooling Mode |
-|--------|--------------|--------------|
+### Climate Properties
+
+| Property | Description |
+|----------|-------------|
+| `ActualTemperature` | Current room temperature |
+| `SetTemperature` | Target temperature |
+| `SetValueComfortHeating` | Comfort mode temperature |
+| `SetValueEnergySavingHeating` | Eco mode temperature |
+| `SetValueFreezeProtection` | Protection temperature |
+| `ModeSaved` | Current preset (values differ by season) |
+| `CoolingMode` | Whether in cooling mode |
+| `IsOn` | Whether actively heating/cooling |
+
+**ModeSaved values by Season Mode:**
+
+| Preset | Heating | Cooling |
+|--------|---------|---------|
 | away | 2 | 5 |
 | eco | 3 | 6 |
 | comfort | 4 | 7 |
 
-#### Season Mode (`Base.ehThermostat`)
+### Season Mode
 
-Season Mode controls whether the entire house is in heating (winter) or cooling (summer) mode.
+Controls global heating/cooling for the entire house.
 
-**Reading:**
+**Read:**
 ```
 GET /api/instances/Base.ehThermostat
 → IsCool: false = heating, true = cooling
 ```
 
-**Setting:**
+**Set:**
 ```
 PUT /api/instances/Base.ehThermostat/IsCool
 Content-Type: application/json
-Body: {"value": false}  // HEATING (winter)
-Body: {"value": true}   // COOLING (summer)
+Body: {"value": false}  // HEATING
+Body: {"value": true}   // COOLING
 ```
 
-When changed, ALL climate devices switch simultaneously and their preset `ModeSaved` values shift accordingly.
-
-#### Bathroom Radiator (`Heating.BathroomRadiator`)
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `Switch` | - | Toggle on/off (timer-based) |
-
-**Properties:**
-| Property | Description |
-|----------|-------------|
-| `Output` | Current on/off state |
-| `NextSwitchPoint` | Minutes remaining until auto-off |
-| `EnableForMins` | Configured run duration |
-
-#### Home State (`System.HomeState`)
+### Home State Methods
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
 | `Activate` | - | Activate this home state |
 
-**Properties:**
-| Property | Description |
-|----------|-------------|
-| `Active` | `true` if this state is currently active |
-| `ActiveInstance` | ID of the currently active home state |
-| `Name` | Display name of the state |
+**Properties**: `Active` (bool), `Name` (string)
 
-**Available states:**
-| ID | German Name | English |
-|----|-------------|---------|
-| `HomeStateAtHome` | Daheim | At Home |
-| `HomeStateHoliday` | Urlaub | Holiday |
-| `HomeStateNight` | Nacht | Night |
-| `HomeStateWork` | Arbeit | Work |
+**State IDs**: `HomeStateAtHome`, `HomeStateNight`, `HomeStateWork`, `HomeStateHoliday`
 
-**Important**: Skip instances where ID starts with `System.` - these are templates.
+### Bathroom Radiator
 
-**Display Order**: Home states are sorted in preferred order: At Home, Night, Work, Holiday. Unknown states appear at the end. See `HOME_STATE_ORDER` in `select.py`.
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Switch` | - | Toggle on/off |
+
+**Properties**: `Output` (state), `NextSwitchPoint` (minutes remaining), `EnableForMins` (duration)
+
+---
 
 ## Known Limitations
 
 ### Physical Buttons (`SmartCOM.Switch`)
 
-Physical wall buttons **cannot be monitored** by Home Assistant:
+Cannot be monitored due to API limitations:
+- `IsOn` is only `true` while physically pressed (milliseconds)
+- No event history or push notifications
+- Polling is ineffective
 
-1. **Momentary state only**: `IsOn` property is `true` only while button is physically pressed
-2. **No event history**: No `LastClickType` or click log
-3. **No push notifications**: Evon API has no WebSocket or event streaming
-4. **Polling ineffective**: Button presses (milliseconds) are missed between polls
+The integration does not create entities for these devices.
 
-**Investigation conducted**:
-- Tested 100ms polling intervals - still couldn't catch button presses
-- Checked for WebSocket endpoints - none exist
-- Looked for event log APIs - none available
-- Tested all potential methods (Press, Click, Trigger, etc.) - all return 404
-
-**Conclusion**: These buttons work within Evon's internal system but cannot be observed externally. The integration does not create entities for `SmartCOM.Switch` devices.
-
-### Controllable Switches vs Input Buttons
-
-- `SmartCOM.Light.Light` = Controllable relay outputs (supported as switches)
-- `SmartCOM.Switch` = Physical input buttons (not supported - see above)
-
-## Repairs Integration
-
-The integration uses Home Assistant's Repairs system to notify users of issues:
-
-### Connection Failed
-- **Trigger**: 3 consecutive API failures
-- **Severity**: Error
-- **Auto-clears**: Yes, when connection restores
-- **Implementation**: `coordinator.py` tracks `_consecutive_failures`
-
-### Stale Entities Cleaned
-- **Trigger**: Orphaned entities removed during reload
-- **Severity**: Warning
-- **Fixable**: Yes (dismissible)
-- **Implementation**: `__init__.py` `_async_cleanup_stale_entities()` with `RepairsFlow` in `config_flow.py`
-
-### Config Migration Failed
-- **Trigger**: Config entry version newer than supported
-- **Severity**: Error
-- **Fixable**: No
-- **Implementation**: `__init__.py` `async_migrate_entry()`
-
-### Key Files
-- `const.py`: `REPAIR_*` constants, `CONNECTION_FAILURE_THRESHOLD`
-- `coordinator.py`: Connection failure tracking and repair creation/deletion
-- `__init__.py`: Stale entity and migration repairs
-- `config_flow.py`: `EvonStaleEntitiesRepairFlow`, `async_create_fix_flow()`
-- `translations/*.json`: `issues` section for repair messages
+---
 
 ## Code Quality
 
 ### Linting
 
-Always run linting before committing changes:
-
-**Python (ruff):**
 ```bash
-pip install ruff
-ruff check custom_components/evon/      # Check for issues
-ruff check custom_components/evon/ --fix  # Auto-fix issues
-ruff format custom_components/evon/     # Format code
+# Python
+ruff check custom_components/evon/
+ruff format custom_components/evon/
+
+# TypeScript
+npm run lint
+npm run lint:fix
 ```
 
-**TypeScript (eslint):**
+### Pre-commit Check
+
 ```bash
-npm run lint       # Check for issues
-npm run lint:fix   # Auto-fix issues
+ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
 ```
 
-CI runs these checks automatically on pull requests.
+---
 
 ## Development Guidelines
 
 ### Adding New Device Types
 
 1. Add device class constant to `const.py`
-2. Add processing method to `coordinator.py`
-3. Create platform file or add to existing one
+2. Add processing logic to `coordinator.py`
+3. Create platform file or extend existing one
 4. Register platform in `__init__.py` PLATFORMS list
 5. Add API methods to `api.py` if needed
 
 ### Entity Best Practices
 
-- Use `EntityDescription` for entity configuration
-- Set appropriate `entity_category` (None for primary, DIAGNOSTIC for info-only)
-- Implement `available` property checking coordinator data
-- Use `HomeAssistantError` for error handling in service calls
-- Include `evon_id` in extra state attributes for debugging
+- Use `EntityDescription` for configuration
+- Set appropriate `entity_category`
+- Implement `available` property
+- Use `HomeAssistantError` for service call errors
+- Include `evon_id` in extra state attributes
+- Implement optimistic updates for responsive UI
 
-### Coordinator Pattern
-
-```python
-# Reading data from coordinator
-data = self.coordinator.get_entity_data("lights", self._instance_id)
-if data:
-    return data.get("is_on", False)
-
-# Triggering update after control action
-await self.coordinator.async_request_refresh()
-```
-
-### API Error Handling
+### Optimistic Updates Pattern
 
 ```python
-try:
-    await self.api.call_method(instance_id, method)
-except EvonApiError as err:
-    raise HomeAssistantError(f"Failed to control device: {err}") from err
+# In __init__
+self._optimistic_is_on: bool | None = None
+
+# In property
+@property
+def is_on(self) -> bool:
+    if self._optimistic_is_on is not None:
+        return self._optimistic_is_on
+    return self.coordinator.get_state(...)
+
+# In action
+async def async_turn_on(self, **kwargs):
+    self._optimistic_is_on = True
+    self.async_write_ha_state()
+    await self._api.turn_on(...)
+    await self.coordinator.async_request_refresh()
+
+# In coordinator update
+def _handle_coordinator_update(self):
+    if self._optimistic_is_on is not None:
+        actual = self.coordinator.get_state(...)
+        if actual == self._optimistic_is_on:
+            self._optimistic_is_on = None
+    super()._handle_coordinator_update()
 ```
+
+---
+
+## Repairs Integration
+
+| Repair | Trigger | Severity | Auto-clear |
+|--------|---------|----------|------------|
+| Connection failed | 3 consecutive failures | Error | Yes |
+| Stale entities | Orphaned entities removed | Warning | Dismissible |
+| Config migration | Incompatible version | Error | No |
+
+Key files: `const.py` (constants), `coordinator.py` (connection tracking), `__init__.py` (entity/migration repairs), `config_flow.py` (repair flows)
+
+---
 
 ## Testing
 
 ### Manual API Testing
 
 ```bash
-# Test authentication
+# Login and get token
 curl -X POST http://EVON_HOST/login \
   -H "x-elocs-username: USERNAME" \
   -H "x-elocs-password: BASE64_SHA512_HASH"
 
-# List all devices
+# List devices
 curl http://EVON_HOST/api/instances \
   -H "Cookie: token=TOKEN"
-
-# Get device details
-curl http://EVON_HOST/api/instances/DEVICE_ID \
-  -H "Cookie: token=TOKEN"
-
-# Call method on device
-curl -X POST http://EVON_HOST/api/instances/DEVICE_ID/METHOD \
-  -H "Cookie: token=TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '[]'
 ```
 
-### Testing with MCP Server
+### Unit Tests
 
 ```bash
-cd /path/to/evon-ha
-npm install
-npm run build
+pip install -r requirements-test.txt
+pytest -v
 ```
 
-Configure credentials in `~/.claude.json` (see README), then use Claude Code to test tools.
+Tests are in `tests/` - some require Home Assistant installed.
 
-### Home Assistant Development
+---
 
-```bash
-# Copy to HA config
-cp -r custom_components/evon /config/custom_components/
+## Deploy Workflow
 
-# Or for development, symlink
-ln -s /path/to/evon-ha/custom_components/evon /config/custom_components/evon
+### Setup
 
-# Restart HA or reload integration
-```
+1. Copy `.env.example` to `.env` with your HA IP
+2. Configure SSH on Home Assistant (Terminal & SSH add-on)
+3. Add your public key to authorized_keys
 
-## Troubleshooting
+### Commands
 
-### 404 Errors on Control
+| Command | Description |
+|---------|-------------|
+| `./scripts/ha-deploy.sh` | Deploy integration to HA |
+| `./scripts/ha-deploy.sh restart` | Deploy and restart HA |
+| `./scripts/ha-logs.sh` | Fetch evon-related logs |
 
-1. Check device class - might be read-only (`SmartCOM.Switch`)
-2. Verify method name exists for that device type
-3. Check API token hasn't expired
-
-### Devices Not Appearing
-
-1. Check `ClassName` matches expected pattern
-2. Verify device has `Name` property set
-3. Check coordinator logs for processing errors
-
-### State Not Updating
-
-1. Verify polling interval in options
-2. Check coordinator is running (`_LOGGER.debug` in `_async_update_data`)
-3. Confirm API responses contain expected data
-
-## MCP Server Tools
-
-| Tool | Description |
-|------|-------------|
-| `list_lights` | List all lights with state |
-| `light_control` | Control single light |
-| `light_control_all` | Control all lights |
-| `list_blinds` | List all blinds with state |
-| `blind_control` | Control single blind |
-| `blind_control_all` | Control all blinds |
-| `list_climate` | List climate devices |
-| `climate_control` | Control single climate (comfort/eco/away/set_temperature) |
-| `climate_control_all` | Control all climate (comfort/eco/away) |
-| `list_home_states` | List home states with active status |
-| `set_home_state` | Set active home state (at_home/holiday/night/work) |
-| `list_bathroom_radiators` | List all bathroom radiators with state |
-| `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
-| `list_sensors` | List temperature sensors |
-| `list_scenes` | List available scenes |
-| `activate_scene` | Activate a scene |
-| `create_scene` | Create custom scene |
-
-## Resources (MCP)
-
-| URI | Description |
-|-----|-------------|
-| `evon://lights` | All lights with state |
-| `evon://blinds` | All blinds with state |
-| `evon://climate` | All climate devices with season mode |
-| `evon://home_state` | Current home state and available states |
-| `evon://bathroom_radiators` | All bathroom radiators with state |
-| `evon://summary` | Home summary (counts, avg temp, home state) |
+---
 
 ## Version Compatibility
 
-- Home Assistant: 2023.1+ (uses modern async patterns)
+- Home Assistant: 2024.1.0+
 - Python: 3.11+
 - Node.js (MCP): 18+
+
+---
 
 ## Contributing
 
 1. Fork the repository
 2. Create feature branch
 3. Follow existing code patterns
-4. Test on actual Evon hardware if possible
-5. Update documentation for API changes
-6. Submit pull request
+4. Run linting before committing
+5. Test on actual Evon hardware if possible
+6. Update documentation for API changes
+7. Submit pull request
 
 ## License
 

@@ -1,12 +1,12 @@
 # Evon Smart Home Integration
 
-<img src="icon.png" alt="Evon Smart Home" width="128" align="right">
+<img src="custom_components/evon/icon.png" alt="Evon Smart Home" width="128" align="right">
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Home Assistant custom integration and MCP server for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
+Home Assistant custom integration for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 
@@ -14,446 +14,155 @@ Home Assistant custom integration and MCP server for [Evon Smart Home](https://w
 
 | Device Type | Features |
 |-------------|----------|
-| **Lights** | On/off, brightness (0-100%) |
-| **Blinds/Covers** | Open/close/stop, position (0-100%), tilt angle (0-100%) |
-| **Climate** | Temperature control, preset modes (comfort, eco, away), heating/cooling status |
-| **Season Mode** | Global heating/cooling switch (winter/summer mode) |
-| **Home State** | Select between home modes (At Home, Holiday, Night, Work) |
-| **Smart Meter** | Power consumption, total energy, daily energy, voltage per phase |
+| **Lights** | On/off, brightness control |
+| **Blinds/Covers** | Open/close/stop, position, tilt angle |
+| **Climate** | Temperature, presets (comfort, eco, away), heating/cooling status |
+| **Season Mode** | Global heating/cooling switch for the whole house |
+| **Home State** | Switch between home modes (At Home, Night, Work, Holiday) |
+| **Smart Meter** | Power consumption, energy usage, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
-| **Sensors** | Temperature sensors from climate devices |
-| **Switches** | Controllable relay outputs (on/off) |
-| **Bathroom Radiators** | Electric heater on/off control with timer |
+| **Temperature Sensors** | Room temperature readings |
+| **Switches** | Controllable relay outputs |
+| **Bathroom Radiators** | Electric heater control with timer |
 
 ## Known Limitations
 
-### Physical Buttons (SmartCOM.Switch)
+### Physical Buttons
 
-Physical wall buttons/switches **cannot be monitored** by Home Assistant due to Evon API limitations:
-
-- They only track **momentary state** (`IsOn` is `true` only while physically pressed)
-- No event log or click history is stored
-- No WebSocket/push notification support in Evon API
-- With polling, button presses (which last milliseconds) are missed
-
-**The buttons still work normally within Evon** - they directly trigger their assigned lights/blinds at the hardware level. They just can't be observed by external systems like Home Assistant.
+Physical wall buttons cannot be monitored by Home Assistant due to Evon API limitations. They only report momentary state (pressed/not pressed) with no event history. The buttons still work normally within the Evon system - they just can't trigger Home Assistant automations.
 
 ### Controllable Switches
 
-The integration supports **controllable switches** (`SmartCOM.Light.Light`) which are relay outputs that can be turned on/off. However, if your Evon system doesn't have these devices configured, the switch platform will be empty.
+The integration supports controllable relay outputs (`SmartCOM.Light.Light`). If your Evon system doesn't have these configured, the switch platform will be empty.
 
 ---
 
-## Home Assistant Integration
+## Installation
 
-### Installation via HACS (Recommended)
+### Via HACS (Recommended)
 
-1. Make sure [HACS](https://hacs.xyz/) is installed in your Home Assistant
+1. Make sure [HACS](https://hacs.xyz/) is installed
 2. Click the button below to add the repository:
 
    [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 
-   Or manually add the repository:
-   - Go to **HACS** → **Integrations** → **⋮** (menu) → **Custom repositories**
-   - Add URL: `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`
-   - Category: **Integration**
-3. Click **Download**
-4. Restart Home Assistant
-5. Click the button below to add the integration:
+   Or manually: **HACS** → **Integrations** → **⋮** → **Custom repositories** → Add `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration` as **Integration**
+
+3. Click **Download** and restart Home Assistant
+4. Add the integration:
 
    [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=evon)
 
-   Or manually add:
-   - Go to **Settings** → **Devices & Services** → **Add Integration**
-   - Search for "Evon Smart Home"
-6. Enter your connection details:
-   - **Host URL**: Your Evon system URL (e.g., `http://192.168.x.x`)
-   - **Username**: Your Evon username
-   - **Password**: Your Evon password (plain text)
+   Or: **Settings** → **Devices & Services** → **Add Integration** → Search "Evon Smart Home"
+
+5. Enter your Evon system URL (e.g., `http://192.168.x.x`), username, and password
 
 ### Manual Installation
 
-1. Copy the `custom_components/evon` folder to your Home Assistant's `custom_components` directory:
-   ```bash
-   cp -r custom_components/evon /config/custom_components/
-   ```
+1. Copy `custom_components/evon` to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
-3. Follow steps 5-6 above
+3. Add the integration via Settings → Devices & Services
 
-### Configuration Options
+---
 
-After installation, you can configure the integration via **Settings** → **Devices & Services** → **Evon Smart Home** → **Configure**:
+## Configuration
 
-- **Poll interval**: How often to fetch device states (5-300 seconds, default: 30)
-- **Sync areas from Evon**: Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system (default: off)
-- **Non-dimmable lights**: Select lights that should be treated as on/off only (no dimming slider). Useful for LED strips connected via PWM dimmers that need full power to operate their controllers.
+### Options
 
-To change your connection credentials, use the **Reconfigure** option from the integration menu.
+After installation, configure via **Settings** → **Devices & Services** → **Evon Smart Home** → **Configure**:
+
+| Option | Description |
+|--------|-------------|
+| **Poll interval** | How often to fetch device states (5-300 seconds, default: 30) |
+| **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
+| **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
+
+To change connection credentials, use **Reconfigure** from the integration menu.
 
 ### Repairs
 
 The integration creates repair issues in **Settings** → **System** → **Repairs** for:
 
-- **Connection failed**: Alerts after 3 consecutive API failures. Auto-clears when connection restores.
-- **Stale entities cleaned**: Informational notice when orphaned entities are removed (dismissible).
-- **Config migration failed**: Error if configuration was created with a newer incompatible version.
+| Issue | Description |
+|-------|-------------|
+| **Connection failed** | Alerts after 3 consecutive API failures. Auto-clears when connection restores. |
+| **Stale entities cleaned** | Notice when orphaned entities are removed (dismissible). |
+| **Config migration failed** | Error if configuration was created with a newer incompatible version. |
 
 ### Translations
 
-The integration supports the following languages:
+Supported languages:
 - English (default)
 - German (Deutsch) - for DACH region customers
 
-### Supported Platforms
+---
 
-#### Light
+## Supported Platforms
+
+### Lights
+
 - Turn on/off
 - Brightness control (0-100%)
-- Attributes: `brightness_pct`, `evon_id`
+- Non-dimmable lights can be configured to show as simple on/off switches
 
-#### Cover (Blinds)
-- Open/close/stop
+### Covers (Blinds)
+
+- Open, close, stop
 - Position control (0-100%)
 - Tilt angle control (0-100%)
-- Attributes: `evon_position`, `tilt_angle`, `evon_id`
 
-**Note**: In Evon, position 0 = open and 100 = closed. Home Assistant uses the opposite convention, so the integration automatically converts between them.
+### Climate
 
-#### Climate
-- Temperature control
+- Temperature control with min/max limits
 - HVAC modes: Heat, Cool (if supported), Off
-- HVAC action: Shows current activity (Heating, Cooling, Idle)
-- Preset modes:
-  - `comfort` - Normal comfortable temperature
-  - `eco` - Energy saving temperature (slightly less comfortable)
-  - `away` - Protection mode
-- Attributes: `comfort_temperature`, `eco_temperature`, `protection_temperature`, `season_mode`, `cooling_enabled`, `evon_mode_saved`, `evon_id`
+- Current activity display: Heating, Cooling, or Idle
+- Presets:
+  - **Comfort** - Normal comfortable temperature
+  - **Eco** - Energy saving mode
+  - **Away** - Protection mode (freeze protection in winter, heat protection in summer)
 
-**About presets and Season Mode:**
-Preset temperature values differ based on Season Mode. The `away` preset provides protection appropriate to the season:
-- **Heating (winter)**: `away` = 18°C freeze protection (prevents pipes from freezing)
-- **Cooling (summer)**: `away` = 29°C heat protection (prevents overheating)
+### Season Mode
 
-The `comfort` and `eco` presets also adjust their targets based on season (e.g., comfort is 24°C in winter, 25.5°C in summer).
+Global switch that controls whether the house is in heating (winter) or cooling (summer) mode. Changing this affects all climate devices simultaneously.
 
-#### Sensor
+Options:
+- **Heating (Winter)** - House in heating mode
+- **Cooling (Summer)** - House in cooling mode
+
+### Home State
+
+Switch between home-wide modes defined in your Evon system:
+
+- **At Home** - Normal home operation
+- **Night** - Night mode
+- **Work** - Away at work
+- **Holiday** - Vacation mode
+
+These states can trigger automations configured in the Evon system.
+
+### Sensors
+
 - Temperature sensors from climate devices
-- Attributes: `target_temperature`, `evon_id`
+- Smart meter: Power (W), Energy (kWh), Daily energy, Voltage per phase
+- Air quality: CO2 (ppm), Humidity (%)
 
-#### Smart Meter (Energy)
-- Power consumption (W)
-- Total energy consumption (kWh)
-- Daily energy consumption (kWh)
-- Voltage per phase (L1, L2, L3)
-- Attributes: `feed_in`, `frequency`, `evon_id`
+### Binary Sensors
 
-#### Air Quality
-- CO2 levels (ppm) - if sensor available
-- Humidity (%) - if sensor available
-- Attributes: `health_index`, `co2_index`, `humidity_index`, `evon_id`
+- Climate valve state (open/closed)
 
-#### Binary Sensor (Valves)
-- Climate valve open/closed state
-- Attributes: `valve_type`, `evon_id`
+### Switches
 
-#### Select
-
-**Season Mode** - Global heating/cooling switch for the entire house:
-- `Heating (Winter)` - House in heating mode
-- `Cooling (Summer)` - House in cooling mode
-- Attributes: `is_cooling`, `description`
-
-**Note**: Season Mode affects ALL climate devices simultaneously. When you switch season mode, the preset values also change (e.g., ModeSaved 4 in heating becomes 7 in cooling for comfort mode).
-
-**Home State** - Switch between home modes defined in Evon:
-- `At Home` (Daheim) - Normal home operation
-- `Holiday` (Urlaub) - Vacation mode
-- `Night` (Nacht) - Night mode
-- `Work` (Arbeit) - Away at work mode
-- Attributes: `evon_id`
-
-**Note**: Home states can trigger automations in the Evon system. Changing the state affects how other devices behave according to your Evon configuration.
-
-#### Switch
-Two types of switches are supported:
-
-**Controllable Relays** (`SmartCOM.Light.Light`)
-- Simple on/off relay outputs
-- Attributes: `evon_id`
-
-**Bathroom Radiators** (`Heating.BathroomRadiator`)
-- Electric bathroom heaters with timer functionality
-- Turn on/off control (toggle)
-- When turned on, runs for configured duration (default: 30 minutes)
-- Attributes: `time_remaining`, `time_remaining_mins`, `duration_mins`, `evon_id`
+- Controllable relay outputs (on/off)
+- Bathroom radiators with timer (turns off automatically after configured duration)
 
 ---
 
-## MCP Server (for AI Assistants)
+## MCP Server
 
-The MCP server allows AI assistants like Claude to control your Evon Smart Home devices directly.
+An MCP (Model Context Protocol) server is included for AI assistant integration (e.g., Claude). This allows AI assistants to control your Evon devices directly.
 
-### Installation
-
-```bash
-git clone https://github.com/milanorszagh/evon-smart-home-homeassistant-integration.git
-cd evon-ha
-npm install
-npm run build
-```
-
-### Configuration
-
-Add to your Claude Code configuration (`~/.claude.json`):
-
-```json
-{
-  "mcpServers": {
-    "evon": {
-      "command": "node",
-      "args": ["/path/to/evon-ha/dist/index.js"],
-      "env": {
-        "EVON_HOST": "http://192.168.x.x",
-        "EVON_USERNAME": "your-username",
-        "EVON_PASSWORD": "your-password"
-      }
-    }
-  }
-}
-```
-
-**Note**: You can use either your plain text password or the encoded `x-elocs-password`. The server automatically detects and handles both formats.
-
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `list_lights` | List all lights with current state |
-| `light_control` | Control a single light (on/off/brightness) |
-| `light_control_all` | Control all lights at once |
-| `list_blinds` | List all blinds with current state |
-| `blind_control` | Control a single blind (position/angle/up/down/stop) |
-| `blind_control_all` | Control all blinds at once |
-| `list_climate` | List all climate controls with current state |
-| `climate_control` | Control a single climate zone (comfort/eco/away/set_temperature) |
-| `climate_control_all` | Control all climate zones at once (comfort/eco/away) |
-| `list_home_states` | List all home states with current active state |
-| `set_home_state` | Set the active home state (at_home/holiday/night/work) |
-| `list_sensors` | List temperature and other sensors |
-| `list_bathroom_radiators` | List all bathroom radiators with current state |
-| `bathroom_radiator_control` | Control a bathroom radiator (on/off/toggle) |
-| `list_scenes` | List available scenes |
-| `activate_scene` | Activate a scene (all_off, movie_mode, morning, night) |
-| `create_scene` | Create a custom scene |
-
-### Available Resources
-
-Resources allow Claude to read device state without calling tools:
-
-| Resource URI | Description |
-|--------------|-------------|
-| `evon://lights` | All lights with current state |
-| `evon://blinds` | All blinds with current state |
-| `evon://climate` | All climate controls with current state |
-| `evon://home_state` | Current home state and available states |
-| `evon://bathroom_radiators` | All bathroom radiators with current state |
-| `evon://summary` | Home summary (device counts, average temp, home state) |
-
-### Pre-defined Scenes
-
-| Scene | Description |
-|-------|-------------|
-| `all_off` | Turn off all lights and close all blinds |
-| `movie_mode` | Dim lights to 10% and close blinds |
-| `morning` | Open blinds, set lights to 70%, comfort mode |
-| `night` | Turn off lights, set climate to eco mode |
-
----
-
-## Evon API Reference
-
-### Authentication
-
-```
-POST /login
-Headers:
-  x-elocs-username: <username>
-  x-elocs-password: <encoded-password>
-
-Response Headers:
-  x-elocs-token: <token>
-```
-
-#### Password Encoding
-
-The `x-elocs-password` is NOT the plain text password. It's encoded as:
-
-```
-x-elocs-password = Base64(SHA512(username + password))
-```
-
-**Example (Python):**
-```python
-import hashlib, base64
-encoded = base64.b64encode(
-    hashlib.sha512((username + password).encode()).digest()
-).decode()
-```
-
-**Example (JavaScript/Node.js):**
-```javascript
-import { createHash } from "crypto";
-const encoded = createHash("sha512")
-    .update(username + password, "utf8")
-    .digest("base64");
-```
-
-Both the MCP server and Home Assistant integration handle this encoding automatically - just provide your plain text password.
-
-### API Endpoints
-
-All API requests require the token in a cookie:
-```
-Cookie: token=<token>
-```
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/instances` | GET | List all device instances |
-| `/api/instances/{id}` | GET | Get device details |
-| `/api/instances/{id}/{method}` | POST | Call a method on a device |
-
-### Device Classes
-
-| Class Name | Type | Controllable |
-|------------|------|--------------|
-| `SmartCOM.Light.LightDim` | Dimmable light | Yes |
-| `SmartCOM.Light.Light` | Non-dimmable light/relay | Yes |
-| `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
-| `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
-| `*ClimateControlUniversal*` | Universal climate control | Yes |
-| `Heating.BathroomRadiator` | Bathroom radiator | Yes |
-| `System.HomeState` | Home mode selector | Yes |
-| `SmartCOM.Switch` | Physical input button | **No** (read-only, momentary state) |
-| `Energy.SmartMeter*` | Smart meter | No (sensor only) |
-| `System.Location.AirQuality` | Air quality sensor | No (sensor only) |
-| `SmartCOM.Clima.Valve` | Climate valve | No (sensor only) |
-
-### Light Methods
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `AmznTurnOn` | - | Turn light on |
-| `AmznTurnOff` | - | Turn light off |
-| `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness |
-
-**Important**: Use `ScaledBrightness` property to read actual brightness, not `Brightness` (internal value).
-
-### Blind Methods
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `Open` | - | Open blind (move up) |
-| `Close` | - | Close blind (move down) |
-| `Stop` | - | Stop movement |
-| `AmznSetPercentage` | `[position]` (0-100) | Set position (0=open, 100=closed) |
-| `SetAngle` | `[angle]` (0-100) | Set tilt angle |
-
-**Note**: `MoveUp` and `MoveDown` methods do NOT exist - use `Open` and `Close` instead.
-
-### Climate Methods
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `WriteDayMode` | - | Set comfort/day mode |
-| `WriteNightMode` | - | Set energy saving/night mode |
-| `WriteFreezeMode` | - | Set freeze protection mode |
-| `WriteCurrentSetTemperature` | `[temperature]` | Set target temperature |
-
-### Climate Properties
-
-| Property | Description |
-|----------|-------------|
-| `ActualTemperature` | Current room temperature |
-| `SetTemperature` | Target temperature |
-| `SetValueComfortHeating` | Comfort mode temperature |
-| `SetValueEnergySavingHeating` | Energy saving mode temperature |
-| `SetValueFreezeProtection` | Freeze protection temperature |
-| `MinSetValueHeat` | Minimum allowed temperature |
-| `MaxSetValueHeat` | Maximum allowed temperature |
-| `ModeSaved` | Current preset mode (values depend on season - see below) |
-| `CoolingMode` | Whether currently in cooling mode (reflects global Season Mode) |
-| `DisableCooling` | Whether cooling is disabled for this device |
-| `IsOn` | Whether the climate control is actively running |
-
-**ModeSaved Values by Season Mode:**
-| Preset | Heating Mode | Cooling Mode |
-|--------|--------------|--------------|
-| away (protection) | 2 | 5 |
-| eco (energy saving) | 3 | 6 |
-| comfort | 4 | 7 |
-
-**Note**: Season Mode (heating/cooling) is controlled globally via `Base.ehThermostat.IsCool`. When changed, ALL climate devices switch simultaneously and their `ModeSaved` values shift accordingly.
-
-### Bathroom Radiator Methods
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `Switch` | - | Toggle radiator on/off |
-
-### Bathroom Radiator Properties
-
-| Property | Description |
-|----------|-------------|
-| `Output` | Current on/off state |
-| `NextSwitchPoint` | Minutes remaining until auto-off |
-| `EnableForMins` | Configured run duration in minutes |
-| `PermanentlyOn` | Whether permanently enabled |
-| `PermanentlyOff` | Whether permanently disabled |
-
-### Physical Button Properties (SmartCOM.Switch)
-
-| Property | Description |
-|----------|-------------|
-| `IsOn` | `true` only while button is physically pressed (momentary) |
-| `ActValue` | Same as IsOn |
-| `CanBeSimulated` | Whether simulation mode is available |
-| `IsSimulation` | Whether currently in simulation mode |
-
-**Limitation**: There is no `LastClickType` or event history. The API only provides momentary state.
-
-### Season Mode (Global Heating/Cooling)
-
-Season Mode controls whether the entire house is in heating (winter) or cooling (summer) mode.
-
-**Reading current state:**
-```
-GET /api/instances/Base.ehThermostat
-→ IsCool: false = heating, true = cooling
-```
-
-**Setting season mode:**
-```
-PUT /api/instances/Base.ehThermostat/IsCool
-Content-Type: application/json
-Body: {"value": false}  // HEATING (winter)
-Body: {"value": true}   // COOLING (summer)
-```
-
-### Home State Methods
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `Activate` | - | Activate this home state |
-
-### Home State Properties
-
-| Property | Description |
-|----------|-------------|
-| `Active` | `true` if this state is currently active |
-| `ActiveInstance` | ID of the currently active home state |
-| `Name` | Display name of the state |
+See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 ---
 
@@ -461,44 +170,28 @@ Body: {"value": true}   // COOLING (summer)
 
 | Version | Changes |
 |---------|---------|
-| **1.10.0** | Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failures, stale entities, config migration), improved home state translations using HA's translation system, hub device for proper device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. |
-| **1.9.0** | Added Season Mode select entity for global heating/cooling control. Climate presets now correctly reflect season-specific values. Added `hvac_action` to show current climate activity (heating/cooling/idle). |
-| **1.8.2** | Fixed blind cover optimistic state for group actions |
-| **1.8.1** | Added optimistic updates for all entities and improved preset icons |
-| **1.8.0** | Added optimistic updates for all controllable entities, improved climate preset icons |
-| **1.7.4** | Added optimistic updates for climate target temperature |
-| **1.7.3** | Added optimistic updates for climate preset mode |
-| **1.7.2** | Fixed climate preset detection for Thermostat devices |
-| **1.7.1** | Fixed climate preset mode detection (uses ModeSaved property), added cooling/heating mode display |
-| **1.7.0** | Added bathroom radiator (electric heater) support with timer functionality |
-| **1.6.0** | Added automatic cleanup of stale/orphaned entities on integration reload |
-| **1.5.2** | Fixed reconfigure flow 500 error with modern HA config flow patterns |
-| **1.5.0** | Added Home State selector (select entity) for switching between home modes |
-| **1.4.1** | Removed button event entities (not functional due to API limitations) |
-| **1.4.0** | Added event entities for physical buttons (later removed in 1.4.1) |
-| **1.3.3** | Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown` |
-| **1.3.2** | Added logbook integration for switch click events |
-| **1.3.1** | Best practices: Entity categories, availability detection, HomeAssistantError, EntityDescription |
-| **1.3.0** | Added smart meter, air quality, valve sensors. Added device triggers. Added diagnostics. |
-| **1.2.1** | Added German translations |
-| **1.2.0** | Added optional area sync feature |
-| **1.1.5** | Fixed AbortFlow exception handling |
-| **1.1.4** | Improved error handling in API client |
-| **1.1.3** | Fixed config flow errors, added host URL normalization |
-| **1.1.2** | Fixed switch detection |
-| **1.1.1** | Documentation and branding updates |
-| **1.1.0** | Added sensors, switches, options flow, reconfigure flow, MCP resources and scenes |
-| **1.0.0** | Initial release with lights, blinds, and climate support |
+| **1.10.0** | Non-dimmable lights option, Repairs integration, improved translations, hub device hierarchy, HA 2025.12.0 compatibility |
+| **1.9.0** | Season Mode for global heating/cooling, climate activity display (heating/cooling/idle) |
+| **1.8.2** | Fixed blind optimistic state for group actions |
+| **1.8.0** | Optimistic updates for all entities, improved preset icons |
+| **1.7.0** | Bathroom radiator support with timer |
+| **1.6.0** | Automatic stale entity cleanup |
+| **1.5.0** | Home State selector |
+| **1.4.1** | Removed non-functional button entities |
+| **1.3.0** | Smart meter, air quality, valve sensors, diagnostics |
+| **1.2.0** | Area sync feature, German translations |
+| **1.1.0** | Sensors, switches, options flow, reconfigure flow |
+| **1.0.0** | Initial release |
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please see [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details and development guidelines.
+Contributions are welcome! See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details, API reference, and development guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file.
 
 ## Disclaimer
 
