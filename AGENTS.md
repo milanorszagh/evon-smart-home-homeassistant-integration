@@ -446,7 +446,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 | Cover | `position`, `tilt_position`, `is_moving` |
 | Climate | `preset_mode`, `target_temperature`, `hvac_mode` |
 | Switch | `is_on` |
-| Bathroom Radiator | `is_on` |
+| Bathroom Radiator | `is_on`, `time_remaining_mins` |
 | Home State Select | `current_option` |
 | Season Mode Select | `current_option` |
 
@@ -698,6 +698,7 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+- **v1.10.1**: Added optimistic time display for bathroom radiators. When turning on, the `time_remaining_mins` attribute is immediately set to the full duration for instant progress bar feedback in dashboards.
 - **v1.10.0**: Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failure alerts after 3 failures, stale entity notifications, config migration warnings), improved home state translations using HA's translation system (proper German/English), hub device for device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. Config entry version bumped to 2 with migration support. Added 9 new tests (29 total).
 - **v1.9.0**: Added Season Mode select entity for global heating/cooling control via `Base.ehThermostat.IsCool`. Climate presets now correctly map to season-specific `ModeSaved` values (2-4 for heating, 5-7 for cooling). Added `hvac_action` property to climate entities showing current activity (heating/cooling/idle).
 - **v1.8.2**: Fixed blind cover optimistic state for group actions. Added `is_moving` optimistic tracking so group open/close buttons work correctly when clicking twice to stop.
