@@ -150,6 +150,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._attr_unique_id = f"evon_radiator_{instance_id}"
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_is_on: bool | None = None
+        # Optimistic time remaining for immediate UI feedback when turning on
+        self._optimistic_time_remaining_mins: float | None = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -174,17 +176,28 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         attrs = {"evon_id": self._instance_id}
         if data:
-            time_remaining = data.get("time_remaining", -1)
-            if time_remaining > 0:
-                # Convert to minutes:seconds format
+            duration_mins = data.get("duration_mins", 30)
+            attrs["duration_mins"] = duration_mins
+
+            # Use optimistic time if set (for immediate UI feedback when turning on)
+            if self._optimistic_time_remaining_mins is not None:
+                time_remaining = self._optimistic_time_remaining_mins
                 mins = int(time_remaining)
                 secs = int((time_remaining - mins) * 60)
                 attrs["time_remaining"] = f"{mins}:{secs:02d}"
                 attrs["time_remaining_mins"] = round(time_remaining, 1)
             else:
-                attrs["time_remaining"] = None
-                attrs["time_remaining_mins"] = None
-            attrs["duration_mins"] = data.get("duration_mins", 30)
+                time_remaining = data.get("time_remaining", -1)
+                if time_remaining > 0:
+                    # Convert to minutes:seconds format
+                    mins = int(time_remaining)
+                    secs = int((time_remaining - mins) * 60)
+                    attrs["time_remaining"] = f"{mins}:{secs:02d}"
+                    attrs["time_remaining_mins"] = round(time_remaining, 1)
+                else:
+                    attrs["time_remaining"] = None
+                    attrs["time_remaining_mins"] = None
+
             attrs["permanently_on"] = data.get("permanently_on", False)
             attrs["permanently_off"] = data.get("permanently_off", False)
         return attrs
@@ -195,6 +208,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data and not data.get("is_on", False):
             self._optimistic_is_on = True
+            # Set optimistic time to full duration for immediate progress bar display
+            self._optimistic_time_remaining_mins = float(data.get("duration_mins", 30))
             self.async_write_ha_state()
 
             await self._api.toggle_bathroom_radiator(self._instance_id)
@@ -206,6 +221,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data and data.get("is_on", False):
             self._optimistic_is_on = False
+            # Clear optimistic time when turning off
+            self._optimistic_time_remaining_mins = None
             self.async_write_ha_state()
 
             await self._api.toggle_bathroom_radiator(self._instance_id)
@@ -220,4 +237,6 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:
                     self._optimistic_is_on = None
+                    # Clear optimistic time once real data is available
+                    self._optimistic_time_remaining_mins = None
         super()._handle_coordinator_update()
