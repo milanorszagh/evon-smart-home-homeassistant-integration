@@ -54,12 +54,13 @@ async def test_smart_meter_energy_sensor(hass, mock_config_entry_v2, mock_evon_a
 
 @pytest.mark.asyncio
 async def test_smart_meter_daily_energy_sensor(hass, mock_config_entry_v2, mock_evon_api_class):
-    """Test smart meter daily energy sensor."""
+    """Test smart meter rolling 24h energy sensor."""
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
     await hass.async_block_till_done()
 
-    state = hass.states.get("sensor.smart_meter_energy_today")
+    # Note: Entity ID derived from name "Energy (24h Rolling)"
+    state = hass.states.get("sensor.smart_meter_energy_24h_rolling")
     assert state is not None
     assert float(state.state) == 45.5
     assert state.attributes.get("unit_of_measurement") == "kWh"

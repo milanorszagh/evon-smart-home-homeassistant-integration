@@ -145,8 +145,10 @@ These states trigger automations in the Evon system and can be used in Home Assi
 ### Sensors
 
 - Temperature sensors from climate devices
-- Smart meter: Power (W), Energy (kWh), Daily energy, Voltage per phase
+- Smart meter: Power (W), Energy Total (kWh), Energy 24h Rolling, Voltage per phase
 - Air quality: CO2 (ppm), Humidity (%)
+
+**Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from Evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
 
 ### Binary Sensors
 
