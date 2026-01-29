@@ -173,6 +173,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 | Version | Changes |
 |---------|---------|
+| **1.10.2** | Data caching to prevent entity unavailability during transient API failures |
 | **1.10.1** | Optimistic time display for bathroom radiators, fixed Energy sensor for HA Energy Dashboard |
 | **1.10.0** | Non-dimmable lights option, Repairs integration, improved translations, hub device hierarchy, HA 2025.12.0 compatibility |
 | **1.9.0** | Season Mode for global heating/cooling, climate activity display (heating/cooling/idle) |
