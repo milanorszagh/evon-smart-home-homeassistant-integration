@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -15,8 +14,6 @@ from .api import EvonApi
 from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -97,11 +94,6 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             return data.get("is_on", False)
         return False
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        return {"evon_id": self._instance_id}
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
         self._optimistic_is_on = True
@@ -173,8 +165,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
-        attrs = {"evon_id": self._instance_id}
         if data:
             duration_mins = data.get("duration_mins", 30)
             attrs["duration_mins"] = duration_mins

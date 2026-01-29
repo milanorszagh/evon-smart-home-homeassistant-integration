@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -28,8 +27,6 @@ from .const import (
     EVON_PRESET_HEATING,
 )
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 # Preset modes list
 PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ENERGY_SAVING, CLIMATE_MODE_FREEZE_PROTECTION]
@@ -204,8 +201,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("climates", self._instance_id)
-        attrs = {}
         if data:
             is_cooling = self.coordinator.get_season_mode()
             attrs["comfort_temperature"] = data.get("comfort_temp")
@@ -214,7 +211,6 @@ class EvonClimate(EvonEntity, ClimateEntity):
             attrs["evon_mode_saved"] = data.get("mode_saved")
             attrs["season_mode"] = "cooling" if is_cooling else "heating"
             attrs["cooling_enabled"] = data.get("cooling_enabled")
-            attrs["evon_id"] = self._instance_id
         return attrs
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

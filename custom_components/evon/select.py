@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -15,8 +14,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api import EvonApi
 from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 # Season mode options
 SEASON_MODE_OPTIONS = [SEASON_MODE_HEATING, SEASON_MODE_COOLING]

@@ -43,7 +43,6 @@ have the same experience.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -62,8 +61,6 @@ from .api import EvonApi
 from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -188,13 +185,12 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
-        attrs = {}
         if data:
             # Evon native position (0=open, 100=closed)
             attrs["evon_position"] = data.get("position", 0)
             attrs["tilt_angle"] = data.get("angle", 0)
-            attrs["evon_id"] = self._instance_id
         return attrs
 
     async def async_open_cover(self, **kwargs: Any) -> None:

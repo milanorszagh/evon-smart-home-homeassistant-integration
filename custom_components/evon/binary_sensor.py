@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
@@ -17,8 +16,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -81,8 +78,8 @@ class EvonValveSensor(EvonEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("valves", self._instance_id)
-        attrs = {"evon_id": self._instance_id}
         if data:
             attrs["valve_type"] = data.get("valve_type")
         return attrs

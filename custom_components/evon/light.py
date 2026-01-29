@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.light import (
@@ -19,8 +18,6 @@ from .api import EvonApi
 from .base_entity import EvonEntity
 from .const import CONF_NON_DIMMABLE_LIGHTS, DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -122,11 +119,10 @@ class EvonLight(EvonEntity, LightEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("lights", self._instance_id)
-        attrs = {}
         if data:
             attrs["brightness_pct"] = data.get("brightness", 0)
-            attrs["evon_id"] = self._instance_id
         return attrs
 
     async def async_turn_on(self, **kwargs: Any) -> None:
