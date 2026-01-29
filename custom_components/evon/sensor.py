@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -18,8 +17,10 @@ from homeassistant.const import (
     CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     EntityCategory,
+    UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,
+    UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
 )
@@ -31,15 +32,12 @@ from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
-_LOGGER = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True, kw_only=True)
 class EvonSensorEntityDescription(SensorEntityDescription):
     """Describes an Evon sensor entity."""
 
     value_fn: Callable[[dict[str, Any]], Any] | None = None
-    extra_attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 
 
 SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
@@ -96,6 +94,50 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("voltage_l3"),
+    ),
+    EvonSensorEntityDescription(
+        key="current_l1",
+        name="Current L1",
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("current_l1"),
+    ),
+    EvonSensorEntityDescription(
+        key="current_l2",
+        name="Current L2",
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("current_l2"),
+    ),
+    EvonSensorEntityDescription(
+        key="current_l3",
+        name="Current L3",
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("current_l3"),
+    ),
+    EvonSensorEntityDescription(
+        key="frequency",
+        name="Frequency",
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("frequency"),
+    ),
+    EvonSensorEntityDescription(
+        key="feed_in_energy",
+        name="Feed-in Energy Total",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        value_fn=lambda data: data.get("feed_in_energy"),
     ),
 )
 
@@ -213,8 +255,8 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("climates", self._instance_id)
-        attrs = {"evon_id": self._instance_id}
         if data:
             attrs["target_temperature"] = data.get("target_temperature")
         return attrs
@@ -252,19 +294,6 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
             return self.entity_description.value_fn(data)
         return None
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        attrs = {"evon_id": self._instance_id}
-        # Add feed_in and frequency for power sensor
-        if self.entity_description.key == "power":
-            data = self.coordinator.get_entity_data("smart_meters", self._instance_id)
-            if data:
-                attrs["feed_in"] = data.get("feed_in")
-                attrs["frequency"] = data.get("frequency")
-        return attrs
-
-
 class EvonAirQualitySensor(EvonEntity, SensorEntity):
     """Representation of an Evon air quality sensor."""
 
@@ -300,8 +329,8 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("air_quality", self._instance_id)
-        attrs = {"evon_id": self._instance_id}
         if data:
             if self.entity_description.key == "co2":
                 attrs["health_index"] = data.get("health_index")

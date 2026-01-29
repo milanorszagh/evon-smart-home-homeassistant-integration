@@ -23,6 +23,7 @@ from .const import (
     EVON_CLASS_HOME_STATE,
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_DIM,
+    EVON_CLASS_SCENE,
     EVON_CLASS_SMART_METER,
     EVON_CLASS_VALVE,
     REPAIR_CONNECTION_FAILED,
@@ -88,6 +89,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             valves = await self._process_valves(instances)
             home_states = await self._process_home_states(instances)
             bathroom_radiators = await self._process_bathroom_radiators(instances)
+            scenes = await self._process_scenes(instances)
 
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
@@ -106,6 +108,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "valves": valves,
                 "home_states": home_states,
                 "bathroom_radiators": bathroom_radiators,
+                "scenes": scenes,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -473,12 +476,31 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Failed to get details for bathroom radiator %s", instance_id)
         return radiators
 
+    async def _process_scenes(self, instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Process scene instances."""
+        scenes = []
+        for instance in instances:
+            if instance.get("ClassName") != EVON_CLASS_SCENE:
+                continue
+            if not instance.get("Name"):
+                continue
+
+            instance_id = instance.get("ID", "")
+            # Scenes don't need detailed state - just id and name
+            scenes.append(
+                {
+                    "id": instance_id,
+                    "name": instance.get("Name"),
+                }
+            )
+        return scenes
+
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity.
 
         Args:
             entity_type: The type of entity (lights, blinds, climates, switches,
-                        smart_meters, air_quality, valves, home_states)
+                        smart_meters, air_quality, valves, home_states, scenes)
             instance_id: The instance ID to look up
 
         Returns:
@@ -550,3 +572,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data:
             return self.data.get("season_mode", False)
         return False
+
+    def get_scene_data(self, instance_id: str) -> dict[str, Any] | None:
+        """Get data for a specific scene."""
+        return self.get_entity_data("scenes", instance_id)
+
+    def get_scenes(self) -> list[dict[str, Any]]:
+        """Get all scenes."""
+        if self.data and "scenes" in self.data:
+            return self.data["scenes"]
+        return []
