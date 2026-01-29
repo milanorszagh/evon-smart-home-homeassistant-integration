@@ -43,12 +43,12 @@ EVON_CLASS_BLIND = "SmartCOM.Blind.Blind"
 EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "ClimateControlUniversal"
 EVON_CLASS_SWITCH = "SmartCOM.Switch"
-EVON_CLASS_ROOM = "System.Location.Room"
 EVON_CLASS_SMART_METER = "Energy.SmartMeter"
 EVON_CLASS_AIR_QUALITY = "System.Location.AirQuality"
 EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
 EVON_CLASS_HOME_STATE = "System.HomeState"
 EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
+EVON_CLASS_SCENE = "System.SceneApp"
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"
