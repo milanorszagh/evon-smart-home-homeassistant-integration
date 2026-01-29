@@ -415,6 +415,7 @@ When filtering devices from the API, use these class names:
 | Climate (universal) | Contains `ClimateControlUniversal` | Yes |
 | Bathroom Radiator | `Heating.BathroomRadiator` | Yes (use `Switch` method to toggle) |
 | Home State | `System.HomeState` | Yes (use `Activate` method) |
+| Scene | `System.SceneApp` | Yes (use `Execute` method) |
 | Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
 
@@ -430,6 +431,7 @@ Evon smart meters expose two energy values:
 **CRITICAL**: The `Energy24h` property is a **rolling 24-hour window**, not a daily reset. It can **decrease** during the day as high-consumption hours from yesterday roll off. Using this in HA's Energy Dashboard will produce **negative values**.
 
 Always configure HA's Energy Dashboard to use `sensor.*_energy_total` instead.
+
 | Air Quality | `System.Location.AirQuality` | No (sensor only) |
 | Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
 | Room/Area | `System.Location.Room` | No (used for area sync) |
@@ -711,6 +713,7 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+- **v1.11.0**: Added scene support - Evon scenes appear as button entities that can be pressed to execute. Also includes smart meter current sensors (L1/L2/L3), frequency sensor, and feed-in energy sensor from 1.10.3 branch.
 - **v1.10.1**: Added optimistic time display for bathroom radiators. Fixed smart meter "Energy Today" sensor - renamed to "Energy (24h Rolling)" with `state_class: measurement` to prevent incorrect negative values in HA Energy Dashboard. The rolling 24h window from Evon can decrease during the day.
 - **v1.10.0**: Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failure alerts after 3 failures, stale entity notifications, config migration warnings), improved home state translations using HA's translation system (proper German/English), hub device for device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. Config entry version bumped to 2 with migration support. Added 9 new tests (29 total).
 - **v1.9.0**: Added Season Mode select entity for global heating/cooling control via `Base.ehThermostat.IsCool`. Climate presets now correctly map to season-specific `ModeSaved` values (2-4 for heating, 5-7 for cooling). Added `hvac_action` property to climate entities showing current activity (heating/cooling/idle).

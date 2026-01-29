@@ -268,6 +268,45 @@ Body: {"value": true}   // COOLING
 
 **Properties**: `Output` (state), `NextSwitchPoint` (minutes remaining), `EnableForMins` (duration)
 
+### Scene Methods
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `Execute` | - | Execute the scene |
+
+**Properties**: `Name` (string), `CanExecute` (bool)
+
+**Class**: `System.SceneApp`
+
+### Smart Meter Properties
+
+| Property | Unit | Description |
+|----------|------|-------------|
+| `PowerActual` | W | Current power consumption |
+| `Energy` | kWh | Total energy consumption |
+| `Energy24h` | kWh | Rolling 24-hour energy (can decrease) |
+| `UL1N` | V | Voltage phase L1 |
+| `UL2N` | V | Voltage phase L2 |
+| `UL3N` | V | Voltage phase L3 |
+| `IL1` | A | Current phase L1 |
+| `IL2` | A | Current phase L2 |
+| `IL3` | A | Current phase L3 |
+| `Frequency` | Hz | Grid frequency |
+| `FeedIn` | W | Power fed to grid (negative = consuming) |
+| `FeedInEnergy` | kWh | Total energy fed to grid |
+
+**Note**: For HA Energy Dashboard, use `Energy` (total_increasing), not `Energy24h` which is a rolling window.
+
+### Air Quality Properties
+
+| Property | Unit | Description |
+|----------|------|-------------|
+| `CO2Value` | ppm | CO2 concentration |
+| `Humidity` | % | Relative humidity |
+| `HealthIndex` | - | Overall air quality index |
+| `CO2Index` | - | CO2 quality index |
+| `HumidityIndex` | - | Humidity quality index |
+
 ---
 
 ## Known Limitations

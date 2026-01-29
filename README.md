@@ -25,6 +25,7 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Temperature Sensors** | Room temperature readings |
 | **Switches** | Controllable relay outputs |
 | **Bathroom Radiators** | Electric heater control with timer |
+| **Scenes** | Trigger Evon-defined scenes from Home Assistant |
 
 ## Known Limitations
 
@@ -145,7 +146,12 @@ These states trigger automations in the Evon system and can be used in Home Assi
 ### Sensors
 
 - Temperature sensors from climate devices
-- Smart meter: Power (W), Energy Total (kWh), Energy 24h Rolling, Voltage per phase
+- Smart meter:
+  - Power (W), Energy Total (kWh), Energy 24h Rolling
+  - Voltage per phase (V) - L1, L2, L3
+  - Current per phase (A) - L1, L2, L3
+  - Frequency (Hz)
+  - Feed-in Energy Total (kWh) - for solar/grid export tracking
 - Air quality: CO2 (ppm), Humidity (%)
 
 **Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from Evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
@@ -173,6 +179,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 | Version | Changes |
 |---------|---------|
+| **1.11.0** | Scene support (trigger Evon scenes as buttons), smart meter current sensors (L1/L2/L3), frequency sensor, feed-in energy sensor |
 | **1.10.2** | Data caching to prevent entity unavailability during transient API failures |
 | **1.10.1** | Optimistic time display for bathroom radiators, fixed Energy sensor for HA Energy Dashboard |
 | **1.10.0** | Non-dimmable lights option, Repairs integration, improved translations, hub device hierarchy, HA 2025.12.0 compatibility |

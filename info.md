@@ -12,6 +12,7 @@ Control your [Evon Smart Home](https://www.evon-smarthome.com/) system directly 
 - **Sensors**: Temperature, energy, air quality
 - **Switches**: Controllable relay outputs
 - **Bathroom Radiators**: Electric heater control with timer
+- **Scenes**: Trigger Evon-defined scenes from Home Assistant
 
 ## Configuration
 
