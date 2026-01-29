@@ -92,6 +92,59 @@ async def test_smart_meter_voltage_sensors(hass, mock_config_entry_v2, mock_evon
 
 
 @pytest.mark.asyncio
+async def test_smart_meter_current_sensors(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test smart meter current sensors for all phases."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Check current L1
+    state = hass.states.get("sensor.smart_meter_current_l1")
+    assert state is not None
+    assert float(state.state) == 2.5
+    assert state.attributes.get("unit_of_measurement") == "A"
+    assert state.attributes.get("device_class") == "current"
+
+    # Check current L2
+    state = hass.states.get("sensor.smart_meter_current_l2")
+    assert state is not None
+    assert float(state.state) == 1.8
+
+    # Check current L3
+    state = hass.states.get("sensor.smart_meter_current_l3")
+    assert state is not None
+    assert float(state.state) == 2.1
+
+
+@pytest.mark.asyncio
+async def test_smart_meter_frequency_sensor(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test smart meter frequency sensor."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.smart_meter_frequency")
+    assert state is not None
+    assert float(state.state) == 50.0
+    assert state.attributes.get("unit_of_measurement") == "Hz"
+    assert state.attributes.get("device_class") == "frequency"
+
+
+@pytest.mark.asyncio
+async def test_smart_meter_feed_in_energy_sensor(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test smart meter feed-in energy sensor for solar/grid export."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.smart_meter_feed_in_energy_total")
+    assert state is not None
+    assert float(state.state) == 100.5
+    assert state.attributes.get("unit_of_measurement") == "kWh"
+    assert state.attributes.get("device_class") == "energy"
+
+
+@pytest.mark.asyncio
 async def test_air_quality_co2_sensor(hass, mock_config_entry_v2, mock_evon_api_class):
     """Test air quality CO2 sensor."""
     mock_config_entry_v2.add_to_hass(hass)
