@@ -62,10 +62,10 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
     # NOTE: Energy24h from Evon is a ROLLING 24-hour window, not daily reset.
     # It can decrease during the day as old data rolls off.
     # Use Energy Total (total_increasing) for HA Energy Dashboard instead.
+    # No device_class - ENERGY requires total/total_increasing state_class.
     EvonSensorEntityDescription(
         key="energy_24h",
         name="Energy (24h Rolling)",
-        device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         value_fn=lambda data: data.get("energy_24h"),
