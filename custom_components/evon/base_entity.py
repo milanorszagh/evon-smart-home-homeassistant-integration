@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -38,6 +40,11 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
     def available(self) -> bool:
         """Return True if entity is available."""
         return self.coordinator.last_update_success and self.coordinator.data is not None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes with evon_id."""
+        return {"evon_id": self._instance_id}
 
     def _build_device_info(self, model: str) -> DeviceInfo:
         """Build device info dictionary."""

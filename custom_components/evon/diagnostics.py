@@ -33,6 +33,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "smart_meters": len(coordinator.data.get("smart_meters", [])),
             "air_quality": len(coordinator.data.get("air_quality", [])),
             "valves": len(coordinator.data.get("valves", [])),
+            "scenes": len(coordinator.data.get("scenes", [])),
+            "bathroom_radiators": len(coordinator.data.get("bathroom_radiators", [])),
             "rooms": len(coordinator.data.get("rooms", {})),
         }
 
@@ -112,6 +114,25 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 "is_open": valve.get("is_open"),
             }
             for valve in coordinator.data.get("valves", [])
+        ]
+
+        # Scenes summary
+        device_summaries["scenes"] = [
+            {
+                "id": scene["id"],
+                "name": scene["name"],
+            }
+            for scene in coordinator.data.get("scenes", [])
+        ]
+
+        # Bathroom radiators summary
+        device_summaries["bathroom_radiators"] = [
+            {
+                "id": radiator["id"],
+                "name": radiator["name"],
+                "is_on": radiator.get("is_on"),
+            }
+            for radiator in coordinator.data.get("bathroom_radiators", [])
         ]
 
     return {
