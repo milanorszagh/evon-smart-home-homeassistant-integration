@@ -54,6 +54,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._rooms_cache: dict[str, str] = {}
         self._consecutive_failures = 0
         self._repair_created = False
+        self._last_successful_data: dict[str, Any] | None = None
 
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
@@ -95,7 +96,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._repair_created = False
                 _LOGGER.info("Connection restored, cleared connection failure repair")
 
-            return {
+            result = {
                 "lights": lights,
                 "blinds": blinds,
                 "climates": climates,
@@ -108,6 +109,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
+
+            # Cache successful data for use during transient failures
+            self._last_successful_data = result
+            return result
 
         except EvonApiError as err:
             self._consecutive_failures += 1
@@ -139,6 +144,25 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._consecutive_failures,
                 )
 
+            # Return cached data for transient failures to keep entities available
+            # Only raise UpdateFailed after threshold is reached AND no cached data
+            if self._consecutive_failures < CONNECTION_FAILURE_THRESHOLD and self._last_successful_data:
+                _LOGGER.info(
+                    "Returning cached data due to transient API failure (failure %d/%d)",
+                    self._consecutive_failures,
+                    CONNECTION_FAILURE_THRESHOLD,
+                )
+                return self._last_successful_data
+
+            # Even after threshold, prefer cached data over unavailable entities
+            if self._last_successful_data:
+                _LOGGER.warning(
+                    "Returning stale cached data after %d consecutive failures",
+                    self._consecutive_failures,
+                )
+                return self._last_successful_data
+
+            # No cached data available - entities will become unavailable
             raise UpdateFailed(f"Error communicating with Evon API: {err}") from err
 
     async def _fetch_rooms(self) -> None:
