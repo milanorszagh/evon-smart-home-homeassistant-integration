@@ -153,6 +153,8 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.set_season_mode = AsyncMock()
         # Bathroom radiator methods
         mock_api.toggle_bathroom_radiator = AsyncMock()
+        # Scene methods
+        mock_api.execute_scene = AsyncMock()
         return mock_api
 
     @pytest.fixture(autouse=True)
@@ -330,6 +332,12 @@ MOCK_INSTANCES = [
         "Name": "Living Room Valve",
         "Group": "room_living",
     },
+    # Scenes
+    {
+        "ID": "SceneApp1234",
+        "ClassName": "System.SceneApp",
+        "Name": "All Lights Off",
+    },
     # Rooms
     {
         "ID": "room_living",
@@ -398,6 +406,11 @@ MOCK_INSTANCE_DETAILS = {
         "UL1N": 230.1,
         "UL2N": 229.8,
         "UL3N": 230.5,
+        "IL1": 2.5,
+        "IL2": 1.8,
+        "IL3": 2.1,
+        "Frequency": 50.0,
+        "FeedInEnergy": 100.5,
     },
     "air_quality_1": {
         "CO2Value": 650,

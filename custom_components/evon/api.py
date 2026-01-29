@@ -326,6 +326,11 @@ class EvonApi:
                 )
         return radiators
 
+    # Scene methods
+    async def execute_scene(self, instance_id: str) -> None:
+        """Execute an Evon scene."""
+        await self.call_method(instance_id, "Execute")
+
     # Season mode methods (global heating/cooling)
     async def get_season_mode(self) -> bool:
         """Get the current season mode.
