@@ -25,6 +25,7 @@ custom_components/evon/
 ├── switch.py            # Switch platform (relays, bathroom radiators)
 ├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves)
+├── button.py            # Button platform (scenes)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
 └── translations/        # Localization files (en.json, de.json)
@@ -301,11 +302,13 @@ Body: {"value": true}   // COOLING
 
 | Property | Unit | Description |
 |----------|------|-------------|
-| `CO2Value` | ppm | CO2 concentration |
+| `CO2Value` | ppm | CO2 concentration (-999 if no sensor) |
 | `Humidity` | % | Relative humidity |
 | `HealthIndex` | - | Overall air quality index |
 | `CO2Index` | - | CO2 quality index |
 | `HumidityIndex` | - | Humidity quality index |
+
+**Note:** Air quality devices (`System.Location.AirQuality`) may exist without physical sensors connected. A `CO2Value` of `-999` indicates no CO2 sensor is installed. The integration only creates sensors when valid data is available.
 
 ---
 
