@@ -245,7 +245,7 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 - API client: `api.py`
 - Base entity: `base_entity.py`
 - Data coordinator: `coordinator.py`
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py`
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py`, `button.py`
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
@@ -432,7 +432,7 @@ Evon smart meters expose two energy values:
 
 Always configure HA's Energy Dashboard to use `sensor.*_energy_total` instead.
 
-| Air Quality | `System.Location.AirQuality` | No (sensor only) |
+| Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
 | Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
 | Room/Area | `System.Location.Room` | No (used for area sync) |
 
@@ -557,7 +557,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ## Integration Features
 
 ### Home Assistant
-- **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor
+- **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor, Button
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
