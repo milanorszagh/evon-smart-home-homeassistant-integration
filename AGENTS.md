@@ -47,6 +47,57 @@ This repository contains two integrations for Evon Smart Home systems:
 5. **Update version history** - Brief in README.md, detailed in AGENTS.md
 6. **Don't duplicate** - Link to other docs instead of copying content
 
+## Remote Access API - CRITICAL
+
+The Evon API supports both local and remote access. **Remote access has different authentication requirements.**
+
+### Connection Types
+
+| Type | Base URL | Use Case |
+|------|----------|----------|
+| **Local** | `http://{local-ip}` | Direct LAN connection (faster, recommended) |
+| **Remote** | `https://my.evon-smarthome.com` | Internet access via relay server |
+
+### Remote Login - IMPORTANT DIFFERENCES
+
+**Local login:**
+```
+POST http://{local-ip}/login
+Headers:
+  x-elocs-username: <username>
+  x-elocs-password: <encoded-password>
+```
+
+**Remote login:**
+```
+POST https://my.evon-smarthome.com/login   ← Note: /login at ROOT, NOT /{engine-id}/login
+Headers:
+  x-elocs-username: <username>
+  x-elocs-password: <encoded-password>
+  x-elocs-relayid: <engine-id>              ← REQUIRED for remote
+  x-elocs-sessionlogin: true                ← REQUIRED for remote
+  X-Requested-With: XMLHttpRequest          ← REQUIRED for remote
+```
+
+**Critical gotcha:** The remote login URL is `https://my.evon-smarthome.com/login` (at root), NOT `https://my.evon-smarthome.com/{engine-id}/login`. The engine ID goes in the `x-elocs-relayid` header only.
+
+### Remote API Calls
+
+After login, API calls use different base URLs:
+
+| Type | API Base URL |
+|------|--------------|
+| Local | `http://{local-ip}/api/instances/...` |
+| Remote | `https://my.evon-smarthome.com/{engine-id}/api/instances/...` |
+
+The actual API methods (get instances, turn on/off, etc.) are identical - the relay server proxies requests to the local Evon system.
+
+### Engine ID
+
+The Engine ID is found in your Evon system settings. It identifies your installation on the relay server (e.g., `985315`).
+
+---
+
 ## Critical API Knowledge
 
 ### Brightness Control - IMPORTANT

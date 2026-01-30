@@ -57,13 +57,38 @@ The integration supports controllable relay outputs (`SmartCOM.Light.Light`). If
 
    Or: **Settings** → **Devices & Services** → **Add Integration** → Search "Evon Smart Home"
 
-5. Enter your Evon system URL (e.g., `http://192.168.x.x`), username, and password
+5. Choose your connection type and enter credentials (see [Connection Methods](#connection-methods) below)
 
 ### Manual Installation
 
 1. Copy `custom_components/evon` to your Home Assistant's `custom_components` directory
 2. Restart Home Assistant
 3. Add the integration via Settings → Devices & Services
+
+---
+
+## Connection Methods
+
+The integration supports two connection methods:
+
+| Method | When to Use |
+|--------|-------------|
+| **Local Network** (Recommended) | When Home Assistant is on the same network as your Evon system. Faster and more reliable. |
+| **Remote Access** | When connecting from outside your home network (e.g., cloud-hosted Home Assistant). |
+
+### Local Network Setup
+
+1. Select **Local network** as connection type
+2. Enter your Evon system's local IP address or hostname (e.g., `http://192.168.1.100`)
+3. Enter your username and password
+
+### Remote Access Setup
+
+1. Select **Remote access** as connection type
+2. Enter your **Engine ID** (found in your Evon system settings or documentation)
+3. Enter your username and password (same credentials as local login)
+
+**Note:** Local network connection is recommended for faster response times and better reliability. Only use remote access when you cannot connect locally.
 
 ---
 

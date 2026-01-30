@@ -8,10 +8,20 @@ CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_SYNC_AREAS = "sync_areas"
+CONF_CONNECTION_TYPE = "connection_type"
+CONF_ENGINE_ID = "engine_id"
+
+# Connection types
+CONNECTION_TYPE_LOCAL = "local"
+CONNECTION_TYPE_REMOTE = "remote"
+
+# Remote access endpoint
+EVON_REMOTE_HOST = "https://my.evon-smarthome.com"
 
 # Default values
 DEFAULT_SCAN_INTERVAL = 30
 DEFAULT_SYNC_AREAS = False
+DEFAULT_REQUEST_TIMEOUT = 30  # seconds
 
 # Season mode (global heating/cooling)
 SEASON_MODE_HEATING = "heating"

@@ -204,6 +204,7 @@ if HAS_HA_TEST_FRAMEWORK:
             domain="evon",
             title="Evon Smart Home",
             data={
+                "connection_type": "local",
                 "host": TEST_HOST,
                 "username": TEST_USERNAME,
                 "password": TEST_PASSWORD,

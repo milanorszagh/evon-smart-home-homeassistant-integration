@@ -44,18 +44,49 @@
     "step": {
       "user": {
         "title": "Mit Evon Smart Home verbinden",
-        "description": "Geben Sie Ihre Evon Smart Home Verbindungsdaten ein.",
+        "description": "Wählen Sie, wie Sie sich mit Ihrem Evon Smart Home System verbinden möchten.",
         "data": {
-          "host": "Host-URL",
+          "connection_type": "Verbindungstyp"
+        },
+        "data_description": {
+          "connection_type": "**Lokales Netzwerk** wird für schnellere Reaktionszeiten und bessere Zuverlässigkeit empfohlen. Verwenden Sie **Fernzugriff** nur, wenn Sie sich von außerhalb Ihres Heimnetzwerks verbinden."
+        }
+      },
+      "local": {
+        "title": "Lokale Netzwerkverbindung",
+        "description": "Geben Sie Ihre lokalen Evon Smart Home Verbindungsdaten ein. Die IP-Adresse finden Sie in Ihrem Router oder in den Evon-Systemeinstellungen.",
+        "data": {
+          "host": "Host-URL oder IP-Adresse",
           "username": "Benutzername",
           "password": "Passwort"
         }
       },
-      "reconfigure": {
-        "title": "Evon Smart Home neu konfigurieren",
-        "description": "Aktualisieren Sie Ihre Verbindungsdaten.",
+      "remote": {
+        "title": "Fernzugriffsverbindung",
+        "description": "Geben Sie Ihre Evon Smart Home Fernzugriffsdaten ein. Die Engine-ID finden Sie in Ihren Evon-Systemeinstellungen oder der Dokumentation.",
         "data": {
-          "host": "Host-URL",
+          "engine_id": "Engine-ID",
+          "username": "Benutzername",
+          "password": "Passwort"
+        },
+        "data_description": {
+          "engine_id": "Ihre eindeutige Evon Smart Home Systemkennung (z.B. 123456)"
+        }
+      },
+      "reconfigure_local": {
+        "title": "Lokale Verbindung neu konfigurieren",
+        "description": "Aktualisieren Sie Ihre lokalen Verbindungsdaten.",
+        "data": {
+          "host": "Host-URL oder IP-Adresse",
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      },
+      "reconfigure_remote": {
+        "title": "Fernzugriff neu konfigurieren",
+        "description": "Aktualisieren Sie Ihre Fernzugriffsdaten.",
+        "data": {
+          "engine_id": "Engine-ID",
           "username": "Benutzername",
           "password": "Passwort"
         }
@@ -65,6 +96,7 @@
       "cannot_connect": "Verbindung zu Evon Smart Home fehlgeschlagen",
       "invalid_auth": "Ungültiger Benutzername oder Passwort",
       "invalid_host": "Ungültige Host-URL. Bitte geben Sie eine gültige IP-Adresse oder einen Hostnamen ein.",
+      "invalid_engine_id": "Ungültige Engine-ID. Bitte geben Sie eine gültige Engine-ID ein.",
       "unknown": "Unerwarteter Fehler"
     },
     "abort": {

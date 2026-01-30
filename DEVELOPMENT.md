@@ -103,7 +103,33 @@ npm run build
 
 ### Configuration
 
-Add to your Claude Code configuration (`~/.claude.json`):
+**Option 1: Using `.env` file (recommended)**
+
+Keep credentials in `.env` (single source of truth):
+
+```bash
+# In your .env file
+EVON_HOST=http://192.168.x.x
+EVON_USERNAME=your-username
+EVON_PASSWORD=your-password
+```
+
+Add to `~/.claude.json` without inline credentials:
+
+```json
+{
+  "mcpServers": {
+    "evon": {
+      "command": "/bin/bash",
+      "args": ["-c", "source /path/to/evon-ha/.env && node /path/to/evon-ha/dist/index.js"]
+    }
+  }
+}
+```
+
+**Option 2: Inline credentials**
+
+Add credentials directly to `~/.claude.json`:
 
 ```json
 {
@@ -157,10 +183,21 @@ The server auto-detects plain text or encoded passwords.
 
 ## Evon API Reference
 
+### Connection Types
+
+The Evon API supports two connection methods:
+
+| Type | URL | Use Case |
+|------|-----|----------|
+| **Local** | `http://{local-ip}` | Direct LAN connection (faster, recommended) |
+| **Remote** | `https://my.evon-smarthome.com` | Internet access via Evon relay server |
+
 ### Authentication
 
+#### Local Authentication
+
 ```
-POST /login
+POST http://{local-ip}/login
 Headers:
   x-elocs-username: <username>
   x-elocs-password: <encoded-password>
@@ -168,6 +205,31 @@ Headers:
 Response Headers:
   x-elocs-token: <session-token>
 ```
+
+#### Remote Authentication
+
+Remote access uses a relay server that routes requests to your local Evon system.
+
+```
+POST https://my.evon-smarthome.com/login
+Headers:
+  x-elocs-username: <username>
+  x-elocs-password: <encoded-password>
+  x-elocs-relayid: <engine-id>
+  x-elocs-sessionlogin: true
+  X-Requested-With: XMLHttpRequest
+
+Response Headers:
+  x-elocs-token: <session-token>
+```
+
+**Key Differences from Local:**
+- Login URL is at the remote host root (`/login`), NOT `/{engine-id}/login`
+- Requires `x-elocs-relayid` header with your Engine ID
+- Requires `x-elocs-sessionlogin: true` header for session-based auth
+- Requires `X-Requested-With: XMLHttpRequest` header
+
+**Engine ID:** Found in your Evon system settings. This identifies your installation on the relay server.
 
 **Password Encoding:**
 ```
@@ -182,6 +244,17 @@ encoded = base64.b64encode(
 ```
 
 Both integrations handle encoding automatically - just provide plain text passwords.
+
+### API Endpoints
+
+After authentication, API calls differ by connection type:
+
+| Type | Base URL |
+|------|----------|
+| Local | `http://{local-ip}/api` |
+| Remote | `https://my.evon-smarthome.com/{engine-id}/api` |
+
+The remote relay server proxies all `/api/*` requests to your local Evon system.
 
 ### Endpoints
 
