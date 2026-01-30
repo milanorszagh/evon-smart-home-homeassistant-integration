@@ -19,14 +19,23 @@ pytestmark = requires_ha_test_framework
 @pytest.mark.asyncio
 async def test_config_flow_user_success(hass):
     """Test successful config flow from user step."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
+    # Step 1: Select connection type
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
 
     assert result["type"] == "form"
     assert result["step_id"] == "user"
-    assert result["errors"] == {}
 
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "local"
+
+    # Step 2: Enter credentials
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
         mock_api.test_connection = AsyncMock(return_value=True)
@@ -46,12 +55,52 @@ async def test_config_flow_user_success(hass):
     assert result["data"]["host"] == "http://192.168.1.100"
     assert result["data"]["username"] == TEST_USERNAME
     assert result["data"]["password"] == TEST_PASSWORD
+    assert result["data"]["connection_type"] == CONNECTION_TYPE_LOCAL
+
+
+@pytest.mark.asyncio
+async def test_config_flow_remote_success(hass):
+    """Test successful config flow with remote connection."""
+    from custom_components.evon.const import CONNECTION_TYPE_REMOTE, DOMAIN
+
+    # Step 1: Select connection type
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_REMOTE},
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "remote"
+
+    # Step 2: Enter remote credentials
+    with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
+        mock_api = AsyncMock()
+        mock_api.test_connection = AsyncMock(return_value=True)
+        mock_api_class.return_value = mock_api
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                "engine_id": "123456",
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+        )
+
+    assert result["type"] == "create_entry"
+    assert result["title"] == "Evon (Remote: 123456)"
+    assert result["data"]["engine_id"] == "123456"
+    assert result["data"]["username"] == TEST_USERNAME
+    assert result["data"]["password"] == TEST_PASSWORD
+    assert result["data"]["connection_type"] == CONNECTION_TYPE_REMOTE
 
 
 @pytest.mark.asyncio
 async def test_config_flow_host_normalization(hass):
     """Test that host URL is normalized correctly."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -60,6 +109,10 @@ async def test_config_flow_host_normalization(hass):
 
         # Test with trailing slash
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"connection_type": CONNECTION_TYPE_LOCAL},
+        )
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
@@ -78,9 +131,13 @@ async def test_config_flow_host_normalization(hass):
 async def test_config_flow_cannot_connect(hass):
     """Test config flow handles connection error."""
     from custom_components.evon.api import EvonApiError
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -104,9 +161,13 @@ async def test_config_flow_cannot_connect(hass):
 async def test_config_flow_invalid_auth(hass):
     """Test config flow handles authentication error."""
     from custom_components.evon.api import EvonAuthError
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -129,9 +190,13 @@ async def test_config_flow_invalid_auth(hass):
 @pytest.mark.asyncio
 async def test_config_flow_unknown_error(hass):
     """Test config flow handles unknown errors."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -154,9 +219,13 @@ async def test_config_flow_unknown_error(hass):
 @pytest.mark.asyncio
 async def test_config_flow_test_connection_false(hass):
     """Test config flow handles test_connection returning False."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -181,21 +250,26 @@ async def test_config_flow_already_configured(hass):
     """Test config flow aborts when already configured."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     # Create existing entry
     existing_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
             "host": "http://192.168.1.100",
             "username": TEST_USERNAME,
             "password": TEST_PASSWORD,
         },
-        unique_id="http://192.168.1.100",
+        unique_id="local_http://192.168.1.100",
     )
     existing_entry.add_to_hass(hass)
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
         mock_api = AsyncMock()
@@ -224,17 +298,18 @@ async def test_config_flow_reconfigure(hass, mock_evon_api_class):
     """
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     # Create existing entry (not set up - just for reconfigure flow test)
     existing_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
             "host": "http://192.168.1.100",
             "username": "olduser",
             "password": "oldpass",
         },
-        unique_id="http://192.168.1.100",
+        unique_id="local_http://192.168.1.100",
     )
     existing_entry.add_to_hass(hass)
 
@@ -245,7 +320,7 @@ async def test_config_flow_reconfigure(hass, mock_evon_api_class):
     )
 
     assert result["type"] == "form"
-    assert result["step_id"] == "reconfigure"
+    assert result["step_id"] == "reconfigure_local"
 
     # Patch the config flow's EvonApi for connection test
     # The mock_evon_api_class fixture handles the reload
@@ -278,16 +353,17 @@ async def test_config_flow_reconfigure_auth_error(hass):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.evon.api import EvonAuthError
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     existing_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
             "host": "http://192.168.1.100",
             "username": "olduser",
             "password": "oldpass",
         },
-        unique_id="http://192.168.1.100",
+        unique_id="local_http://192.168.1.100",
     )
     existing_entry.add_to_hass(hass)
 
@@ -317,9 +393,13 @@ async def test_config_flow_reconfigure_auth_error(hass):
 @pytest.mark.asyncio
 async def test_config_flow_invalid_host_empty(hass):
     """Test config flow handles empty host URL."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -337,9 +417,13 @@ async def test_config_flow_invalid_host_empty(hass):
 @pytest.mark.asyncio
 async def test_config_flow_invalid_host_whitespace(hass):
     """Test config flow handles whitespace-only host URL."""
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
@@ -359,16 +443,17 @@ async def test_config_flow_reconfigure_invalid_host(hass):
     """Test reconfigure flow handles invalid host URL."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.evon.const import DOMAIN
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
     existing_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
             "host": "http://192.168.1.100",
             "username": "olduser",
             "password": "oldpass",
         },
-        unique_id="http://192.168.1.100",
+        unique_id="local_http://192.168.1.100",
     )
     existing_entry.add_to_hass(hass)
 
@@ -388,6 +473,30 @@ async def test_config_flow_reconfigure_invalid_host(hass):
 
     assert result["type"] == "form"
     assert result["errors"] == {"base": "invalid_host"}
+
+
+@pytest.mark.asyncio
+async def test_config_flow_invalid_engine_id(hass):
+    """Test config flow handles empty engine ID."""
+    from custom_components.evon.const import CONNECTION_TYPE_REMOTE, DOMAIN
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_REMOTE},
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "engine_id": "",
+            "username": TEST_USERNAME,
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_engine_id"}
 
 
 @pytest.mark.asyncio

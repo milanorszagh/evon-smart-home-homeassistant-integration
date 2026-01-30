@@ -44,18 +44,49 @@
     "step": {
       "user": {
         "title": "Connect to Evon Smart Home",
-        "description": "Enter your Evon Smart Home connection details.",
+        "description": "Choose how to connect to your Evon Smart Home system.",
         "data": {
-          "host": "Host URL",
+          "connection_type": "Connection type"
+        },
+        "data_description": {
+          "connection_type": "**Local network** is recommended for faster response times and better reliability. Use **Remote access** only when connecting from outside your home network."
+        }
+      },
+      "local": {
+        "title": "Local Network Connection",
+        "description": "Enter your Evon Smart Home local connection details. You can find the IP address in your router or the Evon system settings.",
+        "data": {
+          "host": "Host URL or IP address",
           "username": "Username",
           "password": "Password"
         }
       },
-      "reconfigure": {
-        "title": "Reconfigure Evon Smart Home",
-        "description": "Update your connection details.",
+      "remote": {
+        "title": "Remote Access Connection",
+        "description": "Enter your Evon Smart Home remote access credentials. The Engine ID can be found in your Evon system settings or documentation.",
         "data": {
-          "host": "Host URL",
+          "engine_id": "Engine ID",
+          "username": "Username",
+          "password": "Password"
+        },
+        "data_description": {
+          "engine_id": "Your unique Evon Smart Home system identifier (e.g., 123456)"
+        }
+      },
+      "reconfigure_local": {
+        "title": "Reconfigure Local Connection",
+        "description": "Update your local connection details.",
+        "data": {
+          "host": "Host URL or IP address",
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "reconfigure_remote": {
+        "title": "Reconfigure Remote Connection",
+        "description": "Update your remote access credentials.",
+        "data": {
+          "engine_id": "Engine ID",
           "username": "Username",
           "password": "Password"
         }
@@ -65,6 +96,7 @@
       "cannot_connect": "Failed to connect to Evon Smart Home",
       "invalid_auth": "Invalid username or password",
       "invalid_host": "Invalid host URL. Please enter a valid IP address or hostname.",
+      "invalid_engine_id": "Invalid Engine ID. Please enter a valid Engine ID.",
       "unknown": "Unexpected error"
     },
     "abort": {

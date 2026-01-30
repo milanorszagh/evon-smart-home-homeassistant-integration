@@ -12,14 +12,19 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import EvonApi
 from .const import (
+    CONF_CONNECTION_TYPE,
+    CONF_ENGINE_ID,
     CONF_HOST,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
     CONF_USERNAME,
+    CONNECTION_TYPE_LOCAL,
+    CONNECTION_TYPE_REMOTE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
+    EVON_REMOTE_HOST,
     REPAIR_CONFIG_MIGRATION,
     REPAIR_STALE_ENTITIES_CLEANED,
 )
@@ -43,14 +48,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Evon Smart Home from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    # Create API client
+    # Determine connection type (default to local for backwards compatibility)
+    connection_type = entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+
+    # Create API client based on connection type
     session = async_get_clientsession(hass)
-    api = EvonApi(
-        host=entry.data[CONF_HOST],
-        username=entry.data[CONF_USERNAME],
-        password=entry.data[CONF_PASSWORD],
-        session=session,
-    )
+    if connection_type == CONNECTION_TYPE_REMOTE:
+        api = EvonApi(
+            engine_id=entry.data[CONF_ENGINE_ID],
+            username=entry.data[CONF_USERNAME],
+            password=entry.data[CONF_PASSWORD],
+            session=session,
+        )
+        configuration_url = f"{EVON_REMOTE_HOST}/{entry.data[CONF_ENGINE_ID]}"
+    else:
+        api = EvonApi(
+            host=entry.data[CONF_HOST],
+            username=entry.data[CONF_USERNAME],
+            password=entry.data[CONF_PASSWORD],
+            session=session,
+        )
+        configuration_url = entry.data[CONF_HOST]
 
     # Test connection
     if not await api.test_connection():
@@ -81,7 +99,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         name="Evon Smart Home",
         manufacturer="Evon",
         model="Smart Home Controller",
-        configuration_url=entry.data[CONF_HOST],
+        configuration_url=configuration_url,
     )
 
     # Set up platforms
@@ -224,10 +242,19 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         hass.config_entries.async_update_entry(config_entry, version=2, minor_version=0)
         _LOGGER.info("Migration to version 2 successful")
 
-    if config_entry.version > 2:
+    if config_entry.version == 2:
+        # Migration from v2 to v3
+        # v3 adds connection_type (defaults to local for existing configs)
+        _LOGGER.info("Migrating Evon config entry from version 2 to 3")
+        new_data = dict(config_entry.data)
+        new_data[CONF_CONNECTION_TYPE] = CONNECTION_TYPE_LOCAL
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3, minor_version=0)
+        _LOGGER.info("Migration to version 3 successful")
+
+    if config_entry.version > 3:
         # Future version - can't migrate forward
         _LOGGER.error(
-            "Cannot migrate Evon config entry from version %s (current integration supports up to version 2)",
+            "Cannot migrate Evon config entry from version %s (current integration supports up to version 3)",
             config_entry.version,
         )
         ir.async_create_issue(
@@ -240,7 +267,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             translation_key="config_migration_failed",
             translation_placeholders={
                 "current_version": str(config_entry.version),
-                "supported_version": "2",
+                "supported_version": "3",
             },
         )
         return False

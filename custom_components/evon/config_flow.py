@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -17,9 +18,13 @@ import voluptuous as vol
 
 from .api import EvonApi, EvonApiError, EvonAuthError
 from .const import (
+    CONF_CONNECTION_TYPE,
+    CONF_ENGINE_ID,
     CONF_NON_DIMMABLE_LIGHTS,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
+    CONNECTION_TYPE_LOCAL,
+    CONNECTION_TYPE_REMOTE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
@@ -66,9 +71,28 @@ def normalize_host(host: str) -> str:
     return normalized
 
 
-STEP_USER_DATA_SCHEMA = vol.Schema(
+STEP_CONNECTION_TYPE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPE_LOCAL): vol.In(
+            {
+                CONNECTION_TYPE_LOCAL: "Local network (recommended)",
+                CONNECTION_TYPE_REMOTE: "Remote access (via my.evon-smarthome.com)",
+            }
+        ),
+    }
+)
+
+STEP_LOCAL_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
+        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_PASSWORD): str,
+    }
+)
+
+STEP_REMOTE_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_ENGINE_ID): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
     }
@@ -78,8 +102,12 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Evon Smart Home."""
 
-    VERSION = 2
+    VERSION = 3
     MINOR_VERSION = 0
+
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._connection_type: str = CONNECTION_TYPE_LOCAL
 
     @staticmethod
     @callback
@@ -90,7 +118,21 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return EvonOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle the initial step."""
+        """Handle the initial step - connection type selection."""
+        if user_input is not None:
+            self._connection_type = user_input[CONF_CONNECTION_TYPE]
+            if self._connection_type == CONNECTION_TYPE_LOCAL:
+                return await self.async_step_local()
+            else:
+                return await self.async_step_remote()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=STEP_CONNECTION_TYPE_SCHEMA,
+        )
+
+    async def async_step_local(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle local connection configuration."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -112,12 +154,15 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     if await api.test_connection():
                         # Check if already configured
-                        await self.async_set_unique_id(user_input[CONF_HOST])
+                        await self.async_set_unique_id(f"local_{user_input[CONF_HOST]}")
                         self._abort_if_unique_id_configured()
 
                         return self.async_create_entry(
                             title=f"Evon ({user_input[CONF_HOST]})",
-                            data=user_input,
+                            data={
+                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_LOCAL,
+                                **user_input,
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -132,14 +177,79 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "unknown"
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=STEP_USER_DATA_SCHEMA,
+            step_id="local",
+            data_schema=STEP_LOCAL_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_remote(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle remote connection configuration."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            engine_id = user_input[CONF_ENGINE_ID].strip()
+            # Validate engine ID format (alphanumeric, typically numeric like "985315")
+            if not engine_id or not re.match(r"^[a-zA-Z0-9]+$", engine_id):
+                errors["base"] = "invalid_engine_id"
+            else:
+                # Test connection
+                session = async_get_clientsession(self.hass)
+                api = EvonApi(
+                    engine_id=engine_id,
+                    username=user_input[CONF_USERNAME],
+                    password=user_input[CONF_PASSWORD],
+                    session=session,
+                )
+
+                try:
+                    if await api.test_connection():
+                        # Check if already configured
+                        await self.async_set_unique_id(f"remote_{engine_id}")
+                        self._abort_if_unique_id_configured()
+
+                        return self.async_create_entry(
+                            title=f"Evon (Remote: {engine_id})",
+                            data={
+                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_REMOTE,
+                                CONF_ENGINE_ID: engine_id,
+                                CONF_USERNAME: user_input[CONF_USERNAME],
+                                CONF_PASSWORD: user_input[CONF_PASSWORD],
+                            },
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except EvonAuthError:
+                    errors["base"] = "invalid_auth"
+                except EvonApiError:
+                    errors["base"] = "cannot_connect"
+                except AbortFlow:
+                    raise  # Re-raise flow control exceptions
+                except Exception as ex:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception: %s", ex)
+                    errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="remote",
+            data_schema=STEP_REMOTE_DATA_SCHEMA,
             errors=errors,
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration."""
+        reconfigure_entry = self._get_reconfigure_entry()
+        current_data = reconfigure_entry.data
+        connection_type = current_data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+
+        if connection_type == CONNECTION_TYPE_REMOTE:
+            return await self.async_step_reconfigure_remote(user_input)
+        else:
+            return await self.async_step_reconfigure_local(user_input)
+
+    async def async_step_reconfigure_local(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle local reconfiguration."""
         errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+        current_data = reconfigure_entry.data
 
         if user_input is not None:
             try:
@@ -161,8 +271,11 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if await api.test_connection():
                         # Update and reload the config entry
                         return self.async_update_reload_and_abort(
-                            self._get_reconfigure_entry(),
-                            data_updates=user_input,
+                            reconfigure_entry,
+                            data_updates={
+                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_LOCAL,
+                                **user_input,
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -176,9 +289,6 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
                     errors["base"] = "unknown"
 
-        # Pre-fill with current values
-        reconfigure_entry = self._get_reconfigure_entry()
-        current_data = reconfigure_entry.data
         reconfigure_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, "")): str,
@@ -188,7 +298,66 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(
-            step_id="reconfigure",
+            step_id="reconfigure_local",
+            data_schema=reconfigure_schema,
+            errors=errors,
+        )
+
+    async def async_step_reconfigure_remote(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle remote reconfiguration."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+        current_data = reconfigure_entry.data
+
+        if user_input is not None:
+            engine_id = user_input[CONF_ENGINE_ID].strip()
+            # Validate engine ID format (alphanumeric, typically numeric like "985315")
+            if not engine_id or not re.match(r"^[a-zA-Z0-9]+$", engine_id):
+                errors["base"] = "invalid_engine_id"
+            else:
+                # Test connection with new credentials
+                session = async_get_clientsession(self.hass)
+                api = EvonApi(
+                    engine_id=engine_id,
+                    username=user_input[CONF_USERNAME],
+                    password=user_input[CONF_PASSWORD],
+                    session=session,
+                )
+
+                try:
+                    if await api.test_connection():
+                        # Update and reload the config entry
+                        return self.async_update_reload_and_abort(
+                            reconfigure_entry,
+                            data_updates={
+                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_REMOTE,
+                                CONF_ENGINE_ID: engine_id,
+                                CONF_USERNAME: user_input[CONF_USERNAME],
+                                CONF_PASSWORD: user_input[CONF_PASSWORD],
+                            },
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except EvonAuthError:
+                    errors["base"] = "invalid_auth"
+                except EvonApiError:
+                    errors["base"] = "cannot_connect"
+                except AbortFlow:
+                    raise  # Re-raise flow control exceptions
+                except Exception as ex:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
+                    errors["base"] = "unknown"
+
+        reconfigure_schema = vol.Schema(
+            {
+                vol.Required(CONF_ENGINE_ID, default=current_data.get(CONF_ENGINE_ID, "")): str,
+                vol.Required(CONF_USERNAME, default=current_data.get(CONF_USERNAME, "")): str,
+                vol.Required(CONF_PASSWORD): str,  # Don't show current password
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure_remote",
             data_schema=reconfigure_schema,
             errors=errors,
         )

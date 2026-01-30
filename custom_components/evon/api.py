@@ -10,6 +10,8 @@ from typing import Any
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
+from .const import DEFAULT_REQUEST_TIMEOUT, EVON_REMOTE_HOST
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -21,6 +23,27 @@ def encode_password(username: str, password: str) -> str:
     combined = username + password
     sha512_hash = hashlib.sha512(combined.encode("utf-8")).digest()
     return base64.b64encode(sha512_hash).decode("utf-8")
+
+
+def build_base_url(host: str | None = None, engine_id: str | None = None) -> str:
+    """Build the base URL for the Evon API.
+
+    Args:
+        host: The local Evon system URL (for local connections)
+        engine_id: The Engine ID (for remote connections)
+
+    Returns:
+        The base URL for API requests
+
+    Raises:
+        ValueError: If neither host nor engine_id is provided
+    """
+    if host:
+        return host.rstrip("/")
+    elif engine_id:
+        return f"{EVON_REMOTE_HOST}/{engine_id}"
+    else:
+        raise ValueError("Either host or engine_id must be provided")
 
 
 class EvonApiError(HomeAssistantError):
@@ -40,23 +63,29 @@ class EvonApi:
 
     def __init__(
         self,
-        host: str,
         username: str,
         password: str,
+        host: str | None = None,
+        engine_id: str | None = None,
         session: aiohttp.ClientSession | None = None,
         password_is_encoded: bool = False,
     ) -> None:
         """Initialize the API client.
 
         Args:
-            host: The Evon system URL
             username: The username
             password: The password (plain text or pre-encoded)
+            host: The Evon system URL (for local connections)
+            engine_id: The Engine ID (for remote connections via my.evon-smarthome.com)
             session: Optional aiohttp session
             password_is_encoded: If True, password is already encoded (x-elocs-password).
                                 If False (default), password will be encoded automatically.
+
+        Note:
+            Either host or engine_id must be provided, but not both.
+            Local connections (host) are recommended for faster response times.
         """
-        self._host = host.rstrip("/")
+        self._host = build_base_url(host=host, engine_id=engine_id)
         self._username = username
         if password_is_encoded:
             self._password = password
@@ -65,6 +94,8 @@ class EvonApi:
         self._session = session
         self._token: str | None = None
         self._own_session = False
+        self._is_remote = engine_id is not None
+        self._engine_id = engine_id
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
@@ -83,14 +114,40 @@ class EvonApi:
         """Login to Evon and get token."""
         session = await self._get_session()
 
+        # Build headers - remote connections need additional headers
+        headers = {
+            "x-elocs-username": self._username,
+            "x-elocs-password": self._password,
+        }
+        if self._is_remote and self._engine_id:
+            headers["x-elocs-relayid"] = self._engine_id
+            headers["x-elocs-sessionlogin"] = "true"
+            headers["X-Requested-With"] = "XMLHttpRequest"
+
+        # Remote login uses /login at the remote host root, not /{engine_id}/login
+        login_url = f"{EVON_REMOTE_HOST}/login" if self._is_remote else f"{self._host}/login"
+
         try:
+            # Disable auto-redirect following - we need to check the response headers
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT)
             async with session.post(
-                f"{self._host}/login",
-                headers={
-                    "x-elocs-username": self._username,
-                    "x-elocs-password": self._password,
-                },
+                login_url,
+                headers=headers,
+                allow_redirects=False,
+                timeout=timeout,
             ) as response:
+                _LOGGER.debug(
+                    "Login response: status=%s, headers=%s",
+                    response.status,
+                    dict(response.headers),
+                )
+
+                # 302 redirect to login.html means auth failed
+                if response.status == 302:
+                    location = response.headers.get("Location", "")
+                    if "login" in location.lower():
+                        raise EvonAuthError("Login failed: invalid credentials")
+
                 if response.status != 200:
                     raise EvonAuthError(f"Login failed: {response.status} {response.reason}")
 
@@ -138,11 +195,13 @@ class EvonApi:
         }
 
         try:
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT)
             async with session.request(
                 method,
                 url,
                 headers=headers,
                 json=data,
+                timeout=timeout,
             ) as response:
                 # Handle auth errors with retry
                 if response.status in (302, 401) and retry:
