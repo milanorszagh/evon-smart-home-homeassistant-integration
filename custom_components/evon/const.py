@@ -21,7 +21,13 @@ EVON_REMOTE_HOST = "https://my.evon-smarthome.com"
 # Default values
 DEFAULT_SCAN_INTERVAL = 30
 DEFAULT_SYNC_AREAS = False
-DEFAULT_REQUEST_TIMEOUT = 30  # seconds
+DEFAULT_REQUEST_TIMEOUT = 30  # seconds (for API requests)
+DEFAULT_LOGIN_TIMEOUT = 15  # seconds (login should be faster)
+
+# Validation constants
+MIN_PASSWORD_LENGTH = 1  # Evon allows short passwords
+ENGINE_ID_MIN_LENGTH = 4
+ENGINE_ID_MAX_LENGTH = 12
 
 # Season mode (global heating/cooling)
 SEASON_MODE_HEATING = "heating"
