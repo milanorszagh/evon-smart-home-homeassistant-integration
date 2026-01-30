@@ -15,7 +15,13 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix"
   },
-  "keywords": ["mcp", "evon", "smart-home", "home-assistant", "hacs"],
+  "keywords": [
+    "mcp",
+    "evon",
+    "smart-home",
+    "home-assistant",
+    "hacs"
+  ],
   "author": "Milan Orszagh",
   "license": "MIT",
   "type": "module",
@@ -25,6 +31,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
+    "dotenv": "^17.2.3",
     "zod": "^4.3.5"
   },
   "devDependencies": {
