@@ -152,6 +152,8 @@ async function login(): Promise<string> {
   return token;
 }
 
+const API_TIMEOUT_MS = 10000; // 10 second timeout for API requests
+
 async function apiRequest<T>(
   endpoint: string,
   method: "GET" | "POST" = "GET",
@@ -159,33 +161,46 @@ async function apiRequest<T>(
 ): Promise<ApiResponse<T>> {
   const token = await login();
 
-  const fetchOptions: RequestInit = {
-    method,
-    headers: {
-      Cookie: `token=${token}`,
-      "Content-Type": "application/json",
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-  let response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
-
-  // Handle token expiry with retry
-  if (response.status === 302 || response.status === 401) {
-    currentToken = null;
-    const newToken = await login();
-    fetchOptions.headers = {
-      Cookie: `token=${newToken}`,
-      "Content-Type": "application/json",
+  try {
+    const fetchOptions: RequestInit = {
+      method,
+      headers: {
+        Cookie: `token=${token}`,
+        "Content-Type": "application/json",
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     };
-    response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
-  }
 
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
+    let response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
 
-  return response.json();
+    // Handle token expiry with retry
+    if (response.status === 302 || response.status === 401) {
+      currentToken = null;
+      const newToken = await login();
+      fetchOptions.headers = {
+        Cookie: `token=${newToken}`,
+        "Content-Type": "application/json",
+      };
+      response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
+    }
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`API request timeout after ${API_TIMEOUT_MS}ms: ${endpoint}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function callMethod(
@@ -221,8 +236,9 @@ async function controlAllDevices(
     try {
       await callMethod(device.ID, method, params);
       results.push(`${device.Name}: success`);
-    } catch {
-      results.push(`${device.Name}: failed`);
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      results.push(`${device.Name}: failed (${errorMsg})`);
     }
   }
   return results;
@@ -347,8 +363,9 @@ server.tool(
             isOn: details.data.IsOn ?? false,
             brightness: details.data.ScaledBrightness ?? 0,
           };
-        } catch {
-          return { id: light.ID, name: light.Name, isOn: false, brightness: 0 };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: light.ID, name: light.Name, isOn: false, brightness: 0, error: errorMsg };
         }
       })
     );
@@ -437,8 +454,9 @@ server.tool(
             angle: details.data.Angle ?? 0,
             isMoving: details.data.IsMoving ?? false,
           };
-        } catch {
-          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false, error: errorMsg };
         }
       })
     );
@@ -531,8 +549,9 @@ server.tool(
             setTemperature: details.data.SetTemperature ?? 0,
             actualTemperature: details.data.ActualTemperature ?? 0,
           };
-        } catch {
-          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0 };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0, error: errorMsg };
         }
       })
     );
@@ -615,8 +634,9 @@ server.tool(
             name: state.Name,
             active: details.data.Active ?? false,
           };
-        } catch {
-          return { id: state.ID, name: state.Name, active: false };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: state.ID, name: state.Name, active: false, error: errorMsg };
         }
       })
     );
@@ -685,8 +705,9 @@ server.tool(
             permanentlyOn: details.data.PermanentlyOn ?? false,
             permanentlyOff: details.data.PermanentlyOff ?? false,
           };
-        } catch {
-          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30, permanentlyOn: false, permanentlyOff: false };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30, permanentlyOn: false, permanentlyOff: false, error: errorMsg };
         }
       })
     );
@@ -757,8 +778,9 @@ server.resource(
             isOn: details.data.IsOn ?? false,
             brightness: details.data.ScaledBrightness ?? 0,
           };
-        } catch {
-          return { id: light.ID, name: light.Name, isOn: false, brightness: 0 };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: light.ID, name: light.Name, isOn: false, brightness: 0, error: errorMsg };
         }
       })
     );
@@ -792,8 +814,9 @@ server.resource(
             angle: details.data.Angle ?? 0,
             isMoving: details.data.IsMoving ?? false,
           };
-        } catch {
-          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: blind.ID, name: blind.Name, position: 0, angle: 0, isMoving: false, error: errorMsg };
         }
       })
     );
@@ -832,8 +855,9 @@ server.resource(
             setTemperature: details.data.SetTemperature ?? 0,
             actualTemperature: details.data.ActualTemperature ?? 0,
           };
-        } catch {
-          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0 };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: climate.ID, name: climate.Name, setTemperature: 0, actualTemperature: 0, error: errorMsg };
         }
       })
     );
@@ -872,8 +896,9 @@ server.resource(
             name: state.Name,
             active: details.data.Active ?? false,
           };
-        } catch {
-          return { id: state.ID, name: state.Name, active: false };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: state.ID, name: state.Name, active: false, error: errorMsg };
         }
       })
     );
@@ -915,8 +940,9 @@ server.resource(
             timeRemainingMins: timeRemaining > 0 ? Math.round(timeRemaining * 10) / 10 : null,
             durationMins: details.data.EnableForMins ?? 30,
           };
-        } catch {
-          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30 };
+        } catch (error: unknown) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          return { id: radiator.ID, name: radiator.Name, isOn: false, timeRemaining: null, timeRemainingMins: null, durationMins: 30, error: errorMsg };
         }
       })
     );
@@ -954,7 +980,7 @@ server.resource(
         const details = await apiRequest<LightState>(`/instances/${light.ID}`);
         if (details.data.IsOn) lightsOn++;
       } catch {
-        // Ignore errors - just skip unresponsive devices in count
+        // Skip unresponsive devices in count
       }
     }
 
@@ -965,7 +991,7 @@ server.resource(
         const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
         if ((details.data.Position ?? 0) < 50) blindsOpen++;
       } catch {
-        // Ignore errors - just skip unresponsive devices in count
+        // Skip unresponsive devices in count
       }
     }
 
@@ -980,7 +1006,7 @@ server.resource(
           tempCount++;
         }
       } catch {
-        // Ignore errors - just skip unresponsive devices in count
+        // Skip unresponsive devices in count
       }
     }
 
@@ -1000,7 +1026,7 @@ server.resource(
           break;
         }
       } catch {
-        // Ignore errors
+        // Skip unresponsive devices
       }
     }
 
@@ -1012,7 +1038,7 @@ server.resource(
         const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
         if (details.data.Output) radiatorsOn++;
       } catch {
-        // Ignore errors
+        // Skip unresponsive devices
       }
     }
 

@@ -361,8 +361,11 @@ class EvonApi:
             return True
         except EvonAuthError:
             raise  # Re-raise auth errors to be handled by caller
+        except EvonConnectionError:
+            return False
         except EvonApiError:
             return False
-        except Exception as err:
-            # Wrap any unexpected errors
-            raise EvonApiError(f"Unexpected error: {err}") from err
+        except aiohttp.ClientError as err:
+            raise EvonConnectionError(f"Connection error: {err}") from err
+        except TimeoutError as err:
+            raise EvonConnectionError(f"Connection timeout: {err}") from err
