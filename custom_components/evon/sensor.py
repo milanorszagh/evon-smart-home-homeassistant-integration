@@ -295,6 +295,7 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
             return self.entity_description.value_fn(data)
         return None
 
+
 class EvonAirQualitySensor(EvonEntity, SensorEntity):
     """Representation of an Evon air quality sensor."""
 
