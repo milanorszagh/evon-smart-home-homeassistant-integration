@@ -104,7 +104,7 @@ After installation, configure via **Settings** → **Devices & Services** → **
 | **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
 | **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
 
-To change connection credentials, use **Reconfigure** from the integration menu.
+To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
 
 ### Repairs
 
@@ -121,6 +121,36 @@ The integration creates repair issues in **Settings** → **System** → **Repai
 Supported languages:
 - English (default)
 - German (Deutsch) - for DACH region customers
+
+---
+
+## Security
+
+### Credential Handling
+
+- Credentials are stored securely in Home Assistant's configuration storage
+- Passwords are encoded using SHA-512 hash of username+password, then Base64 encoded before transmission
+- No credentials are logged or exposed in diagnostics
+
+### Remote Access Security
+
+When using remote access via `my.evon-smarthome.com`:
+
+- **SSL/TLS**: All connections use HTTPS with certificate verification
+- **Authentication**: Requires your Evon credentials and Engine ID
+- **Relay Server**: Traffic passes through Evon's relay server, which proxies requests to your local system
+
+**Recommendations:**
+- Use **local network** connection when possible (faster and doesn't rely on external servers)
+- Keep your Evon credentials secure and don't share them
+- The Engine ID is not secret but identifies your specific system
+
+### Network Security
+
+For local connections:
+- Ensure your Evon system is on a trusted network
+- Consider using a VLAN to isolate IoT devices
+- The integration uses HTTP by default for local connections (most Evon systems don't have HTTPS enabled locally)
 
 ---
 
@@ -204,7 +234,8 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 | Version | Changes |
 |---------|---------|
-| **1.11.0** | Scene support (trigger Evon scenes as buttons), smart meter current sensors (L1/L2/L3), frequency sensor, feed-in energy sensor |
+| **1.12.0** | Remote access via my.evon-smarthome.com, switch between local/remote in reconfigure, security improvements (SSL, input validation, token handling) |
+| **1.11.0** | Scene support, smart meter current sensors (L1/L2/L3), frequency sensor, feed-in energy sensor |
 | **1.10.2** | Data caching to prevent entity unavailability during transient API failures |
 | **1.10.1** | Optimistic time display for bathroom radiators, fixed Energy sensor for HA Energy Dashboard |
 | **1.10.0** | Non-dimmable lights option, Repairs integration, improved translations, hub device hierarchy, HA 2025.12.0 compatibility |

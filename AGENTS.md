@@ -502,6 +502,46 @@ Always configure HA's Energy Dashboard to use `sensor.*_energy_total` instead.
 3. Use token in cookie for all subsequent requests: `Cookie: token=<token>`
 4. On 302 or 401 response, re-authenticate and retry
 
+## Security Implementation
+
+The API client implements several security measures:
+
+### SSL/TLS
+- Explicit SSL context using `ssl.create_default_context()` for all HTTPS connections
+- System certificate store used for verification
+- Applied via `aiohttp.TCPConnector` for remote connections
+- Connection limits: 10 total, 5 per host
+
+### Credential Protection
+- Sensitive headers redacted from debug logs (`x-elocs-token`, `x-elocs-password`, `cookie`, etc.)
+- Password hashed client-side before transmission (SHA-512 of username+password, Base64 encoded)
+- No credentials in error messages or exceptions
+- Engine ID redacted in diagnostics export
+- Login redirect URLs sanitized in logs (only path shown)
+
+### Input Validation
+- Instance IDs validated against pattern `^[a-zA-Z0-9._-]+$` (prevents path traversal)
+- Method names validated against pattern `^[a-zA-Z][a-zA-Z0-9]*$`
+- Engine ID validated: 4-12 alphanumeric characters (validated in both config flow and API)
+- Username must be non-empty (whitespace stripped)
+- Password must be non-empty
+- Host port validated: 1-65535
+
+### Token Management
+- Token TTL tracking (1 hour default)
+- Automatic refresh when expired
+- `asyncio.Lock` prevents race conditions in concurrent token access
+- Token cleared on 401/302 responses with retry
+- Token cleared from memory on session close
+
+### HTTP Security
+- Content-Type validation - raises error if response is not JSON
+- Specific error handling for 400 (bad request), 403 (forbidden), 404, 429 (rate limit), 5xx errors
+- Response reason included in all error messages for debugging
+- Accepts 200, 201, 204 as success codes
+- Unexpected redirects rejected (not logged with full URL)
+- Session creation error handling
+
 ## Optimistic Updates
 
 All controllable entities implement optimistic updates to prevent UI flicker when changing state. When a user triggers an action (turn on light, change preset, etc.), the UI immediately shows the expected state without waiting for the coordinator to poll Evon.
@@ -788,8 +828,9 @@ npm run lint
 
 Before creating a release, ensure the following are up to date:
 
-1. **Version numbers** - Update in ALL THREE files (they must match!):
-   - `package.json` ← **Often forgotten!**
+1. **Version numbers** - Update in ALL FOUR files (they must match!):
+   - `package.json`
+   - `package-lock.json` ← Run `npm install --package-lock-only` to sync
    - `pyproject.toml`
    - `custom_components/evon/manifest.json`
 
@@ -818,6 +859,9 @@ Before creating a release, ensure the following are up to date:
 
 ## Version History
 
+**IMPORTANT**: Before updating version history, always check the existing entries to identify the current/latest version. Do not overwrite an already-released version with new features - create a new version number instead.
+
+- **v1.12.0**: Remote access via `my.evon-smarthome.com` relay server. Reconfigure flow now allows switching between local and remote connection types. Security improvements: explicit SSL context with connection limits, header redaction, token TTL with auto-refresh and memory cleanup on close, comprehensive input validation (instance IDs, method names, Engine ID, username, password, host port), asyncio.Lock for token access, HTTP status handling (400/403/404/429/5xx with response.reason), Content-Type validation, Engine ID redaction in diagnostics.
 - **v1.11.0**: Added scene support - Evon scenes appear as button entities that can be pressed to execute. Also includes smart meter current sensors (L1/L2/L3), frequency sensor, and feed-in energy sensor from 1.10.3 branch.
 - **v1.10.1**: Added optimistic time display for bathroom radiators. Fixed smart meter "Energy Today" sensor - renamed to "Energy (24h Rolling)" with `state_class: measurement` to prevent incorrect negative values in HA Energy Dashboard. The rolling 24h window from Evon can decrease during the day.
 - **v1.10.0**: Added configurable non-dimmable lights option, Home Assistant Repairs integration (connection failure alerts after 3 failures, stale entity notifications, config migration warnings), improved home state translations using HA's translation system (proper German/English), hub device for device hierarchy, and fixed `via_device` warnings for HA 2025.12.0 compatibility. Config entry version bumped to 2 with migration support. Added 9 new tests (29 total).

@@ -73,6 +73,16 @@
           "engine_id": "Ihre eindeutige Evon Smart Home Systemkennung (z.B. 123456)"
         }
       },
+      "reconfigure": {
+        "title": "Evon Smart Home neu konfigurieren",
+        "description": "Aktuelle Verbindung: **{current_connection}**\n\nSie können zwischen lokaler und Fernzugriff-Verbindung wechseln oder Ihre Zugangsdaten aktualisieren.",
+        "data": {
+          "connection_type": "Verbindungstyp"
+        },
+        "data_description": {
+          "connection_type": "**Lokales Netzwerk** wird für schnellere Reaktionszeiten empfohlen. Verwenden Sie **Fernzugriff** wenn Sie sich von außerhalb Ihres Heimnetzwerks verbinden."
+        }
+      },
       "reconfigure_local": {
         "title": "Lokale Verbindung neu konfigurieren",
         "description": "Aktualisieren Sie Ihre lokalen Verbindungsdaten.",
@@ -96,7 +106,9 @@
       "cannot_connect": "Verbindung zu Evon Smart Home fehlgeschlagen",
       "invalid_auth": "Ungültiger Benutzername oder Passwort",
       "invalid_host": "Ungültige Host-URL. Bitte geben Sie eine gültige IP-Adresse oder einen Hostnamen ein.",
-      "invalid_engine_id": "Ungültige Engine-ID. Bitte geben Sie eine gültige Engine-ID ein.",
+      "invalid_engine_id": "Ungültige Engine-ID. Muss 4-12 alphanumerische Zeichen sein.",
+      "invalid_username": "Benutzername darf nicht leer sein.",
+      "invalid_password": "Passwort darf nicht leer sein.",
       "unknown": "Unerwarteter Fehler"
     },
     "abort": {

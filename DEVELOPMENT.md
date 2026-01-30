@@ -230,6 +230,9 @@ Response Headers:
 - Requires `X-Requested-With: XMLHttpRequest` header
 
 **Engine ID:** Found in your Evon system settings. This identifies your installation on the relay server.
+- Format: 4-12 alphanumeric characters (e.g., `985315`)
+- Validated in both config flow and API client
+- Used in the URL path for API requests: `https://my.evon-smarthome.com/{engine_id}/api/...`
 
 **Password Encoding:**
 ```

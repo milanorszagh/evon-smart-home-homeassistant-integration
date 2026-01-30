@@ -50,7 +50,7 @@ def normalize_host(host: str) -> str:
     - "http://192.168.1.4/" -> "http://192.168.1.4"
 
     Raises:
-        InvalidHostError: If the host URL is invalid (empty or no valid netloc)
+        InvalidHostError: If the host URL is invalid (empty, no valid netloc, or invalid port)
     """
     host = host.strip()
 
@@ -67,6 +67,10 @@ def normalize_host(host: str) -> str:
     # Validate that we have a valid netloc (host)
     if not parsed.netloc:
         raise InvalidHostError("Invalid host URL: no valid host found")
+
+    # Validate port if specified (must be 1-65535)
+    if parsed.port is not None and (parsed.port < 1 or parsed.port > 65535):
+        raise InvalidHostError(f"Invalid port number: {parsed.port}")
 
     # Reconstruct URL without trailing slash
     normalized = f"{parsed.scheme}://{parsed.netloc}"
@@ -111,6 +115,20 @@ def validate_password(password: str) -> str | None:
     """
     if not password or len(password.strip()) < MIN_PASSWORD_LENGTH:
         return "invalid_password"
+    return None
+
+
+def validate_username(username: str) -> str | None:
+    """Validate username is not empty or whitespace-only.
+
+    Args:
+        username: The username to validate
+
+    Returns:
+        Error key if invalid, None if valid
+    """
+    if not username or not username.strip():
+        return "invalid_username"
     return None
 
 
@@ -179,11 +197,22 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Validate password first
-            password_error = validate_password(user_input[CONF_PASSWORD])
-            if password_error:
-                errors["base"] = password_error
-            else:
+            # Strip username
+            username = user_input[CONF_USERNAME].strip()
+
+            # Validate username first
+            username_error = validate_username(username)
+            if username_error:
+                errors["base"] = username_error
+
+            # Validate password
+            if not errors:
+                password_error = validate_password(user_input[CONF_PASSWORD])
+                if password_error:
+                    errors["base"] = password_error
+
+            # Validate host
+            if not errors:
                 try:
                     # Normalize and validate the host URL
                     user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
@@ -195,7 +224,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
                     host=user_input[CONF_HOST],
-                    username=user_input[CONF_USERNAME],
+                    username=username,
                     password=user_input[CONF_PASSWORD],
                     session=session,
                 )
@@ -210,7 +239,9 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             title=f"Evon ({user_input[CONF_HOST]})",
                             data={
                                 CONF_CONNECTION_TYPE: CONNECTION_TYPE_LOCAL,
-                                **user_input,
+                                CONF_HOST: user_input[CONF_HOST],
+                                CONF_USERNAME: username,
+                                CONF_PASSWORD: user_input[CONF_PASSWORD],
                             },
                         )
                     else:
@@ -237,23 +268,31 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             engine_id = user_input[CONF_ENGINE_ID].strip()
+            username = user_input[CONF_USERNAME].strip()
 
-            # Validate password first
-            password_error = validate_password(user_input[CONF_PASSWORD])
-            if password_error:
-                errors["base"] = password_error
+            # Validate username first
+            username_error = validate_username(username)
+            if username_error:
+                errors["base"] = username_error
+
+            # Validate password
+            if not errors:
+                password_error = validate_password(user_input[CONF_PASSWORD])
+                if password_error:
+                    errors["base"] = password_error
 
             # Validate engine ID format
-            engine_id_error = validate_engine_id(engine_id)
-            if engine_id_error and not errors:
-                errors["base"] = engine_id_error
+            if not errors:
+                engine_id_error = validate_engine_id(engine_id)
+                if engine_id_error:
+                    errors["base"] = engine_id_error
 
             if not errors:
                 # Test connection
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
                     engine_id=engine_id,
-                    username=user_input[CONF_USERNAME],
+                    username=username,
                     password=user_input[CONF_PASSWORD],
                     session=session,
                 )
@@ -269,7 +308,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             data={
                                 CONF_CONNECTION_TYPE: CONNECTION_TYPE_REMOTE,
                                 CONF_ENGINE_ID: engine_id,
-                                CONF_USERNAME: user_input[CONF_USERNAME],
+                                CONF_USERNAME: username,
                                 CONF_PASSWORD: user_input[CONF_PASSWORD],
                             },
                         )
@@ -292,15 +331,41 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Handle reconfiguration."""
+        """Handle reconfiguration - allow changing connection type."""
         reconfigure_entry = self._get_reconfigure_entry()
         current_data = reconfigure_entry.data
-        connection_type = current_data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+        current_type = current_data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
 
-        if connection_type == CONNECTION_TYPE_REMOTE:
-            return await self.async_step_reconfigure_remote(user_input)
+        if user_input is not None:
+            self._connection_type = user_input[CONF_CONNECTION_TYPE]
+            if self._connection_type == CONNECTION_TYPE_LOCAL:
+                return await self.async_step_reconfigure_local()
+            else:
+                return await self.async_step_reconfigure_remote()
+
+        # Show current connection type in description with details
+        if current_type == CONNECTION_TYPE_LOCAL:
+            host = current_data.get(CONF_HOST, "")
+            current_type_label = f"Local network ({host})" if host else "Local network"
         else:
-            return await self.async_step_reconfigure_local(user_input)
+            engine_id = current_data.get(CONF_ENGINE_ID, "")
+            current_type_label = f"Remote access ({engine_id})" if engine_id else "Remote access"
+
+        # Show connection type selection with current type as default
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_CONNECTION_TYPE, default=current_type): vol.In(
+                        {
+                            CONNECTION_TYPE_LOCAL: "Local network (recommended)",
+                            CONNECTION_TYPE_REMOTE: "Remote access (via my.evon-smarthome.com)",
+                        }
+                    ),
+                }
+            ),
+            description_placeholders={"current_connection": current_type_label},
+        )
 
     async def async_step_reconfigure_local(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle local reconfiguration."""
@@ -309,11 +374,22 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current_data = reconfigure_entry.data
 
         if user_input is not None:
-            # Validate password first
-            password_error = validate_password(user_input[CONF_PASSWORD])
-            if password_error:
-                errors["base"] = password_error
-            else:
+            # Strip username
+            username = user_input[CONF_USERNAME].strip()
+
+            # Validate username first
+            username_error = validate_username(username)
+            if username_error:
+                errors["base"] = username_error
+
+            # Validate password
+            if not errors:
+                password_error = validate_password(user_input[CONF_PASSWORD])
+                if password_error:
+                    errors["base"] = password_error
+
+            # Validate host
+            if not errors:
                 try:
                     # Normalize and validate the host URL
                     user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
@@ -325,7 +401,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
                     host=user_input[CONF_HOST],
-                    username=user_input[CONF_USERNAME],
+                    username=username,
                     password=user_input[CONF_PASSWORD],
                     session=session,
                 )
@@ -333,12 +409,16 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     if await api.test_connection():
                         # Update and reload the config entry
+                        # Remove remote-specific fields when switching to local
+                        new_data = {
+                            CONF_CONNECTION_TYPE: CONNECTION_TYPE_LOCAL,
+                            CONF_HOST: user_input[CONF_HOST],
+                            CONF_USERNAME: username,
+                            CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        }
                         return self.async_update_reload_and_abort(
                             reconfigure_entry,
-                            data_updates={
-                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_LOCAL,
-                                **user_input,
-                            },
+                            data=new_data,  # Replace all data
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -352,6 +432,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
                     errors["base"] = "unknown"
 
+        # Pre-fill with current values if available (may be empty when switching from remote)
         reconfigure_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=current_data.get(CONF_HOST, "")): str,
@@ -374,23 +455,31 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             engine_id = user_input[CONF_ENGINE_ID].strip()
+            username = user_input[CONF_USERNAME].strip()
 
-            # Validate password first
-            password_error = validate_password(user_input[CONF_PASSWORD])
-            if password_error:
-                errors["base"] = password_error
+            # Validate username first
+            username_error = validate_username(username)
+            if username_error:
+                errors["base"] = username_error
+
+            # Validate password
+            if not errors:
+                password_error = validate_password(user_input[CONF_PASSWORD])
+                if password_error:
+                    errors["base"] = password_error
 
             # Validate engine ID format
-            engine_id_error = validate_engine_id(engine_id)
-            if engine_id_error and not errors:
-                errors["base"] = engine_id_error
+            if not errors:
+                engine_id_error = validate_engine_id(engine_id)
+                if engine_id_error:
+                    errors["base"] = engine_id_error
 
             if not errors:
                 # Test connection with new credentials
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
                     engine_id=engine_id,
-                    username=user_input[CONF_USERNAME],
+                    username=username,
                     password=user_input[CONF_PASSWORD],
                     session=session,
                 )
@@ -398,14 +487,16 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     if await api.test_connection():
                         # Update and reload the config entry
+                        # Remove local-specific fields when switching to remote
+                        new_data = {
+                            CONF_CONNECTION_TYPE: CONNECTION_TYPE_REMOTE,
+                            CONF_ENGINE_ID: engine_id,
+                            CONF_USERNAME: username,
+                            CONF_PASSWORD: user_input[CONF_PASSWORD],
+                        }
                         return self.async_update_reload_and_abort(
                             reconfigure_entry,
-                            data_updates={
-                                CONF_CONNECTION_TYPE: CONNECTION_TYPE_REMOTE,
-                                CONF_ENGINE_ID: engine_id,
-                                CONF_USERNAME: user_input[CONF_USERNAME],
-                                CONF_PASSWORD: user_input[CONF_PASSWORD],
-                            },
+                            data=new_data,  # Replace all data
                         )
                     else:
                         errors["base"] = "cannot_connect"

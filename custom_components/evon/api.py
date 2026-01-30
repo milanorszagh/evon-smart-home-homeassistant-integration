@@ -14,7 +14,13 @@ from typing import Any
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DEFAULT_LOGIN_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, EVON_REMOTE_HOST
+from .const import (
+    DEFAULT_LOGIN_TIMEOUT,
+    DEFAULT_REQUEST_TIMEOUT,
+    ENGINE_ID_MAX_LENGTH,
+    ENGINE_ID_MIN_LENGTH,
+    EVON_REMOTE_HOST,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,21 +32,20 @@ INSTANCE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 METHOD_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9]*$")
 
 # Headers that should never be logged (contain sensitive data)
-SENSITIVE_HEADERS = frozenset({
-    "x-elocs-token",
-    "x-elocs-password",
-    "authorization",
-    "cookie",
-    "set-cookie",
-})
+SENSITIVE_HEADERS = frozenset(
+    {
+        "x-elocs-token",
+        "x-elocs-password",
+        "authorization",
+        "cookie",
+        "set-cookie",
+    }
+)
 
 
 def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
     """Redact sensitive headers for safe logging."""
-    return {
-        k: "**REDACTED**" if k.lower() in SENSITIVE_HEADERS else v
-        for k, v in headers.items()
-    }
+    return {k: "**REDACTED**" if k.lower() in SENSITIVE_HEADERS else v for k, v in headers.items()}
 
 
 def _create_ssl_context() -> ssl.SSLContext:
@@ -87,6 +92,23 @@ def encode_password(username: str, password: str) -> str:
     return base64.b64encode(sha512_hash).decode("utf-8")
 
 
+def _validate_engine_id(engine_id: str) -> None:
+    """Validate Engine ID format.
+
+    Args:
+        engine_id: The engine ID to validate
+
+    Raises:
+        ValueError: If the engine ID is invalid
+    """
+    if not engine_id:
+        raise ValueError("Engine ID cannot be empty")
+    if len(engine_id) < ENGINE_ID_MIN_LENGTH or len(engine_id) > ENGINE_ID_MAX_LENGTH:
+        raise ValueError(f"Engine ID must be {ENGINE_ID_MIN_LENGTH}-{ENGINE_ID_MAX_LENGTH} characters")
+    if not engine_id.isalnum():
+        raise ValueError("Engine ID must contain only alphanumeric characters")
+
+
 def build_base_url(host: str | None = None, engine_id: str | None = None) -> str:
     """Build the base URL for the Evon API.
 
@@ -98,11 +120,12 @@ def build_base_url(host: str | None = None, engine_id: str | None = None) -> str
         The base URL for API requests
 
     Raises:
-        ValueError: If neither host nor engine_id is provided
+        ValueError: If neither host nor engine_id is provided, or if engine_id is invalid
     """
     if host:
         return host.rstrip("/")
     elif engine_id:
+        _validate_engine_id(engine_id)
         return f"{EVON_REMOTE_HOST}/{engine_id}"
     else:
         raise ValueError("Either host or engine_id must be provided")
@@ -164,17 +187,28 @@ class EvonApi:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with proper SSL configuration."""
         if self._session is None:
-            # Use explicit SSL context for secure HTTPS connections
-            connector = aiohttp.TCPConnector(ssl=_create_ssl_context())
-            self._session = aiohttp.ClientSession(connector=connector)
-            self._own_session = True
+            try:
+                # Use explicit SSL context for secure HTTPS connections
+                # Set a reasonable limit on concurrent connections
+                connector = aiohttp.TCPConnector(
+                    ssl=_create_ssl_context(),
+                    limit=10,
+                    limit_per_host=5,
+                )
+                self._session = aiohttp.ClientSession(connector=connector)
+                self._own_session = True
+            except Exception as err:
+                raise EvonConnectionError(f"Failed to create HTTP session: {err}") from err
         return self._session
 
     async def close(self) -> None:
-        """Close the session if we own it."""
+        """Close the session if we own it and clear sensitive data."""
         if self._own_session and self._session:
             await self._session.close()
             self._session = None
+        # Clear token from memory for security
+        self._token = None
+        self._token_timestamp = 0.0
 
     async def login(self) -> str:
         """Login to Evon and get token."""
@@ -212,8 +246,14 @@ class EvonApi:
                 # 302 redirect to login.html means auth failed
                 if response.status == 302:
                     location = response.headers.get("Location", "")
+                    # Only log the path portion, not full URL (security)
+                    location_path = location.split("?")[0] if location else "unknown"
+                    _LOGGER.debug("Login redirect detected to path: %s", location_path)
                     if "login" in location.lower():
                         raise EvonAuthError("Login failed: invalid credentials")
+                    # Unexpected redirect - don't expose full URL in logs
+                    _LOGGER.warning("Unexpected redirect during login")
+                    raise EvonAuthError("Login failed: unexpected redirect")
 
                 if response.status != 200:
                     raise EvonAuthError(f"Login failed: {response.status} {response.reason}")
@@ -292,26 +332,34 @@ class EvonApi:
                     return await self._request(method, endpoint, data, retry=False)
 
                 # Handle specific error status codes
+                reason = response.reason or "Unknown"
+                if response.status == 400:
+                    raise EvonApiError(f"Bad request ({reason}): invalid data sent to {endpoint}")
                 if response.status == 403:
-                    raise EvonAuthError("Access forbidden - check user permissions")
+                    raise EvonAuthError(f"Access forbidden ({reason}) - check user permissions")
                 if response.status == 404:
-                    raise EvonApiError(f"Resource not found: {endpoint}")
+                    raise EvonApiError(f"Resource not found ({reason}): {endpoint}")
                 if response.status == 429:
-                    raise EvonApiError("Rate limited - too many requests")
+                    raise EvonApiError(f"Rate limited ({reason}) - too many requests")
                 if response.status in (500, 502, 503, 504):
                     raise EvonConnectionError(
-                        f"Server error ({response.status}) - service may be temporarily unavailable"
+                        f"Server error ({response.status} {reason}) - service may be temporarily unavailable"
                     )
-                if response.status != 200:
-                    raise EvonApiError(f"API request failed: {response.status}")
+                # Accept 200 OK, 201 Created, 204 No Content as success
+                if response.status not in (200, 201, 204):
+                    raise EvonApiError(f"API request failed: {response.status} {reason}")
+
+                # 204 No Content has no body
+                if response.status == 204:
+                    return {}
 
                 # Validate Content-Type header before parsing
                 content_type = response.headers.get("Content-Type", "")
+                if not content_type:
+                    raise EvonApiError("Response missing Content-Type header")
                 if "application/json" not in content_type.lower():
-                    _LOGGER.warning(
-                        "Unexpected Content-Type: %s (expected application/json)",
-                        content_type,
-                    )
+                    # Don't attempt to parse non-JSON responses (could be HTML error pages)
+                    raise EvonApiError(f"Unexpected response type: {content_type} (expected application/json)")
 
                 try:
                     return await response.json()
