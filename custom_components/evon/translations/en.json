@@ -64,6 +64,7 @@
     "error": {
       "cannot_connect": "Failed to connect to Evon Smart Home",
       "invalid_auth": "Invalid username or password",
+      "invalid_host": "Invalid host URL. Please enter a valid IP address or hostname.",
       "unknown": "Unexpected error"
     },
     "abort": {

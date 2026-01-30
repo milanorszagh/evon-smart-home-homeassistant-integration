@@ -28,6 +28,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class InvalidHostError(ValueError):
+    """Exception raised when host URL is invalid."""
+
+
 def normalize_host(host: str) -> str:
     """Normalize host input to a proper URL.
 
@@ -36,8 +40,14 @@ def normalize_host(host: str) -> str:
     - "192.168.1.4:8080" -> "http://192.168.1.4:8080"
     - "http://192.168.1.4" -> "http://192.168.1.4"
     - "http://192.168.1.4/" -> "http://192.168.1.4"
+
+    Raises:
+        InvalidHostError: If the host URL is invalid (empty or no valid netloc)
     """
     host = host.strip()
+
+    if not host:
+        raise InvalidHostError("Host cannot be empty")
 
     # If no scheme, add http://
     if not host.startswith(("http://", "https://")):
@@ -45,6 +55,10 @@ def normalize_host(host: str) -> str:
 
     # Parse and reconstruct to normalize
     parsed = urlparse(host)
+
+    # Validate that we have a valid netloc (host)
+    if not parsed.netloc:
+        raise InvalidHostError("Invalid host URL: no valid host found")
 
     # Reconstruct URL without trailing slash
     normalized = f"{parsed.scheme}://{parsed.netloc}"
@@ -80,39 +94,42 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Normalize the host URL
-            user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
-
-            # Test connection
-            session = async_get_clientsession(self.hass)
-            api = EvonApi(
-                host=user_input[CONF_HOST],
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                session=session,
-            )
-
             try:
-                if await api.test_connection():
-                    # Check if already configured
-                    await self.async_set_unique_id(user_input[CONF_HOST])
-                    self._abort_if_unique_id_configured()
+                # Normalize and validate the host URL
+                user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+            except InvalidHostError:
+                errors["base"] = "invalid_host"
+            else:
+                # Test connection
+                session = async_get_clientsession(self.hass)
+                api = EvonApi(
+                    host=user_input[CONF_HOST],
+                    username=user_input[CONF_USERNAME],
+                    password=user_input[CONF_PASSWORD],
+                    session=session,
+                )
 
-                    return self.async_create_entry(
-                        title=f"Evon ({user_input[CONF_HOST]})",
-                        data=user_input,
-                    )
-                else:
+                try:
+                    if await api.test_connection():
+                        # Check if already configured
+                        await self.async_set_unique_id(user_input[CONF_HOST])
+                        self._abort_if_unique_id_configured()
+
+                        return self.async_create_entry(
+                            title=f"Evon ({user_input[CONF_HOST]})",
+                            data=user_input,
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except EvonAuthError:
+                    errors["base"] = "invalid_auth"
+                except EvonApiError:
                     errors["base"] = "cannot_connect"
-            except EvonAuthError:
-                errors["base"] = "invalid_auth"
-            except EvonApiError:
-                errors["base"] = "cannot_connect"
-            except AbortFlow:
-                raise  # Re-raise flow control exceptions
-            except Exception as ex:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception: %s", ex)
-                errors["base"] = "unknown"
+                except AbortFlow:
+                    raise  # Re-raise flow control exceptions
+                except Exception as ex:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception: %s", ex)
+                    errors["base"] = "unknown"
 
         return self.async_show_form(
             step_id="user",
@@ -125,36 +142,39 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Normalize the host URL
-            user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
-
-            # Test connection with new credentials
-            session = async_get_clientsession(self.hass)
-            api = EvonApi(
-                host=user_input[CONF_HOST],
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                session=session,
-            )
-
             try:
-                if await api.test_connection():
-                    # Update and reload the config entry
-                    return self.async_update_reload_and_abort(
-                        self._get_reconfigure_entry(),
-                        data_updates=user_input,
-                    )
-                else:
+                # Normalize and validate the host URL
+                user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+            except InvalidHostError:
+                errors["base"] = "invalid_host"
+            else:
+                # Test connection with new credentials
+                session = async_get_clientsession(self.hass)
+                api = EvonApi(
+                    host=user_input[CONF_HOST],
+                    username=user_input[CONF_USERNAME],
+                    password=user_input[CONF_PASSWORD],
+                    session=session,
+                )
+
+                try:
+                    if await api.test_connection():
+                        # Update and reload the config entry
+                        return self.async_update_reload_and_abort(
+                            self._get_reconfigure_entry(),
+                            data_updates=user_input,
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except EvonAuthError:
+                    errors["base"] = "invalid_auth"
+                except EvonApiError:
                     errors["base"] = "cannot_connect"
-            except EvonAuthError:
-                errors["base"] = "invalid_auth"
-            except EvonApiError:
-                errors["base"] = "cannot_connect"
-            except AbortFlow:
-                raise  # Re-raise flow control exceptions
-            except Exception as ex:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
-                errors["base"] = "unknown"
+                except AbortFlow:
+                    raise  # Re-raise flow control exceptions
+                except Exception as ex:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
+                    errors["base"] = "unknown"
 
         # Pre-fill with current values
         reconfigure_entry = self._get_reconfigure_entry()
