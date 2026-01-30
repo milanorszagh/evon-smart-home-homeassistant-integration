@@ -315,6 +315,82 @@ async def test_config_flow_reconfigure_auth_error(hass):
 
 
 @pytest.mark.asyncio
+async def test_config_flow_invalid_host_empty(hass):
+    """Test config flow handles empty host URL."""
+    from custom_components.evon.const import DOMAIN
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "host": "",
+            "username": TEST_USERNAME,
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_host"}
+
+
+@pytest.mark.asyncio
+async def test_config_flow_invalid_host_whitespace(hass):
+    """Test config flow handles whitespace-only host URL."""
+    from custom_components.evon.const import DOMAIN
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "host": "   ",
+            "username": TEST_USERNAME,
+            "password": TEST_PASSWORD,
+        },
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_host"}
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reconfigure_invalid_host(hass):
+    """Test reconfigure flow handles invalid host URL."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.evon.const import DOMAIN
+
+    existing_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "http://192.168.1.100",
+            "username": "olduser",
+            "password": "oldpass",
+        },
+        unique_id="http://192.168.1.100",
+    )
+    existing_entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reconfigure", "entry_id": existing_entry.entry_id},
+    )
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "host": "",
+            "username": "newuser",
+            "password": "newpass",
+        },
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_host"}
+
+
+@pytest.mark.asyncio
 async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
     """Test options flow."""
     mock_config_entry_v2.add_to_hass(hass)
