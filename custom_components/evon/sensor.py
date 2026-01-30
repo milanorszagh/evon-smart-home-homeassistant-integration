@@ -216,7 +216,8 @@ async def async_setup_entry(
                         )
                     )
 
-    async_add_entities(entities)
+    if entities:
+        async_add_entities(entities)
 
 
 class EvonTemperatureSensor(EvonEntity, SensorEntity):

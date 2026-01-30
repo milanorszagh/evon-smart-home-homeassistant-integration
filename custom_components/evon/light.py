@@ -43,7 +43,8 @@ async def async_setup_entry(
                 )
             )
 
-    async_add_entities(entities)
+    if entities:
+        async_add_entities(entities)
 
 
 class EvonLight(EvonEntity, LightEntity):
@@ -137,8 +138,8 @@ class EvonLight(EvonEntity, LightEntity):
         self.async_write_ha_state()
 
         if ATTR_BRIGHTNESS in kwargs:
-            # Convert from Home Assistant 0-255 to Evon 0-100
-            brightness = int(kwargs[ATTR_BRIGHTNESS] * 100 / 255)
+            # Convert from Home Assistant 0-255 to Evon 0-100 and clamp to valid range
+            brightness = max(0, min(100, int(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
             await self._api.set_light_brightness(self._instance_id, brightness)
         else:
             await self._api.turn_on_light(self._instance_id)
