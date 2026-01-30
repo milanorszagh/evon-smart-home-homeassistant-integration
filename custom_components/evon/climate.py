@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -25,6 +26,7 @@ from .const import (
     DOMAIN,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
+    OPTIMISTIC_STATE_TIMEOUT,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -84,6 +86,24 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self._optimistic_preset: str | None = None
         self._optimistic_target_temp: float | None = None
         self._optimistic_hvac_mode: HVACMode | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired.
+
+        This prevents stale UI state when recovering from network issues.
+        If the coordinator hasn't confirmed the state within the timeout period,
+        we clear the optimistic state so the UI shows real device state.
+        """
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_preset = None
+            self._optimistic_target_temp = None
+            self._optimistic_hvac_mode = None
+            self._optimistic_state_set_at = None
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -101,6 +121,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_hvac_mode is not None:
             return self._optimistic_hvac_mode
@@ -150,6 +173,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def target_temperature(self) -> float | None:
         """Return the target temperature."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_target_temp is not None:
             return self._optimistic_target_temp
@@ -183,6 +209,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
         - HEATING (winter): 2=away, 3=eco, 4=comfort
         - COOLING (summer): 5=away, 6=eco, 7=comfort
         """
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_preset is not None:
             return self._optimistic_preset
@@ -218,6 +247,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Set new target HVAC mode."""
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_hvac_mode = hvac_mode
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         if hvac_mode == HVACMode.OFF:
@@ -230,8 +260,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Set new target temperature."""
         if ATTR_TEMPERATURE in kwargs:
             temperature = kwargs[ATTR_TEMPERATURE]
+            # Clamp temperature to device min/max range
+            temperature = max(self.min_temp, min(self.max_temp, float(temperature)))
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_target_temp = temperature
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             await self._api.set_climate_temperature(self._instance_id, temperature)
@@ -241,16 +274,21 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Set new preset mode."""
         # Set optimistic values immediately to prevent UI flicker
         self._optimistic_preset = preset_mode
+        self._optimistic_state_set_at = time.monotonic()
 
-        # Set optimistic target temperature based on preset
+        # Set optimistic target temperature based on preset (only if value exists)
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
+            temp: float | None = None
             if preset_mode == CLIMATE_MODE_COMFORT:
-                self._optimistic_target_temp = data.get("comfort_temp")
+                temp = data.get("comfort_temp")
             elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
-                self._optimistic_target_temp = data.get("energy_saving_temp")
+                temp = data.get("energy_saving_temp")
             elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
-                self._optimistic_target_temp = data.get("protection_temp")
+                temp = data.get("protection_temp")
+            # Only set optimistic temp if we got a valid value
+            if temp is not None:
+                self._optimistic_target_temp = temp
 
         self.async_write_ha_state()
 
@@ -267,6 +305,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
+            all_cleared = True
+
             if self._optimistic_preset is not None:
                 mode_saved = data.get("mode_saved", 4)
                 # Use appropriate mapping based on season mode
@@ -277,11 +317,15 @@ class EvonClimate(EvonEntity, ClimateEntity):
                     actual_preset = EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
                 if actual_preset == self._optimistic_preset:
                     self._optimistic_preset = None
+                else:
+                    all_cleared = False
 
             if self._optimistic_target_temp is not None:
                 actual_temp = data.get("target_temperature")
                 if actual_temp == self._optimistic_target_temp:
                     self._optimistic_target_temp = None
+                else:
+                    all_cleared = False
 
             if self._optimistic_hvac_mode is not None:
                 # Determine actual HVAC mode from coordinator data
@@ -295,5 +339,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
                 if actual_hvac_mode == self._optimistic_hvac_mode:
                     self._optimistic_hvac_mode = None
+                else:
+                    all_cleared = False
+
+            # Clear timestamp if all optimistic state has been confirmed
+            if all_cleared:
+                self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()

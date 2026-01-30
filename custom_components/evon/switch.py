@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
@@ -12,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -77,6 +78,17 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         self._attr_unique_id = f"evon_switch_{instance_id}"
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_is_on: bool | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_is_on = None
+            self._optimistic_state_set_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -86,6 +98,9 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the switch is on."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
@@ -98,6 +113,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
         self._optimistic_is_on = True
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         await self._api.turn_on_switch(self._instance_id)
@@ -106,6 +122,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
         self._optimistic_is_on = False
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         await self._api.turn_off_switch(self._instance_id)
@@ -120,6 +137,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:
                     self._optimistic_is_on = None
+                    self._optimistic_state_set_at = None
         super()._handle_coordinator_update()
 
 
@@ -145,6 +163,18 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_is_on: bool | None = None
         # Optimistic time remaining for immediate UI feedback when turning on
         self._optimistic_time_remaining_mins: float | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_is_on = None
+            self._optimistic_time_remaining_mins = None
+            self._optimistic_state_set_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -154,6 +184,9 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the radiator is on."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
@@ -203,6 +236,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_is_on = True
             # Set optimistic time to full duration for immediate progress bar display
             self._optimistic_time_remaining_mins = float(data.get("duration_mins", 30))
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             await self._api.toggle_bathroom_radiator(self._instance_id)
@@ -216,6 +250,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_is_on = False
             # Clear optimistic time when turning off
             self._optimistic_time_remaining_mins = None
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             await self._api.toggle_bathroom_radiator(self._instance_id)
@@ -232,4 +267,5 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
                     self._optimistic_is_on = None
                     # Clear optimistic time once real data is available
                     self._optimistic_time_remaining_mins = None
+                    self._optimistic_state_set_at = None
         super()._handle_coordinator_update()

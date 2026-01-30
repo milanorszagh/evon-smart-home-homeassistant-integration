@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -12,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EvonApi
-from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
+from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
 # Season mode options
@@ -70,6 +71,17 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         self._update_options()
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_option = None
+            self._optimistic_state_set_at = None
 
     def _update_options(self) -> None:
         """Update options from coordinator data."""
@@ -95,6 +107,9 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
     @property
     def current_option(self) -> str | None:
         """Return the current selected option (Evon ID)."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_option is not None:
             return self._optimistic_option
@@ -115,6 +130,7 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         if option in self._attr_options:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             await self._api.activate_home_state(option)
@@ -130,6 +146,7 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
             active_id = self.coordinator.get_active_home_state()
             if active_id == self._optimistic_option:
                 self._optimistic_option = None
+                self._optimistic_state_set_at = None
 
         self.async_write_ha_state()
 
@@ -160,6 +177,17 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
         self._attr_options = SEASON_MODE_OPTIONS
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_option = None
+            self._optimistic_state_set_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -175,6 +203,9 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_option is not None:
             return self._optimistic_option
@@ -196,6 +227,7 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
         if option in SEASON_MODE_OPTIONS:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             is_cooling = option == SEASON_MODE_COOLING
@@ -211,5 +243,6 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
             actual_option = SEASON_MODE_COOLING if is_cooling else SEASON_MODE_HEATING
             if actual_option == self._optimistic_option:
                 self._optimistic_option = None
+                self._optimistic_state_set_at = None
 
         self.async_write_ha_state()
