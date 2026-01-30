@@ -86,7 +86,8 @@ async def async_setup_entry(
                 )
             )
 
-    async_add_entities(entities)
+    if entities:
+        async_add_entities(entities)
 
 
 class EvonCover(EvonEntity, CoverEntity):
@@ -271,7 +272,8 @@ class EvonCover(EvonEntity, CoverEntity):
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""
         if ATTR_POSITION in kwargs:
-            ha_position = kwargs[ATTR_POSITION]
+            # Clamp to valid range 0-100
+            ha_position = max(0, min(100, int(kwargs[ATTR_POSITION])))
             # Set optimistic value immediately
             self._optimistic_position = ha_position
             self.async_write_ha_state()
@@ -318,7 +320,8 @@ class EvonCover(EvonEntity, CoverEntity):
         blind's last movement direction. See module docstring for details.
         """
         if ATTR_TILT_POSITION in kwargs:
-            tilt = kwargs[ATTR_TILT_POSITION]
+            # Clamp to valid range 0-100
+            tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
             self._optimistic_tilt = tilt
             self.async_write_ha_state()
 

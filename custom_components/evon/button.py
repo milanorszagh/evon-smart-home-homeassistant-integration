@@ -7,10 +7,11 @@ import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
@@ -42,7 +43,8 @@ async def async_setup_entry(
                 )
             )
 
-    async_add_entities(entities)
+    if entities:
+        async_add_entities(entities)
 
 
 class EvonSceneButton(EvonEntity, ButtonEntity):
@@ -72,6 +74,9 @@ class EvonSceneButton(EvonEntity, ButtonEntity):
     async def async_press(self) -> None:
         """Execute the scene."""
         _LOGGER.debug("Executing scene %s (%s)", self._device_name, self._instance_id)
-        await self._api.execute_scene(self._instance_id)
+        try:
+            await self._api.execute_scene(self._instance_id)
+        except EvonApiError as err:
+            raise HomeAssistantError(f"Failed to execute scene {self._device_name}: {err}") from err
         # Refresh coordinator to update any affected entities
         await self.coordinator.async_request_refresh()
