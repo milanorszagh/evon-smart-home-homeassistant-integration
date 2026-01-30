@@ -66,3 +66,8 @@ OPTIMISTIC_STATE_TOLERANCE = 2
 
 # Delay after cover stop to ensure UI reflects stopped state (seconds)
 COVER_STOP_DELAY = 0.3
+
+# Timeout for optimistic state clearance (seconds)
+# If coordinator hasn't confirmed state within this time, clear optimistic state
+# to prevent stale UI when recovering from network issues
+OPTIMISTIC_STATE_TIMEOUT = 30.0

@@ -43,6 +43,7 @@ have the same experience.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -59,7 +60,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import COVER_STOP_DELAY, DOMAIN, OPTIMISTIC_STATE_TOLERANCE
+from .const import (
+    COVER_STOP_DELAY,
+    DOMAIN,
+    OPTIMISTIC_STATE_TIMEOUT,
+    OPTIMISTIC_STATE_TOLERANCE,
+)
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -121,6 +127,19 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_position: int | None = None
         self._optimistic_tilt: int | None = None
         self._optimistic_is_moving: bool | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_position = None
+            self._optimistic_tilt = None
+            self._optimistic_is_moving = None
+            self._optimistic_state_set_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -130,6 +149,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def current_cover_position(self) -> int | None:
         """Return current position of cover (0=closed, 100=open in HA)."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_position is not None:
             return self._optimistic_position
@@ -144,6 +166,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return current tilt position of cover."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_tilt is not None:
             return self._optimistic_tilt
@@ -164,6 +189,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def is_opening(self) -> bool:
         """Return if the cover is opening."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI staying stuck after group stop)
         if self._optimistic_is_moving is not None:
             return self._optimistic_is_moving
@@ -175,6 +203,9 @@ class EvonCover(EvonEntity, CoverEntity):
     @property
     def is_closing(self) -> bool:
         """Return if the cover is closing."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI staying stuck after group stop)
         if self._optimistic_is_moving is not None:
             return self._optimistic_is_moving
@@ -219,6 +250,7 @@ class EvonCover(EvonEntity, CoverEntity):
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
             await self._api.open_blind(self._instance_id)
             await self.coordinator.async_request_refresh()
@@ -248,6 +280,7 @@ class EvonCover(EvonEntity, CoverEntity):
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
             await self._api.close_blind(self._instance_id)
             await self.coordinator.async_request_refresh()
@@ -276,6 +309,7 @@ class EvonCover(EvonEntity, CoverEntity):
             ha_position = max(0, min(100, int(kwargs[ATTR_POSITION])))
             # Set optimistic value immediately
             self._optimistic_position = ha_position
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
@@ -291,6 +325,7 @@ class EvonCover(EvonEntity, CoverEntity):
         """
         # Tilt 0 = open slats (when last movement was down, matching Evon app)
         self._optimistic_tilt = 0
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         await self._api.set_blind_tilt(self._instance_id, 0)
@@ -304,6 +339,7 @@ class EvonCover(EvonEntity, CoverEntity):
         """
         # Tilt 100 = closed slats (when last movement was down, matching Evon app)
         self._optimistic_tilt = 100
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         await self._api.set_blind_tilt(self._instance_id, 100)
@@ -323,6 +359,7 @@ class EvonCover(EvonEntity, CoverEntity):
             # Clamp to valid range 0-100
             tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
             self._optimistic_tilt = tilt
+            self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
             await self._api.set_blind_tilt(self._instance_id, tilt)
@@ -333,21 +370,33 @@ class EvonCover(EvonEntity, CoverEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
+            all_cleared = True
+
             if self._optimistic_position is not None:
                 # Convert Evon position to HA position for comparison
                 actual_position = 100 - data.get("position", 0)
                 # Allow small tolerance for rounding
                 if abs(actual_position - self._optimistic_position) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_position = None
+                else:
+                    all_cleared = False
 
             if self._optimistic_tilt is not None:
                 actual_tilt = data.get("angle", 0)
                 if abs(actual_tilt - self._optimistic_tilt) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_tilt = None
+                else:
+                    all_cleared = False
 
             if self._optimistic_is_moving is not None:
                 actual_is_moving = data.get("is_moving", False)
                 if actual_is_moving == self._optimistic_is_moving:
                     self._optimistic_is_moving = None
+                else:
+                    all_cleared = False
+
+            # Clear timestamp if all optimistic state has been confirmed
+            if all_cleared:
+                self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()

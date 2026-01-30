@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from homeassistant.components.light import (
@@ -16,7 +17,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import CONF_NON_DIMMABLE_LIGHTS, DOMAIN, OPTIMISTIC_STATE_TOLERANCE
+from .const import (
+    CONF_NON_DIMMABLE_LIGHTS,
+    DOMAIN,
+    OPTIMISTIC_STATE_TIMEOUT,
+    OPTIMISTIC_STATE_TOLERANCE,
+)
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -80,6 +86,18 @@ class EvonLight(EvonEntity, LightEntity):
         self._optimistic_brightness: int | None = None  # HA scale 0-255
         # Store last known brightness for optimistic turn_on (HA scale 0-255)
         self._last_brightness: int | None = None
+        # Timestamp when optimistic state was set (for timeout-based clearance)
+        self._optimistic_state_set_at: float | None = None
+
+    def _clear_optimistic_state_if_expired(self) -> None:
+        """Clear optimistic state if timeout has expired."""
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
+        ):
+            self._optimistic_is_on = None
+            self._optimistic_brightness = None
+            self._optimistic_state_set_at = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -90,6 +108,9 @@ class EvonLight(EvonEntity, LightEntity):
     @property
     def is_on(self) -> bool:
         """Return true if the light is on."""
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
+
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
@@ -105,6 +126,9 @@ class EvonLight(EvonEntity, LightEntity):
         # Non-dimmable lights don't report brightness
         if not self._is_dimmable:
             return None
+
+        # Clear expired optimistic state to prevent stale UI on network recovery
+        self._clear_optimistic_state_if_expired()
 
         # Return optimistic value if set (prevents UI flicker during updates)
         if self._optimistic_brightness is not None:
@@ -135,6 +159,7 @@ class EvonLight(EvonEntity, LightEntity):
         elif self._last_brightness is not None and self._is_dimmable:
             # Use last known brightness for optimistic display
             self._optimistic_brightness = self._last_brightness
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         if ATTR_BRIGHTNESS in kwargs:
@@ -149,6 +174,7 @@ class EvonLight(EvonEntity, LightEntity):
         """Turn off the light."""
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_is_on = False
+        self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
         await self._api.turn_off_light(self._instance_id)
@@ -159,6 +185,8 @@ class EvonLight(EvonEntity, LightEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self.coordinator.get_entity_data("lights", self._instance_id)
         if data:
+            all_cleared = True
+
             # Save last known brightness when light is on (for optimistic turn_on)
             if data.get("is_on", False) and self._is_dimmable:
                 evon_brightness = data.get("brightness", 0)
@@ -169,6 +197,8 @@ class EvonLight(EvonEntity, LightEntity):
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:
                     self._optimistic_is_on = None
+                else:
+                    all_cleared = False
 
             if self._optimistic_brightness is not None:
                 evon_brightness = data.get("brightness", 0)
@@ -176,5 +206,11 @@ class EvonLight(EvonEntity, LightEntity):
                 # Allow small tolerance for rounding differences
                 if abs(actual_brightness - self._optimistic_brightness) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_brightness = None
+                else:
+                    all_cleared = False
+
+            # Clear timestamp if all optimistic state has been confirmed
+            if all_cleared:
+                self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()
