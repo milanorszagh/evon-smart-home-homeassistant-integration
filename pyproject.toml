@@ -21,6 +21,7 @@ select = [
     "UP",     # pyupgrade
     "ARG",    # flake8-unused-arguments
     "SIM",    # flake8-simplify
+    "ASYNC",  # flake8-async (async/await best practices)
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
