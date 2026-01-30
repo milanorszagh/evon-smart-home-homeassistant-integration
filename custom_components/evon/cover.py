@@ -59,7 +59,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import COVER_STOP_DELAY, DOMAIN, OPTIMISTIC_STATE_TOLERANCE
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -212,7 +212,7 @@ class EvonCover(EvonEntity, CoverEntity):
             await self._api.open_blind(self._instance_id)
 
             # Small delay then update state again to ensure UI reflects stopped state
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(COVER_STOP_DELAY)
             self.async_write_ha_state()
         else:
             # Blind is stopped - this will start opening
@@ -241,7 +241,7 @@ class EvonCover(EvonEntity, CoverEntity):
             await self._api.close_blind(self._instance_id)
 
             # Small delay then update state again to ensure UI reflects stopped state
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(COVER_STOP_DELAY)
             self.async_write_ha_state()
         else:
             # Blind is stopped - this will start closing
@@ -265,7 +265,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
         # Small delay then update state again to ensure UI reflects stopped state
         # This helps when multiple blinds are stopped via group action
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(COVER_STOP_DELAY)
         self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
@@ -334,12 +334,12 @@ class EvonCover(EvonEntity, CoverEntity):
                 # Convert Evon position to HA position for comparison
                 actual_position = 100 - data.get("position", 0)
                 # Allow small tolerance for rounding
-                if abs(actual_position - self._optimistic_position) <= 2:
+                if abs(actual_position - self._optimistic_position) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_position = None
 
             if self._optimistic_tilt is not None:
                 actual_tilt = data.get("angle", 0)
-                if abs(actual_tilt - self._optimistic_tilt) <= 2:
+                if abs(actual_tilt - self._optimistic_tilt) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_tilt = None
 
             if self._optimistic_is_moving is not None:

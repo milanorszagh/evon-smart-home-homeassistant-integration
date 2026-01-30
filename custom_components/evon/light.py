@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import CONF_NON_DIMMABLE_LIGHTS, DOMAIN
+from .const import CONF_NON_DIMMABLE_LIGHTS, DOMAIN, OPTIMISTIC_STATE_TOLERANCE
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -173,7 +173,7 @@ class EvonLight(EvonEntity, LightEntity):
                 evon_brightness = data.get("brightness", 0)
                 actual_brightness = int(evon_brightness * 255 / 100)
                 # Allow small tolerance for rounding differences
-                if abs(actual_brightness - self._optimistic_brightness) <= 3:
+                if abs(actual_brightness - self._optimistic_brightness) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_brightness = None
 
         super()._handle_coordinator_update()

@@ -60,3 +60,9 @@ REPAIR_CONFIG_MIGRATION = "config_migration_needed"
 
 # Connection failure threshold before creating repair
 CONNECTION_FAILURE_THRESHOLD = 3
+
+# Optimistic state tolerance (allows small rounding differences)
+OPTIMISTIC_STATE_TOLERANCE = 2
+
+# Delay after cover stop to ensure UI reflects stopped state (seconds)
+COVER_STOP_DELAY = 0.3

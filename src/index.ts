@@ -147,12 +147,13 @@ async function login(): Promise<string> {
   }
 
   currentToken = token;
-  tokenExpiry = Date.now() + 27 * 24 * 60 * 60 * 1000; // 27 days
+  tokenExpiry = Date.now() + TOKEN_VALIDITY_DAYS * 24 * 60 * 60 * 1000;
 
   return token;
 }
 
 const API_TIMEOUT_MS = 10000; // 10 second timeout for API requests
+const TOKEN_VALIDITY_DAYS = 27; // Evon token validity period
 
 async function apiRequest<T>(
   endpoint: string,
@@ -242,6 +243,36 @@ async function controlAllDevices(
     }
   }
   return results;
+}
+
+interface LightWithState {
+  id: string;
+  name: string;
+  isOn: boolean;
+  brightness: number;
+  error?: string;
+}
+
+async function fetchLightsWithState(): Promise<LightWithState[]> {
+  const instances = await getInstances();
+  const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+
+  return Promise.all(
+    lights.map(async (light) => {
+      try {
+        const details = await apiRequest<LightState>(`/instances/${light.ID}`);
+        return {
+          id: light.ID,
+          name: details.data.Name || light.Name,
+          isOn: details.data.IsOn ?? false,
+          brightness: details.data.ScaledBrightness ?? 0,
+        };
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        return { id: light.ID, name: light.Name, isOn: false, brightness: 0, error: errorMsg };
+      }
+    })
+  );
 }
 
 // =============================================================================
@@ -350,26 +381,7 @@ server.tool(
   "List all lights with their current state",
   {},
   async () => {
-    const instances = await getInstances();
-    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
-
-    const lightsWithState = await Promise.all(
-      lights.map(async (light) => {
-        try {
-          const details = await apiRequest<LightState>(`/instances/${light.ID}`);
-          return {
-            id: light.ID,
-            name: details.data.Name || light.Name,
-            isOn: details.data.IsOn ?? false,
-            brightness: details.data.ScaledBrightness ?? 0,
-          };
-        } catch (error: unknown) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          return { id: light.ID, name: light.Name, isOn: false, brightness: 0, error: errorMsg };
-        }
-      })
-    );
-
+    const lightsWithState = await fetchLightsWithState();
     return {
       content: [{ type: "text", text: JSON.stringify(lightsWithState, null, 2) }],
     };
@@ -765,26 +777,7 @@ server.resource(
   "evon://lights",
   "All Evon lights with current state",
   async () => {
-    const instances = await getInstances();
-    const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
-
-    const lightsWithState = await Promise.all(
-      lights.map(async (light) => {
-        try {
-          const details = await apiRequest<LightState>(`/instances/${light.ID}`);
-          return {
-            id: light.ID,
-            name: details.data.Name || light.Name,
-            isOn: details.data.IsOn ?? false,
-            brightness: details.data.ScaledBrightness ?? 0,
-          };
-        } catch (error: unknown) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          return { id: light.ID, name: light.Name, isOn: false, brightness: 0, error: errorMsg };
-        }
-      })
-    );
-
+    const lightsWithState = await fetchLightsWithState();
     return {
       contents: [{
         uri: "evon://lights",
