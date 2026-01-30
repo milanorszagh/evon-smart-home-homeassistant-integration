@@ -18,8 +18,13 @@ Control your [Evon Smart Home](https://www.evon-smarthome.com/) system directly 
 
 After installation, add the integration via **Settings** → **Devices & Services** → **Add Integration** and search for "Evon Smart Home".
 
+### Connection Methods
+
+- **Local Network** (Recommended): Direct connection using your Evon system's IP address
+- **Remote Access**: Connect via my.evon-smarthome.com when outside your home network
+
 You'll need:
-- Your Evon system's IP address/URL
+- Your Evon system's IP address (local) or Engine ID (remote)
 - Your Evon username and password
 
 ## Options

@@ -9,9 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_HOST, DOMAIN
+from .const import CONF_ENGINE_ID, CONF_HOST, DOMAIN
 
-TO_REDACT = {CONF_PASSWORD, CONF_USERNAME, CONF_HOST, "token", "x-elocs-token", "x-elocs-password"}
+TO_REDACT = {CONF_PASSWORD, CONF_USERNAME, CONF_HOST, CONF_ENGINE_ID, "token", "x-elocs-token", "x-elocs-password"}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:

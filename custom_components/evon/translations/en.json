@@ -73,6 +73,16 @@
           "engine_id": "Your unique Evon Smart Home system identifier (e.g., 123456)"
         }
       },
+      "reconfigure": {
+        "title": "Reconfigure Evon Smart Home",
+        "description": "Current connection: **{current_connection}**\n\nYou can switch between local and remote access or update your credentials.",
+        "data": {
+          "connection_type": "Connection type"
+        },
+        "data_description": {
+          "connection_type": "**Local network** is recommended for faster response times. Use **Remote access** when connecting from outside your home network."
+        }
+      },
       "reconfigure_local": {
         "title": "Reconfigure Local Connection",
         "description": "Update your local connection details.",
@@ -97,6 +107,7 @@
       "invalid_auth": "Invalid username or password",
       "invalid_host": "Invalid host URL. Please enter a valid IP address or hostname.",
       "invalid_engine_id": "Invalid Engine ID. Must be 4-12 alphanumeric characters.",
+      "invalid_username": "Username cannot be empty.",
       "invalid_password": "Password cannot be empty.",
       "unknown": "Unexpected error"
     },
