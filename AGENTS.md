@@ -2,6 +2,8 @@
 
 **IMPORTANT FOR CLAUDE:** This is the primary reference document. Always check this file first when working with this codebase. The Evon MCP server is available for direct API queries - prefer using it over writing scripts.
 
+**Commit messages:** Do not add Co-Authored-By lines to commit messages.
+
 This document provides critical information for AI agents working with this codebase.
 
 ## Project Overview
@@ -235,8 +237,12 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 ## File Locations
 
 ### MCP Server
-- Source: `src/index.ts`
-- Compiled: `dist/index.js`
+- Entry point: `src/index.ts`
+- API client: `src/api-client.ts`
+- Configuration: `src/config.ts`, `src/constants.ts`, `src/types.ts`
+- Tools: `src/tools/` (lights, blinds, climate, home-state, radiators, sensors, generic)
+- Resources: `src/resources/` (lights, blinds, climate, home-state, radiators, summary)
+- Compiled: `dist/`
 - Build: `npm run build`
 
 ### Home Assistant Integration
@@ -244,7 +250,9 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 - Entry point: `__init__.py`
 - API client: `api.py`
 - Base entity: `base_entity.py`
-- Data coordinator: `coordinator.py`
+- Data coordinator: `coordinator/` package
+  - Main coordinator: `coordinator/__init__.py`
+  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes)
 - Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py`, `button.py`
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
@@ -549,10 +557,14 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 
 1. Find the device class name in `/api/instances` response
 2. Add class name constant to `const.py`
-3. Add filtering logic to `coordinator.py` in `_async_update_data()`
-4. Create new platform file (e.g., `sensor.py`)
-5. Add platform to `PLATFORMS` list in `__init__.py`
-6. Update `manifest.json` if needed
+3. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
+4. Export processor from `coordinator/processors/__init__.py`
+5. Call processor in `coordinator/__init__.py` `_async_update_data()`
+6. Add getter method in coordinator (e.g., `get_new_device_data()`)
+7. Create new platform file (e.g., `sensor.py`)
+8. Add platform to `PLATFORMS` list in `__init__.py`
+9. Add tests in `tests/test_new_device.py`
+10. Update `manifest.json` if needed
 
 ## Integration Features
 
@@ -636,11 +648,23 @@ ruff check custom_components/evon/ && ruff format --check custom_components/evon
 
 ## Unit Tests
 
-Tests are in the `tests/` directory:
-- `test_standalone.py` - Standalone tests (no HA dependency, reads files directly)
+Tests are in the `tests/` directory (130+ tests, ~84% coverage):
+
+**Platform tests:**
+- `test_light.py` - Light entity tests
+- `test_cover.py` - Cover/blind entity tests
+- `test_climate.py` - Climate entity tests
+- `test_sensor.py` - Sensor entity tests
+- `test_switch.py` - Switch entity tests
+- `test_select.py` - Select entity tests (home state, season mode)
+- `test_binary_sensor.py` - Binary sensor tests (valves)
+- `test_button.py` - Button entity tests (scenes)
+
+**Core tests:**
 - `test_api.py` - API client tests (mocks homeassistant, works without HA installed)
-- `test_config_flow.py` - Config and options flow tests (requires homeassistant)
-- `test_coordinator.py` - Data coordinator tests (requires homeassistant)
+- `test_config_flow.py` / `test_config_flow_unit.py` - Config and options flow tests
+- `test_coordinator.py` - Data coordinator and getter method tests
+- `test_diagnostics.py` - Diagnostics export tests
 
 ### Test Architecture
 

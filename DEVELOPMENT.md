@@ -17,7 +17,20 @@ custom_components/evon/
 ├── base_entity.py       # Base entity class with common functionality
 ├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
 ├── const.py             # Constants, device classes, repair identifiers
-├── coordinator.py       # Data update coordinator with connection failure tracking
+├── coordinator/         # Data update coordinator package
+│   ├── __init__.py      # Main coordinator with connection failure tracking
+│   └── processors/      # Device-specific data processors
+│       ├── __init__.py
+│       ├── lights.py
+│       ├── blinds.py
+│       ├── climate.py
+│       ├── switches.py
+│       ├── smart_meters.py
+│       ├── air_quality.py
+│       ├── valves.py
+│       ├── home_states.py
+│       ├── bathroom_radiators.py
+│       └── scenes.py
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
@@ -35,8 +48,29 @@ custom_components/evon/
 
 ```
 src/
-├── index.ts             # MCP server entry point, tools, and resources
-└── ... (compiled to dist/)
+├── index.ts             # MCP server entry point
+├── api-client.ts        # Evon API client
+├── config.ts            # Environment configuration
+├── constants.ts         # Shared constants
+├── helpers.ts           # Utility functions
+├── types.ts             # TypeScript type definitions
+├── tools/               # MCP tool implementations
+│   ├── index.ts         # Tool exports and registration
+│   ├── lights.ts        # Light control tools
+│   ├── blinds.ts        # Blind control tools
+│   ├── climate.ts       # Climate control tools
+│   ├── home-state.ts    # Home state tools
+│   ├── radiators.ts     # Bathroom radiator tools
+│   ├── sensors.ts       # Sensor listing tools
+│   └── generic.ts       # Generic helper tools
+└── resources/           # MCP resource implementations
+    ├── index.ts         # Resource exports and registration
+    ├── lights.ts        # Light resources
+    ├── blinds.ts        # Blind resources
+    ├── climate.ts       # Climate resources
+    ├── home-state.ts    # Home state resources
+    ├── radiators.ts     # Radiator resources
+    └── summary.ts       # Home summary resource
 ```
 
 ### Data Flow
@@ -352,10 +386,14 @@ ruff check custom_components/evon/ && ruff format --check custom_components/evon
 ### Adding New Device Types
 
 1. Add device class constant to `const.py`
-2. Add processing logic to `coordinator.py`
-3. Create platform file or extend existing one
-4. Register platform in `__init__.py` PLATFORMS list
-5. Add API methods to `api.py` if needed
+2. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
+3. Export processor from `coordinator/processors/__init__.py`
+4. Call processor in `coordinator/__init__.py` `_async_update_data()`
+5. Add getter method in coordinator (e.g., `get_new_device_data()`)
+6. Create platform file or extend existing one
+7. Register platform in `__init__.py` PLATFORMS list
+8. Add API methods to `api.py` if needed
+9. Add tests in `tests/test_new_device.py`
 
 ### Entity Best Practices
 
@@ -432,6 +470,23 @@ pytest -v
 ```
 
 Tests are in `tests/` - some require Home Assistant installed.
+
+### Test Coverage
+
+```bash
+pytest --cov=custom_components/evon --cov-report=term-missing
+```
+
+Test files:
+- `test_api.py` - API client tests
+- `test_config_flow.py` / `test_config_flow_unit.py` - Configuration flow tests
+- `test_coordinator.py` - Coordinator and getter method tests
+- `test_diagnostics.py` - Diagnostics export tests
+- `test_light.py`, `test_cover.py`, `test_climate.py` - Platform tests
+- `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
+- `test_binary_sensor.py`, `test_button.py` - Additional entity tests
+
+Current coverage: ~84% (130+ tests)
 
 ---
 
