@@ -28,6 +28,9 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
+    ENGINE_ID_MAX_LENGTH,
+    ENGINE_ID_MIN_LENGTH,
+    MIN_PASSWORD_LENGTH,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -69,6 +72,46 @@ def normalize_host(host: str) -> str:
     normalized = f"{parsed.scheme}://{parsed.netloc}"
 
     return normalized
+
+
+def validate_engine_id(engine_id: str) -> str | None:
+    """Validate Engine ID format.
+
+    Args:
+        engine_id: The engine ID to validate
+
+    Returns:
+        Error key if invalid, None if valid
+    """
+    engine_id = engine_id.strip()
+
+    if not engine_id:
+        return "invalid_engine_id"
+
+    # Check length constraints
+    if len(engine_id) < ENGINE_ID_MIN_LENGTH or len(engine_id) > ENGINE_ID_MAX_LENGTH:
+        return "invalid_engine_id"
+
+    # Engine IDs are typically numeric (e.g., "985315")
+    # Allow alphanumeric for flexibility but no special characters
+    if not re.match(r"^[a-zA-Z0-9]+$", engine_id):
+        return "invalid_engine_id"
+
+    return None
+
+
+def validate_password(password: str) -> str | None:
+    """Validate password is not empty.
+
+    Args:
+        password: The password to validate
+
+    Returns:
+        Error key if invalid, None if valid
+    """
+    if not password or len(password.strip()) < MIN_PASSWORD_LENGTH:
+        return "invalid_password"
+    return None
 
 
 STEP_CONNECTION_TYPE_SCHEMA = vol.Schema(
@@ -136,12 +179,18 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                # Normalize and validate the host URL
-                user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
-            except InvalidHostError:
-                errors["base"] = "invalid_host"
+            # Validate password first
+            password_error = validate_password(user_input[CONF_PASSWORD])
+            if password_error:
+                errors["base"] = password_error
             else:
+                try:
+                    # Normalize and validate the host URL
+                    user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+                except InvalidHostError:
+                    errors["base"] = "invalid_host"
+
+            if not errors:
                 # Test connection
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
@@ -188,10 +237,18 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             engine_id = user_input[CONF_ENGINE_ID].strip()
-            # Validate engine ID format (alphanumeric, typically numeric like "985315")
-            if not engine_id or not re.match(r"^[a-zA-Z0-9]+$", engine_id):
-                errors["base"] = "invalid_engine_id"
-            else:
+
+            # Validate password first
+            password_error = validate_password(user_input[CONF_PASSWORD])
+            if password_error:
+                errors["base"] = password_error
+
+            # Validate engine ID format
+            engine_id_error = validate_engine_id(engine_id)
+            if engine_id_error and not errors:
+                errors["base"] = engine_id_error
+
+            if not errors:
                 # Test connection
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
@@ -252,12 +309,18 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current_data = reconfigure_entry.data
 
         if user_input is not None:
-            try:
-                # Normalize and validate the host URL
-                user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
-            except InvalidHostError:
-                errors["base"] = "invalid_host"
+            # Validate password first
+            password_error = validate_password(user_input[CONF_PASSWORD])
+            if password_error:
+                errors["base"] = password_error
             else:
+                try:
+                    # Normalize and validate the host URL
+                    user_input[CONF_HOST] = normalize_host(user_input[CONF_HOST])
+                except InvalidHostError:
+                    errors["base"] = "invalid_host"
+
+            if not errors:
                 # Test connection with new credentials
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(
@@ -311,10 +374,18 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             engine_id = user_input[CONF_ENGINE_ID].strip()
-            # Validate engine ID format (alphanumeric, typically numeric like "985315")
-            if not engine_id or not re.match(r"^[a-zA-Z0-9]+$", engine_id):
-                errors["base"] = "invalid_engine_id"
-            else:
+
+            # Validate password first
+            password_error = validate_password(user_input[CONF_PASSWORD])
+            if password_error:
+                errors["base"] = password_error
+
+            # Validate engine ID format
+            engine_id_error = validate_engine_id(engine_id)
+            if engine_id_error and not errors:
+                errors["base"] = engine_id_error
+
+            if not errors:
                 # Test connection with new credentials
                 session = async_get_clientsession(self.hass)
                 api = EvonApi(

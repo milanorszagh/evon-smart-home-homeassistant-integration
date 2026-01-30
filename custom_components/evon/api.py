@@ -2,17 +2,79 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
+import re
+import ssl
+import time
 from typing import Any
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DEFAULT_REQUEST_TIMEOUT, EVON_REMOTE_HOST
+from .const import DEFAULT_LOGIN_TIMEOUT, DEFAULT_REQUEST_TIMEOUT, EVON_REMOTE_HOST
 
 _LOGGER = logging.getLogger(__name__)
+
+# Token TTL in seconds (refresh token after this time)
+TOKEN_TTL_SECONDS = 3600  # 1 hour
+
+# Validation patterns for API parameters
+INSTANCE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
+METHOD_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9]*$")
+
+# Headers that should never be logged (contain sensitive data)
+SENSITIVE_HEADERS = frozenset({
+    "x-elocs-token",
+    "x-elocs-password",
+    "authorization",
+    "cookie",
+    "set-cookie",
+})
+
+
+def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
+    """Redact sensitive headers for safe logging."""
+    return {
+        k: "**REDACTED**" if k.lower() in SENSITIVE_HEADERS else v
+        for k, v in headers.items()
+    }
+
+
+def _create_ssl_context() -> ssl.SSLContext:
+    """Create a secure SSL context for HTTPS connections.
+
+    Uses the system's certificate store for verification.
+    """
+    return ssl.create_default_context()
+
+
+def _validate_instance_id(instance_id: str) -> None:
+    """Validate instance ID format to prevent path traversal.
+
+    Args:
+        instance_id: The instance ID to validate
+
+    Raises:
+        ValueError: If the instance ID contains invalid characters
+    """
+    if not instance_id or not INSTANCE_ID_PATTERN.match(instance_id):
+        raise ValueError(f"Invalid instance ID format: {instance_id!r}")
+
+
+def _validate_method_name(method: str) -> None:
+    """Validate method name format.
+
+    Args:
+        method: The method name to validate
+
+    Raises:
+        ValueError: If the method name contains invalid characters
+    """
+    if not method or not METHOD_NAME_PATTERN.match(method):
+        raise ValueError(f"Invalid method name format: {method!r}")
 
 
 def encode_password(username: str, password: str) -> str:
@@ -93,14 +155,18 @@ class EvonApi:
             self._password = encode_password(username, password)
         self._session = session
         self._token: str | None = None
+        self._token_timestamp: float = 0.0
+        self._token_lock = asyncio.Lock()
         self._own_session = False
         self._is_remote = engine_id is not None
         self._engine_id = engine_id
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
+        """Get or create aiohttp session with proper SSL configuration."""
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            # Use explicit SSL context for secure HTTPS connections
+            connector = aiohttp.TCPConnector(ssl=_create_ssl_context())
+            self._session = aiohttp.ClientSession(connector=connector)
             self._own_session = True
         return self._session
 
@@ -129,7 +195,8 @@ class EvonApi:
 
         try:
             # Disable auto-redirect following - we need to check the response headers
-            timeout = aiohttp.ClientTimeout(total=DEFAULT_REQUEST_TIMEOUT)
+            # Use shorter timeout for login (should be fast)
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_LOGIN_TIMEOUT)
             async with session.post(
                 login_url,
                 headers=headers,
@@ -139,7 +206,7 @@ class EvonApi:
                 _LOGGER.debug(
                     "Login response: status=%s, headers=%s",
                     response.status,
-                    dict(response.headers),
+                    _redact_headers(dict(response.headers)),
                 )
 
                 # 302 redirect to login.html means auth failed
@@ -156,13 +223,23 @@ class EvonApi:
                     raise EvonAuthError("No token received from login")
 
                 self._token = token
+                self._token_timestamp = time.monotonic()
                 return token
 
         except aiohttp.ClientError as err:
             raise EvonConnectionError(f"Connection error: {err}") from err
 
+    def _is_token_expired(self) -> bool:
+        """Check if the current token has expired based on TTL."""
+        if not self._token:
+            return True
+        elapsed = time.monotonic() - self._token_timestamp
+        return elapsed >= TOKEN_TTL_SECONDS
+
     async def _ensure_token(self) -> str:
         """Ensure we have a valid token.
+
+        Uses a lock to prevent concurrent login attempts (race condition fix).
 
         Returns:
             The authentication token.
@@ -170,12 +247,15 @@ class EvonApi:
         Raises:
             EvonAuthError: If login fails and no token is available.
         """
-        if not self._token:
-            await self.login()
-        # login() always sets self._token or raises an exception
-        if self._token is None:
-            raise EvonAuthError("Failed to obtain authentication token")
-        return self._token
+        async with self._token_lock:
+            if not self._token or self._is_token_expired():
+                if self._is_token_expired() and self._token:
+                    _LOGGER.debug("Token expired, refreshing")
+                await self.login()
+            # login() always sets self._token or raises an exception
+            if self._token is None:
+                raise EvonAuthError("Failed to obtain authentication token")
+            return self._token
 
     async def _request(
         self,
@@ -205,12 +285,33 @@ class EvonApi:
             ) as response:
                 # Handle auth errors with retry
                 if response.status in (302, 401) and retry:
-                    self._token = None
+                    async with self._token_lock:
+                        self._token = None
+                        self._token_timestamp = 0.0
                     await self.login()
                     return await self._request(method, endpoint, data, retry=False)
 
+                # Handle specific error status codes
+                if response.status == 403:
+                    raise EvonAuthError("Access forbidden - check user permissions")
+                if response.status == 404:
+                    raise EvonApiError(f"Resource not found: {endpoint}")
+                if response.status == 429:
+                    raise EvonApiError("Rate limited - too many requests")
+                if response.status in (500, 502, 503, 504):
+                    raise EvonConnectionError(
+                        f"Server error ({response.status}) - service may be temporarily unavailable"
+                    )
                 if response.status != 200:
                     raise EvonApiError(f"API request failed: {response.status}")
+
+                # Validate Content-Type header before parsing
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" not in content_type.lower():
+                    _LOGGER.warning(
+                        "Unexpected Content-Type: %s (expected application/json)",
+                        content_type,
+                    )
 
                 try:
                     return await response.json()
@@ -227,6 +328,7 @@ class EvonApi:
 
     async def get_instance(self, instance_id: str) -> dict[str, Any]:
         """Get a specific instance."""
+        _validate_instance_id(instance_id)
         result = await self._request("GET", f"/instances/{instance_id}")
         return result.get("data", {})
 
@@ -254,6 +356,8 @@ class EvonApi:
 
     async def call_method(self, instance_id: str, method: str, params: list | None = None) -> dict[str, Any]:
         """Call a method on an instance."""
+        _validate_instance_id(instance_id)
+        _validate_method_name(method)
         result = await self._request(
             "POST",
             f"/instances/{instance_id}/{method}",

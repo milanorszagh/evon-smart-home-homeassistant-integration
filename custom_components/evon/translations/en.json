@@ -96,7 +96,8 @@
       "cannot_connect": "Failed to connect to Evon Smart Home",
       "invalid_auth": "Invalid username or password",
       "invalid_host": "Invalid host URL. Please enter a valid IP address or hostname.",
-      "invalid_engine_id": "Invalid Engine ID. Please enter a valid Engine ID.",
+      "invalid_engine_id": "Invalid Engine ID. Must be 4-12 alphanumeric characters.",
+      "invalid_password": "Password cannot be empty.",
       "unknown": "Unexpected error"
     },
     "abort": {
