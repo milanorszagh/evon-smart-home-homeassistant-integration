@@ -116,6 +116,7 @@ async def _async_cleanup_stale_entities(
         "air_quality",
         "valves",
         "bathroom_radiators",
+        "scenes",
     ]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:
@@ -125,6 +126,10 @@ async def _async_cleanup_stale_entities(
     if "home_states" in coordinator.data and coordinator.data["home_states"]:
         # The home state select entity uses a fixed ID pattern
         current_device_ids.add("home_state_selector")
+
+    # Season mode uses a fixed ID pattern
+    if "season_mode" in coordinator.data:
+        current_device_ids.add("season_mode")
 
     # Get entity registry
     entity_registry = er.async_get(hass)
