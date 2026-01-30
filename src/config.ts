@@ -2,7 +2,11 @@
  * Configuration and password encoding for Evon Smart Home MCP Server
  */
 
+import { config } from "dotenv";
 import { createHash } from "crypto";
+
+// Load environment variables from .env file
+config();
 
 /**
  * Encode password for Evon API.
