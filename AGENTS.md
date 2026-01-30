@@ -689,27 +689,57 @@ ruff format custom_components/evon/
 npm run lint
 ```
 
-## Release Process
+## Pre-Commit Checklist
 
-Before creating a release, ensure the following are up to date:
+**IMPORTANT**: Before every commit, ensure documentation is updated:
 
-1. **Version numbers** - Update in all three files:
-   - `package.json`
-   - `pyproject.toml`
-   - `custom_components/evon/manifest.json`
+1. **Update ALL documentation files** if the changes affect them:
+   - `README.md` - User-facing features, installation, configuration
+   - `DEVELOPMENT.md` - Architecture, API reference, code patterns
+   - `AGENTS.md` - AI agent guidelines, debugging tips, gotchas
+   - `info.md` - HACS integration page summary
+   - `docs/*.md` - Detailed technical documentation (e.g., BLIND_TILT_BEHAVIOR.md)
 
-2. **Documentation** - Update these files with any new findings:
-   - `README.md` - User-facing documentation, supported devices, API reference
-   - `AGENTS.md` - AI agent guidelines, debugging tips, API discoveries
-
-3. **Version history** - Add entry to both README.md and AGENTS.md
-
-4. **Linting** - Run all CI checks before committing:
+2. **Run linting** before committing:
    ```bash
    ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
    ```
 
-**Important**: Always document new API findings (properties, methods, behaviors) in both README.md (API Reference section) and AGENTS.md (relevant sections). This helps future debugging and development.
+3. **Check for undocumented API discoveries** - Any new properties, methods, or behaviors found during development should be documented.
+
+---
+
+## Release Process
+
+Before creating a release, ensure the following are up to date:
+
+1. **Version numbers** - Update in ALL THREE files (they must match!):
+   - `package.json` ← **Often forgotten!**
+   - `pyproject.toml`
+   - `custom_components/evon/manifest.json`
+
+2. **Documentation** - Review and update ALL docs:
+   - `README.md` - User-facing documentation, supported devices
+   - `DEVELOPMENT.md` - API reference, code patterns
+   - `AGENTS.md` - AI guidelines, debugging tips, version history
+   - `info.md` - HACS summary
+   - `docs/*.md` - Detailed technical docs
+
+3. **Version history** - Add entry to:
+   - `README.md` (brief, user-friendly)
+   - `AGENTS.md` (detailed, technical)
+
+4. **Linting** - Run all CI checks:
+   ```bash
+   ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+   ```
+
+5. **Build TypeScript** - Ensure MCP server compiles:
+   ```bash
+   npm run build
+   ```
+
+**Common mistake**: `package.json` version was not updated from v1.4.1 to v1.11.0 across multiple releases. Always check all three version files match!
 
 ## Version History
 
