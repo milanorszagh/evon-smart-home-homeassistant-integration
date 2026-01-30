@@ -105,9 +105,19 @@ class EvonApi:
             raise EvonConnectionError(f"Connection error: {err}") from err
 
     async def _ensure_token(self) -> str:
-        """Ensure we have a valid token."""
+        """Ensure we have a valid token.
+
+        Returns:
+            The authentication token.
+
+        Raises:
+            EvonAuthError: If login fails and no token is available.
+        """
         if not self._token:
             await self.login()
+        # login() always sets self._token or raises an exception
+        if self._token is None:
+            raise EvonAuthError("Failed to obtain authentication token")
         return self._token
 
     async def _request(
