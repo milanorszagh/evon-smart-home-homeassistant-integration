@@ -53,6 +53,7 @@ async def async_setup_entry(
 class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEntity):
     """Representation of Evon Home State selector."""
 
+    _attr_icon = "mdi:home-account"
     _attr_has_entity_name = True
     _attr_translation_key = "home_state"
 

@@ -14,9 +14,11 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 
 | Device Type | Features |
 |-------------|----------|
-| **Lights** | On/off, brightness control |
+| **Lights** | On/off, brightness control, color temperature (RGBW lights) |
+| **Light Groups** | Control multiple lights as a single entity |
 | **Blinds/Covers** | Open/close/stop, position, tilt angle |
-| **Climate** | Temperature, presets (comfort, eco, away), heating/cooling status |
+| **Blind Groups** | Control multiple blinds as a single entity |
+| **Climate** | Temperature, presets (comfort, eco, away), heating/cooling status, humidity |
 | **Season Mode** | Global heating/cooling switch for the whole house |
 | **Home State** | Switch between home modes (At Home, Night, Work, Holiday) |
 | **Smart Meter** | Power consumption, energy usage, voltage per phase |
@@ -26,6 +28,8 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Switches** | Controllable relay outputs |
 | **Bathroom Radiators** | Electric heater control with timer |
 | **Scenes** | Trigger Evon-defined scenes from Home Assistant |
+| **Security Doors** | Door open/closed state, call in progress indicator |
+| **Intercoms** | Door open/closed state, doorbell events, connection status |
 
 ## Known Limitations
 
@@ -100,9 +104,9 @@ After installation, configure via **Settings** → **Devices & Services** → **
 
 | Option | Description |
 |--------|-------------|
+| **Use HTTP API only** | Disable WebSocket and use HTTP polling only. WebSocket is recommended and enabled by default. Only enable this if you experience connection issues. |
+| **Poll interval** | How often to fetch device states (5-300 seconds). Used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled. |
 | **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
-| **Use WebSocket for real-time updates** | Enable instant state updates via WebSocket (enabled by default, local connections only) |
-| **Poll interval** | How often to fetch device states (5-300 seconds). Only shown when WebSocket is disabled or using remote connection. |
 | **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
@@ -123,24 +127,47 @@ Supported languages:
 - English (default)
 - German (Deutsch) - for DACH region customers
 
-### Real-Time Updates (WebSocket)
+### Real-Time Updates & Control (WebSocket)
 
-Enable **"Use WebSocket for real-time updates"** in options for instant state synchronization:
+WebSocket is **enabled by default** for instant state synchronization and device control. To disable, check **"Use HTTP API only"** in options.
 
-| Feature | Polling | WebSocket (Default) |
-|---------|---------|---------------------|
-| **Update latency** | Up to 30 seconds | Instant (<100ms) |
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        THE WEBSOCKET ADVANTAGE                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   HTTP Polling (old)              WebSocket (default)                   │
+│   ──────────────────              ──────────────────────                │
+│                                                                         │
+│   HA ──────► Evon                 HA ◄═══════════════► Evon             │
+│      poll     │                         persistent                      │
+│      every    │                         bidirectional                   │
+│      30s      ▼                         connection                      │
+│            response                                                     │
+│                                   • State changes push instantly        │
+│   • State can be 30s stale        • Commands execute in <50ms           │
+│   • Control takes 200-500ms       • Single connection, no handshakes    │
+│   • Constant network traffic      • Event-driven, minimal traffic       │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+| Feature | HTTP Only | WebSocket (Default) |
+|---------|-----------|---------------------|
+| **State updates** | Up to 30 seconds | Instant (<100ms) |
+| **Control response** | ~200-500ms | Instant (<50ms) |
 | **Poll interval** | 30 seconds | 300 seconds (fallback) |
-| **Network traffic** | Continuous | Event-driven |
-| **Availability** | Local + Remote | Local only |
+| **Network traffic** | Continuous polling | Event-driven |
 
 **How it works:**
-- WebSocket connects to your Evon system and subscribes to device changes
-- When a device state changes (e.g., light turned on via wall switch), Home Assistant updates immediately
-- HTTP polling continues at reduced frequency (5 minutes) as a fallback
-- If WebSocket disconnects, polling automatically resumes at normal rate
+- **Bidirectional communication**: Same WebSocket connection handles both state updates AND device control
+- **State updates**: When a light is turned on via wall switch, HA updates immediately (no polling delay)
+- **Device control**: Commands execute in <50ms - tap a light and it responds instantly
+- **Automatic fallback**: If WebSocket is unavailable, commands fall back to HTTP API seamlessly
+- HTTP polling continues at reduced frequency (5 minutes) as a safety net
+- For remote connections, WebSocket connects via `wss://my.evon-smarthome.com/`
 
-**Note:** WebSocket is only available for local network connections. Remote access via my.evon-smarthome.com does not support WebSocket and uses polling instead.
+**Note:** WebSocket is recommended for the best experience. Only disable it if you experience connection issues.
 
 ---
 
@@ -180,18 +207,24 @@ For local connections:
 
 - Turn on/off
 - Brightness control (0-100%)
+- Color temperature control for RGBW lights (warm to cool white) *
+- Light Groups: Control multiple lights as a single entity
 - Non-dimmable lights can be configured to show as simple on/off switches
+
+\* *RGBW color temperature support is untested - please report issues if you have RGBW Evon modules*
 
 ### Covers (Blinds)
 
 - Open, close, stop
 - Position control (0-100%)
 - Tilt angle control (0-100%)
+- Blind Groups: Control multiple blinds as a single entity
 
 ### Climate
 
 - Target temperature control with min/max limits
 - Activity display: Shows when system is actively Heating, Cooling, or Idle
+- Current humidity display (if sensor available in the room)
 - Presets:
   - **Comfort** - Normal comfortable temperature
   - **Eco** - Energy saving mode
@@ -234,6 +267,20 @@ These states trigger automations in the Evon system and can be used in Home Assi
 ### Binary Sensors
 
 - Climate valve state (open/closed)
+- Security door state (open/closed)
+- Security door call in progress
+- Intercom door state (open/closed)
+- Intercom connection status
+
+### Events
+
+The integration fires Home Assistant events that can be used in automations:
+
+- **`evon_doorbell`**: Fired when a doorbell is pressed on an intercom *
+  - Event data: `device_id` (intercom instance ID), `name` (intercom name)
+  - Use in automations to trigger notifications, announcements, or other actions
+
+\* *Doorbell events are untested - please report issues if you have 2N intercoms*
 
 ### Switches
 
@@ -289,6 +336,7 @@ See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for complete API documentatio
 
 | Version | Changes |
 |---------|---------|
+| **1.14.0** | **WebSocket device control** - instant response when controlling lights, blinds, and climate via HA (no more waiting for poll cycles). Security doors and intercoms with doorbell events, light/blind groups, RGBW color temperature*, climate humidity display |
 | **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |
 | **1.12.0** | Remote access via my.evon-smarthome.com, switch between local/remote in reconfigure, security improvements (SSL, input validation, token handling) |
 | **1.11.0** | Scene support, smart meter current sensors (L1/L2/L3), frequency sensor, feed-in energy sensor |

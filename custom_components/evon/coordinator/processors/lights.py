@@ -10,9 +10,12 @@ if TYPE_CHECKING:
     from ...api import EvonApi
 
 from ...api import EvonApiError
-from ...const import EVON_CLASS_LIGHT_DIM
+from ...const import EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP
 
 _LOGGER = logging.getLogger(__name__)
+
+# Light classes to process
+LIGHT_CLASSES = {EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, "SmartCOM.Light.DynamicRGBWLight"}
 
 
 async def process_lights(
@@ -32,23 +35,35 @@ async def process_lights(
     """
     lights = []
     for instance in instances:
-        if instance.get("ClassName") != EVON_CLASS_LIGHT_DIM:
+        if instance.get("ClassName") not in LIGHT_CLASSES:
             continue
         if not instance.get("Name"):
             continue
 
         instance_id = instance.get("ID", "")
+        class_name = instance.get("ClassName", "")
         try:
             details = await api.get_instance(instance_id)
-            lights.append(
-                {
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": get_room_name(instance.get("Group", "")),
-                    "is_on": details.get("IsOn", False),
-                    "brightness": details.get("ScaledBrightness", 0),
-                }
-            )
+
+            # Check if this light supports color temperature (RGBW lights)
+            supports_color_temp = class_name == "SmartCOM.Light.DynamicRGBWLight"
+
+            light_data: dict[str, Any] = {
+                "id": instance_id,
+                "name": instance.get("Name"),
+                "room_name": get_room_name(instance.get("Group", "")),
+                "is_on": details.get("IsOn", False),
+                "brightness": details.get("ScaledBrightness", 0),
+                "supports_color_temp": supports_color_temp,
+            }
+
+            # Add color temp properties for RGBW lights
+            if supports_color_temp:
+                light_data["color_temp"] = details.get("ColorTemp")
+                light_data["min_color_temp"] = details.get("MinColorTemperature")
+                light_data["max_color_temp"] = details.get("MaxColorTemperature")
+
+            lights.append(light_data)
         except EvonApiError:
             _LOGGER.warning("Failed to get details for light %s", instance_id)
     return lights

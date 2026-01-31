@@ -280,10 +280,104 @@ await callMethod("HomeStateNight", "Activate");
 
 ### Method Naming Pattern
 
-Evon uses "Amzn" prefix for methods that were designed for Alexa integration. These are the reliable methods for device control:
+Evon uses "Amzn" prefix for methods that were designed for Alexa integration. These work via HTTP API:
 - `AmznTurnOn` / `AmznTurnOff` - lights and switches
 - `AmznSetBrightness` - light brightness
 - `AmznSetPercentage` - blind position
+
+## WebSocket Control - CRITICAL FINDINGS (January 2025)
+
+The integration now supports WebSocket-based device control for faster, more responsive operation. **However, there are important traps to avoid.**
+
+### What Works via WebSocket
+
+| Device | Method | WebSocket Call | Notes |
+|--------|--------|----------------|-------|
+| Light On | `SwitchOn` | `CallMethod [instanceId.SwitchOn, []]` | ✅ Explicit on - PREFERRED |
+| Light Off | `SwitchOff` | `CallMethod [instanceId.SwitchOff, []]` | ✅ Explicit off - PREFERRED |
+| Light Brightness | `BrightnessSetScaled` | `CallMethod [instanceId.BrightnessSetScaled, [brightness, transition]]` | ✅ transition=0 for instant |
+| Blind Open/Close/Stop | `Open/Close/Stop` | `CallMethod [instanceId.Open, []]` | ✅ Verified |
+| Blind Position+Tilt | `MoveToPosition` | `CallMethod [instanceId.MoveToPosition, [angle, position]]` | ✅ Angle comes FIRST! |
+| Climate Temperature | `SetTemperature` | `SetValue [instanceId, "SetTemperature", value]` | ✅ Verified working |
+| Climate Comfort | `WriteDayMode` | `CallMethod [instanceId.WriteDayMode, []]` | ✅ Verified working |
+| Climate Eco | `WriteNightMode` | `CallMethod [instanceId.WriteNightMode, []]` | ✅ Verified working |
+| Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
+| Season Mode | `IsCool` | `SetValue [Base.ehThermostat, "IsCool", bool]` | ✅ true=cooling, false=heating |
+
+### What Does NOT Work via WebSocket
+
+| Device | Trap | What Happens |
+|--------|------|--------------|
+| **Switch** | `SetValue` or `CallMethod` | Returns success but hardware doesn't respond |
+| **Blind Position** | `SetValue Position` | Updates UI value but hardware doesn't move, then reverts |
+| **Light** | `CallMethod AmznTurnOn/Off` | Returns success but hardware doesn't respond |
+| **Light** | `Switch([true/false])` | Inconsistent - may toggle instead of set state on some devices |
+
+### TRAP #1: CallMethod Format
+
+**WRONG format (looks correct but doesn't trigger hardware):**
+```json
+{"args": ["SC1_M09.Blind2", "Open", []], "methodName": "CallMethod"}
+```
+
+**CORRECT format (method appended to instance ID with dot):**
+```json
+{"args": ["SC1_M09.Blind2.Open", []], "methodName": "CallMethod"}
+```
+
+### TRAP #2: Light Control Methods - Use SwitchOn/SwitchOff
+
+The Evon webapp exposes multiple light control methods, but only some work reliably:
+
+**WRONG (inconsistent behavior, may toggle instead of setting state):**
+```json
+{"args": ["SC1_M01.Light3.Switch", [true]], "methodName": "CallMethod"}
+```
+
+**WRONG (doesn't trigger hardware via WebSocket):**
+```json
+{"args": ["SC1_M01.Light3.AmznTurnOn", []], "methodName": "CallMethod"}
+```
+
+**CORRECT (explicit on/off, no ambiguity):**
+```json
+{"args": ["SC1_M01.Light3.SwitchOn", []], "methodName": "CallMethod"}
+{"args": ["SC1_M01.Light3.SwitchOff", []], "methodName": "CallMethod"}
+{"args": ["SC1_M01.Light3.BrightnessSetScaled", [75, 0]], "methodName": "CallMethod"}
+```
+
+### TRAP #3: Blind MoveToPosition Parameters
+
+**IMPORTANT: Angle comes FIRST, then position!**
+```json
+{"args": ["SC1_M09.Blind2.MoveToPosition", [angle, position]], "methodName": "CallMethod"}
+```
+
+The integration caches angle and position separately so:
+- Position changes → `MoveToPosition([cached_angle, new_position])`
+- Tilt changes → `MoveToPosition([new_angle, cached_position])`
+
+### TRAP #4: Switches Must Use HTTP
+
+Switches (`SmartCOM.Switch`, `Base.bSwitch`) do NOT respond to WebSocket control at all. The HTTP API must be used:
+```
+POST /api/instances/{switch_id}/AmznTurnOn
+```
+
+### TRAP #5: Non-Dimmable Lights in Light Groups
+
+When a non-dimmable light (e.g., Evon relay controlling power for a combined light with Govee) is part of a light group:
+- Brightness changes trigger `turn_on()` on all group members
+- The non-dimmable light receives `turn_on()` WITHOUT brightness parameter
+- The integration skips the API call if the light is already on (avoids unnecessary traffic)
+
+This is handled automatically in `light.py` - non-dimmable lights that are already on will not receive WebSocket commands when brightness changes on the group.
+
+### Implementation Details
+
+See `custom_components/evon/ws_control.py` for the mapping configuration and `api.py` for the `_try_ws_control()` method that handles WebSocket-first control with HTTP fallback.
+
+Tests documenting these findings are in `tests/test_ws_client.py` under `TestWebSocketControlFindings`.
 
 ## File Locations
 
@@ -303,8 +397,8 @@ Evon uses "Amzn" prefix for methods that were designed for Alexa integration. Th
 - Base entity: `base_entity.py`
 - Data coordinator: `coordinator/` package
   - Main coordinator: `coordinator/__init__.py`
-  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes)
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py`, `button.py`
+  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms)
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
@@ -469,7 +563,10 @@ When filtering devices from the API, use these class names:
 |--------|------------|--------------|
 | Dimmable Lights | `SmartCOM.Light.LightDim` | Yes |
 | Relay Outputs (Switches) | `SmartCOM.Light.Light` | Yes |
+| RGBW Lights | `SmartCOM.Light.DynamicRGBWLight` | Yes |
+| Light Groups | `SmartCOM.Light.LightGroup` | Yes |
 | Blinds | `SmartCOM.Blind.Blind` | Yes |
+| Blind Groups | `SmartCOM.Blind.BlindGroup` | Yes |
 | Climate | `SmartCOM.Clima.ClimateControl` | Yes |
 | Climate (universal) | Contains `ClimateControlUniversal` | Yes |
 | Bathroom Radiator | `Heating.BathroomRadiator` | Yes (use `Switch` method to toggle) |
@@ -477,6 +574,8 @@ When filtering devices from the API, use these class names:
 | Scene | `System.SceneApp` | Yes (use `Execute` method) |
 | Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
+| Security Door | `SmartCOM.Security.SecurityDoor` | No (sensor only) |
+| Intercom (2N) | `SmartCOM.Intercom.Intercom2N` | No (sensor only) |
 
 ### Smart Meter Energy Sensors - IMPORTANT
 
@@ -861,6 +960,8 @@ Before creating a release, ensure the following are up to date:
 
 **IMPORTANT**: Before updating version history, always check the existing entries to identify the current/latest version. Do not overwrite an already-released version with new features - create a new version number instead.
 
+- **v1.14.0**: WebSocket-based device control for lights and blinds. Lights use `CallMethod SwitchOn/SwitchOff` for explicit on/off (not `Switch([bool])` which is inconsistent) and `BrightnessSetScaled([brightness, transition])` for dimming. Blinds use `CallMethod MoveToPosition([angle, position])` for position and tilt control with cached values. Non-dimmable lights in light groups skip API calls when already on (for combined lights with Govee). Falls back to HTTP when WebSocket unavailable. Added security doors and intercoms with doorbell events (`evon_doorbell`), RGBW light color temperature support (untested), light/blind group classes, and climate humidity display.
+- **v1.13.0**: Added WebSocket support for real-time state updates (read-only).
 - **v1.12.0**: Remote access via `my.evon-smarthome.com` relay server. Reconfigure flow now allows switching between local and remote connection types. Security improvements: explicit SSL context with connection limits, header redaction, token TTL with auto-refresh and memory cleanup on close, comprehensive input validation (instance IDs, method names, Engine ID, username, password, host port), asyncio.Lock for token access, HTTP status handling (400/403/404/429/5xx with response.reason), Content-Type validation, Engine ID redaction in diagnostics.
 - **v1.11.0**: Added scene support - Evon scenes appear as button entities that can be pressed to execute. Also includes smart meter current sensors (L1/L2/L3), frequency sensor, and feed-in energy sensor from 1.10.3 branch.
 - **v1.10.1**: Added optimistic time display for bathroom radiators. Fixed smart meter "Energy Today" sensor - renamed to "Energy (24h Rolling)" with `state_class: measurement` to prevent incorrect negative values in HA Energy Dashboard. The rolling 24h window from Evon can decrease during the day.

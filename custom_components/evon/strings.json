@@ -123,16 +123,16 @@
         "title": "Evon Smart Home Options",
         "description": "Configure integration settings.",
         "data": {
-          "scan_interval": "Poll interval (seconds)",
           "sync_areas": "Sync areas from Evon",
-          "use_websocket": "Use WebSocket for real-time updates",
-          "non_dimmable_lights": "Non-dimmable lights"
+          "non_dimmable_lights": "Non-dimmable lights",
+          "http_only": "Use HTTP API only (disable WebSocket)",
+          "scan_interval": "Poll interval (seconds)"
         },
         "data_description": {
-          "use_websocket": "Enable WebSocket connection for instant state updates. When enabled, device state changes are reflected immediately instead of waiting for the next poll. Only available for local connections. Note: Changing this option will reload the integration.",
-          "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is disabled or disconnected.",
           "sync_areas": "Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system. Note: Changing this option will reload the integration.",
-          "non_dimmable_lights": "Select lights that should be treated as on/off only (no dimming). Useful for LED strips connected via PWM dimmers that need full power. Note: Changing this option will reload the integration."
+          "non_dimmable_lights": "Select lights that should be treated as on/off only (no dimming). Useful for LED strips connected via PWM dimmers that need full power. Note: Changing this option will reload the integration.",
+          "http_only": "Disable WebSocket and use HTTP polling only. WebSocket is recommended for instant state updates. Only enable this if you experience connection issues with WebSocket. Note: Changing this option will reload the integration.",
+          "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled."
         }
       }
     }

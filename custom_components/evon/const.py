@@ -23,6 +23,16 @@ DEFAULT_SCAN_INTERVAL = 30
 DEFAULT_SYNC_AREAS = False
 DEFAULT_REQUEST_TIMEOUT = 30  # seconds (for API requests)
 DEFAULT_LOGIN_TIMEOUT = 15  # seconds (login should be faster)
+DEFAULT_CONNECTION_POOL_SIZE = 10  # HTTP connection pool limit
+
+# Poll interval range (seconds)
+MIN_POLL_INTERVAL = 5
+MAX_POLL_INTERVAL = 300
+
+# Climate temperature defaults (Celsius)
+DEFAULT_MIN_TEMP = 15.0
+DEFAULT_MAX_TEMP = 25.0
+DEFAULT_BATHROOM_RADIATOR_DURATION = 30  # minutes
 
 # Validation constants
 MIN_PASSWORD_LENGTH = 1  # Evon allows short passwords
@@ -65,6 +75,10 @@ EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
 EVON_CLASS_HOME_STATE = "System.HomeState"
 EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
 EVON_CLASS_SCENE = "System.SceneApp"
+EVON_CLASS_LIGHT_GROUP = "SmartCOM.Light.LightGroup"
+EVON_CLASS_BLIND_GROUP = "SmartCOM.Blind.BlindGroup"
+EVON_CLASS_SECURITY_DOOR = "SmartCOM.Security.SecurityDoor"
+EVON_CLASS_INTERCOM_2N = "SmartCOM.Intercom.Intercom2N"
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"
@@ -88,9 +102,16 @@ COVER_STOP_DELAY = 0.3
 # to prevent stale UI when recovering from network issues
 OPTIMISTIC_STATE_TIMEOUT = 30.0
 
+# Settling period after control actions (seconds)
+# During this time, ignore coordinator updates and trust optimistic state
+# This prevents UI flicker from intermediate WebSocket states during Evon's
+# light animation (0% → target brightness) or relay switching delays
+# Note: Evon fade-out takes ~2.2-2.3 seconds, so 2.5s provides buffer
+OPTIMISTIC_SETTLING_PERIOD = 2.5
+
 # WebSocket configuration
-CONF_USE_WEBSOCKET = "use_websocket"
-DEFAULT_USE_WEBSOCKET = True  # On by default for local connections
+CONF_HTTP_ONLY = "http_only"
+DEFAULT_HTTP_ONLY = False  # WebSocket is enabled by default (recommended)
 DEFAULT_WS_RECONNECT_DELAY = 5  # Initial reconnect delay in seconds
 WS_RECONNECT_MAX_DELAY = 300  # Maximum reconnect delay in seconds
 WS_PROTOCOL = "echo-protocol"  # WebSocket sub-protocol

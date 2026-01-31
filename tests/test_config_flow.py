@@ -319,6 +319,16 @@ async def test_config_flow_reconfigure(hass, mock_evon_api_class):
         context={"source": "reconfigure", "entry_id": existing_entry.entry_id},
     )
 
+    # First step: choose connection type
+    assert result["type"] == "form"
+    assert result["step_id"] == "reconfigure"
+
+    # Select local connection type
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
+
     assert result["type"] == "form"
     assert result["step_id"] == "reconfigure_local"
 
@@ -370,6 +380,12 @@ async def test_config_flow_reconfigure_auth_error(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": "reconfigure", "entry_id": existing_entry.entry_id},
+    )
+
+    # First step: choose connection type
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
     )
 
     with patch("custom_components.evon.config_flow.EvonApi") as mock_api_class:
@@ -462,6 +478,12 @@ async def test_config_flow_reconfigure_invalid_host(hass):
         context={"source": "reconfigure", "entry_id": existing_entry.entry_id},
     )
 
+    # First step: choose connection type
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"connection_type": CONNECTION_TYPE_LOCAL},
+    )
+
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         {
@@ -512,15 +534,46 @@ async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
     assert result["type"] == "form"
     assert result["step_id"] == "init"
 
-    # Submit options
+    # Submit options (including http_only which defaults to False)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
+            "http_only": False,
             "scan_interval": 60,
             "sync_areas": True,
         },
     )
 
     assert result["type"] == "create_entry"
+    assert result["data"]["http_only"] is False
     assert result["data"]["scan_interval"] == 60
     assert result["data"]["sync_areas"] is True
+
+
+@pytest.mark.asyncio
+async def test_options_flow_http_only(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test options flow with HTTP only mode enabled."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Start options flow
+    result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "init"
+
+    # Submit options with HTTP only enabled (disables WebSocket)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "http_only": True,
+            "scan_interval": 30,
+            "sync_areas": False,
+        },
+    )
+
+    assert result["type"] == "create_entry"
+    assert result["data"]["http_only"] is True
+    assert result["data"]["scan_interval"] == 30
+    assert result["data"]["sync_areas"] is False

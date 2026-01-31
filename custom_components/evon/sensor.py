@@ -266,6 +266,7 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
 class EvonSmartMeterSensor(EvonEntity, SensorEntity):
     """Representation of an Evon smart meter sensor."""
 
+    _attr_icon = "mdi:meter-electric"
     entity_description: EvonSensorEntityDescription
 
     def __init__(
@@ -299,6 +300,7 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
 class EvonAirQualitySensor(EvonEntity, SensorEntity):
     """Representation of an Evon air quality sensor."""
 
+    _attr_icon = "mdi:air-filter"
     entity_description: EvonSensorEntityDescription
 
     def __init__(

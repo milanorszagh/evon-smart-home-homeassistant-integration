@@ -13,8 +13,9 @@ For AI agents, see [AGENTS.md](AGENTS.md) which contains critical API knowledge 
 ```
 custom_components/evon/
 ├── __init__.py          # Entry point, platform setup, stale entity cleanup
-├── api.py               # Evon HTTP API client
-├── ws_client.py         # WebSocket client for real-time updates
+├── api.py               # Evon HTTP/WebSocket API client with WS-first control
+├── ws_client.py         # WebSocket client for real-time updates and control
+├── ws_control.py        # WebSocket control mappings (methods that work via WS)
 ├── ws_mappings.py       # Property mappings for WebSocket data
 ├── base_entity.py       # Base entity class with common functionality
 ├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
@@ -32,14 +33,16 @@ custom_components/evon/
 │       ├── valves.py
 │       ├── home_states.py
 │       ├── bathroom_radiators.py
-│       └── scenes.py
+│       ├── scenes.py
+│       ├── security_doors.py
+│       └── intercoms.py
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality)
 ├── switch.py            # Switch platform (relays, bathroom radiators)
 ├── select.py            # Select platform (home state, season mode)
-├── binary_sensor.py     # Binary sensor platform (valves)
+├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
 ├── button.py            # Button platform (scenes)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
@@ -76,9 +79,80 @@ src/
     └── summary.ts       # Home summary resource
 ```
 
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         HOME ASSISTANT INTEGRATION                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐    ┌──────────────────────────────────────────────────┐  │
+│  │  Config Flow │───►│              COORDINATOR                         │  │
+│  └──────────────┘    │  • Manages device data                           │  │
+│                      │  • Notifies entities on updates                  │  │
+│                      │  • Tracks connection health                      │  │
+│                      └──────────────────────────────────────────────────┘  │
+│                                      │                                      │
+│                      ┌───────────────┴───────────────┐                      │
+│                      ▼                               ▼                      │
+│  ┌─────────────────────────────┐   ┌─────────────────────────────┐         │
+│  │      WebSocket Client       │   │       HTTP API Client       │         │
+│  │  (ws_client.py)             │   │  (api.py)                   │         │
+│  │                             │   │                             │         │
+│  │  ┌─────────────────────┐    │   │  • Initial data fetch       │         │
+│  │  │ State Updates (IN)  │◄───┼───┼─── Fallback polling (300s)  │         │
+│  │  │ • ValuesChanged     │    │   │                             │         │
+│  │  │ • <100ms latency    │    │   │  • Fallback control         │         │
+│  │  └─────────────────────┘    │   │  • Auth & token refresh     │         │
+│  │                             │   └─────────────────────────────┘         │
+│  │  ┌─────────────────────┐    │                                           │
+│  │  │ Device Control (OUT)│    │   ws_control.py: Method mappings          │
+│  │  │ • CallMethod        │    │   ws_mappings.py: Property mappings       │
+│  │  │ • <50ms response    │    │                                           │
+│  │  └─────────────────────┘    │                                           │
+│  └─────────────────────────────┘                                           │
+│                      │                                                      │
+└──────────────────────┼──────────────────────────────────────────────────────┘
+                       │
+                       ▼ Persistent bidirectional connection
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                            EVON SMART HOME                                   │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐    │
+│  │ Lights  │ │ Blinds  │ │ Climate │ │ Sensors │ │ Doors   │ │ Groups  │    │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘    │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
 ### Data Flow
 
-**Without WebSocket (default):**
+**With WebSocket (default, recommended):**
+```
+STARTUP:
+1. config_flow.py validates credentials with HTTP API
+2. __init__.py creates API client, coordinator, and WebSocket client
+3. coordinator.py fetches initial data via HTTP
+4. ws_client.py connects and subscribes to all device properties
+5. Platform files create entities from coordinator data
+
+REAL-TIME UPDATES (state changes from wall switches, etc.):
+6. Evon sends ValuesChanged event via WebSocket (<100ms)
+7. ws_mappings.py converts WS property names to coordinator format
+8. coordinator.py updates entity data and notifies listeners
+9. Entity UI updates instantly
+
+DEVICE CONTROL (user taps light in HA):
+10. Entity calls api.py control method
+11. api.py sends command via WebSocket (ws_control.py mapping)
+12. Evon executes command (<50ms response)
+13. Optimistic update shows instant UI feedback
+14. WebSocket confirms actual state
+
+FALLBACK:
+• HTTP polling continues at 300s as safety net
+• If WebSocket unavailable, control falls back to HTTP automatically
+```
+
+**HTTP Only (when "Use HTTP API only" is enabled):**
 ```
 1. User adds integration via config flow
 2. config_flow.py validates credentials with API
@@ -86,20 +160,8 @@ src/
 4. coordinator.py fetches all device data periodically (30s)
 5. Platform files create entities from coordinator data
 6. Entities read state from coordinator.data
-7. Entities call API methods for control actions
+7. Entities call HTTP API methods for control actions
 8. Optimistic updates provide instant UI feedback
-```
-
-**With WebSocket (optional):**
-```
-1-3. Same as above
-4. coordinator.py fetches initial data via HTTP
-5. ws_client.py connects to WebSocket and subscribes to all devices
-6. Platform files create entities from coordinator data
-7. WebSocket receives ValuesChanged events instantly
-8. ws_mappings.py converts WS data to coordinator format
-9. coordinator.py updates entity data and notifies listeners
-10. HTTP polling continues at reduced rate (300s) as fallback
 ```
 
 ---
@@ -296,23 +358,27 @@ coordinator/       # Integrates WebSocket with data updates
 
 | Entity Type | WebSocket Property | Coordinator Key |
 |-------------|-------------------|-----------------|
-| lights | `IsOn`, `ScaledBrightness` | `is_on`, `brightness` |
+| lights | `IsOn`, `ScaledBrightness`, `ColorTemp` | `is_on`, `brightness`, `color_temp` |
 | blinds | `Position`, `Angle` | `position`, `angle` |
-| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved` | `target_temp`, `current_temp`, `mode_saved` |
+| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `Humidity` | `target_temp`, `current_temp`, `mode_saved`, `humidity` |
 | switches | `IsOn` | `is_on` |
 | home_states | `Active` | `active` |
 | bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `next_switch_point` |
+| security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress` | `is_open`, `door_is_open`, `call_in_progress` |
+| intercoms | `DoorBellTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
 
 ### Constants
 
 ```python
-CONF_USE_WEBSOCKET = "use_websocket"
-DEFAULT_USE_WEBSOCKET = False        # Disabled by default
+CONF_HTTP_ONLY = "http_only"
+DEFAULT_HTTP_ONLY = False            # WebSocket enabled by default (recommended)
 DEFAULT_WS_RECONNECT_DELAY = 5       # Initial reconnect delay (seconds)
 WS_RECONNECT_MAX_DELAY = 300         # Max reconnect delay (seconds)
 WS_PROTOCOL = "echo-protocol"        # WebSocket sub-protocol
 WS_POLL_INTERVAL = 300               # Reduced poll interval when WS connected
 ```
+
+**Note:** The setting is inverted - `http_only = False` means WebSocket is enabled. This allows users to disable WebSocket (by checking "Use HTTP API only") if they experience connection issues, while keeping WebSocket as the recommended default.
 
 ### Implementation Notes
 
@@ -442,7 +508,10 @@ All requests require: `Cookie: token=<token>`
 |------------|------|--------------|
 | `SmartCOM.Light.LightDim` | Dimmable light | Yes |
 | `SmartCOM.Light.Light` | Relay output | Yes |
+| `SmartCOM.Light.DynamicRGBWLight` | RGBW light | Yes |
+| `SmartCOM.Light.LightGroup` | Light group | Yes |
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
+| `SmartCOM.Blind.BlindGroup` | Blind group | Yes |
 | `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
 | `*ClimateControlUniversal*` | Universal climate | Yes |
 | `Base.ehThermostat` | Season mode | Yes |
@@ -452,9 +521,11 @@ All requests require: `Cookie: token=<token>`
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
+| `SmartCOM.Security.SecurityDoor` | Security door | No (sensor) |
+| `SmartCOM.Intercom.Intercom2N` | 2N Intercom | No (sensor) |
 | `System.Location.Room` | Room/area | No |
 
-### Light Methods
+### Light Methods (HTTP API)
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
@@ -464,7 +535,62 @@ All requests require: `Cookie: token=<token>`
 
 **Important**: Read `ScaledBrightness` property for actual brightness, not `Brightness`.
 
-### Blind Methods
+### WebSocket Control Methods
+
+The integration supports WebSocket-based control for faster response times. When WebSocket is connected, control commands use these methods:
+
+**Lights (via WebSocket):**
+| WS Method | Parameters | HTTP Equivalent | Notes |
+|-----------|------------|-----------------|-------|
+| `SwitchOn` | `[]` | `AmznTurnOn` | Explicit on - PREFERRED |
+| `SwitchOff` | `[]` | `AmznTurnOff` | Explicit off - PREFERRED |
+| `BrightnessSetScaled` | `[brightness, transition_ms]` | `AmznSetBrightness` | transition=0 for instant |
+| `SetValue ColorTemp` | `value` (Kelvin) | - | Color temperature for RGBW lights |
+
+**⚠️ Light Control Trap:** `Switch([true/false])` exists but behaves inconsistently on some devices. Always use `SwitchOn`/`SwitchOff` instead for explicit on/off control.
+
+**RGBW Color Temperature:** DynamicRGBWLight devices support color temperature via the `ColorTemp` property (in Kelvin). The `MinColorTemperature` and `MaxColorTemperature` properties define the supported range. Home Assistant converts between Kelvin and mireds internally. *Note: This feature is untested - please report issues if you have RGBW Evon modules.*
+
+**Blinds (via WebSocket):**
+| WS Method | Parameters | HTTP Equivalent | Notes |
+|-----------|------------|-----------------|-------|
+| `Open` | `[]` | `Open` | Move up |
+| `Close` | `[]` | `Close` | Move down |
+| `Stop` | `[]` | `Stop` | Stop movement |
+| `MoveToPosition` | `[angle, position]` | `AmznSetPercentage`/`SetAngle` | **Angle comes FIRST!** |
+
+**⚠️ Blind Control Trap:** `SetValue` on `Position` property updates the value in Evon but does NOT move the physical blind. Always use `MoveToPosition` CallMethod.
+
+**WebSocket CallMethod Format:**
+```json
+{"methodName":"CallWithReturn","request":{"args":["instanceId.methodName",[params]],"methodName":"CallMethod","sequenceId":N}}
+```
+
+**WebSocket SetValue Format:**
+```json
+{"methodName":"CallWithReturn","request":{"args":["instanceId","propertyName",value],"methodName":"SetValue","sequenceId":N}}
+```
+
+**Note:** For CallMethod, the method is appended to the instance ID with a dot (e.g., `SC1_M01.Light3.SwitchOn`).
+
+**Climate (via WebSocket):**
+| WS Method/Property | Parameters | HTTP Equivalent | Notes |
+|--------------------|------------|-----------------|-------|
+| `SetValue SetTemperature` | `value` | `WriteCurrentSetTemperature` | ✅ Verified working |
+| `CallMethod WriteDayMode` | `[]` | `WriteDayMode` | ✅ Comfort preset |
+| `CallMethod WriteNightMode` | `[]` | `WriteNightMode` | ✅ Eco preset |
+| `CallMethod WriteFreezeMode` | `[]` | `WriteFreezeMode` | ✅ Away preset |
+
+**Alternative Climate Control Methods (from Evon webapp):**
+- `SetValue ModeSaved = 2/3/4` (heating) or `5/6/7` (cooling) for presets
+- `CallMethod IncreaseSetTemperature([])` / `DecreaseSetTemperature([])` for ±0.5°C
+- `CallMethod Base.ehThermostat.AllDayMode/AllNightMode/AllFreezeMode([])` for global preset changes
+
+**Switches:** WebSocket CallMethod does NOT work for switches - the integration falls back to HTTP API automatically.
+
+**Fallback:** When WebSocket control fails or is unavailable, the integration automatically falls back to HTTP API.
+
+### Blind Methods (HTTP API)
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
@@ -476,7 +602,9 @@ All requests require: `Cookie: token=<token>`
 
 **Critical**: `MoveUp` and `MoveDown` do NOT exist - use `Open` and `Close`.
 
-**Position convention**: Evon uses 0=open, 100=closed. Home Assistant uses the opposite.
+**Position convention**: Evon uses 0=open, 100=closed. Home Assistant uses the opposite (0=closed, 100=open).
+
+**Tilt/Angle convention**: Same inversion applies. Evon uses 0=open (horizontal), 100=closed (blocking). Home Assistant uses 0=closed, 100=open.
 
 ### Climate Methods
 
@@ -609,7 +737,7 @@ Cannot be monitored due to API limitations:
 
 The integration does not create entities for these devices.
 
-### Security Doors & Intercoms (WebSocket Works!)
+### Security Doors & Intercoms (Implemented!)
 
 Unlike physical switches, **security doors and intercoms DO expose real-time events** via WebSocket:
 
@@ -621,7 +749,12 @@ Unlike physical switches, **security doors and intercoms DO expose real-time eve
 
 These can be monitored in real-time using `RegisterValuesChanged`. See `ws-security-door.mjs` for a test implementation and `docs/WEBSOCKET_API.md` for full property documentation.
 
-**Potential Future Integration:** Binary sensors for door state and event triggers for doorbell rings.
+**Integration Features (v1.14.0):**
+- **Security Door Sensors**: Binary sensors for door open/closed state and call in progress
+- **Intercom Sensors**: Binary sensors for door state and connection status
+- **Doorbell Events**: Home Assistant event `evon_doorbell` fired when doorbell is pressed *(untested)*
+  - Event data: `device_id`, `name`
+  - Use in automations to trigger notifications, announcements, or camera snapshots
 
 ---
 
@@ -698,6 +831,45 @@ def _handle_coordinator_update(self):
             self._optimistic_is_on = None
     super()._handle_coordinator_update()
 ```
+
+### Light Animation Timing
+
+Evon dimmable lights use hardware-level animations for smooth transitions. This affects how the integration handles state updates:
+
+**Fade Animation Characteristics:**
+- **Fade-out duration**: ~2.2-2.3 seconds (fixed ramp rate, independent of starting brightness)
+- **Fade-in duration**: Similar timing, ramping from 0% to target
+- **Update frequency**: WebSocket sends brightness updates every ~200ms during animation
+- **Brightness steps**: 1-3% per update
+
+**Problem:** During fade animations, WebSocket sends intermediate brightness values (e.g., 87% → 80% → 60% → 40% → 20% → 0% during fade-out). If these updates are applied to the UI, users see:
+- Jerky brightness slider animation during turn-on
+- Light appearing "on" momentarily after turn-off command
+- Incorrect brightness level when rapidly toggling
+
+**Solution:** The `OPTIMISTIC_SETTLING_PERIOD` constant (2.5 seconds) defines a window after control actions during which WebSocket/coordinator updates are ignored. The UI trusts the optimistic state instead:
+
+```python
+# const.py
+OPTIMISTIC_SETTLING_PERIOD = 2.5  # Covers full fade animation (~2.2-2.3s) plus buffer
+
+# light.py - ignore updates during settling
+def _handle_coordinator_update(self) -> None:
+    if (
+        self._optimistic_state_set_at is not None
+        and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+    ):
+        super()._handle_coordinator_update()  # Maintain subscription
+        return  # Don't process data
+
+    # After settling, clear optimistic state when coordinator confirms
+    ...
+```
+
+**Additional Safeguards:**
+- `_last_brightness`: Remembers last known brightness for optimistic turn-on display
+- Only saved when no optimistic state is active (prevents corruption from animation values)
+- `OPTIMISTIC_STATE_TIMEOUT` (30s): Clears stale optimistic state on network recovery
 
 ---
 

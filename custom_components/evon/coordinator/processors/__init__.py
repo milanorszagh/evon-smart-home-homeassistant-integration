@@ -5,8 +5,10 @@ from .bathroom_radiators import process_bathroom_radiators
 from .blinds import process_blinds
 from .climate import process_climates
 from .home_states import process_home_states
+from .intercoms import process_intercoms
 from .lights import process_lights
 from .scenes import process_scenes
+from .security_doors import process_security_doors
 from .smart_meters import process_smart_meters
 from .switches import process_switches
 from .valves import process_valves
@@ -22,4 +24,6 @@ __all__ = [
     "process_home_states",
     "process_bathroom_radiators",
     "process_scenes",
+    "process_security_doors",
+    "process_intercoms",
 ]

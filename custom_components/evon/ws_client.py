@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+import contextlib
 import json
 import logging
-from collections.abc import Callable
 from typing import Any
 
 import aiohttp
@@ -36,19 +37,33 @@ class EvonWsClient:
         session: aiohttp.ClientSession,
         on_values_changed: Callable[[str, dict[str, Any]], None] | None = None,
         on_connection_state: Callable[[bool], None] | None = None,
+        is_remote: bool = False,
+        engine_id: str | None = None,
     ) -> None:
         """Initialize the WebSocket client.
 
         Args:
-            host: The Evon system URL (e.g., http://192.168.1.100)
+            host: The Evon system URL (e.g., http://192.168.1.100) or remote host
             username: The username for authentication
             password: The password (plain text, will be encoded)
             session: The aiohttp client session
             on_values_changed: Callback for ValuesChanged events (instance_id, properties)
             on_connection_state: Callback for connection state changes (connected: bool)
+            is_remote: Whether this is a remote connection via my.evon-smarthome.com
+            engine_id: The engine ID for remote connections
         """
-        self._host = host.rstrip("/")
-        self._ws_host = self._host.replace("http://", "ws://").replace("https://", "wss://")
+        self._is_remote = is_remote
+        self._engine_id = engine_id
+
+        if is_remote:
+            # Remote WebSocket connects to wss://my.evon-smarthome.com/
+            self._host = "https://my.evon-smarthome.com"
+            self._ws_host = "wss://my.evon-smarthome.com/"
+        else:
+            # Local WebSocket
+            self._host = host.rstrip("/")
+            self._ws_host = self._host.replace("http://", "ws://").replace("https://", "wss://")
+
         self._username = username
         self._password = encode_password(username, password)
         self._session = session
@@ -88,16 +103,26 @@ class EvonWsClient:
 
             # Connect to WebSocket
             _LOGGER.debug(
-                "Connecting WebSocket to %s with token=%s...",
+                "Connecting WebSocket to %s with token=%s... (remote=%s)",
                 self._ws_host,
                 self._token[:20] + "..." if self._token else None,
+                self._is_remote,
             )
+
+            # Build cookie based on connection type
+            if self._is_remote:
+                cookie = f"token={self._token}; x-elocs-isrelay=true; x-elocs-token_in_cookie_only=0"
+                origin = "https://my.evon-smarthome.com"
+            else:
+                cookie = f"token={self._token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0"
+                origin = self._host
+
             self._ws = await self._session.ws_connect(
                 self._ws_host,
                 protocols=[WS_PROTOCOL],
                 headers={
-                    "Origin": self._host,
-                    "Cookie": f"token={self._token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0",
+                    "Origin": origin,
+                    "Cookie": cookie,
                 },
                 heartbeat=30,
             )
@@ -123,12 +148,24 @@ class EvonWsClient:
             The authentication token or None if login failed.
         """
         try:
+            # Build headers based on connection type
+            headers = {
+                "x-elocs-username": self._username,
+                "x-elocs-password": self._password,
+            }
+
+            if self._is_remote and self._engine_id:
+                # Remote login requires additional headers
+                headers["x-elocs-relayid"] = self._engine_id
+                headers["x-elocs-sessionlogin"] = "true"
+                headers["X-Requested-With"] = "XMLHttpRequest"
+                login_url = "https://my.evon-smarthome.com/login"
+            else:
+                login_url = f"{self._host}/login"
+
             async with self._session.post(
-                f"{self._host}/login",
-                headers={
-                    "x-elocs-username": self._username,
-                    "x-elocs-password": self._password,
-                },
+                login_url,
+                headers=headers,
                 allow_redirects=False,
             ) as response:
                 _LOGGER.debug(
@@ -180,10 +217,8 @@ class EvonWsClient:
         # Cancel the message loop task
         if self._message_task:
             self._message_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._message_task
-            except asyncio.CancelledError:
-                pass
             self._message_task = None
 
         # Close the WebSocket
@@ -292,7 +327,7 @@ class EvonWsClient:
             # If we get here, we didn't get a valid Connected message
             await self.disconnect()
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _LOGGER.error("Timeout waiting for WebSocket Connected message")
             await self.disconnect()
         except Exception as err:  # pylint: disable=broad-except
@@ -403,14 +438,14 @@ class EvonWsClient:
         self,
         method_name: str,
         args: list[Any],
-        timeout: float = 10.0,
+        request_timeout: float = 10.0,
     ) -> Any:
         """Send a request and wait for the response.
 
         Args:
             method_name: The method to call.
             args: The arguments to pass.
-            timeout: Timeout in seconds.
+            request_timeout: Timeout in seconds.
 
         Returns:
             The response value.
@@ -439,10 +474,10 @@ class EvonWsClient:
         try:
             _LOGGER.debug("Sending WS request: method=%s, seq=%s", method_name, sequence_id)
             await self._ws.send_str(json.dumps(message))  # type: ignore[union-attr]
-            _LOGGER.debug("WS request sent, waiting for response (timeout=%s)", timeout)
-            async with asyncio.timeout(timeout):
+            _LOGGER.debug("WS request sent, waiting for response (timeout=%s)", request_timeout)
+            async with asyncio.timeout(request_timeout):
                 return await future
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending_requests.pop(sequence_id, None)
             raise Exception(f"Request timeout: {method_name}") from None
         except Exception:
@@ -483,7 +518,7 @@ class EvonWsClient:
             await self._send_request(
                 "RegisterValuesChanged",
                 [True, subscriptions, True, True],
-                timeout=30.0,
+                request_timeout=30.0,
             )
             _LOGGER.info(
                 "Subscribed to %d instances for real-time updates",
@@ -508,15 +543,9 @@ class EvonWsClient:
             return
 
         # Remove from stored subscriptions
-        self._subscriptions = [
-            sub for sub in self._subscriptions
-            if sub.get("Instanceid") not in instance_ids
-        ]
+        self._subscriptions = [sub for sub in self._subscriptions if sub.get("Instanceid") not in instance_ids]
 
-        subscriptions = [
-            {"Instanceid": instance_id, "Properties": []}
-            for instance_id in instance_ids
-        ]
+        subscriptions = [{"Instanceid": instance_id, "Properties": []} for instance_id in instance_ids]
 
         try:
             await self._send_request(
@@ -525,3 +554,73 @@ class EvonWsClient:
             )
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Failed to unsubscribe from instances: %s", err)
+
+    async def set_value(self, instance_id: str, property_name: str, value: Any) -> bool:
+        """Set a property value via WebSocket.
+
+        Args:
+            instance_id: The instance ID (e.g., "Light1").
+            property_name: The property to set (e.g., "IsOn").
+            value: The value to set.
+
+        Returns:
+            True if the request was sent successfully, False otherwise.
+        """
+        if not self.is_connected:
+            return False
+
+        try:
+            await self._send_request(
+                "SetValue",
+                [f"{instance_id}.{property_name}", value],
+            )
+            _LOGGER.debug(
+                "Control via WebSocket: SetValue %s.%s = %s",
+                instance_id,
+                property_name,
+                value,
+            )
+            return True
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.warning("WebSocket SetValue failed: %s", err)
+            return False
+
+    async def call_method(
+        self,
+        instance_id: str,
+        method: str,
+        params: list[Any] | None = None,
+    ) -> bool:
+        """Call a method on an instance via WebSocket.
+
+        Uses the format discovered from the Evon web app:
+        CallMethod [instanceId.methodName, params]
+
+        Args:
+            instance_id: The instance ID (e.g., "SC1_M09.Blind2").
+            method: The method name (e.g., "Open", "MoveToPosition").
+            params: Optional list of parameters.
+
+        Returns:
+            True if the request was sent successfully, False otherwise.
+        """
+        if not self.is_connected:
+            return False
+
+        try:
+            # Format: [instanceId.methodName, params]
+            # This matches the Evon web app's WebSocket protocol
+            await self._send_request(
+                "CallMethod",
+                [f"{instance_id}.{method}", params or []],
+            )
+            _LOGGER.debug(
+                "Control via WebSocket: CallMethod %s.%s(%s)",
+                instance_id,
+                method,
+                params or [],
+            )
+            return True
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.warning("WebSocket CallMethod failed: %s", err)
+            return False

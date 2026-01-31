@@ -63,6 +63,8 @@ async def async_setup_entry(
 class EvonSwitch(EvonEntity, SwitchEntity):
     """Representation of an Evon controllable switch (relay)."""
 
+    _attr_icon = "mdi:electric-switch"
+
     def __init__(
         self,
         coordinator: EvonDataUpdateCoordinator,
@@ -229,22 +231,26 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         return attrs
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the radiator (for configured duration)."""
-        # Only toggle if currently off
-        data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
-        if data and not data.get("is_on", False):
-            self._optimistic_is_on = True
-            # Set optimistic time to full duration for immediate progress bar display
-            self._optimistic_time_remaining_mins = float(data.get("duration_mins", 30))
-            self._optimistic_state_set_at = time.monotonic()
-            self.async_write_ha_state()
+        """Turn on the radiator (for configured duration).
 
-            await self._api.toggle_bathroom_radiator(self._instance_id)
-            await self.coordinator.async_request_refresh()
+        Uses SwitchOneTime for explicit turn on (no state check needed).
+        """
+        data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
+        self._optimistic_is_on = True
+        # Set optimistic time to full duration for immediate progress bar display
+        if data:
+            self._optimistic_time_remaining_mins = float(data.get("duration_mins", 30))
+        self._optimistic_state_set_at = time.monotonic()
+        self.async_write_ha_state()
+
+        await self._api.turn_on_bathroom_radiator(self._instance_id)
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the radiator."""
-        # Only toggle if currently on
+        """Turn off the radiator.
+
+        Uses Switch (toggle) only if currently on to prevent toggling ON.
+        """
         data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
         if data and data.get("is_on", False):
             self._optimistic_is_on = False
@@ -253,7 +259,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
-            await self._api.toggle_bathroom_radiator(self._instance_id)
+            await self._api.turn_off_bathroom_radiator(self._instance_id)
             await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:

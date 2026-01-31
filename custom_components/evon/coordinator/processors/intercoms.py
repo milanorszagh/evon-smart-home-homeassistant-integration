@@ -1,4 +1,4 @@
-"""Blind processor for Evon Smart Home coordinator."""
+"""Intercom processor for Evon Smart Home coordinator."""
 
 from __future__ import annotations
 
@@ -10,20 +10,17 @@ if TYPE_CHECKING:
     from ...api import EvonApi
 
 from ...api import EvonApiError
-from ...const import EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP
+from ...const import EVON_CLASS_INTERCOM_2N
 
 _LOGGER = logging.getLogger(__name__)
 
-# Blind classes to process
-BLIND_CLASSES = {EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP, "Base.bBlind", "Base.ehBlind"}
 
-
-async def process_blinds(
+async def process_intercoms(
     api: EvonApi,
     instances: list[dict[str, Any]],
     get_room_name: Callable[[str], str],
 ) -> list[dict[str, Any]]:
-    """Process blind instances.
+    """Process intercom instances.
 
     Args:
         api: The Evon API client
@@ -31,11 +28,11 @@ async def process_blinds(
         get_room_name: Function to get room name from group ID
 
     Returns:
-        List of processed blind data dictionaries
+        List of processed intercom data dictionaries
     """
-    blinds = []
+    intercoms = []
     for instance in instances:
-        if instance.get("ClassName") not in BLIND_CLASSES:
+        if instance.get("ClassName") != EVON_CLASS_INTERCOM_2N:
             continue
         if not instance.get("Name"):
             continue
@@ -43,16 +40,17 @@ async def process_blinds(
         instance_id = instance.get("ID", "")
         try:
             details = await api.get_instance(instance_id)
-            blinds.append(
+            intercoms.append(
                 {
                     "id": instance_id,
                     "name": instance.get("Name"),
                     "room_name": get_room_name(instance.get("Group", "")),
-                    "position": details.get("Position", 0),
-                    "angle": details.get("Angle", 0),
-                    "is_moving": details.get("IsMoving", False),
+                    "doorbell_triggered": details.get("DoorBellTriggered", False),
+                    "door_open_triggered": details.get("DoorOpenTriggered", False),
+                    "is_door_open": details.get("IsDoorOpen", False),
+                    "connection_lost": details.get("ConnectionToIntercomHasBeenLost", False),
                 }
             )
         except EvonApiError:
-            _LOGGER.warning("Failed to get details for blind %s", instance_id)
-    return blinds
+            _LOGGER.warning("Failed to get details for intercom %s", instance_id)
+    return intercoms

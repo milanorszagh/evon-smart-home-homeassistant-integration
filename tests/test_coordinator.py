@@ -2,26 +2,20 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
 import pytest
 
 from tests.conftest import (
     HAS_HA_TEST_FRAMEWORK,
     TEST_HOST,
-    TEST_USERNAME,
     TEST_PASSWORD,
-    MOCK_INSTANCES,
-    MOCK_INSTANCE_DETAILS,
+    TEST_USERNAME,
     requires_ha_test_framework,
 )
 
 if HAS_HA_TEST_FRAMEWORK:
     from homeassistant.core import HomeAssistant
-    from homeassistant.helpers.update_coordinator import UpdateFailed
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.evon.coordinator import EvonDataUpdateCoordinator
-    from custom_components.evon.api import EvonApiError
     from custom_components.evon.const import DOMAIN
 
 

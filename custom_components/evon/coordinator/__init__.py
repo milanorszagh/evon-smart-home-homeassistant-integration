@@ -25,8 +25,10 @@ from .processors import (
     process_blinds,
     process_climates,
     process_home_states,
+    process_intercoms,
     process_lights,
     process_scenes,
+    process_security_doors,
     process_smart_meters,
     process_switches,
     process_valves,
@@ -92,6 +94,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instances = await self.api.get_instances()
             self._instances_cache = instances
 
+            # Update instance class cache for WebSocket routing
+            self.api.set_instance_classes(instances)
+
             # Fetch rooms if area sync is enabled
             if self._sync_areas:
                 await self._fetch_rooms()
@@ -110,6 +115,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             home_states = await process_home_states(self.api, instances)
             bathroom_radiators = await process_bathroom_radiators(self.api, instances, self._get_room_name)
             scenes = await process_scenes(instances)
+            security_doors = await process_security_doors(self.api, instances, self._get_room_name)
+            intercoms = await process_intercoms(self.api, instances, self._get_room_name)
 
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
@@ -129,6 +136,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "home_states": home_states,
                 "bathroom_radiators": bathroom_radiators,
                 "scenes": scenes,
+                "security_doors": security_doors,
+                "intercoms": intercoms,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -310,17 +319,21 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_setup_websocket(
         self,
         session: aiohttp.ClientSession,
-        host: str,
+        host: str | None,
         username: str,
         password: str,
+        is_remote: bool = False,
+        engine_id: str | None = None,
     ) -> None:
         """Set up WebSocket client for real-time updates.
 
         Args:
             session: The aiohttp client session.
-            host: The Evon system URL.
+            host: The Evon system URL (None for remote connections).
             username: The username for authentication.
             password: The password (plain text).
+            is_remote: Whether this is a remote connection via my.evon-smarthome.com.
+            engine_id: The engine ID for remote connections.
         """
         if not self._use_websocket:
             return
@@ -328,19 +341,25 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         from ..ws_client import EvonWsClient
         from ..ws_mappings import build_subscription_list
 
-        _LOGGER.info("Setting up WebSocket for real-time updates")
+        connection_type = "remote" if is_remote else "local"
+        _LOGGER.info("Setting up %s WebSocket for real-time updates", connection_type)
 
         self._ws_client = EvonWsClient(
-            host=host,
+            host=host or "",
             username=username,
             password=password,
             session=session,
             on_values_changed=self._handle_ws_values_changed,
             on_connection_state=self._handle_ws_connection_state,
+            is_remote=is_remote,
+            engine_id=engine_id,
         )
 
         # Start the WebSocket client
         await self._ws_client.start()
+
+        # Connect WS client to API for control operations
+        self.api.set_ws_client(self._ws_client)
 
         # Build subscription list from cached instances
         if self._instances_cache:
@@ -356,6 +375,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Shut down the WebSocket client."""
         if self._ws_client:
             _LOGGER.debug("Shutting down WebSocket client")
+            # Disconnect WS from API before stopping
+            self.api.set_ws_client(None)
             await self._ws_client.stop()
             self._ws_client = None
             self._ws_connected = False
@@ -426,13 +447,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             return
 
+        # Get existing entity data for derived value computation
+        entity = self.data[entity_type][entity_index]
+
         # Convert WebSocket properties to coordinator format
-        coord_data = ws_to_coordinator_data(entity_type, properties)
+        coord_data = ws_to_coordinator_data(entity_type, properties, entity)
         if not coord_data:
             return
 
         # Update the entity data in place
-        entity = self.data[entity_type][entity_index]
         for key, value in coord_data.items():
             if key in entity:
                 old_value = entity[key]
@@ -445,6 +468,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         old_value,
                         value,
                     )
+
+                    # Fire doorbell event when doorbell_triggered transitions to True
+                    if entity_type == "intercoms" and key == "doorbell_triggered" and value is True:
+                        self.hass.bus.async_fire(
+                            f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
+                        )
+                        _LOGGER.info("Doorbell event fired for %s", instance_id)
 
         # Notify listeners of the update
         self.async_set_updated_data(self.data)

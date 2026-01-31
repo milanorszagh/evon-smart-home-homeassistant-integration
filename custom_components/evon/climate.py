@@ -23,6 +23,8 @@ from .const import (
     CLIMATE_MODE_COMFORT,
     CLIMATE_MODE_ENERGY_SAVING,
     CLIMATE_MODE_FREEZE_PROTECTION,
+    DEFAULT_MAX_TEMP,
+    DEFAULT_MIN_TEMP,
     DOMAIN,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
@@ -64,6 +66,7 @@ async def async_setup_entry(
 class EvonClimate(EvonEntity, ClimateEntity):
     """Representation of an Evon climate control."""
 
+    _attr_icon = "mdi:thermostat"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_preset_modes = PRESET_MODES
@@ -171,8 +174,21 @@ class EvonClimate(EvonEntity, ClimateEntity):
         return None
 
     @property
+    def current_humidity(self) -> int | None:
+        """Return the current humidity."""
+        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        if data and data.get("humidity") is not None:
+            return int(data["humidity"])
+        return None
+
+    @property
     def target_temperature(self) -> float | None:
-        """Return the target temperature."""
+        """Return the target temperature.
+
+        Note: Evon may store temperatures outside the device's min/max range
+        (e.g., freeze protection at 15°C when min_temp is 18°C). We clamp
+        the displayed value to the allowed range to show the effective target.
+        """
         # Clear expired optimistic state to prevent stale UI on network recovery
         self._clear_optimistic_state_if_expired()
 
@@ -182,7 +198,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
-            return data.get("target_temperature")
+            temp = data.get("target_temperature")
+            if temp is not None:
+                # Clamp to min/max range - Evon may store values outside allowed range
+                min_t = data.get("min_temp", DEFAULT_MIN_TEMP)
+                max_t = data.get("max_temp", DEFAULT_MAX_TEMP)
+                return max(min_t, min(max_t, temp))
         return None
 
     @property
@@ -190,16 +211,16 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Return the minimum temperature."""
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
-            return data.get("min_temp", 15)
-        return 15
+            return data.get("min_temp", DEFAULT_MIN_TEMP)
+        return DEFAULT_MIN_TEMP
 
     @property
     def max_temp(self) -> float:
         """Return the maximum temperature."""
         data = self.coordinator.get_entity_data("climates", self._instance_id)
         if data:
-            return data.get("max_temp", 25)
-        return 25
+            return data.get("max_temp", DEFAULT_MAX_TEMP)
+        return DEFAULT_MAX_TEMP
 
     @property
     def preset_mode(self) -> str | None:
@@ -272,24 +293,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
-        # Set optimistic values immediately to prevent UI flicker
+        # Set optimistic preset immediately to prevent UI flicker
+        # Don't set optimistic target temp - let WebSocket push the actual value
+        # (Evon may clamp the temp to device min/max limits)
         self._optimistic_preset = preset_mode
         self._optimistic_state_set_at = time.monotonic()
-
-        # Set optimistic target temperature based on preset (only if value exists)
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
-        if data:
-            temp: float | None = None
-            if preset_mode == CLIMATE_MODE_COMFORT:
-                temp = data.get("comfort_temp")
-            elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
-                temp = data.get("energy_saving_temp")
-            elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
-                temp = data.get("protection_temp")
-            # Only set optimistic temp if we got a valid value
-            if temp is not None:
-                self._optimistic_target_temp = temp
-
         self.async_write_ha_state()
 
         if preset_mode == CLIMATE_MODE_COMFORT:

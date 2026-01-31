@@ -1,15 +1,28 @@
 """Cover platform for Evon Smart Home integration.
 
+POSITION AND TILT CONVENTIONS
+=============================
+
+Position:
+- Home Assistant: 0 = closed, 100 = open
+- Evon: 0 = open, 100 = closed
+- Conversion: ha_position = 100 - evon_position
+
+Tilt (Angle):
+- Home Assistant: 0 = closed (blocking light), 100 = open (horizontal)
+- Evon: 0 = open (horizontal), 100 = closed (blocking light)
+- Conversion: ha_tilt = 100 - evon_angle
+
 EVON BLIND TILT BEHAVIOR - IMPORTANT NOTES
 ==========================================
 
 Evon blinds have a hardware quirk where the tilt/slat orientation depends on
 the last movement direction of the blind:
 
-- After moving DOWN: tilt 0 = slats OPEN (horizontal), tilt 100 = slats CLOSED
-- After moving UP: tilt 0 = slats CLOSED, tilt 100 = slats OPEN (inverted!)
+- After moving DOWN: angle 0 = slats OPEN (horizontal), angle 100 = slats CLOSED
+- After moving UP: angle 0 = slats CLOSED, angle 100 = slats OPEN (inverted!)
 
-This means the same tilt value can produce opposite physical results depending
+This means the same angle value can produce opposite physical results depending
 on whether the blind last moved up or down. This behavior is inherent to how
 the blind motor controls the slats and cannot be changed.
 
@@ -17,15 +30,9 @@ The Evon API only provides a `SetAngle` method with values 0-100. There are no
 dedicated "open tilt" or "close tilt" commands that would handle direction
 automatically.
 
-CURRENT IMPLEMENTATION
-----------------------
-This integration uses the same convention as the Evon app:
-- Tilt 0 = slats OPEN (horizontal, letting light through)
-- Tilt 100 = slats CLOSED (blocking light)
-
-This is correct when the blind's last movement was DOWN. If the blind last
-moved UP (e.g., via hardware switch or Evon app), the tilt will appear inverted
-until the next downward position change. This matches the Evon app behavior.
+This integration converts between Evon and HA conventions (inverting the value),
+but the hardware quirk means physical behavior may not always match the UI when
+the blind's last movement direction was UP.
 
 ALTERNATIVES CONSIDERED
 -----------------------
@@ -35,9 +42,6 @@ rejected because:
 1. Large blinds (e.g., 3m) take significant time to move
 2. The delay would negatively impact user experience
 3. It would cause unexpected position changes
-
-The current behavior matches the Evon app, so users familiar with Evon will
-have the same experience.
 """
 
 from __future__ import annotations
@@ -99,6 +103,7 @@ async def async_setup_entry(
 class EvonCover(EvonEntity, CoverEntity):
     """Representation of an Evon blind/cover."""
 
+    _attr_icon = "mdi:blinds"
     _attr_device_class = CoverDeviceClass.BLIND
     _attr_supported_features = (
         CoverEntityFeature.OPEN
@@ -129,6 +134,12 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_is_moving: bool | None = None
         # Timestamp when optimistic state was set (for timeout-based clearance)
         self._optimistic_state_set_at: float | None = None
+
+        # Initialize API caches for WebSocket control
+        data = coordinator.get_entity_data("blinds", instance_id)
+        if data:
+            api.update_blind_position(instance_id, data.get("position", 0))
+            api.update_blind_angle(instance_id, data.get("angle", 0))
 
     def _clear_optimistic_state_if_expired(self) -> None:
         """Clear optimistic state if timeout has expired."""
@@ -165,7 +176,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
     @property
     def current_cover_tilt_position(self) -> int | None:
-        """Return current tilt position of cover."""
+        """Return current tilt position of cover (0=closed, 100=open in HA)."""
         # Clear expired optimistic state to prevent stale UI on network recovery
         self._clear_optimistic_state_if_expired()
 
@@ -175,7 +186,9 @@ class EvonCover(EvonEntity, CoverEntity):
 
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
-            return data.get("angle", 0)
+            # Evon: 0=open (horizontal), 100=closed (blocking)
+            # Home Assistant: 0=closed, 100=open
+            return 100 - data.get("angle", 0)
         return None
 
     @property
@@ -220,9 +233,9 @@ class EvonCover(EvonEntity, CoverEntity):
         attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
-            # Evon native position (0=open, 100=closed)
-            attrs["evon_position"] = data.get("position", 0)
-            attrs["tilt_angle"] = data.get("angle", 0)
+            # Evon native values (for debugging)
+            attrs["evon_position"] = data.get("position", 0)  # 0=open, 100=closed
+            attrs["evon_angle"] = data.get("angle", 0)  # 0=open, 100=closed
         return attrs
 
     async def async_open_cover(self, **kwargs: Any) -> None:
@@ -323,8 +336,8 @@ class EvonCover(EvonEntity, CoverEntity):
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
-        # Tilt 0 = open slats (when last movement was down, matching Evon app)
-        self._optimistic_tilt = 0
+        # HA tilt 100 = open (horizontal), Evon angle 0 = open
+        self._optimistic_tilt = 100
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
@@ -337,8 +350,8 @@ class EvonCover(EvonEntity, CoverEntity):
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
-        # Tilt 100 = closed slats (when last movement was down, matching Evon app)
-        self._optimistic_tilt = 100
+        # HA tilt 0 = closed (blocking), Evon angle 100 = closed
+        self._optimistic_tilt = 0
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
@@ -348,21 +361,23 @@ class EvonCover(EvonEntity, CoverEntity):
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         """Set the cover tilt position.
 
-        Convention (matching Evon app, when last movement was down):
-        - Tilt 0 = slats OPEN (horizontal, letting light through)
-        - Tilt 100 = slats CLOSED (blocking light)
+        Home Assistant convention:
+        - Tilt 0 = slats CLOSED (blocking light)
+        - Tilt 100 = slats OPEN (horizontal, letting light through)
 
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
         if ATTR_TILT_POSITION in kwargs:
             # Clamp to valid range 0-100
-            tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
-            self._optimistic_tilt = tilt
+            ha_tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
+            self._optimistic_tilt = ha_tilt
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
-            await self._api.set_blind_tilt(self._instance_id, tilt)
+            # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
+            evon_angle = 100 - ha_tilt
+            await self._api.set_blind_tilt(self._instance_id, evon_angle)
             await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
@@ -370,6 +385,13 @@ class EvonCover(EvonEntity, CoverEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self.coordinator.get_entity_data("blinds", self._instance_id)
         if data:
+            # Update API caches for WebSocket control
+            # Position is Evon native (0=open, 100=closed)
+            evon_position = data.get("position", 0)
+            evon_angle = data.get("angle", 0)
+            self._api.update_blind_position(self._instance_id, evon_position)
+            self._api.update_blind_angle(self._instance_id, evon_angle)
+
             all_cleared = True
 
             if self._optimistic_position is not None:
@@ -382,7 +404,8 @@ class EvonCover(EvonEntity, CoverEntity):
                     all_cleared = False
 
             if self._optimistic_tilt is not None:
-                actual_tilt = data.get("angle", 0)
+                # Convert Evon angle to HA tilt for comparison
+                actual_tilt = 100 - data.get("angle", 0)
                 if abs(actual_tilt - self._optimistic_tilt) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_tilt = None
                 else:

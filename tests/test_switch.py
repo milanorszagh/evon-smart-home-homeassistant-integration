@@ -49,7 +49,8 @@ async def test_bathroom_radiator_turn_on(hass, mock_config_entry_v2, mock_evon_a
         blocking=True,
     )
 
-    mock_evon_api_class.toggle_bathroom_radiator.assert_called_once_with("bathroom_radiator_1")
+    # SwitchOneTime is used for explicit turn on
+    mock_evon_api_class.turn_on_bathroom_radiator.assert_called_once_with("bathroom_radiator_1")
 
 
 @pytest.mark.asyncio
@@ -66,7 +67,8 @@ async def test_bathroom_radiator_turn_off(hass, mock_config_entry_v2, mock_evon_
         blocking=True,
     )
 
-    mock_evon_api_class.toggle_bathroom_radiator.assert_called_once_with("bathroom_radiator_1")
+    # Switch (toggle) is used for turn off when radiator is on
+    mock_evon_api_class.turn_off_bathroom_radiator.assert_called_once_with("bathroom_radiator_1")
 
 
 @pytest.mark.asyncio

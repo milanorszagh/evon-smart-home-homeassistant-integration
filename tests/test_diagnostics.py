@@ -7,8 +7,8 @@ import pytest
 from tests.conftest import (
     HAS_HA_TEST_FRAMEWORK,
     TEST_HOST,
-    TEST_USERNAME,
     TEST_PASSWORD,
+    TEST_USERNAME,
     requires_ha_test_framework,
 )
 
@@ -17,7 +17,6 @@ if HAS_HA_TEST_FRAMEWORK:
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.evon.diagnostics import async_get_config_entry_diagnostics
-    from custom_components.evon.const import DOMAIN
 
 
 @requires_ha_test_framework

@@ -75,6 +75,7 @@ async def process_climates(
                     "is_cooling": details.get("CoolingMode", False),
                     "cooling_enabled": not details.get("DisableCooling", True),
                     "is_on": details.get("IsOn", False),
+                    "humidity": details.get("Humidity"),
                 }
             )
         except EvonApiError:
