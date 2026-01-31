@@ -100,8 +100,9 @@ After installation, configure via **Settings** → **Devices & Services** → **
 
 | Option | Description |
 |--------|-------------|
-| **Poll interval** | How often to fetch device states (5-300 seconds, default: 30) |
 | **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
+| **Use WebSocket for real-time updates** | Enable instant state updates via WebSocket (enabled by default, local connections only) |
+| **Poll interval** | How often to fetch device states (5-300 seconds). Only shown when WebSocket is disabled or using remote connection. |
 | **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
@@ -121,6 +122,25 @@ The integration creates repair issues in **Settings** → **System** → **Repai
 Supported languages:
 - English (default)
 - German (Deutsch) - for DACH region customers
+
+### Real-Time Updates (WebSocket)
+
+Enable **"Use WebSocket for real-time updates"** in options for instant state synchronization:
+
+| Feature | Polling | WebSocket (Default) |
+|---------|---------|---------------------|
+| **Update latency** | Up to 30 seconds | Instant (<100ms) |
+| **Poll interval** | 30 seconds | 300 seconds (fallback) |
+| **Network traffic** | Continuous | Event-driven |
+| **Availability** | Local + Remote | Local only |
+
+**How it works:**
+- WebSocket connects to your Evon system and subscribes to device changes
+- When a device state changes (e.g., light turned on via wall switch), Home Assistant updates immediately
+- HTTP polling continues at reduced frequency (5 minutes) as a fallback
+- If WebSocket disconnects, polling automatically resumes at normal rate
+
+**Note:** WebSocket is only available for local network connections. Remote access via my.evon-smarthome.com does not support WebSocket and uses polling instead.
 
 ---
 
@@ -230,10 +250,46 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 ---
 
+## WebSocket Client
+
+A TypeScript WebSocket client (`src/ws-client.ts`) is included for real-time communication with Evon systems. This provides:
+
+- **Real-time subscriptions** - Get instant notifications when device states change
+- **Faster control** - Lower latency than HTTP API for device control
+- **Batch queries** - Request multiple device properties in a single call
+
+### Usage
+
+```typescript
+import { getWsClient, wsGetLights, wsControlLight } from './dist/ws-client.js';
+
+// Get singleton client
+const client = getWsClient();
+await client.connect();
+
+// Get all lights
+const lights = await wsGetLights();
+
+// Control a light
+await wsControlLight('SC1_M01.Light1', { on: true, brightness: 75 });
+
+// Subscribe to real-time changes
+client.registerValuesChanged([
+  { Instanceid: 'SC1_M01.Light1', Properties: ['IsOn', 'Brightness'] }
+], (instanceId, props) => {
+  console.log(`${instanceId} changed:`, props);
+});
+```
+
+See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for complete API documentation.
+
+---
+
 ## Version History
 
 | Version | Changes |
 |---------|---------|
+| **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |
 | **1.12.0** | Remote access via my.evon-smarthome.com, switch between local/remote in reconfigure, security improvements (SSL, input validation, token handling) |
 | **1.11.0** | Scene support, smart meter current sensors (L1/L2/L3), frequency sensor, feed-in energy sensor |
 | **1.10.2** | Data caching to prevent entity unavailability during transient API failures |

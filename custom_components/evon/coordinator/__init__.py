@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -16,6 +17,7 @@ from ..const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     REPAIR_CONNECTION_FAILED,
+    WS_POLL_INTERVAL,
 )
 from .processors import (
     process_air_quality,
@@ -30,6 +32,9 @@ from .processors import (
     process_valves,
 )
 
+if TYPE_CHECKING:
+    from ..ws_client import EvonWsClient
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -42,6 +47,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         api: EvonApi,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         sync_areas: bool = False,
+        use_websocket: bool = False,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -57,14 +63,27 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._consecutive_failures = 0
         self._repair_created = False
         self._last_successful_data: dict[str, Any] | None = None
+        self._base_scan_interval = scan_interval
+
+        # WebSocket support
+        self._use_websocket = use_websocket
+        self._ws_client: EvonWsClient | None = None
+        self._ws_connected = False
 
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
-        self.update_interval = timedelta(seconds=scan_interval)
+        self._base_scan_interval = scan_interval
+        # Only apply base interval if WebSocket not connected
+        if not self._ws_connected:
+            self.update_interval = timedelta(seconds=scan_interval)
 
     def set_sync_areas(self, sync_areas: bool) -> None:
         """Update the sync areas setting."""
         self._sync_areas = sync_areas
+
+    def set_use_websocket(self, use_websocket: bool) -> None:
+        """Update the WebSocket setting."""
+        self._use_websocket = use_websocket
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Evon API."""
@@ -285,3 +304,152 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data and "scenes" in self.data:
             return self.data["scenes"]
         return []
+
+    # WebSocket methods
+
+    async def async_setup_websocket(
+        self,
+        session: aiohttp.ClientSession,
+        host: str,
+        username: str,
+        password: str,
+    ) -> None:
+        """Set up WebSocket client for real-time updates.
+
+        Args:
+            session: The aiohttp client session.
+            host: The Evon system URL.
+            username: The username for authentication.
+            password: The password (plain text).
+        """
+        if not self._use_websocket:
+            return
+
+        from ..ws_client import EvonWsClient
+        from ..ws_mappings import build_subscription_list
+
+        _LOGGER.info("Setting up WebSocket for real-time updates")
+
+        self._ws_client = EvonWsClient(
+            host=host,
+            username=username,
+            password=password,
+            session=session,
+            on_values_changed=self._handle_ws_values_changed,
+            on_connection_state=self._handle_ws_connection_state,
+        )
+
+        # Start the WebSocket client
+        await self._ws_client.start()
+
+        # Build subscription list from cached instances
+        if self._instances_cache:
+            subscriptions = build_subscription_list(self._instances_cache)
+            if subscriptions:
+                await self._ws_client.subscribe_instances(subscriptions)
+                _LOGGER.debug(
+                    "Subscribed to %d instances via WebSocket",
+                    len(subscriptions),
+                )
+
+    async def async_shutdown_websocket(self) -> None:
+        """Shut down the WebSocket client."""
+        if self._ws_client:
+            _LOGGER.debug("Shutting down WebSocket client")
+            await self._ws_client.stop()
+            self._ws_client = None
+            self._ws_connected = False
+
+    def _handle_ws_connection_state(self, connected: bool) -> None:
+        """Handle WebSocket connection state changes.
+
+        Args:
+            connected: Whether the WebSocket is now connected.
+        """
+        self._ws_connected = connected
+
+        if connected:
+            # Reduce polling frequency when WebSocket is connected
+            self.update_interval = timedelta(seconds=WS_POLL_INTERVAL)
+            _LOGGER.info(
+                "WebSocket connected, reduced poll interval to %d seconds",
+                WS_POLL_INTERVAL,
+            )
+        else:
+            # Resume normal polling when WebSocket disconnects
+            self.update_interval = timedelta(seconds=self._base_scan_interval)
+            _LOGGER.info(
+                "WebSocket disconnected, resumed poll interval to %d seconds",
+                self._base_scan_interval,
+            )
+            # Trigger an immediate refresh to get latest state
+            self.hass.async_create_task(self.async_request_refresh())
+
+    def _handle_ws_values_changed(
+        self,
+        instance_id: str,
+        properties: dict[str, Any],
+    ) -> None:
+        """Handle WebSocket ValuesChanged events.
+
+        Args:
+            instance_id: The instance ID that changed.
+            properties: Dictionary of changed property names to values.
+        """
+        if not self.data:
+            return
+
+        from ..ws_mappings import CLASS_TO_TYPE, ws_to_coordinator_data
+
+        # Find the entity in our data
+        # First, find what type of entity this is
+        entity_type: str | None = None
+        entity_index: int | None = None
+
+        # Search through all entity types to find this instance
+        for etype in CLASS_TO_TYPE.values():
+            if etype not in self.data:
+                continue
+            for idx, entity in enumerate(self.data[etype]):
+                if entity.get("id") == instance_id:
+                    entity_type = etype
+                    entity_index = idx
+                    break
+            if entity_type:
+                break
+
+        if entity_type is None or entity_index is None:
+            # Unknown instance, might be a type we don't track
+            _LOGGER.debug(
+                "WebSocket update for unknown instance: %s",
+                instance_id,
+            )
+            return
+
+        # Convert WebSocket properties to coordinator format
+        coord_data = ws_to_coordinator_data(entity_type, properties)
+        if not coord_data:
+            return
+
+        # Update the entity data in place
+        entity = self.data[entity_type][entity_index]
+        for key, value in coord_data.items():
+            if key in entity:
+                old_value = entity[key]
+                entity[key] = value
+                if old_value != value:
+                    _LOGGER.debug(
+                        "WebSocket update: %s.%s: %s -> %s",
+                        instance_id,
+                        key,
+                        old_value,
+                        value,
+                    )
+
+        # Notify listeners of the update
+        self.async_set_updated_data(self.data)
+
+    @property
+    def ws_connected(self) -> bool:
+        """Return whether WebSocket is connected."""
+        return self._ws_connected
