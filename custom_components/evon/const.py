@@ -87,3 +87,11 @@ COVER_STOP_DELAY = 0.3
 # If coordinator hasn't confirmed state within this time, clear optimistic state
 # to prevent stale UI when recovering from network issues
 OPTIMISTIC_STATE_TIMEOUT = 30.0
+
+# WebSocket configuration
+CONF_USE_WEBSOCKET = "use_websocket"
+DEFAULT_USE_WEBSOCKET = True  # On by default for local connections
+DEFAULT_WS_RECONNECT_DELAY = 5  # Initial reconnect delay in seconds
+WS_RECONNECT_MAX_DELAY = 300  # Maximum reconnect delay in seconds
+WS_PROTOCOL = "echo-protocol"  # WebSocket sub-protocol
+WS_POLL_INTERVAL = 300  # Reduced poll interval when WebSocket connected (seconds)

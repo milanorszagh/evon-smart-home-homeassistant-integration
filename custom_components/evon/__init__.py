@@ -18,11 +18,13 @@ from .const import (
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
+    CONF_USE_WEBSOCKET,
     CONF_USERNAME,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
+    DEFAULT_USE_WEBSOCKET,
     DOMAIN,
     EVON_REMOTE_HOST,
     REPAIR_CONFIG_MIGRATION,
@@ -78,18 +80,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get options
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     sync_areas = entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
+    use_websocket = entry.options.get(CONF_USE_WEBSOCKET, DEFAULT_USE_WEBSOCKET)
 
     # Create coordinator
-    coordinator = EvonDataUpdateCoordinator(hass, api, scan_interval, sync_areas)
+    coordinator = EvonDataUpdateCoordinator(
+        hass, api, scan_interval, sync_areas, use_websocket
+    )
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
-    # Store coordinator
+    # Store coordinator and connection info for WebSocket
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
+        "session": session,
+        "host": entry.data.get(CONF_HOST) if connection_type == CONNECTION_TYPE_LOCAL else None,
+        "username": entry.data[CONF_USERNAME],
+        "password": entry.data[CONF_PASSWORD],
     }
+
+    # Set up WebSocket for real-time updates (only for local connections)
+    if use_websocket and connection_type == CONNECTION_TYPE_LOCAL:
+        await coordinator.async_setup_websocket(
+            session=session,
+            host=entry.data[CONF_HOST],
+            username=entry.data[CONF_USERNAME],
+            password=entry.data[CONF_PASSWORD],
+        )
 
     # Create hub device that child devices reference via via_device
     device_registry = dr.async_get(hass)
@@ -217,12 +235,23 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     coordinator.set_sync_areas(sync_areas)
     _LOGGER.debug("Updated sync areas to %s", sync_areas)
 
-    # Reload integration to apply area changes to devices
+    # Update WebSocket setting
+    use_websocket = entry.options.get(CONF_USE_WEBSOCKET, DEFAULT_USE_WEBSOCKET)
+    coordinator.set_use_websocket(use_websocket)
+    _LOGGER.debug("Updated use_websocket to %s", use_websocket)
+
+    # Reload integration to apply changes
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Shut down WebSocket client first
+    if entry.entry_id in hass.data.get(DOMAIN, {}):
+        coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id].get("coordinator")
+        if coordinator:
+            await coordinator.async_shutdown_websocket()
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:

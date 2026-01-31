@@ -2,6 +2,7 @@
  * Constants for Evon Smart Home MCP Server
  */
 
+// HTTP API device classes (used by api-client.ts)
 export const DEVICE_CLASSES = {
   LIGHT: "SmartCOM.Light.LightDim",
   BLIND: "SmartCOM.Blind.Blind",
@@ -9,6 +10,38 @@ export const DEVICE_CLASSES = {
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",
   HOME_STATE: "System.HomeState",
   BATHROOM_RADIATOR: "Heating.BathroomRadiator",
+} as const;
+
+// WebSocket API device classes (used by ws-client.ts)
+// These may differ slightly from HTTP API classes
+export const WS_DEVICE_CLASSES = {
+  // Lights
+  LIGHT: "Base.bLight",
+  LIGHT_DIM: "SmartCOM.Light.LightDim",
+  LIGHT_RGBW: "SmartCOM.Light.DynamicRGBWLight",
+  LIGHT_GROUP: "SmartCOM.Light.LightGroup",
+
+  // Blinds
+  BLIND: "Base.bBlind",
+  BLIND_SMARTCOM: "SmartCOM.Blind.Blind",
+  BLIND_GROUP: "SmartCOM.Blind.BlindGroup",
+
+  // Climate
+  CLIMATE: "SmartCOM.Clima.ClimateControl",
+
+  // Home State
+  HOME_STATE: "System.HomeState",
+
+  // Heating
+  BATHROOM_RADIATOR: "Heating.BathroomRadiator",
+
+  // Inputs
+  SWITCH: "Base.bSwitch",
+  SWITCH_UNIVERSAL: "Base.bSwitchUniversal",
+
+  // Rooms/Areas
+  ROOM: "System.Room",
+  AREA: "System.Area",
 } as const;
 
 export const BLIND_METHODS = {

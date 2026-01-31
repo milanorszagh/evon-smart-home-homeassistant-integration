@@ -13,12 +13,14 @@ For AI agents, see [AGENTS.md](AGENTS.md) which contains critical API knowledge 
 ```
 custom_components/evon/
 ├── __init__.py          # Entry point, platform setup, stale entity cleanup
-├── api.py               # Evon API client
+├── api.py               # Evon HTTP API client
+├── ws_client.py         # WebSocket client for real-time updates
+├── ws_mappings.py       # Property mappings for WebSocket data
 ├── base_entity.py       # Base entity class with common functionality
 ├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
 ├── const.py             # Constants, device classes, repair identifiers
 ├── coordinator/         # Data update coordinator package
-│   ├── __init__.py      # Main coordinator with connection failure tracking
+│   ├── __init__.py      # Main coordinator with connection failure tracking, WebSocket integration
 │   └── processors/      # Device-specific data processors
 │       ├── __init__.py
 │       ├── lights.py
@@ -49,9 +51,10 @@ custom_components/evon/
 ```
 src/
 ├── index.ts             # MCP server entry point
-├── api-client.ts        # Evon API client
+├── api-client.ts        # Evon HTTP API client
+├── ws-client.ts         # Evon WebSocket client (real-time)
 ├── config.ts            # Environment configuration
-├── constants.ts         # Shared constants
+├── constants.ts         # Shared constants (HTTP + WS device classes)
 ├── helpers.ts           # Utility functions
 ├── types.ts             # TypeScript type definitions
 ├── tools/               # MCP tool implementations
@@ -75,15 +78,28 @@ src/
 
 ### Data Flow
 
+**Without WebSocket (default):**
 ```
 1. User adds integration via config flow
 2. config_flow.py validates credentials with API
 3. __init__.py creates API client and coordinator
-4. coordinator.py fetches all device data periodically
+4. coordinator.py fetches all device data periodically (30s)
 5. Platform files create entities from coordinator data
 6. Entities read state from coordinator.data
 7. Entities call API methods for control actions
 8. Optimistic updates provide instant UI feedback
+```
+
+**With WebSocket (optional):**
+```
+1-3. Same as above
+4. coordinator.py fetches initial data via HTTP
+5. ws_client.py connects to WebSocket and subscribes to all devices
+6. Platform files create entities from coordinator data
+7. WebSocket receives ValuesChanged events instantly
+8. ws_mappings.py converts WS data to coordinator format
+9. coordinator.py updates entity data and notifies listeners
+10. HTTP polling continues at reduced rate (300s) as fallback
 ```
 
 ---
@@ -178,6 +194,155 @@ The server auto-detects plain text or encoded passwords.
 | `evon://home_state` | Current and available home states |
 | `evon://bathroom_radiators` | All bathroom radiators |
 | `evon://summary` | Home summary (counts, avg temp, state) |
+
+---
+
+## WebSocket Client
+
+The MCP server includes a WebSocket client (`src/ws-client.ts`) for real-time communication with Evon systems.
+
+### Architecture
+
+```
+src/
+├── ws-client.ts         # WebSocket client with device helpers
+└── constants.ts         # Device class constants (WS_DEVICE_CLASSES)
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time subscriptions** | Get instant notifications when device states change |
+| **Lower latency** | Faster than HTTP API for device control |
+| **Batch queries** | Request multiple device properties in a single call |
+| **Automatic reconnection** | Handles connection drops gracefully |
+
+### Usage
+
+```typescript
+import { getWsClient, wsGetLights, wsControlLight } from './dist/ws-client.js';
+
+// Get singleton client
+const client = getWsClient();
+await client.connect();
+
+// Get all lights
+const lights = await wsGetLights();
+
+// Control a light
+await wsControlLight('SC1_M01.Light1', { on: true, brightness: 75 });
+
+// Subscribe to real-time changes
+client.registerValuesChanged([
+  { Instanceid: 'SC1_M01.Light1', Properties: ['IsOn', 'Brightness'] }
+], (instanceId, props) => {
+  console.log(`${instanceId} changed:`, props);
+});
+```
+
+### Available Methods
+
+| Method | Description |
+|--------|-------------|
+| `connect()` | Connect to WebSocket server |
+| `disconnect()` | Close connection |
+| `getInstances(className)` | List all instances of a device class |
+| `registerValuesChanged(subs, callback)` | Subscribe to property changes |
+| `setValue(path, value)` | Set a device property |
+| `setLightOn(id, on)` | Turn light on/off |
+| `setLightBrightness(id, brightness)` | Set light brightness (0-100) |
+| `setBlindPosition(id, position)` | Set blind position (0-100) |
+| `setClimateTemperature(id, temp)` | Set target temperature |
+| `setHomeStateActive(id, active)` | Activate home state |
+| `setBathroomRadiatorOn(id, on)` | Control bathroom radiator |
+
+### Convenience Functions
+
+| Function | Description |
+|----------|-------------|
+| `wsGetLights()` | Get all lights with state |
+| `wsGetBlinds()` | Get all blinds with state |
+| `wsGetClimateZones()` | Get all climate zones |
+| `wsGetHomeStates()` | Get all home states |
+| `wsControlLight(id, opts)` | Control light with options |
+| `wsControlBlind(id, opts)` | Control blind with options |
+
+See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for detailed protocol documentation.
+
+---
+
+## Home Assistant WebSocket Integration
+
+The Home Assistant integration includes a Python WebSocket client (`ws_client.py`) for real-time updates.
+
+### Architecture
+
+```
+ws_client.py       # WebSocket client with reconnection logic
+ws_mappings.py     # Property mappings (WS → coordinator format)
+coordinator/       # Integrates WebSocket with data updates
+```
+
+### How It Works
+
+1. **Connection**: HTTP login → get token → WebSocket connect with token in Cookie
+2. **Subscription**: `RegisterValuesChanged` for all tracked devices
+3. **Events**: `ValuesChanged` events trigger coordinator data updates
+4. **Reconnection**: Exponential backoff (5s → 300s max) on disconnect
+5. **Fallback**: HTTP polling resumes at normal rate when WS disconnects
+
+### Property Mappings
+
+| Entity Type | WebSocket Property | Coordinator Key |
+|-------------|-------------------|-----------------|
+| lights | `IsOn`, `ScaledBrightness` | `is_on`, `brightness` |
+| blinds | `Position`, `Angle` | `position`, `angle` |
+| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved` | `target_temp`, `current_temp`, `mode_saved` |
+| switches | `IsOn` | `is_on` |
+| home_states | `Active` | `active` |
+| bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `next_switch_point` |
+
+### Constants
+
+```python
+CONF_USE_WEBSOCKET = "use_websocket"
+DEFAULT_USE_WEBSOCKET = False        # Disabled by default
+DEFAULT_WS_RECONNECT_DELAY = 5       # Initial reconnect delay (seconds)
+WS_RECONNECT_MAX_DELAY = 300         # Max reconnect delay (seconds)
+WS_PROTOCOL = "echo-protocol"        # WebSocket sub-protocol
+WS_POLL_INTERVAL = 300               # Reduced poll interval when WS connected
+```
+
+### Implementation Notes
+
+**Subscription Timing:** The WebSocket client must schedule resubscription as a background task after `_wait_for_connected()` returns, not inside it. This is because the message loop (`_handle_messages()`) only runs after `_wait_for_connected()` completes. If you call `_resubscribe()` synchronously inside `_wait_for_connected()`, the subscription request will timeout because there's no message loop running to process the `Callback` response.
+
+```python
+# CORRECT: Schedule resubscription in _run_loop after _wait_for_connected returns
+async def _run_loop(self):
+    if await self.connect():
+        await self._wait_for_connected()
+        if self._connected and self._subscriptions:
+            asyncio.create_task(self._resubscribe())  # Background task
+    await self._handle_messages()  # Now running to process responses
+
+# WRONG: Don't resubscribe inside _wait_for_connected
+async def _wait_for_connected(self):
+    # ... handle Connected message ...
+    await self._resubscribe()  # Will timeout! No message loop running yet
+```
+
+**Subscription Timeout:** For systems with many devices (50+), the `RegisterValuesChanged` request can take longer to process. Use a 30-second timeout instead of the default 10 seconds.
+
+**Brightness Property:** Always subscribe to `ScaledBrightness` (0-100 percentage) instead of `Brightness` (raw internal value). Using the wrong property causes brightness mismatches between Home Assistant and the Evon UI.
+
+### Testing
+
+```bash
+# Run WebSocket unit tests
+pytest tests/test_ws_client.py -v
+```
 
 ---
 
@@ -424,14 +589,39 @@ Body: {"value": true}   // COOLING
 
 ## Known Limitations
 
-### Physical Buttons (`SmartCOM.Switch`)
+### Physical Buttons (`SmartCOM.Switch` / `Base.bSwitchUniversal`)
 
 Cannot be monitored due to API limitations:
+
+**HTTP API:**
 - `IsOn` is only `true` while physically pressed (milliseconds)
 - No event history or push notifications
 - Polling is ineffective
 
+**WebSocket API:**
+- Physical switches (Taster) are action triggers, not stateful devices
+- When pressed, the controller executes pre-configured actions
+- Button press events are NOT exposed via WebSocket
+- Only static configuration is available (ID, Name, Address, Channel)
+- No `Pressed`, `State`, or `Value` properties exist
+
+**Workaround:** Detect button presses indirectly by monitoring the devices they control (e.g., watch for light state changes). See `ws-switch-listener.mjs` for a test implementation and `docs/WEBSOCKET_API.md` for details.
+
 The integration does not create entities for these devices.
+
+### Security Doors & Intercoms (WebSocket Works!)
+
+Unlike physical switches, **security doors and intercoms DO expose real-time events** via WebSocket:
+
+| Device | Instance Example | Key Properties |
+|--------|------------------|----------------|
+| Entry Door | `Door7586` | `IsOpen`, `DoorIsOpen`, `CallInProgress` |
+| 2N Intercom | `Intercom2N1000` | `DoorBellTriggered`, `DoorOpenTriggered`, `IsDoorOpen` |
+| Doorbell Button | `Intercom2N1000.DoorSwitch` | `IsOn` (pressed state) |
+
+These can be monitored in real-time using `RegisterValuesChanged`. See `ws-security-door.mjs` for a test implementation and `docs/WEBSOCKET_API.md` for full property documentation.
+
+**Potential Future Integration:** Binary sensors for door state and event triggers for doorbell rings.
 
 ---
 
@@ -538,6 +728,16 @@ curl http://EVON_HOST/api/instances \
   -H "Cookie: token=TOKEN"
 ```
 
+### WebSocket Testing
+
+```bash
+# Test switch/button event detection (requires EVON_TOKEN in .env)
+node ws-switch-listener.mjs [mode]
+# Modes: lights, switches, all
+
+# Get token from browser: Developer Tools > Application > Cookies > token
+```
+
 ### Unit Tests
 
 ```bash
@@ -555,6 +755,7 @@ pytest --cov=custom_components/evon --cov-report=term-missing
 
 Test files:
 - `test_api.py` - API client tests
+- `test_ws_client.py` - WebSocket client and mapping tests
 - `test_config_flow.py` / `test_config_flow_unit.py` - Configuration flow tests
 - `test_coordinator.py` - Coordinator and getter method tests
 - `test_diagnostics.py` - Diagnostics export tests
@@ -562,7 +763,7 @@ Test files:
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
 
-Current coverage: ~84% (130+ tests)
+Current coverage: ~85% (160+ tests)
 
 ---
 
