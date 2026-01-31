@@ -1,4 +1,4 @@
-"""Blind processor for Evon Smart Home coordinator."""
+"""Security door processor for Evon Smart Home coordinator."""
 
 from __future__ import annotations
 
@@ -10,20 +10,17 @@ if TYPE_CHECKING:
     from ...api import EvonApi
 
 from ...api import EvonApiError
-from ...const import EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP
+from ...const import EVON_CLASS_SECURITY_DOOR
 
 _LOGGER = logging.getLogger(__name__)
 
-# Blind classes to process
-BLIND_CLASSES = {EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP, "Base.bBlind", "Base.ehBlind"}
 
-
-async def process_blinds(
+async def process_security_doors(
     api: EvonApi,
     instances: list[dict[str, Any]],
     get_room_name: Callable[[str], str],
 ) -> list[dict[str, Any]]:
-    """Process blind instances.
+    """Process security door instances.
 
     Args:
         api: The Evon API client
@@ -31,11 +28,11 @@ async def process_blinds(
         get_room_name: Function to get room name from group ID
 
     Returns:
-        List of processed blind data dictionaries
+        List of processed security door data dictionaries
     """
-    blinds = []
+    security_doors = []
     for instance in instances:
-        if instance.get("ClassName") not in BLIND_CLASSES:
+        if instance.get("ClassName") != EVON_CLASS_SECURITY_DOOR:
             continue
         if not instance.get("Name"):
             continue
@@ -43,16 +40,15 @@ async def process_blinds(
         instance_id = instance.get("ID", "")
         try:
             details = await api.get_instance(instance_id)
-            blinds.append(
+            security_doors.append(
                 {
                     "id": instance_id,
                     "name": instance.get("Name"),
                     "room_name": get_room_name(instance.get("Group", "")),
-                    "position": details.get("Position", 0),
-                    "angle": details.get("Angle", 0),
-                    "is_moving": details.get("IsMoving", False),
+                    "is_open": details.get("IsOpen", False) or details.get("DoorIsOpen", False),
+                    "call_in_progress": details.get("CallInProgress", False),
                 }
             )
         except EvonApiError:
-            _LOGGER.warning("Failed to get details for blind %s", instance_id)
-    return blinds
+            _LOGGER.warning("Failed to get details for security door %s", instance_id)
+    return security_doors

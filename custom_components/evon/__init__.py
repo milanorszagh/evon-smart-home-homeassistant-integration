@@ -15,16 +15,16 @@ from .const import (
     CONF_CONNECTION_TYPE,
     CONF_ENGINE_ID,
     CONF_HOST,
+    CONF_HTTP_ONLY,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
-    CONF_USE_WEBSOCKET,
     CONF_USERNAME,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_HTTP_ONLY,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
-    DEFAULT_USE_WEBSOCKET,
     DOMAIN,
     EVON_REMOTE_HOST,
     REPAIR_CONFIG_MIGRATION,
@@ -80,12 +80,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Get options
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     sync_areas = entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
-    use_websocket = entry.options.get(CONF_USE_WEBSOCKET, DEFAULT_USE_WEBSOCKET)
+    http_only = entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
+    use_websocket = not http_only
 
     # Create coordinator
-    coordinator = EvonDataUpdateCoordinator(
-        hass, api, scan_interval, sync_areas, use_websocket
-    )
+    coordinator = EvonDataUpdateCoordinator(hass, api, scan_interval, sync_areas, use_websocket)
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
@@ -100,14 +99,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "password": entry.data[CONF_PASSWORD],
     }
 
-    # Set up WebSocket for real-time updates (only for local connections)
-    if use_websocket and connection_type == CONNECTION_TYPE_LOCAL:
-        await coordinator.async_setup_websocket(
-            session=session,
-            host=entry.data[CONF_HOST],
-            username=entry.data[CONF_USERNAME],
-            password=entry.data[CONF_PASSWORD],
-        )
+    # Set up WebSocket for real-time updates (both local and remote connections)
+    if use_websocket:
+        if connection_type == CONNECTION_TYPE_LOCAL:
+            await coordinator.async_setup_websocket(
+                session=session,
+                host=entry.data[CONF_HOST],
+                username=entry.data[CONF_USERNAME],
+                password=entry.data[CONF_PASSWORD],
+            )
+        else:
+            # Remote connection via my.evon-smarthome.com
+            await coordinator.async_setup_websocket(
+                session=session,
+                host=None,
+                username=entry.data[CONF_USERNAME],
+                password=entry.data[CONF_PASSWORD],
+                is_remote=True,
+                engine_id=entry.data[CONF_ENGINE_ID],
+            )
 
     # Create hub device that child devices reference via via_device
     device_registry = dr.async_get(hass)
@@ -153,6 +163,8 @@ async def _async_cleanup_stale_entities(
         "valves",
         "bathroom_radiators",
         "scenes",
+        "security_doors",
+        "intercoms",
     ]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:
@@ -236,9 +248,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     _LOGGER.debug("Updated sync areas to %s", sync_areas)
 
     # Update WebSocket setting
-    use_websocket = entry.options.get(CONF_USE_WEBSOCKET, DEFAULT_USE_WEBSOCKET)
-    coordinator.set_use_websocket(use_websocket)
-    _LOGGER.debug("Updated use_websocket to %s", use_websocket)
+    http_only = entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
+    coordinator.set_use_websocket(not http_only)
+    _LOGGER.debug("Updated http_only to %s (use_websocket=%s)", http_only, not http_only)
 
     # Reload integration to apply changes
     await hass.config_entries.async_reload(entry.entry_id)

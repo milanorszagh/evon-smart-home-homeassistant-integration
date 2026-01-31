@@ -20,19 +20,21 @@ from .api import EvonApi, EvonApiError, EvonAuthError
 from .const import (
     CONF_CONNECTION_TYPE,
     CONF_ENGINE_ID,
+    CONF_HTTP_ONLY,
     CONF_NON_DIMMABLE_LIGHTS,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
-    CONF_USE_WEBSOCKET,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_HTTP_ONLY,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
-    DEFAULT_USE_WEBSOCKET,
     DOMAIN,
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
+    MAX_POLL_INTERVAL,
     MIN_PASSWORD_LENGTH,
+    MIN_POLL_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -537,13 +539,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
 
         current_interval = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         current_sync_areas = self.config_entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
-        current_use_websocket = self.config_entry.options.get(CONF_USE_WEBSOCKET, DEFAULT_USE_WEBSOCKET)
+        current_http_only = self.config_entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
         current_non_dimmable = self.config_entry.options.get(CONF_NON_DIMMABLE_LIGHTS, [])
-
-        # Check if this is a local connection (WebSocket only works for local)
-        is_local_connection = self.config_entry.data.get(
-            CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL
-        ) == CONNECTION_TYPE_LOCAL
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
@@ -555,30 +552,10 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     light_name = light["name"]
                     light_options[light_id] = light_name
 
-        # Build schema
-        schema_dict: dict[Any, Any] = {}
-
-        # For local connections: WebSocket toggle first, then poll interval
-        if is_local_connection:
-            schema_dict[vol.Required(
-                CONF_USE_WEBSOCKET,
-                default=current_use_websocket,
-            )] = bool
-            schema_dict[vol.Required(
-                CONF_SCAN_INTERVAL,
-                default=current_interval,
-            )] = vol.All(vol.Coerce(int), vol.Range(min=5, max=300))
-        else:
-            # Remote connections: just poll interval (no WebSocket support)
-            schema_dict[vol.Required(
-                CONF_SCAN_INTERVAL,
-                default=current_interval,
-            )] = vol.All(vol.Coerce(int), vol.Range(min=5, max=300))
-
-        schema_dict[vol.Required(
-            CONF_SYNC_AREAS,
-            default=current_sync_areas,
-        )] = bool
+        # Build schema - order: sync_areas, non_dimmable_lights, http_only, scan_interval
+        schema_dict: dict[Any, Any] = {
+            vol.Required(CONF_SYNC_AREAS, default=current_sync_areas): bool,
+        }
 
         if light_options:
             from homeassistant.helpers.selector import (
@@ -594,6 +571,12 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     mode=SelectSelectorMode.DROPDOWN,
                 )
             )
+
+        # Advanced options last
+        schema_dict[vol.Required(CONF_HTTP_ONLY, default=current_http_only)] = bool
+        schema_dict[vol.Required(CONF_SCAN_INTERVAL, default=current_interval)] = vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
+        )
 
         return self.async_show_form(
             step_id="init",

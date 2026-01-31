@@ -9,12 +9,17 @@ import logging
 import re
 import ssl
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 from homeassistant.exceptions import HomeAssistantError
 
+if TYPE_CHECKING:
+    from .ws_client import EvonWsClient
+
 from .const import (
+    DEFAULT_BATHROOM_RADIATOR_DURATION,
+    DEFAULT_CONNECTION_POOL_SIZE,
     DEFAULT_LOGIN_TIMEOUT,
     DEFAULT_REQUEST_TIMEOUT,
     ENGINE_ID_MAX_LENGTH,
@@ -184,6 +189,12 @@ class EvonApi:
         self._is_remote = engine_id is not None
         self._engine_id = engine_id
 
+        # WebSocket control support
+        self._ws_client: EvonWsClient | None = None
+        self._instance_classes: dict[str, str] = {}  # ID → ClassName cache
+        self._blind_angles: dict[str, int] = {}  # ID → current Angle cache for WS control
+        self._blind_positions: dict[str, int] = {}  # ID → current Position cache for WS control
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with proper SSL configuration."""
         if self._session is None:
@@ -192,8 +203,8 @@ class EvonApi:
                 # Set a reasonable limit on concurrent connections
                 connector = aiohttp.TCPConnector(
                     ssl=_create_ssl_context(),
-                    limit=10,
-                    limit_per_host=5,
+                    limit=DEFAULT_CONNECTION_POOL_SIZE,
+                    limit_per_host=DEFAULT_CONNECTION_POOL_SIZE // 2,
                 )
                 self._session = aiohttp.ClientSession(connector=connector)
                 self._own_session = True
@@ -209,6 +220,62 @@ class EvonApi:
         # Clear token from memory for security
         self._token = None
         self._token_timestamp = 0.0
+
+    def set_ws_client(self, ws_client: EvonWsClient | None) -> None:
+        """Set the WebSocket client for control operations.
+
+        Args:
+            ws_client: The WebSocket client, or None to disable WS control.
+        """
+        self._ws_client = ws_client
+
+    def set_instance_classes(self, instances: list[dict[str, Any]]) -> None:
+        """Cache instance class names for WebSocket routing.
+
+        Args:
+            instances: List of instance dictionaries with ID and ClassName.
+        """
+        self._instance_classes = {i.get("ID", ""): i.get("ClassName", "") for i in instances if i.get("ID")}
+
+    def update_blind_angle(self, instance_id: str, angle: int) -> None:
+        """Update cached blind angle for WebSocket position control.
+
+        Args:
+            instance_id: The blind instance ID.
+            angle: The current angle (0-100).
+        """
+        self._blind_angles[instance_id] = angle
+
+    def get_blind_angle(self, instance_id: str) -> int | None:
+        """Get cached blind angle.
+
+        Args:
+            instance_id: The blind instance ID.
+
+        Returns:
+            The cached angle, or None if not cached.
+        """
+        return self._blind_angles.get(instance_id)
+
+    def update_blind_position(self, instance_id: str, position: int) -> None:
+        """Update cached blind position for WebSocket tilt control.
+
+        Args:
+            instance_id: The blind instance ID.
+            position: The current position (0-100, 0=open, 100=closed).
+        """
+        self._blind_positions[instance_id] = position
+
+    def get_blind_position(self, instance_id: str) -> int | None:
+        """Get cached blind position.
+
+        Args:
+            instance_id: The blind instance ID.
+
+        Returns:
+            The cached position, or None if not cached.
+        """
+        return self._blind_positions.get(instance_id)
 
     async def login(self) -> str:
         """Login to Evon and get token."""
@@ -403,15 +470,157 @@ class EvonApi:
         return rooms
 
     async def call_method(self, instance_id: str, method: str, params: list | None = None) -> dict[str, Any]:
-        """Call a method on an instance."""
+        """Call a method on an instance.
+
+        Tries WebSocket first if available, falls back to HTTP.
+        """
         _validate_instance_id(instance_id)
         _validate_method_name(method)
+
+        # Try WebSocket first if available (faster, real-time)
+        ws_attempted = False
+        if self._ws_client and self._ws_client.is_connected:
+            ws_attempted = True
+            _LOGGER.debug("Attempting WS control for %s.%s", instance_id, method)
+            if await self._try_ws_control(instance_id, method, params):
+                _LOGGER.debug("WS control succeeded for %s.%s", instance_id, method)
+                return {}
+            _LOGGER.debug("WS control failed/unavailable, falling back to HTTP")
+
+        # Fall back to HTTP
+        _LOGGER.debug("HTTP control: POST /instances/%s/%s %s", instance_id, method, params or [])
         result = await self._request(
             "POST",
             f"/instances/{instance_id}/{method}",
             params or [],
         )
+
+        # Log warning if WS was attempted but failed (helps diagnose WS issues)
+        if ws_attempted:
+            _LOGGER.warning(
+                "WebSocket control failed for %s.%s, HTTP fallback succeeded. "
+                "Consider checking WebSocket connection or device support.",
+                instance_id,
+                method,
+            )
+
         return result
+
+    async def _try_ws_control(
+        self,
+        instance_id: str,
+        method: str,
+        params: list | None,
+    ) -> bool:
+        """Try to execute control via WebSocket.
+
+        Args:
+            instance_id: The instance ID.
+            method: The method name.
+            params: Optional parameters.
+
+        Returns:
+            True if WebSocket control succeeded, False otherwise.
+        """
+        from .ws_control import get_ws_control_mapping
+
+        class_name = self._instance_classes.get(instance_id, "")
+        if not class_name:
+            _LOGGER.debug("WS control: No class found for instance %s, using HTTP", instance_id)
+            return False
+
+        # Special handling for blind position/tilt - use MoveToPosition with cached values
+        if self._is_blind_class(class_name):
+            if method == "AmznSetPercentage" and params:
+                # Set position: MoveToPosition([cached_angle, new_position])
+                cached_angle = self.get_blind_angle(instance_id)
+                if cached_angle is None:
+                    _LOGGER.debug("WS control: No cached angle for blind %s, using HTTP", instance_id)
+                    return False
+                new_position = params[0]
+                _LOGGER.info(
+                    "WS control: CallMethod %s.MoveToPosition([%s, %s]) (class: %s)",
+                    instance_id,
+                    cached_angle,
+                    new_position,
+                    class_name,
+                )
+                result = await self._ws_client.call_method(  # type: ignore[union-attr]
+                    instance_id, "MoveToPosition", [cached_angle, new_position]
+                )
+                _LOGGER.info("WS control: MoveToPosition result = %s", result)
+                return result
+
+            if method == "SetAngle" and params:
+                # Set tilt: MoveToPosition([new_angle, cached_position])
+                cached_position = self.get_blind_position(instance_id)
+                if cached_position is None:
+                    _LOGGER.debug("WS control: No cached position for blind %s, using HTTP", instance_id)
+                    return False
+                new_angle = params[0]
+                _LOGGER.info(
+                    "WS control: CallMethod %s.MoveToPosition([%s, %s]) (class: %s)",
+                    instance_id,
+                    new_angle,
+                    cached_position,
+                    class_name,
+                )
+                result = await self._ws_client.call_method(  # type: ignore[union-attr]
+                    instance_id, "MoveToPosition", [new_angle, cached_position]
+                )
+                _LOGGER.info("WS control: MoveToPosition result = %s", result)
+                return result
+
+        mapping = get_ws_control_mapping(class_name, method)
+        if not mapping:
+            _LOGGER.debug("WS control: No mapping for %s.%s, using HTTP", class_name, method)
+            return False
+
+        if mapping.property_name:
+            # SetValue operation
+            value = mapping.get_value(params)
+            _LOGGER.info(
+                "WS control: SetValue %s.%s = %s (class: %s)", instance_id, mapping.property_name, value, class_name
+            )
+            result = await self._ws_client.set_value(  # type: ignore[union-attr]
+                instance_id, mapping.property_name, value
+            )
+            _LOGGER.info("WS control: SetValue result = %s", result)
+            return result
+        else:
+            # CallMethod operation - use get_value to transform params if needed
+            method_params = mapping.get_value(params)
+            _LOGGER.info(
+                "WS control: CallMethod %s.%s(%s) (class: %s)",
+                instance_id,
+                mapping.method_name,
+                method_params,
+                class_name,
+            )
+            result = await self._ws_client.call_method(  # type: ignore[union-attr]
+                instance_id, mapping.method_name, method_params
+            )
+            _LOGGER.info("WS control: CallMethod result = %s", result)
+            return result
+
+    def _is_blind_class(self, class_name: str) -> bool:
+        """Check if a class name is a blind class.
+
+        Args:
+            class_name: The class name to check.
+
+        Returns:
+            True if it's a blind class, False otherwise.
+        """
+        from .const import EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP
+
+        blind_classes = {
+            EVON_CLASS_BLIND,
+            EVON_CLASS_BLIND_GROUP,
+            "Base.bBlind",
+            "Base.ehBlind",
+        }
+        return class_name in blind_classes
 
     # Light methods
     async def turn_on_light(self, instance_id: str) -> None:
@@ -425,6 +634,10 @@ class EvonApi:
     async def set_light_brightness(self, instance_id: str, brightness: int) -> None:
         """Set light brightness (0-100)."""
         await self.call_method(instance_id, "AmznSetBrightness", [brightness])
+
+    async def set_light_color_temp(self, instance_id: str, kelvin: int) -> None:
+        """Set light color temperature (in Kelvin)."""
+        await self.call_method(instance_id, "SetColorTemp", [kelvin])
 
     # Blind methods
     async def open_blind(self, instance_id: str) -> None:
@@ -523,6 +736,22 @@ class EvonApi:
         """
         await self.call_method(instance_id, "Switch")
 
+    async def turn_on_bathroom_radiator(self, instance_id: str) -> None:
+        """Turn on a bathroom radiator for one heating cycle.
+
+        Uses SwitchOneTime method (verified working January 2025).
+        This is idempotent - calling when already on restarts the timer.
+        """
+        await self.call_method(instance_id, "SwitchOneTime")
+
+    async def turn_off_bathroom_radiator(self, instance_id: str) -> None:
+        """Turn off a bathroom radiator.
+
+        Uses Switch (toggle) - caller must check state first to avoid toggling ON.
+        Note: SwitchOff method exists but doesn't work (acknowledged but no effect).
+        """
+        await self.call_method(instance_id, "Switch")
+
     async def get_bathroom_radiators(self, radiator_class: str = "Heating.BathroomRadiator") -> list[dict[str, Any]]:
         """Get all bathroom radiators with their current state.
 
@@ -542,7 +771,7 @@ class EvonApi:
                         "name": instance.get("Name", instance_id),
                         "is_on": details.get("Output", False),
                         "time_remaining": details.get("NextSwitchPoint", -1),
-                        "duration_mins": details.get("EnableForMins", 30),
+                        "duration_mins": details.get("EnableForMins", DEFAULT_BATHROOM_RADIATOR_DURATION),
                     }
                 )
         return radiators
@@ -565,14 +794,26 @@ class EvonApi:
     async def set_season_mode(self, is_cooling: bool) -> None:
         """Set the global season mode.
 
+        Tries WebSocket first if available, falls back to HTTP PUT.
+
         Args:
             is_cooling: True for cooling (summer), False for heating (winter)
         """
+        # Try WebSocket first if available
+        ws_attempted = self._ws_client and self._ws_client.is_connected
+        if ws_attempted and await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling):  # type: ignore[union-attr]
+            return
+
+        # Fall back to HTTP PUT
         await self._request(
             "PUT",
             "/instances/Base.ehThermostat/IsCool",
             {"value": is_cooling},
         )
+
+        # Log warning if WS was attempted but failed
+        if ws_attempted:
+            _LOGGER.warning("WebSocket control failed for Base.ehThermostat.IsCool, HTTP fallback succeeded.")
 
     async def test_connection(self) -> bool:
         """Test the connection to the Evon system."""

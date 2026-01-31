@@ -56,6 +56,7 @@ if HAS_HA_TEST_FRAMEWORK:
     try:
         from pytest_homeassistant_custom_component.common import long_repr_strings
     except ImportError:
+
         @contextlib.contextmanager
         def long_repr_strings():
             """Fallback no-op context manager."""
@@ -128,9 +129,7 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.test_connection = AsyncMock(return_value=True)
         mock_api.login = AsyncMock(return_value="test_token")
         mock_api.get_instances = AsyncMock(return_value=MOCK_INSTANCES)
-        mock_api.get_instance = AsyncMock(
-            side_effect=lambda instance_id: MOCK_INSTANCE_DETAILS.get(instance_id, {})
-        )
+        mock_api.get_instance = AsyncMock(side_effect=lambda instance_id: MOCK_INSTANCE_DETAILS.get(instance_id, {}))
         # Light methods
         mock_api.turn_on_light = AsyncMock()
         mock_api.turn_off_light = AsyncMock()
@@ -155,6 +154,9 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.toggle_bathroom_radiator = AsyncMock()
         # Scene methods
         mock_api.execute_scene = AsyncMock()
+        # WebSocket control support methods
+        mock_api.set_ws_client = lambda ws: None
+        mock_api.set_instance_classes = lambda instances: None
         return mock_api
 
     @pytest.fixture(autouse=True)
@@ -184,6 +186,7 @@ if HAS_HA_TEST_FRAMEWORK:
         else:
             # Create a new custom_components module pointing to our directory
             import types
+
             custom_components_module = types.ModuleType("custom_components")
             custom_components_module.__path__ = [str(custom_components_path)]
             custom_components_module.__file__ = str(custom_components_path / "__init__.py")
@@ -231,8 +234,10 @@ if HAS_HA_TEST_FRAMEWORK:
 
         # Patch at both the api module and the __init__.py import location
         # This ensures the mock is used regardless of import order
-        with patch("custom_components.evon.api.EvonApi", return_value=mock_api), \
-             patch("custom_components.evon.EvonApi", return_value=mock_api):
+        with (
+            patch("custom_components.evon.api.EvonApi", return_value=mock_api),
+            patch("custom_components.evon.EvonApi", return_value=mock_api),
+        ):
             yield mock_api
 
 
@@ -339,6 +344,41 @@ MOCK_INSTANCES = [
         "ClassName": "System.SceneApp",
         "Name": "All Lights Off",
     },
+    # Security Door
+    {
+        "ID": "security_door_1",
+        "ClassName": "SmartCOM.Security.SecurityDoor",
+        "Name": "Front Door",
+        "Group": "room_living",
+    },
+    # Intercom
+    {
+        "ID": "intercom_1",
+        "ClassName": "SmartCOM.Intercom.Intercom2N",
+        "Name": "Main Intercom",
+        "Group": "room_living",
+    },
+    # Light Group
+    {
+        "ID": "light_group_1",
+        "ClassName": "SmartCOM.Light.LightGroup",
+        "Name": "All Living Room Lights",
+        "Group": "room_living",
+    },
+    # Blind Group
+    {
+        "ID": "blind_group_1",
+        "ClassName": "SmartCOM.Blind.BlindGroup",
+        "Name": "All Living Room Blinds",
+        "Group": "room_living",
+    },
+    # RGBW Light
+    {
+        "ID": "rgbw_light_1",
+        "ClassName": "SmartCOM.Light.DynamicRGBWLight",
+        "Name": "RGBW Light",
+        "Group": "room_living",
+    },
     # Rooms
     {
         "ID": "room_living",
@@ -387,6 +427,7 @@ MOCK_INSTANCE_DETAILS = {
         "ModeSaved": 4,  # Comfort in heating mode
         "CoolingMode": False,
         "IsOn": True,
+        "Humidity": 45.0,
     },
     "sensor_temp_1": {
         "ActualTemperature": 20.0,
@@ -412,6 +453,10 @@ MOCK_INSTANCE_DETAILS = {
         "IL3": 2.1,
         "Frequency": 50.0,
         "FeedInEnergy": 100.5,
+        # Per-phase power for WebSocket real-time updates
+        "P1": 500.0,
+        "P2": 480.0,
+        "P3": 520.0,
     },
     "air_quality_1": {
         "CO2Value": 650,
@@ -444,6 +489,31 @@ MOCK_INSTANCE_DETAILS = {
         "Active": False,
         "Name": "Holiday",
     },
+    "security_door_1": {
+        "IsOpen": False,
+        "DoorIsOpen": False,
+        "CallInProgress": False,
+    },
+    "intercom_1": {
+        "DoorBellTriggered": False,
+        "DoorOpenTriggered": False,
+        "IsDoorOpen": False,
+        "ConnectionToIntercomHasBeenLost": False,
+    },
+    "light_group_1": {
+        "IsOn": True,
+        "ScaledBrightness": 80,
+    },
+    "blind_group_1": {
+        "Position": 30,
+        "Angle": 50,
+        "IsMoving": False,
+    },
+    "rgbw_light_1": {
+        "IsOn": True,
+        "ScaledBrightness": 100,
+        "ColorTemp": 4000,
+        "MinColorTemperature": 2700,
+        "MaxColorTemperature": 6500,
+    },
 }
-
-

@@ -58,6 +58,10 @@ async def process_smart_meters(
                     "current_l1": details.get("IL1", 0),
                     "current_l2": details.get("IL2", 0),
                     "current_l3": details.get("IL3", 0),
+                    # Per-phase power (WebSocket provides P1, P2, P3)
+                    "power_l1": details.get("P1", 0),
+                    "power_l2": details.get("P2", 0),
+                    "power_l3": details.get("P3", 0),
                 }
             )
         except EvonApiError:

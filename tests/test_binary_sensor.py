@@ -32,9 +32,7 @@ async def test_valve_binary_sensor_closed(hass, mock_config_entry_v2, mock_evon_
     modified_details = {**MOCK_INSTANCE_DETAILS, "valve_1": {"ActValue": False}}
 
     # Override get_instance to return closed valve
-    mock_evon_api_class.get_instance.side_effect = lambda instance_id: modified_details.get(
-        instance_id, {}
-    )
+    mock_evon_api_class.get_instance.side_effect = lambda instance_id: modified_details.get(instance_id, {})
 
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
