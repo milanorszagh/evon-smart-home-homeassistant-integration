@@ -289,12 +289,12 @@ class EvonLight(EvonEntity, LightEntity):
         # During settling period, completely ignore coordinator updates
         # This prevents UI flicker from intermediate WebSocket states during
         # Evon's light animation (0% → target brightness) or relay switching
+        # Note: Don't call super() here - it triggers async_write_ha_state() which
+        # can cause frontend animation glitches even with unchanged optimistic values
         if (
             self._optimistic_state_set_at is not None
             and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
         ):
-            # Still call super to maintain entity subscription, but don't process data
-            super()._handle_coordinator_update()
             return
 
         # Only clear optimistic state when coordinator data matches expected value

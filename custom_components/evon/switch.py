@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi
 from .base_entity import EvonEntity
-from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT
+from .const import DOMAIN, OPTIMISTIC_SETTLING_PERIOD_SHORT, OPTIMISTIC_STATE_TIMEOUT
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -265,11 +265,28 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
+        # AND settling period has passed (prevents UI flicker from intermediate states)
         if self._optimistic_is_on is not None:
+            # During settling period, keep optimistic state to avoid intermediate state flicker
+            # Note: Don't call super() - it triggers async_write_ha_state() which can cause
+            # frontend animation glitches even with unchanged optimistic values
+            if (
+                self._optimistic_state_set_at is not None
+                and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD_SHORT
+            ):
+                return
+
             data = self.coordinator.get_entity_data("bathroom_radiators", self._instance_id)
             if data:
                 actual_is_on = data.get("is_on", False)
+                actual_time_remaining = data.get("time_remaining", -1)
+                # Only clear optimistic state when:
+                # - is_on matches AND
+                # - time_remaining is valid (> 0) when turning on
                 if actual_is_on == self._optimistic_is_on:
+                    if self._optimistic_is_on and actual_time_remaining <= 0:
+                        # Turning on but time_remaining not yet reported - keep optimistic
+                        return
                     self._optimistic_is_on = None
                     # Clear optimistic time once real data is available
                     self._optimistic_time_remaining_mins = None

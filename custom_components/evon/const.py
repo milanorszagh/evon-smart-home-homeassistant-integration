@@ -109,6 +109,9 @@ OPTIMISTIC_STATE_TIMEOUT = 30.0
 # Note: Evon fade-out takes ~2.2-2.3 seconds, so 2.5s provides buffer
 OPTIMISTIC_SETTLING_PERIOD = 2.5
 
+# Shorter settling period for bathroom radiators (no animation, just response delay)
+OPTIMISTIC_SETTLING_PERIOD_SHORT = 1.0
+
 # WebSocket configuration
 CONF_HTTP_ONLY = "http_only"
 DEFAULT_HTTP_ONLY = False  # WebSocket is enabled by default (recommended)

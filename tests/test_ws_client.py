@@ -1115,11 +1115,11 @@ class TestNewFeatures:
 
     def test_class_to_type_security_doors(self):
         """Test security door class mappings."""
-        assert get_entity_type("SmartCOM.Security.SecurityDoor") == "security_doors"
+        assert get_entity_type("Security.Door") == "security_doors"
 
     def test_class_to_type_intercoms(self):
         """Test intercom class mappings."""
-        assert get_entity_type("SmartCOM.Intercom.Intercom2N") == "intercoms"
+        assert get_entity_type("Security.Intercom.2N.Intercom2N") == "intercoms"
 
     def test_class_to_type_light_group(self):
         """Test light group class mappings."""
@@ -1222,8 +1222,8 @@ class TestNewFeatures:
     def test_build_subscription_list_includes_new_types(self):
         """Test building subscription list with new device types."""
         instances = [
-            {"ID": "Door1", "ClassName": "SmartCOM.Security.SecurityDoor"},
-            {"ID": "Intercom1", "ClassName": "SmartCOM.Intercom.Intercom2N"},
+            {"ID": "Door1", "ClassName": "Security.Door"},
+            {"ID": "Intercom1", "ClassName": "Security.Intercom.2N.Intercom2N"},
             {"ID": "LightGroup1", "ClassName": "SmartCOM.Light.LightGroup"},
             {"ID": "BlindGroup1", "ClassName": "SmartCOM.Blind.BlindGroup"},
         ]

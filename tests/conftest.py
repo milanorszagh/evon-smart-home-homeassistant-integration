@@ -425,14 +425,14 @@ MOCK_INSTANCES = [
     # Security Door
     {
         "ID": "security_door_1",
-        "ClassName": "SmartCOM.Security.SecurityDoor",
+        "ClassName": "Security.Door",
         "Name": "Front Door",
         "Group": "room_living",
     },
     # Intercom
     {
         "ID": "intercom_1",
-        "ClassName": "SmartCOM.Intercom.Intercom2N",
+        "ClassName": "Security.Intercom.2N.Intercom2N",
         "Name": "Main Intercom",
         "Group": "room_living",
     },
