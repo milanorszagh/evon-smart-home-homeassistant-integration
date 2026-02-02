@@ -42,7 +42,8 @@ async def test_camera_unique_id(hass, mock_config_entry_v2, mock_evon_api_class)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
     await hass.async_block_till_done()
 
-    entity_registry = hass.helpers.entity_registry.async_get(hass)
+    from homeassistant.helpers import entity_registry as er
+    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("camera.intercom_camera")
     assert entry is not None
     assert entry.unique_id == "evon_camera_intercom_1.Cam"
