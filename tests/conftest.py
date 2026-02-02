@@ -44,6 +44,17 @@ if not importlib.util.find_spec("homeassistant"):
     mock_ha.components.select = MagicMock()
     mock_ha.components.button = MagicMock()
     mock_ha.components.scene = MagicMock()
+    # Camera component with proper base class
+    mock_camera = MagicMock()
+    mock_camera.Camera = type("Camera", (), {"__init__": lambda self: None})
+    mock_camera.CameraEntityFeature = MagicMock()
+    mock_camera.CameraEntityFeature.ON_OFF = 1
+    mock_ha.components.camera = mock_camera
+
+    # Image component with proper base class
+    mock_image = MagicMock()
+    mock_image.ImageEntity = type("ImageEntity", (), {"__init__": lambda self, hass: None})
+    mock_ha.components.image = mock_image
     mock_ha.exceptions = MagicMock()
     mock_ha.util = MagicMock()
     mock_ha.util.dt = MagicMock()
@@ -75,6 +86,8 @@ if not importlib.util.find_spec("homeassistant"):
     sys.modules["homeassistant.components.select"] = mock_ha.components.select
     sys.modules["homeassistant.components.button"] = mock_ha.components.button
     sys.modules["homeassistant.components.scene"] = mock_ha.components.scene
+    sys.modules["homeassistant.components.camera"] = mock_ha.components.camera
+    sys.modules["homeassistant.components.image"] = mock_ha.components.image
     sys.modules["homeassistant.exceptions"] = mock_ha.exceptions
     sys.modules["homeassistant.util"] = mock_ha.util
     sys.modules["homeassistant.util.dt"] = mock_ha.util.dt
@@ -231,6 +244,8 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.all_lights_off = AsyncMock()
         mock_api.all_blinds_close = AsyncMock()
         mock_api.all_blinds_open = AsyncMock()
+        # Image fetch method
+        mock_api.fetch_image = AsyncMock(return_value=b"\xff\xd8\xff\xe0\x00\x10JFIF")  # JPEG header bytes
         # WebSocket control support methods
         mock_api.set_ws_client = lambda ws: None
         mock_api.set_instance_classes = lambda instances: None
@@ -436,6 +451,13 @@ MOCK_INSTANCES = [
         "Name": "Main Intercom",
         "Group": "room_living",
     },
+    # Camera (2N Intercom Camera)
+    {
+        "ID": "intercom_1.Cam",
+        "ClassName": "Security.Intercom.2N.Intercom2NCam",
+        "Name": "Intercom Camera",
+        "Group": "room_living",
+    },
     # Light Group
     {
         "ID": "light_group_1",
@@ -571,12 +593,27 @@ MOCK_INSTANCE_DETAILS = {
         "IsOpen": False,
         "DoorIsOpen": False,
         "CallInProgress": False,
+        "CamInstanceName": "intercom_1.Cam",
+        "SavedPictures": [
+            {"Path": "/images/snapshot_1.jpg", "Timestamp": 1706900000000},
+            {"Path": "/images/snapshot_2.jpg", "Timestamp": 1706899000000},
+        ],
     },
     "intercom_1": {
         "DoorBellTriggered": False,
         "DoorOpenTriggered": False,
         "IsDoorOpen": False,
         "ConnectionToIntercomHasBeenLost": False,
+        "CamInstanceName": "intercom_1.Cam",
+        "SavedPictures": [
+            {"Path": "/images/snapshot_1.jpg", "Timestamp": 1706900000000},
+            {"Path": "/images/snapshot_2.jpg", "Timestamp": 1706899000000},
+        ],
+    },
+    "intercom_1.Cam": {
+        "ImagePath": "/images/current.jpg",
+        "IpAddress": "192.168.1.50",
+        "Error": False,
     },
     "light_group_1": {
         "IsOn": True,
