@@ -68,6 +68,17 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "call_in_progress": {
+        "name": "Anruf läuft"
+      },
+      "connection": {
+        "name": "Verbindung"
+      },
+      "websocket": {
+        "name": "WebSocket"
+      }
+    },
     "select": {
       "season_mode": {
         "name": "Jahreszeit-Modus",

@@ -35,7 +35,8 @@ custom_components/evon/
 │       ├── bathroom_radiators.py
 │       ├── scenes.py
 │       ├── security_doors.py
-│       └── intercoms.py
+│       ├── intercoms.py
+│       └── cameras.py
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
@@ -44,6 +45,8 @@ custom_components/evon/
 ├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
 ├── button.py            # Button platform (scenes)
+├── camera.py            # Camera platform (2N intercoms)
+├── image.py             # Image platform (doorbell snapshots)
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
 └── translations/        # Localization files (en.json, de.json)
@@ -366,6 +369,7 @@ coordinator/       # Integrates WebSocket with data updates
 | bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `next_switch_point` |
 | security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress` | `is_open`, `door_is_open`, `call_in_progress` |
 | intercoms | `DoorBellTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
+| cameras | `ImagePath` | `image_path` |
 
 ### Constants
 
@@ -521,8 +525,9 @@ All requests require: `Cookie: token=<token>`
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
-| `SmartCOM.Security.SecurityDoor` | Security door | No (sensor) |
-| `SmartCOM.Intercom.Intercom2N` | 2N Intercom | No (sensor) |
+| `Security.Door` | Security door | No (sensor) |
+| `Security.Intercom.2N.Intercom2N` | 2N Intercom | No (sensor) |
+| `Security.Intercom.2N.Intercom2NCam` | 2N Camera | Yes (image request) |
 | `System.Location.Room` | Room/area | No |
 
 ### Light Methods (HTTP API)
@@ -681,6 +686,24 @@ Body: {"value": true}   // COOLING
 **Properties**: `Name` (string), `CanExecute` (bool)
 
 **Class**: `System.SceneApp`
+
+### Camera Methods (2N Intercom)
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `SetValue ImageRequest` | `true` | Request new image capture |
+
+**Properties**: `ImagePath` (string - path to JPEG on Evon server)
+
+**Class**: `Security.Intercom.2N.Intercom2NCam`
+
+**2N Camera Capabilities:**
+- Frame rate: 1-10 fps for streaming mode
+- Resolutions: 160×120, 176×144, 320×240, 352×272, 352×288, 640×480, 1280×960
+- Historical buffer: 30 seconds (`time` parameter: -30 to 0)
+- Image format: JPEG
+
+**Image Fetch:** After requesting an image via WebSocket, wait ~0.5 seconds (`CAMERA_IMAGE_CAPTURE_DELAY`) before fetching via HTTP at the `ImagePath` URL with token authentication.
 
 ### Smart Meter Properties
 
@@ -934,8 +957,9 @@ Test files:
 - `test_light.py`, `test_cover.py`, `test_climate.py` - Platform tests
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
+- `test_camera.py`, `test_image.py` - Camera and image platform tests
 
-Current coverage: ~85% (160+ tests)
+Current coverage: ~85% (180+ tests)
 
 ---
 

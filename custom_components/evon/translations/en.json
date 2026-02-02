@@ -68,6 +68,17 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "call_in_progress": {
+        "name": "Call In Progress"
+      },
+      "connection": {
+        "name": "Connection"
+      },
+      "websocket": {
+        "name": "WebSocket"
+      }
+    },
     "select": {
       "season_mode": {
         "name": "Season Mode",

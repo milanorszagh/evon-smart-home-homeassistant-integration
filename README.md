@@ -313,6 +313,11 @@ Cameras from 2N intercoms are supported with live feed capability:
 
 The camera entity provides a still image that updates when you view it. The integration triggers an image request via WebSocket and fetches the resulting JPEG from the Evon server.
 
+**2N Intercom Camera Specifications:**
+- Frame rate: Up to 10 fps for streaming
+- Resolutions: 160×120 to 1280×960 (model dependent)
+- Historical buffer: 30 seconds of footage retained on device
+
 ### Doorbell Snapshots
 
 When someone rings the doorbell, Evon automatically captures and stores a snapshot. These are exposed as image entities:
@@ -541,7 +546,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
-| **1.15.0** | **Camera & doorbell snapshots** - Live feed from 2N intercom cameras via WebSocket, doorbell snapshot history as image entities (up to 10), security door sensors with call-in-progress indicator. Fixed security device class names for proper discovery. |
+| **1.15.0** | **Camera & doorbell snapshots** - Live feed from 2N intercom cameras via WebSocket, doorbell snapshot history as image entities (up to 10), security door sensors with call-in-progress indicator. Performance improvements with parallel data processing. Security hardening (credentials removed from diagnostics, tokens removed from logs). |
 | **1.14.0** | **WebSocket device control** - instant response when controlling lights, blinds, and climate via HA (no more waiting for poll cycles). Security doors and intercoms with doorbell events, light/blind groups, RGBW color temperature*, climate humidity display |
 | **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |
 | **1.12.0** | Remote access via my.evon-smarthome.com, switch between local/remote in reconfigure, security improvements (SSL, input validation, token handling) |

@@ -183,6 +183,7 @@ class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
 
     _attr_icon = "mdi:phone-ring"
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    _attr_translation_key = "call_in_progress"
 
     def __init__(
         self,
@@ -194,7 +195,6 @@ class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, instance_id, name, room_name, entry)
-        self._attr_name = "Call In Progress"
         self._attr_unique_id = f"evon_security_door_{instance_id}_call"
 
     @property
@@ -260,6 +260,7 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
     _attr_icon = "mdi:lan-connect"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "connection"
 
     def __init__(
         self,
@@ -271,7 +272,6 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, instance_id, name, room_name, entry)
-        self._attr_name = "Connection"
         self._attr_unique_id = f"evon_intercom_{instance_id}_connection"
 
     @property
@@ -296,6 +296,7 @@ class EvonWebSocketStatusSensor(BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
+    _attr_translation_key = "websocket"
 
     def __init__(
         self,
@@ -305,7 +306,6 @@ class EvonWebSocketStatusSensor(BinarySensorEntity):
         """Initialize the sensor."""
         self.coordinator = coordinator
         self._entry = entry
-        self._attr_name = "WebSocket"
         self._attr_unique_id = f"evon_websocket_{entry.entry_id}"
 
     @property
