@@ -54,7 +54,8 @@ async def test_climate_set_preset_comfort(hass, mock_config_entry_v2, mock_evon_
         blocking=True,
     )
 
-    mock_evon_api_class.set_climate_comfort_mode.assert_called_once_with("climate_1")
+    # is_cooling=False because mock get_season_mode returns False (heating mode)
+    mock_evon_api_class.set_climate_comfort_mode.assert_called_once_with("climate_1", False)
 
 
 @pytest.mark.asyncio
@@ -71,7 +72,8 @@ async def test_climate_set_preset_eco(hass, mock_config_entry_v2, mock_evon_api_
         blocking=True,
     )
 
-    mock_evon_api_class.set_climate_energy_saving_mode.assert_called_once_with("climate_1")
+    # is_cooling=False because mock get_season_mode returns False (heating mode)
+    mock_evon_api_class.set_climate_energy_saving_mode.assert_called_once_with("climate_1", False)
 
 
 @pytest.mark.asyncio
@@ -88,7 +90,8 @@ async def test_climate_set_preset_away(hass, mock_config_entry_v2, mock_evon_api
         blocking=True,
     )
 
-    mock_evon_api_class.set_climate_freeze_protection_mode.assert_called_once_with("climate_1")
+    # is_cooling=False because mock get_season_mode returns False (heating mode)
+    mock_evon_api_class.set_climate_freeze_protection_mode.assert_called_once_with("climate_1", False)
 
 
 @pytest.mark.asyncio

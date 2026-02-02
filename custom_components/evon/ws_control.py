@@ -21,13 +21,11 @@ Blind Control:
     - TRAP: SetValue on Position updates the value but doesn't move the hardware
 
 Climate Control:
-    - SetValue SetTemperature = value: Set absolute target temperature (verified working)
-    - CallMethod WriteDayMode([]): Set comfort preset (verified working)
-    - CallMethod WriteNightMode([]): Set eco preset (verified working)
-    - CallMethod WriteFreezeMode([]): Set away/protection preset (verified working)
+    - CallMethod WriteCurrentSetTemperature([temp]): Set target temperature (REQUIRED - SetValue only updates UI!)
+    - SetValue ModeSaved = 2/3/4 (heating) or 5/6/7 (cooling) for presets (VERIFIED WORKING)
     - SetValue Base.ehThermostat.IsCool = bool: Set global season mode (heating/cooling)
-    - Alternative: SetValue ModeSaved = 2/3/4 (heating) or 5/6/7 (cooling) for presets
-    - Alternative: CallMethod IncreaseSetTemperature([]) / DecreaseSetTemperature([]) for +/- 0.5°C
+    - BROKEN: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode - acknowledged but no effect!
+    - TRAP: SetValue SetTemperature updates UI only, doesn't change actual thermostat target!
 
 Switch Control:
     - WebSocket CallMethod doesn't work for switches - must use HTTP API fallback
@@ -103,22 +101,29 @@ BLIND_MAPPINGS: dict[str, WsControlMapping] = {
 }
 
 # Climate control mappings (SmartCOM.Clima.ClimateControl, ClimateControlUniversal)
-# All mappings below are VERIFIED WORKING via WebSocket (January 2025).
+# All mappings below are VERIFIED WORKING via WebSocket (February 2026).
 #
-# Presets - two approaches available:
-# 1. CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode([]) - used by integration ✅
-# 2. SetValue ModeSaved = 2 (away), 3 (eco), 4 (comfort) in heating mode
-#                       = 5 (away), 6 (eco), 7 (comfort) in cooling mode
-# 3. Global: CallMethod Base.ehThermostat.AllDayMode/AllNightMode/AllFreezeMode([])
+# Presets - SetValue ModeSaved is the working approach:
+# - Heating mode: 2 (away), 3 (eco), 4 (comfort)
+# - Cooling mode: 5 (away), 6 (eco), 7 (comfort)
+# Note: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode does NOT work via WebSocket!
+#
+# Global presets (all units at once):
+# - CallMethod Base.ehThermostat.AllDayMode([]) - comfort for all
+# - CallMethod Base.ehThermostat.AllNightMode([]) - eco for all
+# - CallMethod Base.ehThermostat.AllFreezeMode([]) - away for all
 #
 # Temperature:
-# - SetValue SetTemperature = value (absolute temperature) - used by integration ✅
+# - CallMethod WriteCurrentSetTemperature([temp]) - sets actual target temperature
+# - SetValue SetTemperature only updates UI, NOT the actual thermostat!
 # - CallMethod IncreaseSetTemperature([]) / DecreaseSetTemperature([]) for +/- 0.5°C
 CLIMATE_MAPPINGS: dict[str, WsControlMapping] = {
-    "WriteDayMode": WsControlMapping(None, "WriteDayMode", None),
-    "WriteNightMode": WsControlMapping(None, "WriteNightMode", None),
-    "WriteFreezeMode": WsControlMapping(None, "WriteFreezeMode", None),
-    "WriteCurrentSetTemperature": WsControlMapping("SetTemperature", None, lambda params: params[0] if params else 0),
+    # SetPreset uses ModeSaved with value computed by API based on is_cooling
+    "SetPreset": WsControlMapping("ModeSaved", None, lambda params: params[0] if params else 4),
+    # WriteCurrentSetTemperature must use CallMethod - SetValue only updates UI!
+    "WriteCurrentSetTemperature": WsControlMapping(
+        None, "WriteCurrentSetTemperature", lambda params: [params[0]] if params else [0]
+    ),
 }
 
 # Switch control mappings (SmartCOM.Switch.Switch, Base.bSwitch)

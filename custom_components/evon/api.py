@@ -661,17 +661,38 @@ class EvonApi:
         await self.call_method(instance_id, "SetAngle", [angle])
 
     # Climate methods
-    async def set_climate_comfort_mode(self, instance_id: str) -> None:
-        """Set climate to comfort (day) mode."""
-        await self.call_method(instance_id, "WriteDayMode")
+    async def set_climate_comfort_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+        """Set climate to comfort (day) mode.
 
-    async def set_climate_energy_saving_mode(self, instance_id: str) -> None:
-        """Set climate to energy saving (night) mode."""
-        await self.call_method(instance_id, "WriteNightMode")
+        Args:
+            instance_id: The climate instance ID.
+            is_cooling: True if in cooling mode (summer), False for heating (winter).
+        """
+        # WebSocket uses SetValue ModeSaved: 4 (heating) or 7 (cooling)
+        mode_saved = 7 if is_cooling else 4
+        await self.call_method(instance_id, "SetPreset", [mode_saved])
 
-    async def set_climate_freeze_protection_mode(self, instance_id: str) -> None:
-        """Set climate to freeze protection mode."""
-        await self.call_method(instance_id, "WriteFreezeMode")
+    async def set_climate_energy_saving_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+        """Set climate to energy saving (night) mode.
+
+        Args:
+            instance_id: The climate instance ID.
+            is_cooling: True if in cooling mode (summer), False for heating (winter).
+        """
+        # WebSocket uses SetValue ModeSaved: 3 (heating) or 6 (cooling)
+        mode_saved = 6 if is_cooling else 3
+        await self.call_method(instance_id, "SetPreset", [mode_saved])
+
+    async def set_climate_freeze_protection_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+        """Set climate to freeze protection mode.
+
+        Args:
+            instance_id: The climate instance ID.
+            is_cooling: True if in cooling mode (summer), False for heating (winter).
+        """
+        # WebSocket uses SetValue ModeSaved: 2 (heating) or 5 (cooling)
+        mode_saved = 5 if is_cooling else 2
+        await self.call_method(instance_id, "SetPreset", [mode_saved])
 
     async def set_climate_temperature(self, instance_id: str, temperature: float) -> None:
         """Set climate target temperature."""
@@ -801,8 +822,12 @@ class EvonApi:
         """
         # Try WebSocket first if available
         ws_attempted = self._ws_client and self._ws_client.is_connected
-        if ws_attempted and await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling):  # type: ignore[union-attr]
-            return
+        if ws_attempted:
+            _LOGGER.info("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
+            result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
+            _LOGGER.info("WS control: SetValue result = %s", result)
+            if result:
+                return
 
         # Fall back to HTTP PUT
         await self._request(

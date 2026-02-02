@@ -4,13 +4,86 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # Add repo root to path so custom_components can be found
 REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from collections.abc import Generator
 import importlib.util
+
+# Mock homeassistant module BEFORE importing custom_components
+# This allows tests to run without the full homeassistant package installed
+if not importlib.util.find_spec("homeassistant"):
+    # Create mock homeassistant modules
+    mock_ha = MagicMock()
+    mock_ha.config_entries = MagicMock()
+    mock_ha.config_entries.ConfigEntry = MagicMock()
+    mock_ha.const = MagicMock()
+    mock_ha.const.Platform = MagicMock()
+    mock_ha.const.ATTR_TEMPERATURE = "temperature"
+    mock_ha.const.UnitOfTemperature = MagicMock()
+    mock_ha.core = MagicMock()
+    mock_ha.core.HomeAssistant = MagicMock()
+    mock_ha.core.ServiceCall = MagicMock()
+    mock_ha.helpers = MagicMock()
+    mock_ha.helpers.device_registry = MagicMock()
+    mock_ha.helpers.entity_registry = MagicMock()
+    mock_ha.helpers.issue_registry = MagicMock()
+    mock_ha.helpers.aiohttp_client = MagicMock()
+    mock_ha.helpers.entity_platform = MagicMock()
+    mock_ha.helpers.entity = MagicMock()
+    mock_ha.helpers.update_coordinator = MagicMock()
+    mock_ha.components = MagicMock()
+    mock_ha.components.climate = MagicMock()
+    mock_ha.components.light = MagicMock()
+    mock_ha.components.cover = MagicMock()
+    mock_ha.components.sensor = MagicMock()
+    mock_ha.components.binary_sensor = MagicMock()
+    mock_ha.components.switch = MagicMock()
+    mock_ha.components.select = MagicMock()
+    mock_ha.components.button = MagicMock()
+    mock_ha.components.scene = MagicMock()
+    mock_ha.exceptions = MagicMock()
+    mock_ha.util = MagicMock()
+    mock_ha.util.dt = MagicMock()
+    mock_ha.components.repairs = MagicMock()
+    mock_ha.loader = MagicMock()
+    mock_ha.helpers.config_validation = MagicMock()
+    mock_ha.data_entry_flow = MagicMock()
+
+    # Register the mocks in sys.modules
+    sys.modules["homeassistant"] = mock_ha
+    sys.modules["homeassistant.config_entries"] = mock_ha.config_entries
+    sys.modules["homeassistant.const"] = mock_ha.const
+    sys.modules["homeassistant.core"] = mock_ha.core
+    sys.modules["homeassistant.helpers"] = mock_ha.helpers
+    sys.modules["homeassistant.helpers.device_registry"] = mock_ha.helpers.device_registry
+    sys.modules["homeassistant.helpers.entity_registry"] = mock_ha.helpers.entity_registry
+    sys.modules["homeassistant.helpers.issue_registry"] = mock_ha.helpers.issue_registry
+    sys.modules["homeassistant.helpers.aiohttp_client"] = mock_ha.helpers.aiohttp_client
+    sys.modules["homeassistant.helpers.entity_platform"] = mock_ha.helpers.entity_platform
+    sys.modules["homeassistant.helpers.entity"] = mock_ha.helpers.entity
+    sys.modules["homeassistant.helpers.update_coordinator"] = mock_ha.helpers.update_coordinator
+    sys.modules["homeassistant.components"] = mock_ha.components
+    sys.modules["homeassistant.components.climate"] = mock_ha.components.climate
+    sys.modules["homeassistant.components.light"] = mock_ha.components.light
+    sys.modules["homeassistant.components.cover"] = mock_ha.components.cover
+    sys.modules["homeassistant.components.sensor"] = mock_ha.components.sensor
+    sys.modules["homeassistant.components.binary_sensor"] = mock_ha.components.binary_sensor
+    sys.modules["homeassistant.components.switch"] = mock_ha.components.switch
+    sys.modules["homeassistant.components.select"] = mock_ha.components.select
+    sys.modules["homeassistant.components.button"] = mock_ha.components.button
+    sys.modules["homeassistant.components.scene"] = mock_ha.components.scene
+    sys.modules["homeassistant.exceptions"] = mock_ha.exceptions
+    sys.modules["homeassistant.util"] = mock_ha.util
+    sys.modules["homeassistant.util.dt"] = mock_ha.util.dt
+    sys.modules["homeassistant.components.repairs"] = mock_ha.components.repairs
+    sys.modules["homeassistant.loader"] = mock_ha.loader
+    sys.modules["homeassistant.helpers.config_validation"] = mock_ha.helpers.config_validation
+    sys.modules["homeassistant.data_entry_flow"] = mock_ha.data_entry_flow
+
+from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest

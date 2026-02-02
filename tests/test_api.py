@@ -161,6 +161,9 @@ class TestEvonApiLogin:
     @pytest.mark.asyncio
     async def test_login_failure_status(self, mock_session_auth_failure):
         """Test login failure due to bad status."""
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonAuthError, type):
+            pytest.skip("Requires real homeassistant package")
         api = EvonApi(
             host="http://192.168.1.100",
             username="user",
@@ -174,6 +177,9 @@ class TestEvonApiLogin:
     @pytest.mark.asyncio
     async def test_login_no_token(self, mock_session_no_token):
         """Test login failure when no token in response."""
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonAuthError, type):
+            pytest.skip("Requires real homeassistant package")
         api = EvonApi(
             host="http://192.168.1.100",
             username="user",
@@ -300,22 +306,46 @@ class TestEvonApiMethods:
         mock_api._request.assert_called_with("POST", "/instances/blind_1/SetAngle", [45])
 
     @pytest.mark.asyncio
-    async def test_set_climate_comfort_mode(self, mock_api):
-        """Test setting climate to comfort mode."""
-        await mock_api.set_climate_comfort_mode("climate_1")
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteDayMode", [])
+    async def test_set_climate_comfort_mode_heating(self, mock_api):
+        """Test setting climate to comfort mode in heating season."""
+        # In heating mode (is_cooling=False), comfort uses ModeSaved=4
+        await mock_api.set_climate_comfort_mode("climate_1", is_cooling=False)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [4])
 
     @pytest.mark.asyncio
-    async def test_set_climate_energy_saving_mode(self, mock_api):
-        """Test setting climate to energy saving mode."""
-        await mock_api.set_climate_energy_saving_mode("climate_1")
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteNightMode", [])
+    async def test_set_climate_comfort_mode_cooling(self, mock_api):
+        """Test setting climate to comfort mode in cooling season."""
+        # In cooling mode (is_cooling=True), comfort uses ModeSaved=7
+        await mock_api.set_climate_comfort_mode("climate_1", is_cooling=True)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [7])
 
     @pytest.mark.asyncio
-    async def test_set_climate_freeze_protection_mode(self, mock_api):
-        """Test setting climate to freeze protection mode."""
-        await mock_api.set_climate_freeze_protection_mode("climate_1")
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteFreezeMode", [])
+    async def test_set_climate_energy_saving_mode_heating(self, mock_api):
+        """Test setting climate to energy saving mode in heating season."""
+        # In heating mode (is_cooling=False), eco uses ModeSaved=3
+        await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=False)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [3])
+
+    @pytest.mark.asyncio
+    async def test_set_climate_energy_saving_mode_cooling(self, mock_api):
+        """Test setting climate to energy saving mode in cooling season."""
+        # In cooling mode (is_cooling=True), eco uses ModeSaved=6
+        await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=True)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [6])
+
+    @pytest.mark.asyncio
+    async def test_set_climate_freeze_protection_mode_heating(self, mock_api):
+        """Test setting climate to freeze protection mode in heating season."""
+        # In heating mode (is_cooling=False), away uses ModeSaved=2
+        await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=False)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [2])
+
+    @pytest.mark.asyncio
+    async def test_set_climate_freeze_protection_mode_cooling(self, mock_api):
+        """Test setting climate to freeze protection mode in cooling season."""
+        # In cooling mode (is_cooling=True), away uses ModeSaved=5
+        await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=True)
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [5])
 
     @pytest.mark.asyncio
     async def test_set_climate_temperature(self, mock_api):
@@ -343,20 +373,34 @@ class TestEvonApiMethods:
 
 
 class TestEvonApiExceptions:
-    """Tests for API exception handling."""
+    """Tests for API exception handling.
+
+    These tests require the actual homeassistant package to verify inheritance.
+    When homeassistant is mocked, the exception classes inherit from MagicMock
+    which breaks issubclass() checks.
+    """
 
     def test_evon_api_error_inheritance(self):
         """Test that EvonApiError inherits from HomeAssistantError."""
+        # Skip if homeassistant is mocked (exception classes become MagicMock)
+        if not isinstance(EvonApiError, type):
+            pytest.skip("Requires real homeassistant package")
         from homeassistant.exceptions import HomeAssistantError
 
         assert issubclass(EvonApiError, HomeAssistantError)
 
     def test_evon_auth_error_inheritance(self):
         """Test that EvonAuthError inherits from EvonApiError."""
+        # Skip if homeassistant is mocked (exception classes become MagicMock)
+        if not isinstance(EvonApiError, type):
+            pytest.skip("Requires real homeassistant package")
         assert issubclass(EvonAuthError, EvonApiError)
 
     def test_evon_connection_error_inheritance(self):
         """Test that EvonConnectionError inherits from EvonApiError."""
+        # Skip if homeassistant is mocked (exception classes become MagicMock)
+        if not isinstance(EvonApiError, type):
+            pytest.skip("Requires real homeassistant package")
         assert issubclass(EvonConnectionError, EvonApiError)
 
 
