@@ -132,11 +132,15 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_position: int | None = None
         self._optimistic_tilt: int | None = None
         self._optimistic_is_moving: bool | None = None
+        self._optimistic_direction: str | None = None  # "opening" or "closing"
         # Timestamp when optimistic state was set (for timeout-based clearance)
         self._optimistic_state_set_at: float | None = None
 
-        # Initialize API caches for WebSocket control
+        # Check if this is a blind group (requires different API calls)
         data = coordinator.get_entity_data("blinds", instance_id)
+        self._is_group = data.get("is_group", False) if data else False
+
+        # Initialize API caches for WebSocket control
         if data:
             api.update_blind_position(instance_id, data.get("position", 0))
             api.update_blind_angle(instance_id, data.get("angle", 0))
@@ -150,6 +154,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_position = None
             self._optimistic_tilt = None
             self._optimistic_is_moving = None
+            self._optimistic_direction = None
             self._optimistic_state_set_at = None
 
     @property
@@ -205,12 +210,11 @@ class EvonCover(EvonEntity, CoverEntity):
         # Clear expired optimistic state to prevent stale UI on network recovery
         self._clear_optimistic_state_if_expired()
 
-        # Return optimistic value if set (prevents UI staying stuck after group stop)
-        if self._optimistic_is_moving is not None:
-            return self._optimistic_is_moving
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
-        if data:
-            return data.get("is_moving", False)
+        # Use optimistic direction if set
+        if self._optimistic_is_moving is not None and self._optimistic_direction is not None:
+            return self._optimistic_is_moving and self._optimistic_direction == "opening"
+        # Fallback: Evon API doesn't provide direction, so we can't know from coordinator data
+        # Return False when not using optimistic state (HA will show as idle)
         return False
 
     @property
@@ -219,12 +223,11 @@ class EvonCover(EvonEntity, CoverEntity):
         # Clear expired optimistic state to prevent stale UI on network recovery
         self._clear_optimistic_state_if_expired()
 
-        # Return optimistic value if set (prevents UI staying stuck after group stop)
-        if self._optimistic_is_moving is not None:
-            return self._optimistic_is_moving
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
-        if data:
-            return data.get("is_moving", False)
+        # Use optimistic direction if set
+        if self._optimistic_is_moving is not None and self._optimistic_direction is not None:
+            return self._optimistic_is_moving and self._optimistic_direction == "closing"
+        # Fallback: Evon API doesn't provide direction, so we can't know from coordinator data
+        # Return False when not using optimistic state (HA will show as idle)
         return False
 
     @property
@@ -252,9 +255,13 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_tilt = None
             # Optimistically set is_moving to False (same as stop)
             self._optimistic_is_moving = False
+            self._optimistic_direction = None
             self.async_write_ha_state()
 
-            await self._api.open_blind(self._instance_id)
+            if self._is_group:
+                await self._api.open_all_blinds()
+            else:
+                await self._api.open_blind(self._instance_id)
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
@@ -263,9 +270,13 @@ class EvonCover(EvonEntity, CoverEntity):
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
+            self._optimistic_direction = "opening"
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
-            await self._api.open_blind(self._instance_id)
+            if self._is_group:
+                await self._api.open_all_blinds()
+            else:
+                await self._api.open_blind(self._instance_id)
             await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
@@ -282,9 +293,13 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_tilt = None
             # Optimistically set is_moving to False (same as stop)
             self._optimistic_is_moving = False
+            self._optimistic_direction = None
             self.async_write_ha_state()
 
-            await self._api.close_blind(self._instance_id)
+            if self._is_group:
+                await self._api.close_all_blinds()
+            else:
+                await self._api.close_blind(self._instance_id)
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
@@ -293,9 +308,13 @@ class EvonCover(EvonEntity, CoverEntity):
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
+            self._optimistic_direction = "closing"
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
-            await self._api.close_blind(self._instance_id)
+            if self._is_group:
+                await self._api.close_all_blinds()
+            else:
+                await self._api.close_blind(self._instance_id)
             await self.coordinator.async_request_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
@@ -306,9 +325,13 @@ class EvonCover(EvonEntity, CoverEntity):
         # Optimistically set is_moving to False immediately
         # This fixes the issue where group stop actions leave arrows inactive
         self._optimistic_is_moving = False
+        self._optimistic_direction = None
         self.async_write_ha_state()
 
-        await self._api.stop_blind(self._instance_id)
+        if self._is_group:
+            await self._api.stop_all_blinds()
+        else:
+            await self._api.stop_blind(self._instance_id)
 
         # Small delay then update state again to ensure UI reflects stopped state
         # This helps when multiple blinds are stopped via group action
@@ -415,11 +438,13 @@ class EvonCover(EvonEntity, CoverEntity):
                 actual_is_moving = data.get("is_moving", False)
                 if actual_is_moving == self._optimistic_is_moving:
                     self._optimistic_is_moving = None
+                    self._optimistic_direction = None
                 else:
                     all_cleared = False
 
             # Clear timestamp if all optimistic state has been confirmed
             if all_cleared:
                 self._optimistic_state_set_at = None
+                self._optimistic_direction = None
 
         super()._handle_coordinator_update()

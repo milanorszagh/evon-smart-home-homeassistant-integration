@@ -652,6 +652,18 @@ class EvonApi:
         """Stop a blind."""
         await self.call_method(instance_id, "Stop")
 
+    async def open_all_blinds(self) -> None:
+        """Open all blinds (for blind groups)."""
+        await self.call_method("Base.bBlind", "OpenAll", [None])
+
+    async def close_all_blinds(self) -> None:
+        """Close all blinds (for blind groups)."""
+        await self.call_method("Base.bBlind", "CloseAll", [None])
+
+    async def stop_all_blinds(self) -> None:
+        """Stop all blinds (for blind groups)."""
+        await self.call_method("Base.bBlind", "StopAll", [None])
+
     async def set_blind_position(self, instance_id: str, position: int) -> None:
         """Set blind position (0=open, 100=closed)."""
         await self.call_method(instance_id, "AmznSetPercentage", [position])

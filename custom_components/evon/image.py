@@ -9,17 +9,18 @@ from typing import Any
 import aiohttp
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Maximum number of snapshot entities to create
+# Maximum number of snapshot entities to create (always create all for consistency)
 MAX_SNAPSHOTS = 10
 
 
@@ -33,18 +34,14 @@ async def async_setup_entry(
 
     entities: list[ImageEntity] = []
 
-    # Find security doors with saved pictures
+    # Find security doors - create MAX_SNAPSHOTS entities for each door
+    # This ensures consistent entity count across reloads
     if coordinator.data and "security_doors" in coordinator.data:
         for door in coordinator.data["security_doors"]:
-            saved_pictures = door.get("saved_pictures", [])
-
-            if not saved_pictures:
-                continue
-
             door_name = door.get("name", "Doorbell")
 
-            # Create image entities for saved pictures (up to MAX_SNAPSHOTS)
-            for idx in range(min(len(saved_pictures), MAX_SNAPSHOTS)):
+            # Always create MAX_SNAPSHOTS entities per door for consistency
+            for idx in range(MAX_SNAPSHOTS):
                 entities.append(
                     EvonDoorbellSnapshot(
                         coordinator,
@@ -59,7 +56,7 @@ async def async_setup_entry(
         async_add_entities(entities)
 
 
-class EvonDoorbellSnapshot(ImageEntity):
+class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEntity):
     """Representation of a doorbell snapshot image."""
 
     _attr_has_entity_name = True
@@ -73,8 +70,10 @@ class EvonDoorbellSnapshot(ImageEntity):
         entry: ConfigEntry,
     ) -> None:
         """Initialize the snapshot image."""
-        super().__init__(coordinator.hass)
-        self.coordinator = coordinator
+        # Initialize CoordinatorEntity first
+        CoordinatorEntity.__init__(self, coordinator)
+        # Initialize ImageEntity with hass
+        ImageEntity.__init__(self, coordinator.hass)
         self._door_id = door_id
         self._door_name = door_name
         self._index = index
@@ -82,6 +81,15 @@ class EvonDoorbellSnapshot(ImageEntity):
         self._attr_unique_id = f"evon_snapshot_{door_id}_{index}"
         self._cached_image: bytes | None = None
         self._cached_path: str | None = None
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        # Entity is available if coordinator is available AND this snapshot index exists
+        if not self.coordinator.last_update_success:
+            return False
+        snapshot = self._get_snapshot()
+        return snapshot is not None
 
     @property
     def name(self) -> str:
@@ -135,6 +143,19 @@ class EvonDoorbellSnapshot(ImageEntity):
                 if self._index < len(saved_pictures):
                     return saved_pictures[self._index]
         return None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Check if the snapshot path changed - if so, invalidate cache
+        snapshot = self._get_snapshot()
+        if snapshot:
+            new_path = snapshot.get("path", "")
+            if new_path != self._cached_path:
+                # Path changed, invalidate cache so next image request fetches new image
+                self._cached_image = None
+                self._cached_path = None
+        self.async_write_ha_state()
 
     async def async_image(self) -> bytes | None:
         """Return the image bytes."""

@@ -41,6 +41,7 @@ async def process_blinds(
             continue
 
         instance_id = instance.get("ID", "")
+        class_name = instance.get("ClassName", "")
         try:
             details = await api.get_instance(instance_id)
             blinds.append(
@@ -51,6 +52,7 @@ async def process_blinds(
                     "position": details.get("Position", 0),
                     "angle": details.get("Angle", 0),
                     "is_moving": details.get("IsMoving", False),
+                    "is_group": class_name == EVON_CLASS_BLIND_GROUP,
                 }
             )
         except EvonApiError:
