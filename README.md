@@ -5,6 +5,9 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![IoT Class](https://img.shields.io/badge/IoT_Class-local_push-blue.svg)](https://developers.home-assistant.io/docs/creating_integration_manifest#iot-class)
+[![HA Version](https://img.shields.io/badge/Home_Assistant-2024.1+-blue.svg)](https://www.home-assistant.io/)
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 
 Home Assistant custom integration for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 
@@ -289,6 +292,104 @@ The integration fires Home Assistant events that can be used in automations:
 
 ---
 
+## Services
+
+The integration provides the following services that can be called from automations, scripts, or the Developer Tools:
+
+| Service | Description |
+|---------|-------------|
+| `evon.refresh` | Force refresh all device states from the Evon system |
+| `evon.reconnect_websocket` | Reconnect the WebSocket connection (use if real-time updates stop working) |
+| `evon.set_home_state` | Set home state: `at_home`, `night`, `work`, `holiday` |
+| `evon.set_season_mode` | Set season mode: `heating` or `cooling` |
+| `evon.all_lights_off` | Turn off all Evon lights at once |
+| `evon.all_blinds_close` | Close all Evon blinds at once |
+| `evon.all_blinds_open` | Open all Evon blinds at once |
+
+### Example Automations
+
+**Refresh on Home Assistant start:**
+```yaml
+automation:
+  - alias: "Refresh Evon on startup"
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: "00:00:30"
+      - service: evon.refresh
+```
+
+**Doorbell notification (for 2N intercoms):**
+```yaml
+automation:
+  - alias: "Doorbell notification"
+    trigger:
+      - platform: event
+        event_type: evon_doorbell
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Doorbell"
+          message: "Someone is at {{ trigger.event.data.name }}"
+```
+
+**Close all blinds at sunset:**
+```yaml
+automation:
+  - alias: "Close blinds at sunset"
+    trigger:
+      - platform: sun
+        event: sunset
+    action:
+      - service: cover.close_cover
+        target:
+          entity_id: cover.living_room_blinds
+```
+
+**Set away mode when leaving:**
+```yaml
+automation:
+  - alias: "Away mode when leaving"
+    trigger:
+      - platform: state
+        entity_id: person.me
+        from: "home"
+    action:
+      - service: evon.set_home_state
+        data:
+          state: work
+```
+
+**All lights off at midnight:**
+```yaml
+automation:
+  - alias: "All lights off at midnight"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: evon.all_lights_off
+```
+
+**Switch to cooling in summer:**
+```yaml
+automation:
+  - alias: "Summer cooling mode"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.outdoor_temperature
+        above: 25
+        for:
+          hours: 2
+    action:
+      - service: evon.set_season_mode
+        data:
+          mode: cooling
+```
+
+---
+
 ## MCP Server
 
 An MCP (Model Context Protocol) server is included for AI assistant integration (e.g., Claude). This allows AI assistants to control your Evon devices directly.
@@ -329,6 +430,55 @@ client.registerValuesChanged([
 ```
 
 See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for complete API documentation.
+
+---
+
+## Troubleshooting
+
+### Connection Issues
+
+| Problem | Solution |
+|---------|----------|
+| **"Failed to connect"** during setup | Verify the Evon system is powered on and reachable. Try pinging the IP address. |
+| **Devices show "Unavailable"** | Check network connectivity. Use `evon.reconnect_websocket` service to re-establish connection. |
+| **Slow state updates** | Ensure WebSocket is enabled (uncheck "Use HTTP API only" in options). |
+| **Remote access not working** | Verify Engine ID is correct. Check that remote access is enabled in your Evon system. |
+
+### WebSocket Troubleshooting
+
+```
+Check WebSocket status in Home Assistant logs:
+Settings → System → Logs → Filter by "evon"
+
+Common WebSocket messages:
+✓ "WebSocket connected" - Working normally
+✗ "WebSocket connection failed" - Network/firewall issue
+✗ "WebSocket authentication failed" - Check credentials
+```
+
+If WebSocket keeps disconnecting:
+1. Check your router/firewall allows WebSocket connections
+2. Try the `evon.reconnect_websocket` service
+3. As a last resort, enable "Use HTTP API only" in options
+
+### Entity Issues
+
+| Problem | Solution |
+|---------|----------|
+| **Missing devices** | Go to Settings → Devices & Services → Evon → Reload |
+| **Stale entities** | The integration automatically cleans up removed devices on restart |
+| **Wrong room assignment** | Enable "Sync areas from Evon" in options, then reload |
+
+### Debug Logging
+
+To enable debug logging, add to `configuration.yaml`:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.evon: debug
+```
 
 ---
 

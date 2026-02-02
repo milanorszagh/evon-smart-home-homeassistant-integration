@@ -387,7 +387,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Args:
             connected: Whether the WebSocket is now connected.
         """
+        from homeassistant.components.persistent_notification import (
+            async_create,
+            async_dismiss,
+        )
+
+        from ..const import DOMAIN
+
         self._ws_connected = connected
+        notification_id = f"{DOMAIN}_websocket_status"
 
         if connected:
             # Reduce polling frequency when WebSocket is connected
@@ -396,12 +404,27 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "WebSocket connected, reduced poll interval to %d seconds",
                 WS_POLL_INTERVAL,
             )
+            # Dismiss any disconnect notification
+            async_dismiss(self.hass, notification_id)
         else:
             # Resume normal polling when WebSocket disconnects
             self.update_interval = timedelta(seconds=self._base_scan_interval)
             _LOGGER.info(
                 "WebSocket disconnected, resumed poll interval to %d seconds",
                 self._base_scan_interval,
+            )
+            # Create disconnect notification
+            async_create(
+                self.hass,
+                message=(
+                    "The WebSocket connection to your Evon system has been lost. "
+                    "Real-time updates are temporarily unavailable. "
+                    "The integration is using HTTP polling as fallback.\n\n"
+                    "The connection will automatically reconnect when available. "
+                    "If this persists, try calling the `evon.reconnect_websocket` service."
+                ),
+                title="Evon WebSocket Disconnected",
+                notification_id=notification_id,
             )
             # Trigger an immediate refresh to get latest state
             self.hass.async_create_task(self.async_request_refresh())

@@ -1,4 +1,46 @@
 {
+  "services": {
+    "refresh": {
+      "name": "Aktualisieren",
+      "description": "Alle Gerätezustände vom Evon-System aktualisieren."
+    },
+    "reconnect_websocket": {
+      "name": "WebSocket neu verbinden",
+      "description": "WebSocket-Verbindung zum Evon-System neu aufbauen. Verwenden Sie dies, wenn Echtzeit-Updates nicht mehr funktionieren."
+    },
+    "set_home_state": {
+      "name": "Zuhause-Status setzen",
+      "description": "Setzt den Zuhause-Status (at_home, night, work, holiday).",
+      "fields": {
+        "state": {
+          "name": "Status",
+          "description": "Der zu setzende Zuhause-Status."
+        }
+      }
+    },
+    "set_season_mode": {
+      "name": "Jahreszeit-Modus setzen",
+      "description": "Setzt den Jahreszeit-Modus (heating oder cooling).",
+      "fields": {
+        "mode": {
+          "name": "Modus",
+          "description": "Der zu setzende Jahreszeit-Modus."
+        }
+      }
+    },
+    "all_lights_off": {
+      "name": "Alle Lichter aus",
+      "description": "Alle Evon-Lichter auf einmal ausschalten."
+    },
+    "all_blinds_close": {
+      "name": "Alle Jalousien schließen",
+      "description": "Alle Evon-Jalousien auf einmal schließen."
+    },
+    "all_blinds_open": {
+      "name": "Alle Jalousien öffnen",
+      "description": "Alle Evon-Jalousien auf einmal öffnen."
+    }
+  },
   "issues": {
     "connection_failed": {
       "title": "Evon Smart Home Verbindung fehlgeschlagen",

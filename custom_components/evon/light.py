@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ColorMode,
     LightEntity,
 )
@@ -236,8 +236,10 @@ class EvonLight(EvonEntity, LightEntity):
             # Note: _last_brightness is NOT updated during turn-off to avoid corruption
             # from Evon's turn-off animation (87% → 0%)
             self._optimistic_brightness = self._last_brightness
-        if ATTR_COLOR_TEMP in kwargs and self._supports_color_temp:
-            self._optimistic_color_temp = kwargs[ATTR_COLOR_TEMP]
+        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
+            # Store as mireds for internal use (HA still uses mireds for color_temp property)
+            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
+            self._optimistic_color_temp = int(1000000 / kelvin) if kelvin > 0 else 250
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
@@ -252,10 +254,8 @@ class EvonLight(EvonEntity, LightEntity):
             return
 
         # Handle color temperature change
-        if ATTR_COLOR_TEMP in kwargs and self._supports_color_temp:
-            # Convert from mireds to Kelvin
-            mireds = kwargs[ATTR_COLOR_TEMP]
-            kelvin = int(1000000 / mireds) if mireds > 0 else 4000
+        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
+            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
             await self._api.set_light_color_temp(self._instance_id, kelvin)
 
         # Handle brightness change
@@ -263,7 +263,7 @@ class EvonLight(EvonEntity, LightEntity):
             # Convert from Home Assistant 0-255 to Evon 0-100 and clamp to valid range
             brightness = max(0, min(100, int(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
             await self._api.set_light_brightness(self._instance_id, brightness)
-        elif ATTR_COLOR_TEMP not in kwargs:
+        elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
             # Only turn on if no brightness or color temp change
             await self._api.turn_on_light(self._instance_id)
         # Only request refresh if WebSocket is not connected

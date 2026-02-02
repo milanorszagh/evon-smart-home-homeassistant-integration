@@ -1,0 +1,51 @@
+refresh:
+  name: Refresh
+  description: Force refresh all device states from the Evon system.
+
+reconnect_websocket:
+  name: Reconnect WebSocket
+  description: Reconnect the WebSocket connection to the Evon system. Use this if real-time updates have stopped working.
+
+set_home_state:
+  name: Set Home State
+  description: Set the home state (at_home, night, work, holiday).
+  fields:
+    state:
+      name: State
+      description: The home state to set.
+      required: true
+      example: "at_home"
+      selector:
+        select:
+          options:
+            - "at_home"
+            - "night"
+            - "work"
+            - "holiday"
+
+set_season_mode:
+  name: Set Season Mode
+  description: Set the season mode (heating or cooling).
+  fields:
+    mode:
+      name: Mode
+      description: The season mode to set.
+      required: true
+      example: "heating"
+      selector:
+        select:
+          options:
+            - "heating"
+            - "cooling"
+
+all_lights_off:
+  name: All Lights Off
+  description: Turn off all Evon lights at once.
+
+all_blinds_close:
+  name: Close All Blinds
+  description: Close all Evon blinds at once.
+
+all_blinds_open:
+  name: Open All Blinds
+  description: Open all Evon blinds at once.

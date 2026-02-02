@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
-from homeassistant.components.button import ButtonEntity
+from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -38,6 +40,20 @@ async def async_setup_entry(
                     coordinator,
                     scene["id"],
                     scene["name"],
+                    entry,
+                    api,
+                )
+            )
+
+    # Identify buttons for lights
+    if coordinator.data and "lights" in coordinator.data:
+        for light in coordinator.data["lights"]:
+            entities.append(
+                EvonIdentifyButton(
+                    coordinator,
+                    light["id"],
+                    light["name"],
+                    light.get("room_name", ""),
                     entry,
                     api,
                 )
@@ -80,3 +96,55 @@ class EvonSceneButton(EvonEntity, ButtonEntity):
             raise HomeAssistantError(f"Failed to execute scene {self._device_name}: {err}") from err
         # Refresh coordinator to update any affected entities
         await self.coordinator.async_request_refresh()
+
+
+class EvonIdentifyButton(EvonEntity, ButtonEntity):
+    """Button to identify a light by flashing it."""
+
+    _attr_icon = "mdi:lightbulb-alert"
+    _attr_device_class = ButtonDeviceClass.IDENTIFY
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+        api: EvonApi,
+    ) -> None:
+        """Initialize the identify button."""
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
+        self._attr_name = "Identify"
+        self._attr_unique_id = f"evon_identify_{instance_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this light."""
+        return self._build_device_info("Light")
+
+    async def async_press(self) -> None:
+        """Flash the light to identify it (off -> on -> restore)."""
+        _LOGGER.debug("Identifying light %s (%s)", self._device_name, self._instance_id)
+        try:
+            # Get current state for restoration
+            data = self.coordinator.get_entity_data("lights", self._instance_id)
+            was_on = data.get("is_on", False) if data else False
+            original_brightness = data.get("brightness", 100) if data else 100
+
+            # Always do off -> on -> restore (works regardless of state detection)
+            await self._api.turn_off_light(self._instance_id)
+            await asyncio.sleep(3.0)  # Wait for fade-out
+
+            await self._api.turn_on_light(self._instance_id)
+            await asyncio.sleep(3.0)  # Wait for fade-in
+
+            # Restore original state
+            if not was_on:
+                await self._api.turn_off_light(self._instance_id)
+            elif original_brightness != 100:
+                await self._api.set_light_brightness(self._instance_id, original_brightness)
+
+        except EvonApiError as err:
+            raise HomeAssistantError(f"Failed to identify light {self._device_name}: {err}") from err

@@ -9,6 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -98,6 +99,7 @@ class EvonValveSensor(EvonEntity, BinarySensorEntity):
 
     _attr_icon = "mdi:valve"
     _attr_device_class = BinarySensorDeviceClass.OPENING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
@@ -249,6 +251,7 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
 
     _attr_icon = "mdi:lan-connect"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,

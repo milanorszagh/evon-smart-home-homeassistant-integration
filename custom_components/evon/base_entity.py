@@ -43,8 +43,18 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes with evon_id."""
-        return {"evon_id": self._instance_id}
+        """Return extra state attributes with evon_id and debug info."""
+        attrs = {
+            "evon_id": self._instance_id,
+            "integration": DOMAIN,
+        }
+        # Add room name if available
+        if self._room_name:
+            attrs["room"] = self._room_name
+        # Add WebSocket connection status
+        if hasattr(self.coordinator, "_ws_connected"):
+            attrs["websocket_connected"] = self.coordinator._ws_connected
+        return attrs
 
     def _build_device_info(self, model: str) -> DeviceInfo:
         """Build device info dictionary."""

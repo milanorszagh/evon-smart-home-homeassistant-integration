@@ -6,7 +6,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -33,6 +33,22 @@ from .const import (
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+SERVICE_REFRESH = "refresh"
+SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
+SERVICE_SET_HOME_STATE = "set_home_state"
+SERVICE_SET_SEASON_MODE = "set_season_mode"
+SERVICE_ALL_LIGHTS_OFF = "all_lights_off"
+SERVICE_ALL_BLINDS_CLOSE = "all_blinds_close"
+SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
+
+# Home state mapping from service values to Evon instance IDs
+HOME_STATE_MAP = {
+    "at_home": "HomeStateAtHome",
+    "night": "HomeStateNight",
+    "work": "HomeStateWork",
+    "holiday": "HomeStateHoliday",
+}
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
@@ -132,6 +148,116 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Register services (only once per domain)
+    if not hass.services.has_service(DOMAIN, SERVICE_REFRESH):
+        async def handle_refresh(call: ServiceCall) -> None:
+            """Handle the refresh service call."""
+            _LOGGER.info("Refresh service called - forcing data update")
+            for entry_data in hass.data[DOMAIN].values():
+                if "coordinator" in entry_data:
+                    await entry_data["coordinator"].async_refresh()
+
+        async def handle_reconnect_websocket(call: ServiceCall) -> None:
+            """Handle the reconnect websocket service call."""
+            _LOGGER.info("Reconnect WebSocket service called")
+            for entry_id, entry_data in hass.data[DOMAIN].items():
+                if "coordinator" in entry_data:
+                    coordinator = entry_data["coordinator"]
+                    # Get the config entry to access connection details
+                    config_entry = hass.config_entries.async_get_entry(entry_id)
+                    if config_entry and coordinator.use_websocket:
+                        await coordinator.async_shutdown_websocket()
+                        connection_type = config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+                        if connection_type == CONNECTION_TYPE_LOCAL:
+                            await coordinator.async_setup_websocket(
+                                session=async_get_clientsession(hass),
+                                host=config_entry.data[CONF_HOST],
+                                username=config_entry.data[CONF_USERNAME],
+                                password=config_entry.data[CONF_PASSWORD],
+                            )
+                        else:
+                            await coordinator.async_setup_websocket(
+                                session=async_get_clientsession(hass),
+                                host=None,
+                                username=config_entry.data[CONF_USERNAME],
+                                password=config_entry.data[CONF_PASSWORD],
+                                is_remote=True,
+                                engine_id=config_entry.data[CONF_ENGINE_ID],
+                            )
+
+        async def handle_set_home_state(call: ServiceCall) -> None:
+            """Handle the set home state service call."""
+            state = call.data.get("state")
+            if not state or state not in HOME_STATE_MAP:
+                _LOGGER.error("Invalid home state: %s", state)
+                return
+            evon_state = HOME_STATE_MAP[state]
+            _LOGGER.info("Set home state service called: %s -> %s", state, evon_state)
+            for entry_data in hass.data[DOMAIN].values():
+                if "api" in entry_data:
+                    await entry_data["api"].activate_home_state(evon_state)
+                if "coordinator" in entry_data:
+                    await entry_data["coordinator"].async_refresh()
+
+        async def handle_set_season_mode(call: ServiceCall) -> None:
+            """Handle the set season mode service call."""
+            mode = call.data.get("mode")
+            if mode not in ("heating", "cooling"):
+                _LOGGER.error("Invalid season mode: %s", mode)
+                return
+            is_cooling = mode == "cooling"
+            _LOGGER.info("Set season mode service called: %s", mode)
+            for entry_data in hass.data[DOMAIN].values():
+                if "api" in entry_data:
+                    await entry_data["api"].set_season_mode(is_cooling)
+                if "coordinator" in entry_data:
+                    await entry_data["coordinator"].async_refresh()
+
+        async def handle_all_lights_off(call: ServiceCall) -> None:
+            """Handle the all lights off service call."""
+            _LOGGER.info("All lights off service called")
+            for entry_data in hass.data[DOMAIN].values():
+                if "coordinator" in entry_data and "api" in entry_data:
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    if coordinator.data and "lights" in coordinator.data:
+                        for light in coordinator.data["lights"]:
+                            if light.get("is_on"):
+                                await api.turn_off_light(light["id"])
+                    await coordinator.async_refresh()
+
+        async def handle_all_blinds_close(call: ServiceCall) -> None:
+            """Handle the all blinds close service call."""
+            _LOGGER.info("All blinds close service called")
+            for entry_data in hass.data[DOMAIN].values():
+                if "coordinator" in entry_data and "api" in entry_data:
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    if coordinator.data and "blinds" in coordinator.data:
+                        for blind in coordinator.data["blinds"]:
+                            await api.close_blind(blind["id"])
+                    await coordinator.async_refresh()
+
+        async def handle_all_blinds_open(call: ServiceCall) -> None:
+            """Handle the all blinds open service call."""
+            _LOGGER.info("All blinds open service called")
+            for entry_data in hass.data[DOMAIN].values():
+                if "coordinator" in entry_data and "api" in entry_data:
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    if coordinator.data and "blinds" in coordinator.data:
+                        for blind in coordinator.data["blinds"]:
+                            await api.open_blind(blind["id"])
+                    await coordinator.async_refresh()
+
+        hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)
+        hass.services.async_register(DOMAIN, SERVICE_RECONNECT_WEBSOCKET, handle_reconnect_websocket)
+        hass.services.async_register(DOMAIN, SERVICE_SET_HOME_STATE, handle_set_home_state)
+        hass.services.async_register(DOMAIN, SERVICE_SET_SEASON_MODE, handle_set_season_mode)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_LIGHTS_OFF, handle_all_lights_off)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_BLINDS_CLOSE, handle_all_blinds_close)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_BLINDS_OPEN, handle_all_blinds_open)
 
     # Clean up stale entities
     await _async_cleanup_stale_entities(hass, entry, coordinator)
