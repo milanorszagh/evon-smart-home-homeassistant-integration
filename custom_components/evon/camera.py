@@ -6,16 +6,14 @@ import asyncio
 import logging
 from typing import Any
 
-import aiohttp
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import CAMERA_IMAGE_CAPTURE_DELAY, DOMAIN
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,7 +133,7 @@ class EvonCamera(EvonEntity, Camera):
                 if ws_client and ws_client.is_connected:
                     await self._request_image_via_ws(ws_client)
                     # Wait for image to be captured
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(CAMERA_IMAGE_CAPTURE_DELAY)
                     # Refresh data to get new image path
                     data = self.coordinator.get_entity_data("cameras", self._instance_id)
 
@@ -166,26 +164,7 @@ class EvonCamera(EvonEntity, Camera):
 
     async def _fetch_image(self, image_path: str) -> bytes | None:
         """Fetch image from Evon server."""
-        try:
-            session = async_get_clientsession(self.hass)
-            api = self.coordinator.api
-
-            # Build full URL
-            url = f"{api._host}{image_path}"
-
-            # Get auth token
-            token = await api._ensure_token()
-            cookies = {"token": token}
-
-            async with session.get(url, cookies=cookies, timeout=10) as resp:
-                if resp.status == 200:
-                    return await resp.read()
-                _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("Failed to fetch image: %s", err)
-        except Exception as err:
-            _LOGGER.warning("Unexpected error fetching image: %s", err)
-        return None
+        return await self.coordinator.api.fetch_image(image_path)
 
     async def async_turn_on(self) -> None:
         """Turn on the camera (start streaming)."""

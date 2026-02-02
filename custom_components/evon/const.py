@@ -103,6 +103,10 @@ COVER_STOP_DELAY = 0.3
 # to prevent stale UI when recovering from network issues
 OPTIMISTIC_STATE_TIMEOUT = 30.0
 
+# Camera/Image fetch settings
+CAMERA_IMAGE_CAPTURE_DELAY = 0.5  # seconds to wait after requesting image capture
+IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server
+
 # Settling period after control actions (seconds)
 # During this time, ignore coordinator updates and trust optimistic state
 # This prevents UI flicker from intermediate WebSocket states during Evon's

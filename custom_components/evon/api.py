@@ -25,6 +25,7 @@ from .const import (
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
     EVON_REMOTE_HOST,
+    IMAGE_FETCH_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -868,3 +869,32 @@ class EvonApi:
             raise EvonConnectionError(f"Connection error: {err}") from err
         except TimeoutError as err:
             raise EvonConnectionError(f"Connection timeout: {err}") from err
+
+    async def fetch_image(self, image_path: str) -> bytes | None:
+        """Fetch an image from the Evon server.
+
+        This method handles authentication and fetches images from paths
+        like /temp/image.jpg that are returned by camera entities.
+
+        Args:
+            image_path: The image path (e.g., "/temp/image.jpg")
+
+        Returns:
+            The image bytes, or None if fetch failed
+        """
+        try:
+            url = f"{self._host}{image_path}"
+            token = await self._ensure_token()
+            cookies = {"token": token}
+
+            async with self._session.get(
+                url, cookies=cookies, timeout=IMAGE_FETCH_TIMEOUT
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.read()
+                _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)
+        except aiohttp.ClientError as err:
+            _LOGGER.debug("Failed to fetch image: %s", err)
+        except Exception as err:
+            _LOGGER.warning("Unexpected error fetching image: %s", err)
+        return None

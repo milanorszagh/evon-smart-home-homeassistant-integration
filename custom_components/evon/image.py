@@ -6,11 +6,9 @@ from datetime import datetime
 import logging
 from typing import Any
 
-import aiohttp
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -171,24 +169,11 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
         if path == self._cached_path and self._cached_image:
             return self._cached_image
 
-        # Fetch the image from Evon
-        try:
-            session = async_get_clientsession(self.hass)
-            api = self.coordinator.api
-
-            url = f"{api._host}{path}"
-            token = await api._ensure_token()
-            cookies = {"token": token}
-
-            async with session.get(url, cookies=cookies, timeout=10) as resp:
-                if resp.status == 200:
-                    self._cached_image = await resp.read()
-                    self._cached_path = path
-                    return self._cached_image
-                _LOGGER.debug("Failed to fetch snapshot: HTTP %d", resp.status)
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("Failed to fetch snapshot: %s", err)
-        except Exception as err:
-            _LOGGER.warning("Unexpected error fetching snapshot: %s", err)
+        # Fetch the image from Evon using shared API method
+        image = await self.coordinator.api.fetch_image(path)
+        if image:
+            self._cached_image = image
+            self._cached_path = path
+            return self._cached_image
 
         return self._cached_image
