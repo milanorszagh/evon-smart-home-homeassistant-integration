@@ -103,9 +103,8 @@ class EvonWsClient:
 
             # Connect to WebSocket
             _LOGGER.debug(
-                "Connecting WebSocket to %s with token=%s... (remote=%s)",
+                "Connecting WebSocket to %s (remote=%s)",
                 self._ws_host,
-                self._token[:20] + "..." if self._token else None,
                 self._is_remote,
             )
 
@@ -169,9 +168,8 @@ class EvonWsClient:
                 allow_redirects=False,
             ) as response:
                 _LOGGER.debug(
-                    "WebSocket login response: status=%s, headers=%s",
+                    "WebSocket login response: status=%s",
                     response.status,
-                    dict(response.headers),
                 )
 
                 # Token can be in headers regardless of status code

@@ -48,11 +48,9 @@ async def process_cameras(
                     "image_path": details.get("Image", ""),
                     "image_request": details.get("ImageRequest", False),
                     "ip_address": details.get("IPAddress", ""),
-                    "jpeg_url": details.get("JPEGUrl", ""),
-                    "username": details.get("Username", ""),
-                    "password": details.get("Password", ""),
                     "error": details.get("Error", False),
-                    "http_preview_url": details.get("HTTPPreviewUrl", ""),
+                    # Note: Username/Password for direct camera access intentionally
+                    # excluded from coordinator data to avoid exposure in diagnostics
                 }
             )
         except EvonApiError:
