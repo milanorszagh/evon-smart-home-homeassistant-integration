@@ -210,7 +210,8 @@ class EvonApi:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session with proper SSL configuration."""
-        if self._session is None:
+        # Check if session is None or closed (e.g., by HA shutdown)
+        if self._session is None or self._session.closed:
             try:
                 # Use explicit SSL context for secure HTTPS connections
                 # Set a reasonable limit on concurrent connections

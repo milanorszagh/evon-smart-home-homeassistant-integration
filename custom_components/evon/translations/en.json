@@ -68,6 +68,11 @@
     }
   },
   "entity": {
+    "button": {
+      "identify": {
+        "name": "Identify"
+      }
+    },
     "binary_sensor": {
       "call_in_progress": {
         "name": "Call In Progress"
@@ -77,6 +82,17 @@
       },
       "websocket": {
         "name": "WebSocket"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "energy_today": {
+        "name": "Energy Today"
+      },
+      "energy_this_month": {
+        "name": "Energy This Month"
       }
     },
     "select": {

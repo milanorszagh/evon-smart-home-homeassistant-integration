@@ -71,6 +71,7 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
     ENTITY_TYPE_HOME_STATES: ["Active"],
     ENTITY_TYPE_BATHROOM_RADIATORS: ["Output", "NextSwitchPoint"],
     # SmartMeter: real-time measurements (P1+P2+P3 computed to power)
+    # Plus historical energy data arrays for statistics import
     ENTITY_TYPE_SMART_METERS: [
         "IL1",
         "IL2",
@@ -82,6 +83,15 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
         "P1",
         "P2",
         "P3",  # Active power per phase (sum = total power)
+        # Historical energy data arrays (for external statistics)
+        "Energy",
+        "Energy24h",
+        "EnergyDataDay",  # Today's consumption (single value or small array)
+        "EnergyDataMonth",  # Daily values - rolling window of previous days (not including today)
+        "EnergyDataYear",  # Monthly values - rolling window of previous 12 months
+        "FeedInEnergy",
+        "FeedIn24h",
+        "FeedInDataMonth",  # Daily feed-in values
     ],
     # Air Quality: humidity and temperature sensors
     ENTITY_TYPE_AIR_QUALITY: ["Humidity", "ActualTemperature", "CO2Value"],
@@ -138,6 +148,15 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "P1": "power_l1",  # Active power phase 1
         "P2": "power_l2",  # Active power phase 2
         "P3": "power_l3",  # Active power phase 3
+        # Energy totals and historical data
+        "Energy": "energy",
+        "Energy24h": "energy_24h",
+        "EnergyDataDay": "energy_today",  # Today's consumption
+        "EnergyDataMonth": "energy_data_month",  # Array of daily values (previous days, not today)
+        "EnergyDataYear": "energy_data_year",  # Array of monthly values (previous 12 months)
+        "FeedInEnergy": "feed_in_energy",
+        "FeedIn24h": "feed_in_24h",
+        "FeedInDataMonth": "feed_in_data_month",  # Array of daily feed-in values
     },
     ENTITY_TYPE_AIR_QUALITY: {
         "Humidity": "humidity",

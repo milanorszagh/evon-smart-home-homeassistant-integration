@@ -104,6 +104,7 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
     _attr_icon = "mdi:lightbulb-alert"
     _attr_device_class = ButtonDeviceClass.IDENTIFY
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_translation_key = "identify"
 
     def __init__(
         self,
@@ -116,7 +117,6 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
     ) -> None:
         """Initialize the identify button."""
         super().__init__(coordinator, instance_id, name, room_name, entry, api)
-        self._attr_name = "Identify"
         self._attr_unique_id = f"evon_identify_{instance_id}"
 
     @property

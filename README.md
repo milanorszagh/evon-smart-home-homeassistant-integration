@@ -267,6 +267,8 @@ These states trigger automations in the Evon system and can be used in Home Assi
 - Temperature sensors from climate devices
 - Smart meter:
   - Power (W), Energy Total (kWh), Energy 24h Rolling
+  - **Energy Today** (kWh) - today's consumption, calculated from HA statistics
+  - **Energy This Month** (kWh) - this month's total, combining Evon data with today's stats
   - Voltage per phase (V) - L1, L2, L3
   - Current per phase (A) - L1, L2, L3
   - Frequency (Hz)
@@ -274,6 +276,36 @@ These states trigger automations in the Evon system and can be used in Home Assi
 - Air quality: CO2 (ppm), Humidity (%)
 
 **Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from Evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
+
+#### Daily Energy Statistics
+
+The integration provides two calculated sensors for easy energy tracking:
+
+| Sensor | Description |
+|--------|-------------|
+| **Energy Today** | Today's consumption, calculated from HA statistics on the Energy Total sensor |
+| **Energy This Month** | This month's total, combining Evon's daily data (previous days) with today's consumption |
+
+These sensors update automatically with each coordinator refresh.
+
+The integration also imports **daily energy consumption data** from Evon's `EnergyDataMonth` into Home Assistant's external statistics. This provides accurate daily consumption values for the **previous 31 days** (not including today).
+
+**Statistic ID:** `evon:energy_smartmeter{ID}` (e.g., `evon:energy_smartmeter3006939`)
+
+Display in a dashboard using the `statistics-graph` card:
+
+```yaml
+type: statistics-graph
+entities:
+  - entity: evon:energy_smartmeter3006939
+    name: Daily Energy
+stat_types:
+  - change
+period: day
+days_to_show: 31
+```
+
+For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 
 ### Binary Sensors
 
@@ -546,6 +578,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
+| **1.16.0** | **Energy Today & Energy This Month sensors** - Built-in calculated sensors for daily and monthly energy consumption. Energy Today queries HA statistics, Energy This Month combines Evon's daily data with today's consumption. No more manual utility_meter configuration needed. |
 | **1.15.0** | **Camera & doorbell snapshots** - Live feed from 2N intercom cameras via WebSocket, doorbell snapshot history as image entities (up to 10), security door sensors with call-in-progress indicator. Performance improvements with parallel data processing. Security hardening (credentials removed from diagnostics, tokens removed from logs). Code quality: session management hardening, WebSocket reconnect jitter, improved input validation. |
 | **1.14.0** | **WebSocket device control** - instant response when controlling lights, blinds, and climate via HA (no more waiting for poll cycles). Security doors and intercoms with doorbell events, light/blind groups, RGBW color temperature*, climate humidity display |
 | **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |

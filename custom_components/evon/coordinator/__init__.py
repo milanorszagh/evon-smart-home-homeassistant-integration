@@ -8,9 +8,13 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
+from homeassistant.components.recorder.statistics import statistics_during_period
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from ..api import EvonApi, EvonApiError
 from ..const import (
@@ -151,6 +155,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 process_cameras(self.api, instances, self._get_room_name),
             )
 
+            _LOGGER.debug("Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d",
+                          len(lights), len(climates), len(smart_meters), len(blinds))
+
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
             if self._repair_created:
@@ -176,8 +183,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "season_mode": season_mode,
             }
 
+            # Calculate energy_today and energy_this_month for smart meters
+            await self._calculate_energy_today_and_month(smart_meters)
+
             # Cache successful data for use during transient failures
             self._last_successful_data = result
+
+            # Import energy statistics for smart meters (backfill historical data)
+            for meter in smart_meters:
+                self._maybe_import_energy_statistics(meter["id"], meter, force=True)
+
             return result
 
         except EvonApiError as err:
@@ -401,6 +416,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             on_connection_state=self._handle_ws_connection_state,
             is_remote=is_remote,
             engine_id=engine_id,
+            get_session=lambda: async_get_clientsession(self.hass),
         )
 
         # Start the WebSocket client
@@ -568,8 +584,145 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         _LOGGER.info("Doorbell event fired for %s", instance_id)
 
+        # Import energy statistics when smart meter data is received
+        if entity_type == ENTITY_TYPE_SMART_METERS:
+            self._maybe_import_energy_statistics(instance_id, entity)
+
         # Notify listeners of the update
         self.async_set_updated_data(self.data)
+
+    def _maybe_import_energy_statistics(
+        self,
+        instance_id: str,
+        entity_data: dict[str, Any],
+        force: bool = False,
+    ) -> None:
+        """Import energy statistics for a smart meter if data is available.
+
+        Args:
+            instance_id: The smart meter instance ID.
+            entity_data: The entity data dictionary.
+            force: If True, bypass rate limiting (for initial backfill).
+        """
+        # Check if we have the required energy data for statistics import
+        energy_data_month = entity_data.get("energy_data_month")
+
+        if not energy_data_month:
+            return
+
+        # Import the statistics module and trigger import
+        from ..statistics import import_energy_statistics
+
+        self.hass.async_create_task(
+            import_energy_statistics(
+                hass=self.hass,
+                meter_id=instance_id,
+                meter_name=entity_data.get("name") or instance_id,
+                energy_data_month=energy_data_month,
+                feed_in_data_month=entity_data.get("feed_in_data_month"),
+                energy_data_year=entity_data.get("energy_data_year"),
+                force=force,
+            )
+        )
+        _LOGGER.info(
+            "Triggered energy statistics import for %s (force=%s)",
+            instance_id,
+            force,
+        )
+
+    async def _calculate_energy_today_and_month(
+        self, smart_meters: list[dict[str, Any]]
+    ) -> None:
+        """Calculate energy_today and energy_this_month for smart meters.
+
+        Uses HA statistics to get today's consumption and combines with
+        Evon's EnergyDataMonth for this month's total.
+        """
+        now = dt_util.now()
+        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_day = now.day  # Day of month (1-31)
+
+        _LOGGER.debug(
+            "Calculating energy for %d smart meters, today_day=%d, start_of_day=%s",
+            len(smart_meters), today_day, start_of_day.isoformat()
+        )
+
+        for meter in smart_meters:
+            meter_name = meter.get("name", "")
+            # Build the entity_id for the Energy Total sensor
+            # Format: sensor.{name}_energy_total (lowercase, spaces to underscores)
+            entity_id = f"sensor.{meter_name.lower().replace(' ', '_')}_energy_total"
+
+            _LOGGER.debug("Querying statistics for entity_id: %s", entity_id)
+
+            energy_today = None
+            try:
+                # Query HA statistics for today's energy consumption
+                stats = await self.hass.async_add_executor_job(
+                    statistics_during_period,
+                    self.hass,
+                    start_of_day,
+                    now,
+                    [entity_id],
+                    "hour",
+                    {"energy": UnitOfEnergy.KILO_WATT_HOUR},
+                    {"change"},
+                )
+
+                _LOGGER.debug("Statistics result keys: %s", list(stats.keys()) if stats else "None")
+
+                if entity_id in stats:
+                    # Sum all hourly changes for today
+                    hourly_changes = [s.get("change", 0) or 0 for s in stats[entity_id]]
+                    _LOGGER.debug("Hourly changes for %s: %s", entity_id, hourly_changes)
+                    energy_today = sum(hourly_changes)
+                    energy_today = round(energy_today, 2) if energy_today > 0 else 0.0
+                    _LOGGER.debug("Calculated energy_today for %s: %s kWh", meter_name, energy_today)
+                else:
+                    _LOGGER.debug("No statistics found for %s in result", entity_id)
+            except Exception as err:
+                _LOGGER.warning("Could not get energy statistics for %s: %s", entity_id, err)
+
+            # Store energy_today in the meter data
+            meter["energy_today_calculated"] = energy_today
+            _LOGGER.debug("Set energy_today_calculated=%s for %s", energy_today, meter_name)
+
+            # Calculate energy_this_month
+            energy_data_month = meter.get("energy_data_month")
+            _LOGGER.debug(
+                "energy_data_month for %s: %d items, last 5: %s",
+                meter_name,
+                len(energy_data_month) if energy_data_month else 0,
+                energy_data_month[-5:] if energy_data_month else "None"
+            )
+
+            if energy_data_month and isinstance(energy_data_month, list):
+                # Days from this month excluding today: yesterday back to day 1
+                days_this_month_excluding_today = today_day - 1
+
+                month_sum = 0.0
+                if days_this_month_excluding_today > 0 and len(energy_data_month) >= days_this_month_excluding_today:
+                    relevant_days = energy_data_month[-days_this_month_excluding_today:]
+                    _LOGGER.debug(
+                        "Using %d days from energy_data_month: %s",
+                        days_this_month_excluding_today, relevant_days
+                    )
+                    for v in relevant_days:
+                        if isinstance(v, (int, float)):
+                            month_sum += float(v)
+
+                # Add today's consumption
+                if energy_today is not None:
+                    month_sum += energy_today
+
+                meter["energy_this_month_calculated"] = round(month_sum, 2)
+                _LOGGER.debug(
+                    "Set energy_this_month_calculated=%s for %s (month_sum=%s + today=%s)",
+                    meter["energy_this_month_calculated"], meter_name, month_sum - (energy_today or 0), energy_today
+                )
+            else:
+                meter["energy_this_month_calculated"] = energy_today
+                _LOGGER.debug("No energy_data_month, set energy_this_month_calculated=%s", energy_today)
 
     @property
     def ws_connected(self) -> bool:

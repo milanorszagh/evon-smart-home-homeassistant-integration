@@ -722,6 +722,9 @@ Body: {"value": true}   // COOLING
 | `PowerActual` | W | Current power consumption |
 | `Energy` | kWh | Total energy consumption |
 | `Energy24h` | kWh | Rolling 24-hour energy (can decrease) |
+| `EnergyDataDay` | kWh | Today's consumption data |
+| `EnergyDataMonth` | kWh[] | Array of daily values (rolling 31-day window, last = yesterday) |
+| `EnergyDataYear` | kWh[] | Array of monthly values (rolling 12-month window, last = previous month) |
 | `UL1N` | V | Voltage phase L1 |
 | `UL2N` | V | Voltage phase L2 |
 | `UL3N` | V | Voltage phase L3 |
@@ -733,6 +736,22 @@ Body: {"value": true}   // COOLING
 | `FeedInEnergy` | kWh | Total energy fed to grid |
 
 **Note**: For HA Energy Dashboard, use `Energy` (total_increasing), not `Energy24h` which is a rolling window.
+
+### Calculated Energy Sensors
+
+The integration provides two calculated sensors that don't exist in the Evon API:
+
+| Sensor | Calculation | Source |
+|--------|-------------|--------|
+| **Energy Today** | Sum of hourly changes from HA statistics | `statistics_during_period()` on `sensor.*_energy_total` |
+| **Energy This Month** | Previous days from Evon + today from HA | `EnergyDataMonth[-N:]` + Energy Today |
+
+**Implementation Details:**
+- Calculation happens in `coordinator/_calculate_energy_today_and_month()`
+- Called during each coordinator refresh cycle
+- `statistics_during_period()` is a blocking call - use `async_add_executor_job()`
+- Values stored as `energy_today_calculated` and `energy_this_month_calculated` in meter data
+- Sensor classes read from coordinator data, return 0.0 if not yet calculated
 
 ### Air Quality Properties
 

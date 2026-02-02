@@ -417,16 +417,26 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
                     remainder = remainder[: -len(suffix)]
                     break
             # For meter sensors, the format is evon_meter_{key}_{instance_id}
-            # We need to find the last underscore-separated part that looks like an instance_id
+            # Known meter sensor keys from SMART_METER_SENSORS (ordered longest first)
             if prefix == "evon_meter_":
-                # Format: evon_meter_power_SC1_M01.SmartMeter1 -> instance_id is the last part with a dot
-                # Split and find the part containing a dot (Evon instance IDs have dots)
+                meter_keys = [
+                    "feed_in_month_", "feed_in_today_", "feed_in_energy_",
+                    "energy_month_", "energy_today_", "energy_24h_",
+                    "voltage_l1_", "voltage_l2_", "voltage_l3_",
+                    "current_l1_", "current_l2_", "current_l3_",
+                    "frequency_", "energy_", "power_",
+                ]
+                for key in meter_keys:
+                    if remainder.startswith(key):
+                        return remainder[len(key):]
+                # Fallback: try to find a part with a dot (old format)
                 parts = remainder.split("_")
                 for i, part in enumerate(parts):
                     if "." in part:
                         return "_".join(parts[i:])
-                # No dot found, return the whole remainder
-                return remainder
+                # Can't reliably extract - return None to skip this entity
+                _LOGGER.debug("Cannot extract instance_id from meter unique_id: %s", unique_id)
+                return None
             # For snapshot, format is evon_snapshot_{door_id}_{index}
             if prefix == "evon_snapshot_":
                 # Remove the trailing index (last underscore-separated number)
@@ -496,7 +506,7 @@ async def _async_cleanup_stale_entities(
         # Check if this device still exists
         if instance_id not in current_device_ids:
             entities_to_remove.append(entity_entry.entity_id)
-            _LOGGER.debug("Marking stale entity for removal: %s (unique_id: %s, instance_id: %s)", entity_entry.entity_id, unique_id, instance_id)
+            _LOGGER.debug("Marking stale entity for removal: %s (instance_id: %s)", entity_entry.entity_id, instance_id)
 
     # Remove stale entities
     for entity_id in entities_to_remove:

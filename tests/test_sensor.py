@@ -2,9 +2,113 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from tests.conftest import requires_ha_test_framework
+
+
+# Tests for daily energy helper functions
+# These require Python 3.10+ due to dataclass kw_only parameter in sensor.py
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="Requires Python 3.10+")
+class TestDailyEnergyHelpers:
+    """Test daily energy helper functions."""
+
+    def test_get_today_energy_valid_data(self):
+        """Test getting today's energy from valid data."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from custom_components.evon.sensor import _get_today_energy
+
+        # Mock today as day 3 of month
+        with patch("custom_components.evon.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2024, 1, 3, 12, 0, 0)
+
+            data = {"energy_data_month": [7.5, 8.3, 9.1, 6.2, 10.0]}
+            result = _get_today_energy(data)
+            # Day 3 = index 2 = 9.1
+            assert result == 9.1
+
+    def test_get_today_energy_string_values(self):
+        """Test getting today's energy when values are strings."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from custom_components.evon.sensor import _get_today_energy
+
+        with patch("custom_components.evon.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2024, 1, 2, 12, 0, 0)
+
+            data = {"energy_data_month": ["7.50", "8.30", "9.10"]}
+            result = _get_today_energy(data)
+            assert result == 8.3
+
+    def test_get_today_energy_missing_data(self):
+        """Test getting today's energy when data is missing."""
+        from custom_components.evon.sensor import _get_today_energy
+
+        result = _get_today_energy({})
+        assert result is None
+
+        result = _get_today_energy({"energy_data_month": None})
+        assert result is None
+
+        result = _get_today_energy({"energy_data_month": []})
+        assert result is None
+
+    def test_get_today_energy_day_out_of_range(self):
+        """Test getting today's energy when day exceeds array length."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from custom_components.evon.sensor import _get_today_energy
+
+        with patch("custom_components.evon.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2024, 1, 31, 12, 0, 0)
+
+            # Only 3 days of data
+            data = {"energy_data_month": [7.5, 8.3, 9.1]}
+            result = _get_today_energy(data)
+            assert result is None
+
+    def test_get_today_energy_none_value_in_array(self):
+        """Test getting today's energy when today's value is None."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from custom_components.evon.sensor import _get_today_energy
+
+        with patch("custom_components.evon.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2024, 1, 2, 12, 0, 0)
+
+            data = {"energy_data_month": [7.5, None, 9.1]}
+            result = _get_today_energy(data)
+            assert result is None
+
+    def test_get_today_feed_in_valid_data(self):
+        """Test getting today's feed-in from valid data."""
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from custom_components.evon.sensor import _get_today_feed_in
+
+        with patch("custom_components.evon.sensor.dt_util") as mock_dt:
+            mock_dt.now.return_value = datetime(2024, 1, 1, 12, 0, 0)
+
+            data = {"feed_in_data_month": [3.2, 4.1, 5.0]}
+            result = _get_today_feed_in(data)
+            # Day 1 = index 0 = 3.2
+            assert result == 3.2
+
+    def test_get_today_feed_in_missing_data(self):
+        """Test getting today's feed-in when data is missing."""
+        from custom_components.evon.sensor import _get_today_feed_in
+
+        result = _get_today_feed_in({})
+        assert result is None
+
 
 pytestmark = requires_ha_test_framework
 

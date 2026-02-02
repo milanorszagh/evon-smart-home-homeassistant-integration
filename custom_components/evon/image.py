@@ -36,7 +36,7 @@ async def async_setup_entry(
     # This ensures consistent entity count across reloads
     if coordinator.data and ENTITY_TYPE_SECURITY_DOORS in coordinator.data:
         for door in coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
-            door_name = door.get("name", "Doorbell")
+            door_name = door.get("name") or "Doorbell"
 
             # Always create MAX_SNAPSHOTS entities per door for consistency
             for idx in range(MAX_SNAPSHOTS):

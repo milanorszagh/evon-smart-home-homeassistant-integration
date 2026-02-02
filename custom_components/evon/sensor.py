@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -27,6 +29,9 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
+
+_LOGGER = logging.getLogger(__name__)
 
 from .base_entity import EvonEntity
 from .const import (
@@ -146,6 +151,9 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
     ),
 )
 
+# Energy Today and Energy This Month are created as separate sensor classes
+# because they need async access to HA statistics
+
 AIR_QUALITY_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
     EvonSensorEntityDescription(
         key="co2",
@@ -204,6 +212,35 @@ async def async_setup_entry(
                     )
                 )
 
+            # Create Energy Today and Energy This Month sensors
+            # Values are calculated in the coordinator from HA statistics + Evon data
+            _LOGGER.debug(
+                "Creating Energy Today/This Month sensors for meter %s (id=%s), "
+                "energy_today_calculated=%s, energy_this_month_calculated=%s",
+                meter["name"],
+                meter["id"],
+                meter.get("energy_today_calculated"),
+                meter.get("energy_this_month_calculated"),
+            )
+            entities.append(
+                EvonEnergyTodaySensor(
+                    coordinator,
+                    meter["id"],
+                    meter["name"],
+                    meter.get("room_name", ""),
+                    entry,
+                )
+            )
+            entities.append(
+                EvonEnergyThisMonthSensor(
+                    coordinator,
+                    meter["id"],
+                    meter["name"],
+                    meter.get("room_name", ""),
+                    entry,
+                )
+            )
+
     # Create air quality sensors using entity descriptions
     if coordinator.data and ENTITY_TYPE_AIR_QUALITY in coordinator.data:
         for aq in coordinator.data[ENTITY_TYPE_AIR_QUALITY]:
@@ -231,6 +268,7 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_translation_key = "temperature"
 
     def __init__(
         self,
@@ -242,7 +280,6 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, instance_id, name, room_name, entry)
-        self._attr_name = "Temperature"
         self._attr_unique_id = f"evon_temp_{instance_id}"
 
     @property
@@ -347,3 +384,79 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
             elif self.entity_description.key == "humidity":
                 attrs["humidity_index"] = data.get("humidity_index")
         return attrs
+
+
+class EvonEnergyTodaySensor(EvonEntity, SensorEntity):
+    """Sensor that shows today's energy consumption."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:calendar-today"
+    _attr_translation_key = "energy_today"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self._attr_unique_id = f"evon_energy_today_{instance_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this sensor."""
+        return self._build_device_info("Smart Meter")
+
+    @property
+    def native_value(self) -> float:
+        """Return today's energy consumption (calculated in coordinator)."""
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
+        if data:
+            value = data.get("energy_today_calculated")
+            if value is not None:
+                return value
+        # Return 0.0 when data is unavailable or not yet calculated
+        return 0.0
+
+
+class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
+    """Sensor that shows this month's energy consumption."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:calendar-month"
+    _attr_translation_key = "energy_this_month"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self._attr_unique_id = f"evon_energy_this_month_{instance_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this sensor."""
+        return self._build_device_info("Smart Meter")
+
+    @property
+    def native_value(self) -> float:
+        """Return this month's energy consumption (calculated in coordinator)."""
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
+        if data:
+            value = data.get("energy_this_month_calculated")
+            if value is not None:
+                return value
+        # Return 0.0 when data is unavailable or not yet calculated
+        return 0.0

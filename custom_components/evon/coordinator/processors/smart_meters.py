@@ -31,10 +31,14 @@ async def process_smart_meters(
         List of processed smart meter data dictionaries
     """
     smart_meters = []
+    _LOGGER.debug("Processing %d instances for smart meters", len(instances))
     for instance in instances:
-        if EVON_CLASS_SMART_METER not in instance.get("ClassName", ""):
+        class_name = instance.get("ClassName", "")
+        if EVON_CLASS_SMART_METER not in class_name:
             continue
+        _LOGGER.debug("Found smart meter candidate: %s (class=%s)", instance.get("ID"), class_name)
         if not instance.get("Name"):
+            _LOGGER.debug("Skipping %s - no name configured", instance.get("ID"))
             continue
 
         instance_id = instance.get("ID", "")
@@ -62,8 +66,15 @@ async def process_smart_meters(
                     "power_l1": details.get("P1", 0),
                     "power_l2": details.get("P2", 0),
                     "power_l3": details.get("P3", 0),
+                    # Energy data for today and statistics import
+                    "energy_today": details.get("EnergyDataDay", 0),
+                    "energy_data_month": details.get("EnergyDataMonth", []),
+                    "feed_in_data_month": details.get("FeedInDataMonth", []),
+                    "energy_data_year": details.get("EnergyDataYear", []),
                 }
             )
-        except EvonApiError:
-            _LOGGER.warning("Failed to get details for smart meter %s", instance_id)
+            _LOGGER.info("Added smart meter: %s with power=%s", instance_id, details.get("PowerActual"))
+        except EvonApiError as err:
+            _LOGGER.warning("Failed to get details for smart meter %s: %s", instance_id, err)
+    _LOGGER.info("Processed %d smart meters total", len(smart_meters))
     return smart_meters

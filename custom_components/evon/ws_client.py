@@ -61,11 +61,12 @@ class EvonWsClient:
         host: str,
         username: str,
         password: str,
-        session: aiohttp.ClientSession,
+        session: aiohttp.ClientSession | None = None,
         on_values_changed: Callable[[str, dict[str, Any]], None] | None = None,
         on_connection_state: Callable[[bool], None] | None = None,
         is_remote: bool = False,
         engine_id: str | None = None,
+        get_session: Callable[[], aiohttp.ClientSession] | None = None,
     ) -> None:
         """Initialize the WebSocket client.
 
@@ -73,11 +74,12 @@ class EvonWsClient:
             host: The Evon system URL (e.g., http://192.168.1.100) or remote host
             username: The username for authentication
             password: The password (plain text, will be encoded)
-            session: The aiohttp client session
+            session: The aiohttp client session (deprecated, use get_session)
             on_values_changed: Callback for ValuesChanged events (instance_id, properties)
             on_connection_state: Callback for connection state changes (connected: bool)
             is_remote: Whether this is a remote connection via my.evon-smarthome.com
             engine_id: The engine ID for remote connections
+            get_session: Callback to get a fresh aiohttp session (preferred over session)
         """
         self._is_remote = is_remote
         self._engine_id = engine_id
@@ -94,6 +96,7 @@ class EvonWsClient:
         self._username = username
         self._password = encode_password(username, password)
         self._session = session
+        self._get_session = get_session
         self._on_values_changed = on_values_changed
         self._on_connection_state = on_connection_state
 
@@ -112,6 +115,29 @@ class EvonWsClient:
     def is_connected(self) -> bool:
         """Return whether the WebSocket is connected."""
         return self._connected and self._ws is not None and not self._ws.closed
+
+    def _get_valid_session(self) -> aiohttp.ClientSession:
+        """Get a valid (non-closed) aiohttp session.
+
+        Returns:
+            A valid aiohttp session.
+
+        Raises:
+            RuntimeError: If no valid session is available.
+        """
+        # If we have a session factory, use it to get a fresh session if needed
+        if self._get_session is not None:
+            # Always get fresh session from callback if available
+            session = self._get_session()
+            if session is not None and not session.closed:
+                self._session = session
+                return session
+
+        # Fall back to stored session
+        if self._session is not None and not self._session.closed:
+            return self._session
+
+        raise RuntimeError("Session is closed and no session factory available")
 
     async def connect(self) -> bool:
         """Connect to the WebSocket server.
@@ -144,7 +170,8 @@ class EvonWsClient:
                 cookie = f"token={self._token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0"
                 origin = self._host
 
-            self._ws = await self._session.ws_connect(
+            session = self._get_valid_session()
+            self._ws = await session.ws_connect(
                 self._ws_host,
                 protocols=[WS_PROTOCOL],
                 headers={
@@ -190,7 +217,8 @@ class EvonWsClient:
             else:
                 login_url = f"{self._host}/login"
 
-            async with self._session.post(
+            session = self._get_valid_session()
+            async with session.post(
                 login_url,
                 headers=headers,
                 allow_redirects=False,

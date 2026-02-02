@@ -174,7 +174,6 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
         self._api = api
         self._entry = entry
         self._attr_unique_id = f"evon_season_mode_{entry.entry_id}"
-        self._attr_name = "Season Mode"
         self._attr_options = SEASON_MODE_OPTIONS
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
