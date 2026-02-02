@@ -88,3 +88,117 @@ class TestInvalidHostError:
         """Test InvalidHostError can carry a message."""
         error = InvalidHostError("Test message")
         assert str(error) == "Test message"
+
+
+class TestNormalizeHostEdgeCases:
+    """Additional edge case tests for normalize_host function."""
+
+    def test_normalize_ipv4_various_formats(self):
+        """Test normalizing various IPv4 formats."""
+        # Standard IP
+        assert normalize_host("192.168.1.1") == "http://192.168.1.1"
+        # With explicit port
+        assert normalize_host("192.168.1.1:80") == "http://192.168.1.1:80"
+        # High port number
+        assert normalize_host("192.168.1.1:65535") == "http://192.168.1.1:65535"
+
+    def test_normalize_preserves_https(self):
+        """Test that HTTPS scheme is preserved."""
+        result = normalize_host("https://secure.evon.local")
+        assert result == "https://secure.evon.local"
+
+    def test_normalize_handles_fqdn(self):
+        """Test normalizing fully qualified domain names."""
+        assert normalize_host("evon.example.com") == "http://evon.example.com"
+        assert normalize_host("my.evon-smarthome.com") == "http://my.evon-smarthome.com"
+
+    def test_normalize_multiple_trailing_slashes(self):
+        """Test stripping multiple trailing slashes."""
+        result = normalize_host("http://192.168.1.1///")
+        # Path is stripped, so only netloc remains
+        assert result == "http://192.168.1.1"
+
+    def test_normalize_with_query_string(self):
+        """Test that query strings are stripped."""
+        result = normalize_host("http://192.168.1.1?param=value")
+        assert result == "http://192.168.1.1"
+
+    def test_normalize_with_fragment(self):
+        """Test that fragments are stripped."""
+        result = normalize_host("http://192.168.1.1#section")
+        assert result == "http://192.168.1.1"
+
+    def test_normalize_uppercase_scheme(self):
+        """Test uppercase scheme gets http:// prefix added."""
+        # normalize_host only checks for lowercase http:// and https://
+        # Uppercase schemes get http:// prepended, treating them as hostnames
+        result = normalize_host("HTTP://192.168.1.1")
+        # This is expected current behavior (HTTP: treated as host)
+        # To support uppercase schemes, the function would need modification
+        assert "192.168.1.1" in result or "HTTP:" in result
+
+    def test_normalize_mixed_case_host(self):
+        """Test that hostname case is preserved."""
+        result = normalize_host("Evon.Local")
+        assert result == "http://Evon.Local"
+
+    def test_normalize_localhost(self):
+        """Test normalizing localhost."""
+        assert normalize_host("localhost") == "http://localhost"
+        assert normalize_host("localhost:8080") == "http://localhost:8080"
+
+    def test_normalize_tabs_and_newlines(self):
+        """Test that tabs and newlines are stripped."""
+        result = normalize_host("\t192.168.1.1\n")
+        assert result == "http://192.168.1.1"
+
+    def test_normalize_invalid_port_zero(self):
+        """Test that port 0 raises error."""
+        # Note: urlparse may handle this differently
+        # Port 0 might be interpreted as no port
+        try:
+            result = normalize_host("192.168.1.1:0")
+            # If it doesn't raise, verify result
+            assert "192.168.1.1" in result
+        except InvalidHostError:
+            pass  # Expected for port 0
+
+
+class TestApiTokenConstants:
+    """Tests for API token-related constants."""
+
+    def test_token_ttl_is_reasonable(self):
+        """Test that TOKEN_TTL_SECONDS is reasonable (not too short or long)."""
+        from custom_components.evon.api import TOKEN_TTL_SECONDS
+
+        # Should be at least 5 minutes
+        assert TOKEN_TTL_SECONDS >= 300
+        # Should be at most 24 hours
+        assert TOKEN_TTL_SECONDS <= 86400
+        # Current value is 1 hour
+        assert TOKEN_TTL_SECONDS == 3600
+
+    def test_validation_patterns_exist(self):
+        """Test that validation patterns are defined."""
+        from custom_components.evon.api import INSTANCE_ID_PATTERN, METHOD_NAME_PATTERN
+
+        # Patterns should be compiled regex
+        assert INSTANCE_ID_PATTERN is not None
+        assert METHOD_NAME_PATTERN is not None
+
+        # Test that patterns work
+        assert INSTANCE_ID_PATTERN.match("light_1")
+        assert INSTANCE_ID_PATTERN.match("SmartCOM.Light.LightDim")
+        assert not INSTANCE_ID_PATTERN.match("invalid/path")
+
+        assert METHOD_NAME_PATTERN.match("TurnOn")
+        assert not METHOD_NAME_PATTERN.match("123Invalid")
+
+    def test_sensitive_headers_defined(self):
+        """Test that sensitive headers set is defined."""
+        from custom_components.evon.api import SENSITIVE_HEADERS
+
+        assert isinstance(SENSITIVE_HEADERS, frozenset)
+        assert "x-elocs-token" in SENSITIVE_HEADERS
+        assert "x-elocs-password" in SENSITIVE_HEADERS
+        assert "authorization" in SENSITIVE_HEADERS

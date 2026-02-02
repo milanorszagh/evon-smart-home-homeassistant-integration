@@ -1285,3 +1285,89 @@ class TestNewFeatures:
         assert cam_sub["Instanceid"] == "Intercom2N1000.Cam"
         assert "Image" in cam_sub["Properties"]
         assert "ImageRequest" in cam_sub["Properties"]
+
+
+class TestWsMappingsEdgeCases:
+    """Edge case tests for ws_mappings module."""
+
+    def test_ws_to_coordinator_data_security_doors_saved_pictures(self):
+        """Test security door SavedPictures transformation."""
+        ws_props = {
+            "SavedPictures": [
+                {"imageUrlClient": "/images/snap1.jpg", "datetime": 1706900000000},
+                {"imageUrlClient": "/images/snap2.jpg", "datetime": 1706899000000},
+            ]
+        }
+        coord = ws_to_coordinator_data("security_doors", ws_props)
+
+        assert "saved_pictures" in coord
+        assert len(coord["saved_pictures"]) == 2
+        assert coord["saved_pictures"][0]["path"] == "/images/snap1.jpg"
+        assert coord["saved_pictures"][0]["timestamp"] == 1706900000000
+
+    def test_ws_to_coordinator_data_security_doors_empty_pictures(self):
+        """Test security door with empty SavedPictures."""
+        ws_props = {"SavedPictures": []}
+        coord = ws_to_coordinator_data("security_doors", ws_props)
+
+        assert coord["saved_pictures"] == []
+
+    def test_ws_to_coordinator_data_security_doors_non_list_pictures(self):
+        """Test security door with non-list SavedPictures passes through unchanged."""
+        ws_props = {"SavedPictures": "not a list"}
+        coord = ws_to_coordinator_data("security_doors", ws_props)
+
+        # Non-list values pass through via property mapping (saved_pictures key)
+        # Only list values get transformed
+        assert "saved_pictures" in coord
+        assert coord["saved_pictures"] == "not a list"
+
+    def test_ws_to_coordinator_data_smart_meter_power_none_phases(self):
+        """Test smart meter power computation with None phase values."""
+        ws_props = {"P1": None, "P2": 1000, "P3": 1000}
+        # No existing data, so can't compute total
+        coord = ws_to_coordinator_data("smart_meters", ws_props)
+
+        # Should have individual phases but no total power
+        assert "power_l2" in coord
+        assert coord["power_l2"] == 1000
+        assert "power" not in coord  # Can't compute without all phases
+
+    def test_ws_to_coordinator_data_smart_meter_power_invalid_type(self):
+        """Test smart meter power computation handles invalid types."""
+        ws_props = {"P1": "not a number", "P2": 1000, "P3": 1000}
+        coord = ws_to_coordinator_data("smart_meters", ws_props)
+
+        # Should not raise, power should not be computed due to invalid type
+        # The function uses contextlib.suppress(TypeError, ValueError)
+        assert "power" not in coord or coord.get("power") is None
+
+    def test_get_entity_type_climate_universal_prefix(self):
+        """Test climate universal with Heating prefix (substring matching)."""
+        # Standard Heating.ClimateControlUniversal class
+        assert get_entity_type("Heating.ClimateControlUniversal") == "climates"
+        # With additional suffix - substring match works
+        assert get_entity_type("Heating.ClimateControlUniversal.V2") == "climates"
+        # Note: SmartCOM.Clima.ClimateControlUniversal wouldn't match because
+        # it uses substring match on "Heating.ClimateControlUniversal"
+
+    def test_get_entity_type_smart_meter_variations(self):
+        """Test various smart meter class name variations."""
+        # Standard
+        assert get_entity_type("Energy.SmartMeter") == "smart_meters"
+        # With Modbus suffix
+        assert get_entity_type("Energy.SmartMeterModbus") == "smart_meters"
+        # With version suffix
+        assert get_entity_type("Energy.SmartMeter300") == "smart_meters"
+
+    def test_ws_to_coordinator_data_unknown_entity_type(self):
+        """Test with unknown entity type returns empty dict."""
+        ws_props = {"SomeProperty": "value"}
+        coord = ws_to_coordinator_data("unknown_type", ws_props)
+
+        assert coord == {}
+
+    def test_get_subscribe_properties_unknown_type(self):
+        """Test subscribe properties for unknown type returns empty list."""
+        props = get_subscribe_properties("unknown_type")
+        assert props == []

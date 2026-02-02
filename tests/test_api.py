@@ -672,3 +672,282 @@ class TestEvonApiWebSocketControl:
             "/instances/Base.ehThermostat/IsCool",
             {"value": False},
         )
+
+
+class TestRedactHeaders:
+    """Tests for _redact_headers function."""
+
+    def test_redact_sensitive_headers(self):
+        """Test that sensitive headers are redacted."""
+        from custom_components.evon.api import _redact_headers
+
+        headers = {
+            "x-elocs-token": "secret_token",
+            "x-elocs-password": "secret_password",
+            "Authorization": "Bearer token",
+            "Cookie": "session=abc123",
+            "Content-Type": "application/json",
+        }
+
+        redacted = _redact_headers(headers)
+
+        assert redacted["x-elocs-token"] == "**REDACTED**"
+        assert redacted["x-elocs-password"] == "**REDACTED**"
+        assert redacted["Authorization"] == "**REDACTED**"
+        assert redacted["Cookie"] == "**REDACTED**"
+        assert redacted["Content-Type"] == "application/json"
+
+    def test_redact_headers_case_insensitive(self):
+        """Test that header matching is case insensitive."""
+        from custom_components.evon.api import _redact_headers
+
+        headers = {
+            "X-ELOCS-TOKEN": "secret",
+            "X-Elocs-Password": "secret",
+            "content-type": "application/json",
+        }
+
+        redacted = _redact_headers(headers)
+
+        assert redacted["X-ELOCS-TOKEN"] == "**REDACTED**"
+        assert redacted["X-Elocs-Password"] == "**REDACTED**"
+        assert redacted["content-type"] == "application/json"
+
+    def test_redact_headers_empty(self):
+        """Test with empty headers dict."""
+        from custom_components.evon.api import _redact_headers
+
+        assert _redact_headers({}) == {}
+
+
+class TestValidateInstanceId:
+    """Tests for _validate_instance_id function."""
+
+    def test_valid_instance_ids(self):
+        """Test valid instance ID formats."""
+        from custom_components.evon.api import _validate_instance_id
+
+        # These should not raise
+        _validate_instance_id("light_1")
+        _validate_instance_id("SmartCOM.Light.LightDim")
+        _validate_instance_id("intercom_1.Cam")
+        _validate_instance_id("Base-Device-123")
+        _validate_instance_id("device.sub.item")
+
+    def test_invalid_empty(self):
+        """Test empty instance ID raises ValueError."""
+        from custom_components.evon.api import _validate_instance_id
+
+        with pytest.raises(ValueError, match="Invalid instance ID"):
+            _validate_instance_id("")
+
+    def test_invalid_characters(self):
+        """Test instance ID with invalid characters raises ValueError."""
+        from custom_components.evon.api import _validate_instance_id
+
+        with pytest.raises(ValueError, match="Invalid instance ID"):
+            _validate_instance_id("light/1")  # Path traversal attempt
+
+        with pytest.raises(ValueError, match="Invalid instance ID"):
+            _validate_instance_id("light;drop table")  # SQL injection attempt
+
+        with pytest.raises(ValueError, match="Invalid instance ID"):
+            _validate_instance_id("light\n1")  # Newline
+
+
+class TestValidateMethodName:
+    """Tests for _validate_method_name function."""
+
+    def test_valid_method_names(self):
+        """Test valid method name formats."""
+        from custom_components.evon.api import _validate_method_name
+
+        # These should not raise
+        _validate_method_name("AmznTurnOn")
+        _validate_method_name("SetBrightness")
+        _validate_method_name("Open")
+        _validate_method_name("WriteCurrentSetTemperature")
+
+    def test_invalid_empty(self):
+        """Test empty method name raises ValueError."""
+        from custom_components.evon.api import _validate_method_name
+
+        with pytest.raises(ValueError, match="Invalid method name"):
+            _validate_method_name("")
+
+    def test_invalid_starting_with_number(self):
+        """Test method name starting with number raises ValueError."""
+        from custom_components.evon.api import _validate_method_name
+
+        with pytest.raises(ValueError, match="Invalid method name"):
+            _validate_method_name("123Method")
+
+    def test_invalid_with_special_chars(self):
+        """Test method name with special characters raises ValueError."""
+        from custom_components.evon.api import _validate_method_name
+
+        with pytest.raises(ValueError, match="Invalid method name"):
+            _validate_method_name("Turn_On")  # Underscore not allowed
+
+        with pytest.raises(ValueError, match="Invalid method name"):
+            _validate_method_name("Turn-Off")  # Hyphen not allowed
+
+
+class TestValidateEngineId:
+    """Tests for _validate_engine_id function."""
+
+    def test_valid_engine_ids(self):
+        """Test valid engine ID formats."""
+        from custom_components.evon.api import _validate_engine_id
+
+        # These should not raise (4-12 alphanumeric chars)
+        _validate_engine_id("ab12")  # Min length
+        _validate_engine_id("ABCD1234")
+        _validate_engine_id("123456789012")  # Max length
+
+    def test_invalid_empty(self):
+        """Test empty engine ID raises ValueError."""
+        from custom_components.evon.api import _validate_engine_id
+
+        with pytest.raises(ValueError, match="Engine ID cannot be empty"):
+            _validate_engine_id("")
+
+    def test_invalid_too_short(self):
+        """Test engine ID too short raises ValueError."""
+        from custom_components.evon.api import _validate_engine_id
+
+        with pytest.raises(ValueError, match="must be 4-12 characters"):
+            _validate_engine_id("abc")  # 3 chars, min is 4
+
+    def test_invalid_too_long(self):
+        """Test engine ID too long raises ValueError."""
+        from custom_components.evon.api import _validate_engine_id
+
+        with pytest.raises(ValueError, match="must be 4-12 characters"):
+            _validate_engine_id("1234567890123")  # 13 chars, max is 12
+
+    def test_invalid_non_alphanumeric(self):
+        """Test engine ID with non-alphanumeric chars raises ValueError."""
+        from custom_components.evon.api import _validate_engine_id
+
+        with pytest.raises(ValueError, match="alphanumeric"):
+            _validate_engine_id("abc-123")
+
+        with pytest.raises(ValueError, match="alphanumeric"):
+            _validate_engine_id("abc_123")
+
+
+class TestBuildBaseUrl:
+    """Tests for build_base_url function."""
+
+    def test_with_host(self):
+        """Test building URL with local host."""
+        from custom_components.evon.api import build_base_url
+
+        assert build_base_url(host="http://192.168.1.100") == "http://192.168.1.100"
+        assert build_base_url(host="http://192.168.1.100/") == "http://192.168.1.100"
+
+    def test_with_engine_id(self):
+        """Test building URL with engine ID (remote connection)."""
+        from custom_components.evon.api import build_base_url
+
+        url = build_base_url(engine_id="ABC123")
+        assert url == "https://my.evon-smarthome.com/ABC123"
+
+    def test_host_takes_precedence(self):
+        """Test that host takes precedence over engine_id."""
+        from custom_components.evon.api import build_base_url
+
+        url = build_base_url(host="http://local.evon", engine_id="ABC123")
+        assert url == "http://local.evon"
+
+    def test_neither_provided_raises(self):
+        """Test that ValueError is raised when neither host nor engine_id provided."""
+        from custom_components.evon.api import build_base_url
+
+        with pytest.raises(ValueError, match="Either host or engine_id"):
+            build_base_url()
+
+    def test_invalid_engine_id_raises(self):
+        """Test that invalid engine_id raises ValueError."""
+        from custom_components.evon.api import build_base_url
+
+        with pytest.raises(ValueError):
+            build_base_url(engine_id="ab")  # Too short
+
+
+class TestIsTokenExpired:
+    """Tests for _is_token_expired method."""
+
+    def test_expired_when_no_token(self):
+        """Test token is expired when no token set."""
+        from custom_components.evon.api import EvonApi
+
+        api = EvonApi("http://192.168.1.100", "user", "pass")
+        api._token = None
+
+        assert api._is_token_expired() is True
+
+    def test_not_expired_when_fresh(self):
+        """Test token is not expired when recently set."""
+        import time
+        from custom_components.evon.api import EvonApi
+
+        api = EvonApi("http://192.168.1.100", "user", "pass")
+        api._token = "valid_token"
+        api._token_timestamp = time.monotonic()  # Just now
+
+        assert api._is_token_expired() is False
+
+    def test_expired_after_ttl(self):
+        """Test token is expired after TTL period."""
+        import time
+        from custom_components.evon.api import EvonApi, TOKEN_TTL_SECONDS
+
+        api = EvonApi("http://192.168.1.100", "user", "pass")
+        api._token = "valid_token"
+        # Set timestamp to just past TTL
+        api._token_timestamp = time.monotonic() - TOKEN_TTL_SECONDS - 1
+
+        assert api._is_token_expired() is True
+
+
+class TestIsBlindClass:
+    """Tests for _is_blind_class method."""
+
+    def test_blind_classes(self):
+        """Test that blind classes are recognized."""
+        from custom_components.evon.api import EvonApi
+
+        api = EvonApi("http://192.168.1.100", "user", "pass")
+
+        assert api._is_blind_class("SmartCOM.Blind.Blind") is True
+        assert api._is_blind_class("SmartCOM.Blind.BlindGroup") is True
+        assert api._is_blind_class("Base.bBlind") is True
+        assert api._is_blind_class("Base.ehBlind") is True
+
+    def test_non_blind_classes(self):
+        """Test that non-blind classes are not recognized."""
+        from custom_components.evon.api import EvonApi
+
+        api = EvonApi("http://192.168.1.100", "user", "pass")
+
+        assert api._is_blind_class("SmartCOM.Light.LightDim") is False
+        assert api._is_blind_class("Climate.ClimateControl") is False
+        assert api._is_blind_class("") is False
+        assert api._is_blind_class("Blind") is False  # Partial match
+
+
+class TestCreateSslContext:
+    """Tests for _create_ssl_context function."""
+
+    def test_creates_ssl_context(self):
+        """Test that function creates a valid SSL context."""
+        import ssl
+        from custom_components.evon.api import _create_ssl_context
+
+        ctx = _create_ssl_context()
+
+        assert isinstance(ctx, ssl.SSLContext)
+        # Default context should verify certificates
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
