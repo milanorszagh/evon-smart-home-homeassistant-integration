@@ -533,7 +533,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             coord_data = ws_to_coordinator_data(entity_type, properties, entity)
         except Exception as err:
-            _LOGGER.warning("Failed to convert WebSocket data for %s: %s", instance_id, err)
+            _LOGGER.error(
+                "Failed to convert WebSocket data for %s (%s): %s. "
+                "Requesting coordinator refresh to sync state.",
+                instance_id,
+                entity_type,
+                err,
+            )
+            # Schedule HTTP refresh to recover from the conversion failure
+            self.hass.async_create_task(self.async_request_refresh())
             return
 
         if not coord_data:
