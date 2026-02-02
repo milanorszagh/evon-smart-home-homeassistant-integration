@@ -374,12 +374,22 @@ coordinator/       # Integrates WebSocket with data updates
 ### Constants
 
 ```python
+# WebSocket configuration
 CONF_HTTP_ONLY = "http_only"
-DEFAULT_HTTP_ONLY = False            # WebSocket enabled by default (recommended)
-DEFAULT_WS_RECONNECT_DELAY = 5       # Initial reconnect delay (seconds)
-WS_RECONNECT_MAX_DELAY = 300         # Max reconnect delay (seconds)
-WS_PROTOCOL = "echo-protocol"        # WebSocket sub-protocol
-WS_POLL_INTERVAL = 300               # Reduced poll interval when WS connected
+DEFAULT_HTTP_ONLY = False              # WebSocket enabled by default (recommended)
+DEFAULT_WS_RECONNECT_DELAY = 5         # Initial reconnect delay (seconds)
+WS_RECONNECT_MAX_DELAY = 300           # Max reconnect delay (seconds)
+WS_PROTOCOL = "echo-protocol"          # WebSocket sub-protocol
+WS_POLL_INTERVAL = 300                 # Reduced poll interval when WS connected
+WS_HEARTBEAT_INTERVAL = 30             # WebSocket heartbeat/ping interval (seconds)
+WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (seconds)
+WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
+WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
+
+# Animation timing
+LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
+OPTIMISTIC_SETTLING_PERIOD = 2.5       # Window to ignore WS updates after control action
+OPTIMISTIC_STATE_TIMEOUT = 30.0        # Clears stale optimistic state on network recovery
 ```
 
 **Note:** The setting is inverted - `http_only = False` means WebSocket is enabled. This allows users to disable WebSocket (by checking "Use HTTP API only") if they experience connection issues, while keeping WebSocket as the recommended default.
