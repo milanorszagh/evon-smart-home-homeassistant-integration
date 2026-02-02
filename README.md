@@ -159,7 +159,7 @@ WebSocket is **enabled by default** for instant state synchronization and device
 |---------|-----------|---------------------|
 | **State updates** | Up to 30 seconds | Instant (<100ms) |
 | **Control response** | ~200-500ms | Instant (<50ms) |
-| **Poll interval** | 30 seconds | 300 seconds (fallback) |
+| **Poll interval** | 30 seconds | 60 seconds (safety net) |
 | **Network traffic** | Continuous polling | Event-driven |
 
 **How it works:**
@@ -167,7 +167,7 @@ WebSocket is **enabled by default** for instant state synchronization and device
 - **State updates**: When a light is turned on via wall switch, HA updates immediately (no polling delay)
 - **Device control**: Commands execute in <50ms - tap a light and it responds instantly
 - **Automatic fallback**: If WebSocket is unavailable, commands fall back to HTTP API seamlessly
-- HTTP polling continues at reduced frequency (5 minutes) as a safety net
+- HTTP polling continues at reduced frequency (1 minute) as a safety net
 - For remote connections, WebSocket connects via `wss://my.evon-smarthome.com/`
 
 **Note:** WebSocket is recommended for the best experience. Only disable it if you experience connection issues.
@@ -274,6 +274,15 @@ These states trigger automations in the Evon system and can be used in Home Assi
 - Security door call in progress
 - Intercom door state (open/closed)
 - Intercom connection status
+- **WebSocket connection status** (diagnostic) - shows if real-time updates are active
+
+### Device Triggers
+
+The integration provides device triggers for automations:
+
+- **Doorbell pressed** - Triggered when a doorbell is pressed on an intercom *
+
+To use: Go to **Automations** → **Create Automation** → **Device** → Select your intercom → **Doorbell pressed**
 
 ### Events
 

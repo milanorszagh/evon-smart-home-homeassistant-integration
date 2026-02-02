@@ -1,4 +1,9 @@
 {
+  "device_automation": {
+    "trigger_type": {
+      "doorbell": "Türklingel gedrückt"
+    }
+  },
   "services": {
     "refresh": {
       "name": "Aktualisieren",

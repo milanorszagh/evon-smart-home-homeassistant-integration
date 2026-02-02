@@ -506,3 +506,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def ws_connected(self) -> bool:
         """Return whether WebSocket is connected."""
         return self._ws_connected
+
+    @property
+    def use_websocket(self) -> bool:
+        """Return whether WebSocket is enabled."""
+        return self._use_websocket

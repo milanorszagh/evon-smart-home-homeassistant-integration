@@ -90,6 +90,14 @@ async def async_setup_entry(
                 )
             )
 
+    # WebSocket connection status sensor (one per integration)
+    entities.append(
+        EvonWebSocketStatusSensor(
+            coordinator,
+            entry,
+        )
+    )
+
     if entities:
         async_add_entities(entities)
 
@@ -279,3 +287,55 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
             # is_on = connected (inverse of connection_lost)
             return not data.get("connection_lost", False)
         return None
+
+
+class EvonWebSocketStatusSensor(BinarySensorEntity):
+    """Sensor showing WebSocket connection status."""
+
+    _attr_icon = "mdi:websocket"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        self.coordinator = coordinator
+        self._entry = entry
+        self._attr_name = "WebSocket"
+        self._attr_unique_id = f"evon_websocket_{entry.entry_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info linking to the hub device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if WebSocket is connected."""
+        return self.coordinator.ws_connected
+
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        return self.coordinator.last_update_success
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        return {
+            "use_websocket": self.coordinator.use_websocket,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks when added to hass."""
+        self.async_on_remove(self.coordinator.async_add_listener(self._handle_coordinator_update))
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()

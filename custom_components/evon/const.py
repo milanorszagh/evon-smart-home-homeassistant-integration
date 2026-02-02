@@ -115,4 +115,4 @@ DEFAULT_HTTP_ONLY = False  # WebSocket is enabled by default (recommended)
 DEFAULT_WS_RECONNECT_DELAY = 5  # Initial reconnect delay in seconds
 WS_RECONNECT_MAX_DELAY = 300  # Maximum reconnect delay in seconds
 WS_PROTOCOL = "echo-protocol"  # WebSocket sub-protocol
-WS_POLL_INTERVAL = 300  # Reduced poll interval when WebSocket connected (seconds)
+WS_POLL_INTERVAL = 60  # Safety net poll interval when WebSocket connected (seconds)

@@ -154,6 +154,10 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.toggle_bathroom_radiator = AsyncMock()
         # Scene methods
         mock_api.execute_scene = AsyncMock()
+        # Global control methods
+        mock_api.all_lights_off = AsyncMock()
+        mock_api.all_blinds_close = AsyncMock()
+        mock_api.all_blinds_open = AsyncMock()
         # WebSocket control support methods
         mock_api.set_ws_client = lambda ws: None
         mock_api.set_instance_classes = lambda instances: None
@@ -216,6 +220,7 @@ if HAS_HA_TEST_FRAMEWORK:
                 "scan_interval": 30,
                 "sync_areas": False,
                 "non_dimmable_lights": [],
+                "http_only": True,  # Disable WebSocket for tests since it's not mocked
             },
             entry_id=TEST_ENTRY_ID,
         )

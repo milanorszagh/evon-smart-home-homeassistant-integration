@@ -121,7 +121,7 @@ class TestWsMappings:
         """Test bathroom radiator property conversion."""
         ws_props = {"Output": True, "NextSwitchPoint": 1800}
         coord = ws_to_coordinator_data("bathroom_radiators", ws_props)
-        assert coord == {"is_on": True, "next_switch_point": 1800}
+        assert coord == {"is_on": True, "time_remaining": 1800}
 
     def test_ws_to_coordinator_data_smart_meters(self):
         """Test smart meter property conversion."""

@@ -151,6 +151,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register services (only once per domain)
     if not hass.services.has_service(DOMAIN, SERVICE_REFRESH):
+
         async def handle_refresh(call: ServiceCall) -> None:
             """Handle the refresh service call."""
             _LOGGER.info("Refresh service called - forcing data update")
