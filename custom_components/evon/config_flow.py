@@ -32,10 +32,16 @@ from .const import (
     DOMAIN,
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
+    ENTITY_TYPE_LIGHTS,
     MAX_POLL_INTERVAL,
     MIN_PASSWORD_LENGTH,
     MIN_POLL_INTERVAL,
 )
+
+# Validation constants
+MAX_USERNAME_LENGTH = 64
+MAX_PASSWORD_LENGTH = 128
+MAX_HOST_LENGTH = 253  # Max DNS hostname length
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +67,10 @@ def normalize_host(host: str) -> str:
     if not host:
         raise InvalidHostError("Host cannot be empty")
 
+    # Check for maximum length before processing
+    if len(host) > MAX_HOST_LENGTH + 10:  # Allow extra for scheme prefix
+        raise InvalidHostError("Host URL is too long")
+
     # If no scheme, add http://
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
@@ -70,7 +80,20 @@ def normalize_host(host: str) -> str:
 
     # Validate that we have a valid netloc (host)
     if not parsed.netloc:
-        raise InvalidHostError("Invalid host URL: no valid host found")
+        raise InvalidHostError("Invalid host URL: No valid host found")
+
+    # Extract hostname without port
+    hostname = parsed.hostname or ""
+
+    # Validate hostname length
+    if len(hostname) > MAX_HOST_LENGTH:
+        raise InvalidHostError("Hostname is too long")
+
+    # Validate hostname format (basic check for valid characters)
+    # Allows: alphanumeric, dots, hyphens (for hostnames)
+    # Also allows valid IPv4 addresses
+    if hostname and not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$|^\d{1,3}(\.\d{1,3}){3}$", hostname):
+        raise InvalidHostError("Invalid hostname format")
 
     # Validate port if specified (must be 1-65535)
     if parsed.port is not None and (parsed.port < 1 or parsed.port > 65535):
@@ -109,7 +132,7 @@ def validate_engine_id(engine_id: str) -> str | None:
 
 
 def validate_password(password: str) -> str | None:
-    """Validate password is not empty.
+    """Validate password is not empty and not too long.
 
     Args:
         password: The password to validate
@@ -119,11 +142,13 @@ def validate_password(password: str) -> str | None:
     """
     if not password or len(password.strip()) < MIN_PASSWORD_LENGTH:
         return "invalid_password"
+    if len(password) > MAX_PASSWORD_LENGTH:
+        return "invalid_password"
     return None
 
 
 def validate_username(username: str) -> str | None:
-    """Validate username is not empty or whitespace-only.
+    """Validate username is not empty, whitespace-only, or too long.
 
     Args:
         username: The username to validate
@@ -132,6 +157,8 @@ def validate_username(username: str) -> str | None:
         Error key if invalid, None if valid
     """
     if not username or not username.strip():
+        return "invalid_username"
+    if len(username.strip()) > MAX_USERNAME_LENGTH:
         return "invalid_username"
     return None
 
@@ -546,8 +573,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         light_options: dict[str, str] = {}
         if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
-            if coordinator and coordinator.data and "lights" in coordinator.data:
-                for light in coordinator.data["lights"]:
+            if coordinator and coordinator.data and ENTITY_TYPE_LIGHTS in coordinator.data:
+                for light in coordinator.data[ENTITY_TYPE_LIGHTS]:
                     light_id = light["id"]
                     light_name = light["name"]
                     light_options[light_id] = light_name

@@ -9,7 +9,20 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ENGINE_ID, CONF_HOST, DOMAIN
+from .const import (
+    CONF_ENGINE_ID,
+    CONF_HOST,
+    DOMAIN,
+    ENTITY_TYPE_AIR_QUALITY,
+    ENTITY_TYPE_BATHROOM_RADIATORS,
+    ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_LIGHTS,
+    ENTITY_TYPE_SCENES,
+    ENTITY_TYPE_SMART_METERS,
+    ENTITY_TYPE_SWITCHES,
+    ENTITY_TYPE_VALVES,
+)
 
 TO_REDACT = {CONF_PASSWORD, CONF_USERNAME, CONF_HOST, CONF_ENGINE_ID, "token", "x-elocs-token", "x-elocs-password"}
 
@@ -26,15 +39,15 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     device_counts = {}
     if coordinator.data:
         device_counts = {
-            "lights": len(coordinator.data.get("lights", [])),
-            "blinds": len(coordinator.data.get("blinds", [])),
-            "climates": len(coordinator.data.get("climates", [])),
-            "switches": len(coordinator.data.get("switches", [])),
-            "smart_meters": len(coordinator.data.get("smart_meters", [])),
-            "air_quality": len(coordinator.data.get("air_quality", [])),
-            "valves": len(coordinator.data.get("valves", [])),
-            "scenes": len(coordinator.data.get("scenes", [])),
-            "bathroom_radiators": len(coordinator.data.get("bathroom_radiators", [])),
+            ENTITY_TYPE_LIGHTS: len(coordinator.data.get(ENTITY_TYPE_LIGHTS, [])),
+            ENTITY_TYPE_BLINDS: len(coordinator.data.get(ENTITY_TYPE_BLINDS, [])),
+            ENTITY_TYPE_CLIMATES: len(coordinator.data.get(ENTITY_TYPE_CLIMATES, [])),
+            ENTITY_TYPE_SWITCHES: len(coordinator.data.get(ENTITY_TYPE_SWITCHES, [])),
+            ENTITY_TYPE_SMART_METERS: len(coordinator.data.get(ENTITY_TYPE_SMART_METERS, [])),
+            ENTITY_TYPE_AIR_QUALITY: len(coordinator.data.get(ENTITY_TYPE_AIR_QUALITY, [])),
+            ENTITY_TYPE_VALVES: len(coordinator.data.get(ENTITY_TYPE_VALVES, [])),
+            ENTITY_TYPE_SCENES: len(coordinator.data.get(ENTITY_TYPE_SCENES, [])),
+            ENTITY_TYPE_BATHROOM_RADIATORS: len(coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])),
             "rooms": len(coordinator.data.get("rooms", {})),
         }
 
@@ -42,97 +55,97 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     device_summaries = {}
     if coordinator.data:
         # Lights summary
-        device_summaries["lights"] = [
+        device_summaries[ENTITY_TYPE_LIGHTS] = [
             {
                 "id": light["id"],
                 "name": light["name"],
                 "is_on": light.get("is_on"),
                 "has_brightness": "brightness" in light,
             }
-            for light in coordinator.data.get("lights", [])
+            for light in coordinator.data.get(ENTITY_TYPE_LIGHTS, [])
         ]
 
         # Blinds summary
-        device_summaries["blinds"] = [
+        device_summaries[ENTITY_TYPE_BLINDS] = [
             {
                 "id": blind["id"],
                 "name": blind["name"],
                 "position": blind.get("position"),
                 "has_tilt": "angle" in blind,
             }
-            for blind in coordinator.data.get("blinds", [])
+            for blind in coordinator.data.get(ENTITY_TYPE_BLINDS, [])
         ]
 
         # Climates summary
-        device_summaries["climates"] = [
+        device_summaries[ENTITY_TYPE_CLIMATES] = [
             {
                 "id": climate["id"],
                 "name": climate["name"],
                 "current_temp": climate.get("current_temperature"),
                 "target_temp": climate.get("target_temperature"),
             }
-            for climate in coordinator.data.get("climates", [])
+            for climate in coordinator.data.get(ENTITY_TYPE_CLIMATES, [])
         ]
 
         # Switches summary
-        device_summaries["switches"] = [
+        device_summaries[ENTITY_TYPE_SWITCHES] = [
             {
                 "id": switch["id"],
                 "name": switch["name"],
                 "is_on": switch.get("is_on"),
             }
-            for switch in coordinator.data.get("switches", [])
+            for switch in coordinator.data.get(ENTITY_TYPE_SWITCHES, [])
         ]
 
         # Smart meters summary
-        device_summaries["smart_meters"] = [
+        device_summaries[ENTITY_TYPE_SMART_METERS] = [
             {
                 "id": meter["id"],
                 "name": meter["name"],
                 "power": meter.get("power"),
                 "energy": meter.get("energy"),
             }
-            for meter in coordinator.data.get("smart_meters", [])
+            for meter in coordinator.data.get(ENTITY_TYPE_SMART_METERS, [])
         ]
 
         # Air quality summary
-        device_summaries["air_quality"] = [
+        device_summaries[ENTITY_TYPE_AIR_QUALITY] = [
             {
                 "id": aq["id"],
                 "name": aq["name"],
                 "has_co2": aq.get("co2") is not None,
                 "has_humidity": aq.get("humidity") is not None,
             }
-            for aq in coordinator.data.get("air_quality", [])
+            for aq in coordinator.data.get(ENTITY_TYPE_AIR_QUALITY, [])
         ]
 
         # Valves summary
-        device_summaries["valves"] = [
+        device_summaries[ENTITY_TYPE_VALVES] = [
             {
                 "id": valve["id"],
                 "name": valve["name"],
                 "is_open": valve.get("is_open"),
             }
-            for valve in coordinator.data.get("valves", [])
+            for valve in coordinator.data.get(ENTITY_TYPE_VALVES, [])
         ]
 
         # Scenes summary
-        device_summaries["scenes"] = [
+        device_summaries[ENTITY_TYPE_SCENES] = [
             {
                 "id": scene["id"],
                 "name": scene["name"],
             }
-            for scene in coordinator.data.get("scenes", [])
+            for scene in coordinator.data.get(ENTITY_TYPE_SCENES, [])
         ]
 
         # Bathroom radiators summary
-        device_summaries["bathroom_radiators"] = [
+        device_summaries[ENTITY_TYPE_BATHROOM_RADIATORS] = [
             {
                 "id": radiator["id"],
                 "name": radiator["name"],
                 "is_on": radiator.get("is_on"),
             }
-            for radiator in coordinator.data.get("bathroom_radiators", [])
+            for radiator in coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])
         ]
 
     return {

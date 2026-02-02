@@ -13,7 +13,7 @@ from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import DOMAIN, ENTITY_TYPE_INTERCOMS
 
 # Trigger types
 TRIGGER_TYPE_DOORBELL = "doorbell"
@@ -46,7 +46,7 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
                 if entry_id in hass.data.get(DOMAIN, {}):
                     coordinator = hass.data[DOMAIN][entry_id].get("coordinator")
                     if coordinator and coordinator.data:
-                        intercoms = coordinator.data.get("intercoms", [])
+                        intercoms = coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])
                         for intercom in intercoms:
                             if intercom.get("id") == instance_id:
                                 triggers.append(

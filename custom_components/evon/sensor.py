@@ -29,7 +29,12 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    ENTITY_TYPE_AIR_QUALITY,
+    ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_SMART_METERS,
+)
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -172,8 +177,8 @@ async def async_setup_entry(
     entities: list[SensorEntity] = []
 
     # Create temperature sensors for each climate device
-    if coordinator.data and "climates" in coordinator.data:
-        for climate in coordinator.data["climates"]:
+    if coordinator.data and ENTITY_TYPE_CLIMATES in coordinator.data:
+        for climate in coordinator.data[ENTITY_TYPE_CLIMATES]:
             entities.append(
                 EvonTemperatureSensor(
                     coordinator,
@@ -185,8 +190,8 @@ async def async_setup_entry(
             )
 
     # Create smart meter sensors using entity descriptions
-    if coordinator.data and "smart_meters" in coordinator.data:
-        for meter in coordinator.data["smart_meters"]:
+    if coordinator.data and ENTITY_TYPE_SMART_METERS in coordinator.data:
+        for meter in coordinator.data[ENTITY_TYPE_SMART_METERS]:
             for description in SMART_METER_SENSORS:
                 entities.append(
                     EvonSmartMeterSensor(
@@ -200,8 +205,8 @@ async def async_setup_entry(
                 )
 
     # Create air quality sensors using entity descriptions
-    if coordinator.data and "air_quality" in coordinator.data:
-        for aq in coordinator.data["air_quality"]:
+    if coordinator.data and ENTITY_TYPE_AIR_QUALITY in coordinator.data:
+        for aq in coordinator.data[ENTITY_TYPE_AIR_QUALITY]:
             for description in AIR_QUALITY_SENSORS:
                 # Only create sensor if data is available
                 if aq.get(description.key) is not None:
@@ -248,7 +253,7 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return the current temperature."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             return data.get("current_temperature")
         return None
@@ -257,7 +262,7 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             attrs["target_temperature"] = data.get("target_temperature")
         return attrs
@@ -291,7 +296,7 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return the sensor value."""
-        data = self.coordinator.get_entity_data("smart_meters", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -325,7 +330,7 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     @property
     def native_value(self) -> float | int | None:
         """Return the sensor value."""
-        data = self.coordinator.get_entity_data("air_quality", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_AIR_QUALITY, self._instance_id)
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -334,7 +339,7 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data("air_quality", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_AIR_QUALITY, self._instance_id)
         if data:
             if self.entity_description.key == "co2":
                 attrs["health_index"] = data.get("health_index")

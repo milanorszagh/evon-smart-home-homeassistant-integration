@@ -6,6 +6,18 @@ import contextlib
 from typing import Any
 
 from .const import (
+    ENTITY_TYPE_AIR_QUALITY,
+    ENTITY_TYPE_BATHROOM_RADIATORS,
+    ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_CAMERAS,
+    ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_HOME_STATES,
+    ENTITY_TYPE_INTERCOMS,
+    ENTITY_TYPE_LIGHTS,
+    ENTITY_TYPE_SECURITY_DOORS,
+    ENTITY_TYPE_SMART_METERS,
+    ENTITY_TYPE_SWITCHES,
+    ENTITY_TYPE_VALVES,
     EVON_CLASS_AIR_QUALITY,
     EVON_CLASS_BATHROOM_RADIATOR,
     EVON_CLASS_BLIND,
@@ -26,40 +38,40 @@ from .const import (
 
 # Map Evon class names to entity types (coordinator data keys)
 CLASS_TO_TYPE: dict[str, str] = {
-    EVON_CLASS_LIGHT: "lights",
-    EVON_CLASS_LIGHT_DIM: "lights",
-    EVON_CLASS_LIGHT_GROUP: "lights",
-    "Base.bLight": "lights",
-    "SmartCOM.Light.DynamicRGBWLight": "lights",
-    EVON_CLASS_BLIND: "blinds",
-    EVON_CLASS_BLIND_GROUP: "blinds",
-    "Base.bBlind": "blinds",
-    "Base.ehBlind": "blinds",
-    EVON_CLASS_CLIMATE: "climates",
-    EVON_CLASS_CLIMATE_UNIVERSAL: "climates",
-    EVON_CLASS_SWITCH: "switches",
-    "Base.bSwitch": "switches",
-    EVON_CLASS_HOME_STATE: "home_states",
-    EVON_CLASS_BATHROOM_RADIATOR: "bathroom_radiators",
-    EVON_CLASS_SMART_METER: "smart_meters",
-    EVON_CLASS_AIR_QUALITY: "air_quality",
-    EVON_CLASS_VALVE: "valves",
-    EVON_CLASS_SECURITY_DOOR: "security_doors",
-    EVON_CLASS_INTERCOM_2N: "intercoms",
-    EVON_CLASS_INTERCOM_2N_CAM: "cameras",
+    EVON_CLASS_LIGHT: ENTITY_TYPE_LIGHTS,
+    EVON_CLASS_LIGHT_DIM: ENTITY_TYPE_LIGHTS,
+    EVON_CLASS_LIGHT_GROUP: ENTITY_TYPE_LIGHTS,
+    "Base.bLight": ENTITY_TYPE_LIGHTS,
+    "SmartCOM.Light.DynamicRGBWLight": ENTITY_TYPE_LIGHTS,
+    EVON_CLASS_BLIND: ENTITY_TYPE_BLINDS,
+    EVON_CLASS_BLIND_GROUP: ENTITY_TYPE_BLINDS,
+    "Base.bBlind": ENTITY_TYPE_BLINDS,
+    "Base.ehBlind": ENTITY_TYPE_BLINDS,
+    EVON_CLASS_CLIMATE: ENTITY_TYPE_CLIMATES,
+    EVON_CLASS_CLIMATE_UNIVERSAL: ENTITY_TYPE_CLIMATES,
+    EVON_CLASS_SWITCH: ENTITY_TYPE_SWITCHES,
+    "Base.bSwitch": ENTITY_TYPE_SWITCHES,
+    EVON_CLASS_HOME_STATE: ENTITY_TYPE_HOME_STATES,
+    EVON_CLASS_BATHROOM_RADIATOR: ENTITY_TYPE_BATHROOM_RADIATORS,
+    EVON_CLASS_SMART_METER: ENTITY_TYPE_SMART_METERS,
+    EVON_CLASS_AIR_QUALITY: ENTITY_TYPE_AIR_QUALITY,
+    EVON_CLASS_VALVE: ENTITY_TYPE_VALVES,
+    EVON_CLASS_SECURITY_DOOR: ENTITY_TYPE_SECURITY_DOORS,
+    EVON_CLASS_INTERCOM_2N: ENTITY_TYPE_INTERCOMS,
+    EVON_CLASS_INTERCOM_2N_CAM: ENTITY_TYPE_CAMERAS,
 }
 
 # Properties to subscribe for each entity type
 # These are the WebSocket property names
 SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
-    "lights": ["IsOn", "ScaledBrightness", "ColorTemp", "MinColorTemperature", "MaxColorTemperature"],
-    "blinds": ["Position", "Angle"],
-    "climates": ["SetTemperature", "ActualTemperature", "ModeSaved", "IsOn", "Mode", "Humidity"],
-    "switches": ["IsOn", "State"],
-    "home_states": ["Active"],
-    "bathroom_radiators": ["Output", "NextSwitchPoint"],
+    ENTITY_TYPE_LIGHTS: ["IsOn", "ScaledBrightness", "ColorTemp", "MinColorTemperature", "MaxColorTemperature"],
+    ENTITY_TYPE_BLINDS: ["Position", "Angle"],
+    ENTITY_TYPE_CLIMATES: ["SetTemperature", "ActualTemperature", "ModeSaved", "IsOn", "Mode", "Humidity"],
+    ENTITY_TYPE_SWITCHES: ["IsOn", "State"],
+    ENTITY_TYPE_HOME_STATES: ["Active"],
+    ENTITY_TYPE_BATHROOM_RADIATORS: ["Output", "NextSwitchPoint"],
     # SmartMeter: real-time measurements (P1+P2+P3 computed to power)
-    "smart_meters": [
+    ENTITY_TYPE_SMART_METERS: [
         "IL1",
         "IL2",
         "IL3",  # Current per phase
@@ -72,31 +84,31 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
         "P3",  # Active power per phase (sum = total power)
     ],
     # Air Quality: humidity and temperature sensors
-    "air_quality": ["Humidity", "ActualTemperature", "CO2Value"],
+    ENTITY_TYPE_AIR_QUALITY: ["Humidity", "ActualTemperature", "CO2Value"],
     # Valves: open/closed state
-    "valves": ["ActValue"],
+    ENTITY_TYPE_VALVES: ["ActValue"],
     # Security doors: door state, call in progress, and saved pictures
-    "security_doors": ["IsOpen", "DoorIsOpen", "CallInProgress", "SavedPictures", "CamInstanceName"],
+    ENTITY_TYPE_SECURITY_DOORS: ["IsOpen", "DoorIsOpen", "CallInProgress", "SavedPictures", "CamInstanceName"],
     # Intercoms: doorbell, door open, connection status
-    "intercoms": ["DoorBellTriggered", "DoorOpenTriggered", "IsDoorOpen", "ConnectionToIntercomHasBeenLost"],
+    ENTITY_TYPE_INTERCOMS: ["DoorBellTriggered", "DoorOpenTriggered", "IsDoorOpen", "ConnectionToIntercomHasBeenLost"],
     # Cameras: image path updates for live feed
-    "cameras": ["Image", "ImageRequest", "Error"],
+    ENTITY_TYPE_CAMERAS: ["Image", "ImageRequest", "Error"],
 }
 
 # Map WebSocket property names to coordinator data keys
 PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
-    "lights": {
+    ENTITY_TYPE_LIGHTS: {
         "IsOn": "is_on",
         "ScaledBrightness": "brightness",  # 0-100 scale
         "ColorTemp": "color_temp",  # Kelvin
         "MinColorTemperature": "min_color_temp",  # Kelvin
         "MaxColorTemperature": "max_color_temp",  # Kelvin
     },
-    "blinds": {
+    ENTITY_TYPE_BLINDS: {
         "Position": "position",
         "Angle": "angle",
     },
-    "climates": {
+    ENTITY_TYPE_CLIMATES: {
         "SetTemperature": "target_temp",
         "ActualTemperature": "current_temp",
         "ModeSaved": "mode_saved",
@@ -104,18 +116,18 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "Mode": "mode",
         "Humidity": "humidity",
     },
-    "switches": {
+    ENTITY_TYPE_SWITCHES: {
         "IsOn": "is_on",
         "State": "is_on",  # Some switches use State instead
     },
-    "home_states": {
+    ENTITY_TYPE_HOME_STATES: {
         "Active": "active",
     },
-    "bathroom_radiators": {
+    ENTITY_TYPE_BATHROOM_RADIATORS: {
         "Output": "is_on",
         "NextSwitchPoint": "time_remaining",
     },
-    "smart_meters": {
+    ENTITY_TYPE_SMART_METERS: {
         "IL1": "current_l1",
         "IL2": "current_l2",
         "IL3": "current_l3",
@@ -127,28 +139,28 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "P2": "power_l2",  # Active power phase 2
         "P3": "power_l3",  # Active power phase 3
     },
-    "air_quality": {
+    ENTITY_TYPE_AIR_QUALITY: {
         "Humidity": "humidity",
         "ActualTemperature": "temperature",
         "CO2Value": "co2",
     },
-    "valves": {
+    ENTITY_TYPE_VALVES: {
         "ActValue": "is_open",
     },
-    "security_doors": {
+    ENTITY_TYPE_SECURITY_DOORS: {
         "IsOpen": "is_open",
         "DoorIsOpen": "door_is_open",
         "CallInProgress": "call_in_progress",
         "SavedPictures": "saved_pictures",
         "CamInstanceName": "cam_instance_name",
     },
-    "intercoms": {
+    ENTITY_TYPE_INTERCOMS: {
         "DoorBellTriggered": "doorbell_triggered",
         "DoorOpenTriggered": "door_open_triggered",
         "IsDoorOpen": "is_door_open",
         "ConnectionToIntercomHasBeenLost": "connection_lost",
     },
-    "cameras": {
+    ENTITY_TYPE_CAMERAS: {
         "Image": "image_path",
         "ImageRequest": "image_request",
         "Error": "error",
@@ -163,7 +175,7 @@ def get_entity_type(class_name: str) -> str | None:
         class_name: The Evon class name.
 
     Returns:
-        The entity type (e.g., "lights", "blinds") or None if unknown.
+        The entity type (e.g., ENTITY_TYPE_LIGHTS, ENTITY_TYPE_BLINDS) or None if unknown.
     """
     # Try exact match first
     if class_name in CLASS_TO_TYPE:
@@ -172,11 +184,11 @@ def get_entity_type(class_name: str) -> str | None:
     # SmartMeter has variations (Energy.SmartMeter, Energy.SmartMeterModbus, etc.)
     # Use substring match to handle all variants
     if EVON_CLASS_SMART_METER in class_name:
-        return "smart_meters"
+        return ENTITY_TYPE_SMART_METERS
 
     # ClimateControlUniversal may have prefix (e.g., SmartCOM.Clima.ClimateControlUniversal)
     if EVON_CLASS_CLIMATE_UNIVERSAL in class_name:
-        return "climates"
+        return ENTITY_TYPE_CLIMATES
 
     return None
 
@@ -217,7 +229,7 @@ def ws_to_coordinator_data(
             result[coord_key] = value
 
     # Special handling for security doors: transform SavedPictures array
-    if entity_type == "security_doors" and "SavedPictures" in ws_properties:
+    if entity_type == ENTITY_TYPE_SECURITY_DOORS and "SavedPictures" in ws_properties:
         saved_pictures_raw = ws_properties["SavedPictures"]
         if isinstance(saved_pictures_raw, list):
             saved_pictures = []
@@ -230,7 +242,7 @@ def ws_to_coordinator_data(
             result["saved_pictures"] = saved_pictures
 
     # Special handling for smart meters: compute total power from P1+P2+P3
-    if entity_type == "smart_meters":
+    if entity_type == ENTITY_TYPE_SMART_METERS:
         # Get per-phase power values (from this update or existing data)
         p1 = ws_properties.get("P1")
         p2 = ws_properties.get("P2")

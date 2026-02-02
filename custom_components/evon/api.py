@@ -149,6 +149,18 @@ class EvonConnectionError(EvonApiError):
     """Exception for connection errors."""
 
 
+class EvonWsError(EvonApiError):
+    """Exception for WebSocket errors."""
+
+
+class EvonWsNotConnectedError(EvonWsError):
+    """Exception raised when WebSocket is not connected."""
+
+
+class EvonWsTimeoutError(EvonWsError):
+    """Exception raised when WebSocket request times out."""
+
+
 class EvonApi:
     """Evon Smart Home API client."""
 
@@ -318,10 +330,10 @@ class EvonApi:
                     location_path = location.split("?")[0] if location else "unknown"
                     _LOGGER.debug("Login redirect detected to path: %s", location_path)
                     if "login" in location.lower():
-                        raise EvonAuthError("Login failed: invalid credentials")
+                        raise EvonAuthError("Login failed: Invalid credentials")
                     # Unexpected redirect - don't expose full URL in logs
                     _LOGGER.warning("Unexpected redirect during login")
-                    raise EvonAuthError("Login failed: unexpected redirect")
+                    raise EvonAuthError("Login failed: Unexpected redirect")
 
                 if response.status != 200:
                     raise EvonAuthError(f"Login failed: {response.status} {response.reason}")
@@ -549,7 +561,7 @@ class EvonApi:
                 result = await self._ws_client.call_method(  # type: ignore[union-attr]
                     instance_id, "MoveToPosition", [cached_angle, new_position]
                 )
-                _LOGGER.info("WS control: MoveToPosition result = %s", result)
+                _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
 
             if method == "SetAngle" and params:
@@ -569,7 +581,7 @@ class EvonApi:
                 result = await self._ws_client.call_method(  # type: ignore[union-attr]
                     instance_id, "MoveToPosition", [new_angle, cached_position]
                 )
-                _LOGGER.info("WS control: MoveToPosition result = %s", result)
+                _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
 
         mapping = get_ws_control_mapping(class_name, method)
@@ -586,7 +598,7 @@ class EvonApi:
             result = await self._ws_client.set_value(  # type: ignore[union-attr]
                 instance_id, mapping.property_name, value
             )
-            _LOGGER.info("WS control: SetValue result = %s", result)
+            _LOGGER.debug("WS control: SetValue result = %s", result)
             return result
         else:
             # CallMethod operation - use get_value to transform params if needed
@@ -601,7 +613,7 @@ class EvonApi:
             result = await self._ws_client.call_method(  # type: ignore[union-attr]
                 instance_id, mapping.method_name, method_params
             )
-            _LOGGER.info("WS control: CallMethod result = %s", result)
+            _LOGGER.debug("WS control: CallMethod result = %s", result)
             return result
 
     def _is_blind_class(self, class_name: str) -> bool:
@@ -823,7 +835,32 @@ class EvonApi:
             True if cooling (summer), False if heating (winter)
         """
         details = await self.get_instance("Base.ehThermostat")
-        return details.get("IsCool", False)
+        is_cool = details.get("IsCool")
+
+        # Validate the response - IsCool should be a boolean
+        if is_cool is None:
+            _LOGGER.warning(
+                "Season mode response missing 'IsCool' field, defaulting to heating mode"
+            )
+            return False
+
+        if not isinstance(is_cool, bool):
+            _LOGGER.warning(
+                "Season mode 'IsCool' has unexpected type %s (value: %s), "
+                "attempting to interpret as boolean",
+                type(is_cool).__name__,
+                is_cool,
+            )
+            # Try to interpret common values as boolean
+            if is_cool in (0, "0", "false", "False", "no", "No"):
+                return False
+            if is_cool in (1, "1", "true", "True", "yes", "Yes"):
+                return True
+            # Unknown value, default to heating
+            _LOGGER.warning("Could not interpret season mode value, defaulting to heating mode")
+            return False
+
+        return is_cool
 
     async def set_season_mode(self, is_cooling: bool) -> None:
         """Set the global season mode.
@@ -838,7 +875,7 @@ class EvonApi:
         if ws_attempted:
             _LOGGER.info("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
             result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
-            _LOGGER.info("WS control: SetValue result = %s", result)
+            _LOGGER.debug("WS control: SetValue result = %s", result)
             if result:
                 return
 
@@ -885,16 +922,20 @@ class EvonApi:
         try:
             url = f"{self._host}{image_path}"
             token = await self._ensure_token()
+            session = await self._get_session()
             cookies = {"token": token}
+            timeout = aiohttp.ClientTimeout(total=IMAGE_FETCH_TIMEOUT)
 
-            async with self._session.get(
-                url, cookies=cookies, timeout=IMAGE_FETCH_TIMEOUT
+            async with session.get(
+                url, cookies=cookies, timeout=timeout
             ) as resp:
                 if resp.status == 200:
                     return await resp.read()
                 _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch image: %s", err)
+        except EvonConnectionError:
+            _LOGGER.debug("Failed to fetch image: session error")
         except Exception as err:
             _LOGGER.warning("Unexpected error fetching image: %s", err)
         return None

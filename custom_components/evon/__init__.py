@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -26,6 +27,18 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
+    ENTITY_TYPE_AIR_QUALITY,
+    ENTITY_TYPE_BATHROOM_RADIATORS,
+    ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_CAMERAS,
+    ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_INTERCOMS,
+    ENTITY_TYPE_LIGHTS,
+    ENTITY_TYPE_SCENES,
+    ENTITY_TYPE_SECURITY_DOORS,
+    ENTITY_TYPE_SMART_METERS,
+    ENTITY_TYPE_SWITCHES,
+    ENTITY_TYPE_VALVES,
     EVON_REMOTE_HOST,
     REPAIR_CONFIG_MIGRATION,
     REPAIR_STALE_ENTITIES_CLEANED,
@@ -33,6 +46,18 @@ from .const import (
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+def _get_service_lock(hass: HomeAssistant) -> asyncio.Lock:
+    """Get or create the service lock for this hass instance.
+
+    The lock is stored in hass.data to ensure it's properly bound to the
+    event loop and isolated per HA instance.
+    """
+    lock_key = f"{DOMAIN}_service_lock"
+    if lock_key not in hass.data:
+        hass.data[lock_key] = asyncio.Lock()
+    return hass.data[lock_key]
+
 
 SERVICE_REFRESH = "refresh"
 SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
@@ -157,37 +182,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_refresh(call: ServiceCall) -> None:
             """Handle the refresh service call."""
             _LOGGER.info("Refresh service called - forcing data update")
-            for entry_data in hass.data[DOMAIN].values():
+            # Take a snapshot of entries to iterate over
+            entries = list(hass.data.get(DOMAIN, {}).values())
+            for entry_data in entries:
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_refresh()
 
         async def handle_reconnect_websocket(call: ServiceCall) -> None:
             """Handle the reconnect websocket service call."""
             _LOGGER.info("Reconnect WebSocket service called")
-            for entry_id, entry_data in hass.data[DOMAIN].items():
-                if "coordinator" in entry_data:
-                    coordinator = entry_data["coordinator"]
-                    # Get the config entry to access connection details
-                    config_entry = hass.config_entries.async_get_entry(entry_id)
-                    if config_entry and coordinator.use_websocket:
-                        await coordinator.async_shutdown_websocket()
-                        connection_type = config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
-                        if connection_type == CONNECTION_TYPE_LOCAL:
-                            await coordinator.async_setup_websocket(
-                                session=async_get_clientsession(hass),
-                                host=config_entry.data[CONF_HOST],
-                                username=config_entry.data[CONF_USERNAME],
-                                password=config_entry.data[CONF_PASSWORD],
-                            )
-                        else:
-                            await coordinator.async_setup_websocket(
-                                session=async_get_clientsession(hass),
-                                host=None,
-                                username=config_entry.data[CONF_USERNAME],
-                                password=config_entry.data[CONF_PASSWORD],
-                                is_remote=True,
-                                engine_id=config_entry.data[CONF_ENGINE_ID],
-                            )
+            # Take a snapshot of entries to iterate over
+            entries = list(hass.data.get(DOMAIN, {}).items())
+            for entry_id, entry_data in entries:
+                if "coordinator" not in entry_data:
+                    continue
+                coordinator = entry_data["coordinator"]
+                # Get the config entry to access connection details
+                config_entry = hass.config_entries.async_get_entry(entry_id)
+                if not config_entry:
+                    _LOGGER.debug("Config entry %s not found, skipping WebSocket reconnect", entry_id)
+                    continue
+                if not coordinator.use_websocket:
+                    _LOGGER.debug("WebSocket disabled for %s, skipping reconnect", entry_id)
+                    continue
+                try:
+                    await coordinator.async_shutdown_websocket()
+                    connection_type = config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+                    if connection_type == CONNECTION_TYPE_LOCAL:
+                        await coordinator.async_setup_websocket(
+                            session=async_get_clientsession(hass),
+                            host=config_entry.data[CONF_HOST],
+                            username=config_entry.data[CONF_USERNAME],
+                            password=config_entry.data[CONF_PASSWORD],
+                        )
+                    else:
+                        await coordinator.async_setup_websocket(
+                            session=async_get_clientsession(hass),
+                            host=None,
+                            username=config_entry.data[CONF_USERNAME],
+                            password=config_entry.data[CONF_PASSWORD],
+                            is_remote=True,
+                            engine_id=config_entry.data[CONF_ENGINE_ID],
+                        )
+                except Exception as err:
+                    _LOGGER.error("Failed to reconnect WebSocket for %s: %s", entry_id, err)
 
         async def handle_set_home_state(call: ServiceCall) -> None:
             """Handle the set home state service call."""
@@ -197,9 +235,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
             evon_state = HOME_STATE_MAP[state]
             _LOGGER.info("Set home state service called: %s -> %s", state, evon_state)
-            for entry_data in hass.data[DOMAIN].values():
+            # Take a snapshot of entries to iterate over
+            entries = list(hass.data.get(DOMAIN, {}).values())
+            for entry_data in entries:
                 if "api" in entry_data:
-                    await entry_data["api"].activate_home_state(evon_state)
+                    try:
+                        await entry_data["api"].activate_home_state(evon_state)
+                    except Exception as err:
+                        _LOGGER.warning("Failed to set home state: %s", err)
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_refresh()
 
@@ -211,47 +254,79 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
             is_cooling = mode == "cooling"
             _LOGGER.info("Set season mode service called: %s", mode)
-            for entry_data in hass.data[DOMAIN].values():
+            # Take a snapshot of entries to iterate over
+            entries = list(hass.data.get(DOMAIN, {}).values())
+            for entry_data in entries:
                 if "api" in entry_data:
-                    await entry_data["api"].set_season_mode(is_cooling)
+                    try:
+                        await entry_data["api"].set_season_mode(is_cooling)
+                    except Exception as err:
+                        _LOGGER.warning("Failed to set season mode: %s", err)
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_refresh()
 
         async def handle_all_lights_off(call: ServiceCall) -> None:
             """Handle the all lights off service call."""
             _LOGGER.info("All lights off service called")
-            for entry_data in hass.data[DOMAIN].values():
-                if "coordinator" in entry_data and "api" in entry_data:
+            async with _get_service_lock(hass):
+                # Take a snapshot of entries to iterate over
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
-                    if coordinator.data and "lights" in coordinator.data:
-                        for light in coordinator.data["lights"]:
+                    if coordinator.data and ENTITY_TYPE_LIGHTS in coordinator.data:
+                        # Copy lights list to avoid modification during iteration
+                        lights = list(coordinator.data[ENTITY_TYPE_LIGHTS])
+                        for light in lights:
                             if light.get("is_on"):
-                                await api.turn_off_light(light["id"])
+                                try:
+                                    await api.turn_off_light(light["id"])
+                                except Exception as err:
+                                    _LOGGER.warning("Failed to turn off light %s: %s", light["id"], err)
                     await coordinator.async_refresh()
 
         async def handle_all_blinds_close(call: ServiceCall) -> None:
             """Handle the all blinds close service call."""
             _LOGGER.info("All blinds close service called")
-            for entry_data in hass.data[DOMAIN].values():
-                if "coordinator" in entry_data and "api" in entry_data:
+            async with _get_service_lock(hass):
+                # Take a snapshot of entries to iterate over
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
-                    if coordinator.data and "blinds" in coordinator.data:
-                        for blind in coordinator.data["blinds"]:
-                            await api.close_blind(blind["id"])
+                    if coordinator.data and ENTITY_TYPE_BLINDS in coordinator.data:
+                        # Copy blinds list to avoid modification during iteration
+                        blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
+                        for blind in blinds:
+                            try:
+                                await api.close_blind(blind["id"])
+                            except Exception as err:
+                                _LOGGER.warning("Failed to close blind %s: %s", blind["id"], err)
                     await coordinator.async_refresh()
 
         async def handle_all_blinds_open(call: ServiceCall) -> None:
             """Handle the all blinds open service call."""
             _LOGGER.info("All blinds open service called")
-            for entry_data in hass.data[DOMAIN].values():
-                if "coordinator" in entry_data and "api" in entry_data:
+            async with _get_service_lock(hass):
+                # Take a snapshot of entries to iterate over
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
-                    if coordinator.data and "blinds" in coordinator.data:
-                        for blind in coordinator.data["blinds"]:
-                            await api.open_blind(blind["id"])
+                    if coordinator.data and ENTITY_TYPE_BLINDS in coordinator.data:
+                        # Copy blinds list to avoid modification during iteration
+                        blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
+                        for blind in blinds:
+                            try:
+                                await api.open_blind(blind["id"])
+                            except Exception as err:
+                                _LOGGER.warning("Failed to open blind %s: %s", blind["id"], err)
                     await coordinator.async_refresh()
 
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)
@@ -271,6 +346,99 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | None:
+    """Extract the Evon instance ID from an entity's unique_id.
+
+    Our entities use formats like:
+    - evon_light_{instance_id}
+    - evon_cover_{instance_id}
+    - evon_climate_{instance_id}
+    - evon_switch_{instance_id}
+    - evon_radiator_{instance_id}
+    - evon_valve_{instance_id}
+    - evon_security_door_{instance_id}[_call]
+    - evon_intercom_{instance_id}[_connection]
+    - evon_scene_{instance_id}
+    - evon_identify_{instance_id}
+    - evon_camera_{instance_id}
+    - evon_snapshot_{door_id}_{index}
+    - evon_temp_{instance_id}
+    - evon_meter_{key}_{instance_id}
+    - evon_{key}_{instance_id} (air quality)
+    - evon_home_state_{entry_id} (special)
+    - evon_season_mode_{entry_id} (special)
+    - evon_websocket_{entry_id} (special)
+
+    Returns the instance_id or None if it can't be extracted.
+    """
+    if not unique_id or not unique_id.startswith("evon_"):
+        return None
+
+    # Special entities that use entry_id instead of instance_id - skip these
+    special_prefixes = (f"evon_home_state_{entry_id}", f"evon_season_mode_{entry_id}", f"evon_websocket_{entry_id}")
+    if unique_id in special_prefixes or unique_id.startswith(special_prefixes):
+        return None
+
+    # Known type prefixes - order matters (longer prefixes first to avoid partial matches)
+    type_prefixes = [
+        "evon_security_door_",
+        "evon_intercom_",
+        "evon_snapshot_",
+        "evon_radiator_",
+        "evon_identify_",
+        "evon_climate_",
+        "evon_camera_",
+        "evon_switch_",
+        "evon_cover_",
+        "evon_light_",
+        "evon_scene_",
+        "evon_valve_",
+        "evon_meter_",
+        "evon_temp_",
+    ]
+
+    for prefix in type_prefixes:
+        if unique_id.startswith(prefix):
+            remainder = unique_id[len(prefix) :]
+            # Handle suffixes like _call, _connection, _power, _energy, etc.
+            # Instance IDs can contain dots (e.g., SC1_M01.Light1)
+            # Strip known suffixes
+            for suffix in ("_call", "_connection", "_power", "_energy", "_co2", "_humidity", "_temperature", "_pm25", "_pm10", "_voc"):
+                if remainder.endswith(suffix):
+                    remainder = remainder[: -len(suffix)]
+                    break
+            # For meter sensors, the format is evon_meter_{key}_{instance_id}
+            # We need to find the last underscore-separated part that looks like an instance_id
+            if prefix == "evon_meter_":
+                # Format: evon_meter_power_SC1_M01.SmartMeter1 -> instance_id is the last part with a dot
+                # Split and find the part containing a dot (Evon instance IDs have dots)
+                parts = remainder.split("_")
+                for i, part in enumerate(parts):
+                    if "." in part:
+                        return "_".join(parts[i:])
+                # No dot found, return the whole remainder
+                return remainder
+            # For snapshot, format is evon_snapshot_{door_id}_{index}
+            if prefix == "evon_snapshot_":
+                # Remove the trailing index (last underscore-separated number)
+                parts = remainder.rsplit("_", 1)
+                if len(parts) == 2 and parts[1].isdigit():
+                    return parts[0]
+                return remainder
+            return remainder
+
+    # Fallback for air quality sensors: evon_{key}_{instance_id}
+    # These don't have a specific type prefix
+    parts = unique_id.split("_")
+    if len(parts) >= 3:
+        # Try to find the instance_id (contains a dot)
+        for i, part in enumerate(parts[1:], 1):
+            if "." in part:
+                return "_".join(parts[i:])
+
+    return None
+
+
 async def _async_cleanup_stale_entities(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -283,31 +451,22 @@ async def _async_cleanup_stale_entities(
     # Collect all current device IDs from coordinator data
     current_device_ids: set[str] = set()
     for entity_type in [
-        "lights",
-        "blinds",
-        "climates",
-        "switches",
-        "smart_meters",
-        "air_quality",
-        "valves",
-        "bathroom_radiators",
-        "scenes",
-        "security_doors",
-        "intercoms",
-        "cameras",
+        ENTITY_TYPE_LIGHTS,
+        ENTITY_TYPE_BLINDS,
+        ENTITY_TYPE_CLIMATES,
+        ENTITY_TYPE_SWITCHES,
+        ENTITY_TYPE_SMART_METERS,
+        ENTITY_TYPE_AIR_QUALITY,
+        ENTITY_TYPE_VALVES,
+        ENTITY_TYPE_BATHROOM_RADIATORS,
+        ENTITY_TYPE_SCENES,
+        ENTITY_TYPE_SECURITY_DOORS,
+        ENTITY_TYPE_INTERCOMS,
+        ENTITY_TYPE_CAMERAS,
     ]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:
                 current_device_ids.add(device["id"])
-
-    # Home states use a different entity (select), add those IDs too
-    if "home_states" in coordinator.data and coordinator.data["home_states"]:
-        # The home state select entity uses a fixed ID pattern
-        current_device_ids.add("home_state_selector")
-
-    # Season mode uses a fixed ID pattern
-    if "season_mode" in coordinator.data:
-        current_device_ids.add("season_mode")
 
     # Get entity registry
     entity_registry = er.async_get(hass)
@@ -315,30 +474,20 @@ async def _async_cleanup_stale_entities(
     # Find entities belonging to this config entry
     entities_to_remove: list[str] = []
     for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
-        # Extract device ID from the entity's unique_id
-        # Our entities use unique_id format: "{entry_id}_{instance_id}" or "{entry_id}_{instance_id}_{suffix}"
         unique_id = entity_entry.unique_id
         if not unique_id:
             continue
 
-        # Remove entry_id prefix to get the device identifier
-        prefix = f"{entry.entry_id}_"
-        if not unique_id.startswith(prefix):
+        # Extract the instance_id from the unique_id
+        instance_id = _extract_instance_id_from_unique_id(unique_id, entry.entry_id)
+        if instance_id is None:
+            # Special entity or unrecognized format - skip
             continue
 
-        device_part = unique_id[len(prefix) :]
-
         # Check if this device still exists
-        # Handle suffixes like "_power", "_energy", "_co2", etc.
-        device_exists = False
-        for current_id in current_device_ids:
-            if device_part == current_id or device_part.startswith(f"{current_id}_"):
-                device_exists = True
-                break
-
-        if not device_exists:
+        if instance_id not in current_device_ids:
             entities_to_remove.append(entity_entry.entity_id)
-            _LOGGER.debug("Marking stale entity for removal: %s (unique_id: %s)", entity_entry.entity_id, unique_id)
+            _LOGGER.debug("Marking stale entity for removal: %s (unique_id: %s, instance_id: %s)", entity_entry.entity_id, unique_id, instance_id)
 
     # Remove stale entities
     for entity_id in entities_to_remove:
@@ -400,6 +549,28 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Handle removal of a config entry.
+
+    This is called when the user removes the integration completely.
+    Clean up any remaining devices and entities.
+    """
+    # Clean up devices associated with this config entry
+    device_registry = dr.async_get(hass)
+    devices_to_remove = [
+        device.id
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)
+    ]
+    for device_id in devices_to_remove:
+        device_registry.async_remove_device(device_id)
+        _LOGGER.debug("Removed device %s for config entry %s", device_id, entry.entry_id)
+
+    # Clean up any repair issues for this entry
+    ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}")
+
+    _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

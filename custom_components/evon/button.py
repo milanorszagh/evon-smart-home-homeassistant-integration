@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
-from .const import DOMAIN
+from .const import DOMAIN, ENTITY_TYPE_LIGHTS, ENTITY_TYPE_SCENES, LIGHT_IDENTIFY_ANIMATION_DELAY
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,8 +33,8 @@ async def async_setup_entry(
     entities = []
 
     # Scene buttons
-    if coordinator.data and "scenes" in coordinator.data:
-        for scene in coordinator.data["scenes"]:
+    if coordinator.data and ENTITY_TYPE_SCENES in coordinator.data:
+        for scene in coordinator.data[ENTITY_TYPE_SCENES]:
             entities.append(
                 EvonSceneButton(
                     coordinator,
@@ -46,8 +46,8 @@ async def async_setup_entry(
             )
 
     # Identify buttons for lights
-    if coordinator.data and "lights" in coordinator.data:
-        for light in coordinator.data["lights"]:
+    if coordinator.data and ENTITY_TYPE_LIGHTS in coordinator.data:
+        for light in coordinator.data[ENTITY_TYPE_LIGHTS]:
             entities.append(
                 EvonIdentifyButton(
                     coordinator,
@@ -129,16 +129,16 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
         _LOGGER.debug("Identifying light %s (%s)", self._device_name, self._instance_id)
         try:
             # Get current state for restoration
-            data = self.coordinator.get_entity_data("lights", self._instance_id)
+            data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
             was_on = data.get("is_on", False) if data else False
             original_brightness = data.get("brightness", 100) if data else 100
 
             # Always do off -> on -> restore (works regardless of state detection)
             await self._api.turn_off_light(self._instance_id)
-            await asyncio.sleep(3.0)  # Wait for fade-out
+            await asyncio.sleep(LIGHT_IDENTIFY_ANIMATION_DELAY)  # Wait for fade-out
 
             await self._api.turn_on_light(self._instance_id)
-            await asyncio.sleep(3.0)  # Wait for fade-in
+            await asyncio.sleep(LIGHT_IDENTIFY_ANIMATION_DELAY)  # Wait for fade-in
 
             # Restore original state
             if not was_on:

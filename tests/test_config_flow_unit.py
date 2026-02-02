@@ -67,13 +67,13 @@ class TestNormalizeHost:
 
     def test_normalize_scheme_only_raises(self):
         """Test that scheme-only URL raises InvalidHostError."""
-        with pytest.raises(InvalidHostError, match="no valid host found"):
+        with pytest.raises(InvalidHostError, match="No valid host found"):
             normalize_host("http://")
 
     def test_normalize_scheme_only_with_slash_raises(self):
         """Test that scheme with only slashes raises InvalidHostError."""
         # http:// with nothing after should fail
-        with pytest.raises(InvalidHostError, match="no valid host found"):
+        with pytest.raises(InvalidHostError, match="No valid host found"):
             normalize_host("https://")
 
 
@@ -162,6 +162,68 @@ class TestNormalizeHostEdgeCases:
             assert "192.168.1.1" in result
         except InvalidHostError:
             pass  # Expected for port 0
+
+
+class TestValidationFunctions:
+    """Tests for config flow validation functions."""
+
+    def test_validate_username_valid(self):
+        """Test validate_username with valid usernames."""
+        from custom_components.evon.config_flow import validate_username
+
+        assert validate_username("user") is None
+        assert validate_username("admin") is None
+        assert validate_username("user@example.com") is None
+
+    def test_validate_username_empty_raises(self):
+        """Test validate_username with empty string."""
+        from custom_components.evon.config_flow import validate_username
+
+        assert validate_username("") == "invalid_username"
+        assert validate_username("   ") == "invalid_username"
+
+    def test_validate_username_too_long(self):
+        """Test validate_username with too long username."""
+        from custom_components.evon.config_flow import validate_username
+
+        long_username = "a" * 100
+        assert validate_username(long_username) == "invalid_username"
+
+    def test_validate_password_valid(self):
+        """Test validate_password with valid passwords."""
+        from custom_components.evon.config_flow import validate_password
+
+        assert validate_password("p") is None  # Minimum is 1
+        assert validate_password("password123") is None
+
+    def test_validate_password_empty_raises(self):
+        """Test validate_password with empty string."""
+        from custom_components.evon.config_flow import validate_password
+
+        assert validate_password("") == "invalid_password"
+
+    def test_validate_password_too_long(self):
+        """Test validate_password with too long password."""
+        from custom_components.evon.config_flow import validate_password
+
+        long_password = "a" * 200
+        assert validate_password(long_password) == "invalid_password"
+
+    def test_normalize_host_too_long(self):
+        """Test normalize_host with too long hostname."""
+        long_hostname = "a" * 300
+        with pytest.raises(InvalidHostError, match="too long"):
+            normalize_host(long_hostname)
+
+    def test_normalize_host_valid_ip(self):
+        """Test normalize_host with valid IP addresses."""
+        assert normalize_host("192.168.1.1") == "http://192.168.1.1"
+        assert normalize_host("10.0.0.1") == "http://10.0.0.1"
+
+    def test_normalize_host_valid_hostname(self):
+        """Test normalize_host with valid hostnames."""
+        assert normalize_host("evon.local") == "http://evon.local"
+        assert normalize_host("my-evon.example.com") == "http://my-evon.example.com"
 
 
 class TestApiTokenConstants:

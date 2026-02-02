@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import CAMERA_IMAGE_CAPTURE_DELAY, DOMAIN
+from .const import CAMERA_IMAGE_CAPTURE_DELAY, DOMAIN, ENTITY_TYPE_CAMERAS, ENTITY_TYPE_SECURITY_DOORS
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,8 +29,8 @@ async def async_setup_entry(
 
     entities: list[Camera] = []
 
-    if coordinator.data and "cameras" in coordinator.data:
-        for camera in coordinator.data["cameras"]:
+    if coordinator.data and ENTITY_TYPE_CAMERAS in coordinator.data:
+        for camera in coordinator.data[ENTITY_TYPE_CAMERAS]:
             entities.append(
                 EvonCamera(
                     coordinator,
@@ -80,7 +80,7 @@ class EvonCamera(EvonEntity, Camera):
     @property
     def is_on(self) -> bool:
         """Return true if the camera is on."""
-        data = self.coordinator.get_entity_data("cameras", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
         if data:
             return not data.get("error", False)
         return False
@@ -89,7 +89,7 @@ class EvonCamera(EvonEntity, Camera):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data("cameras", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
         if data:
             attrs["ip_address"] = data.get("ip_address")
             attrs["error"] = data.get("error", False)
@@ -102,11 +102,11 @@ class EvonCamera(EvonEntity, Camera):
 
     def _get_saved_pictures(self) -> list[dict[str, Any]]:
         """Get saved pictures from the linked door entity."""
-        if not self.coordinator.data or "security_doors" not in self.coordinator.data:
+        if not self.coordinator.data or ENTITY_TYPE_SECURITY_DOORS not in self.coordinator.data:
             return []
 
         # Find the door that links to this camera
-        for door in self.coordinator.data["security_doors"]:
+        for door in self.coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
             cam_instance = door.get("cam_instance_name", "")
             # CamInstanceName might be just "Cam" or full "Intercom2N1000.Cam"
             if cam_instance and (
@@ -124,7 +124,7 @@ class EvonCamera(EvonEntity, Camera):
         async with self._image_lock:
             try:
                 # Get camera data
-                data = self.coordinator.get_entity_data("cameras", self._instance_id)
+                data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
                 if not data:
                     return self._last_image
 
@@ -135,7 +135,7 @@ class EvonCamera(EvonEntity, Camera):
                     # Wait for image to be captured
                     await asyncio.sleep(CAMERA_IMAGE_CAPTURE_DELAY)
                     # Refresh data to get new image path
-                    data = self.coordinator.get_entity_data("cameras", self._instance_id)
+                    data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
 
                 # Fetch the image via HTTP
                 image_path = data.get("image_path", "")

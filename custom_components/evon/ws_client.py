@@ -7,15 +7,21 @@ from collections.abc import Callable
 import contextlib
 import json
 import logging
+import random
 from typing import Any
 
 import aiohttp
 
-from .api import encode_password
+from .api import EvonWsError, EvonWsNotConnectedError, EvonWsTimeoutError, encode_password
 from .const import (
     DEFAULT_WS_RECONNECT_DELAY,
+    WS_DEFAULT_REQUEST_TIMEOUT,
+    WS_HEARTBEAT_INTERVAL,
+    WS_LOG_MESSAGE_TRUNCATE,
+    WS_MAX_PENDING_REQUESTS,
     WS_PROTOCOL,
     WS_RECONNECT_MAX_DELAY,
+    WS_SUBSCRIBE_REQUEST_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,6 +30,27 @@ _LOGGER = logging.getLogger(__name__)
 WS_MSG_CONNECTED = "Connected"
 WS_MSG_CALLBACK = "Callback"
 WS_MSG_EVENT = "Event"
+
+# Jitter factor for reconnect delays (0.0 to 1.0)
+# Adds randomness to prevent thundering herd on server recovery
+WS_RECONNECT_JITTER = 0.25
+
+
+def _calculate_reconnect_delay(base_delay: float, max_delay: float) -> float:
+    """Calculate reconnect delay with jitter.
+
+    Args:
+        base_delay: The base delay in seconds.
+        max_delay: The maximum delay in seconds.
+
+    Returns:
+        The delay with random jitter applied (±25% of base).
+    """
+    # Apply jitter: randomly adjust delay by ±25%
+    jitter = base_delay * WS_RECONNECT_JITTER * (2 * random.random() - 1)
+    delay = base_delay + jitter
+    # Clamp to valid range
+    return max(1.0, min(delay, max_delay))
 
 
 class EvonWsClient:
@@ -77,6 +104,7 @@ class EvonWsClient:
         self._running = False
         self._reconnect_delay = DEFAULT_WS_RECONNECT_DELAY
         self._message_task: asyncio.Task | None = None
+        self._resubscribe_task: asyncio.Task | None = None
         self._pending_requests: dict[int, asyncio.Future] = {}
         self._subscriptions: list[dict[str, Any]] = []
 
@@ -123,7 +151,7 @@ class EvonWsClient:
                     "Origin": origin,
                     "Cookie": cookie,
                 },
-                heartbeat=30,
+                heartbeat=WS_HEARTBEAT_INTERVAL,
             )
 
             _LOGGER.debug(
@@ -178,12 +206,12 @@ class EvonWsClient:
                 if response.status == 302:
                     location = response.headers.get("Location", "")
                     if "login" in location.lower() and not token:
-                        _LOGGER.error("WebSocket login failed: invalid credentials")
+                        _LOGGER.error("WebSocket login failed: Invalid credentials")
                         return None
                     # Redirect with token is OK (common for successful login)
                     if token:
                         return token
-                    _LOGGER.error("WebSocket login failed: redirect without token")
+                    _LOGGER.error("WebSocket login failed: Redirect without token")
                     return None
 
                 if response.status != 200:
@@ -222,23 +250,47 @@ class EvonWsClient:
         # Close the WebSocket
         await self.disconnect()
 
+        # Clear subscriptions since we're fully stopping
+        self._subscriptions.clear()
+        _LOGGER.debug("WebSocket client stopped and subscriptions cleared")
+
     async def disconnect(self) -> None:
         """Disconnect from the WebSocket server."""
-        if self._ws and not self._ws.closed:
-            await self._ws.close()
-        self._ws = None
+        # Clear token first to prevent stale auth on any in-flight requests
         self._token = None
 
+        # Cancel any pending resubscribe task
+        if self._resubscribe_task and not self._resubscribe_task.done():
+            self._resubscribe_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._resubscribe_task
+            self._resubscribe_task = None
+
+        # Reject pending requests before closing connection
+        # to ensure proper error handling
+        pending = list(self._pending_requests.items())
+        self._pending_requests.clear()
+        for seq_id, future in pending:
+            if not future.done():
+                future.set_exception(EvonWsNotConnectedError("WebSocket disconnected"))
+            _LOGGER.debug("Rejected pending request: seq=%s", seq_id)
+
+        # Close WebSocket connection
+        if self._ws and not self._ws.closed:
+            try:
+                await self._ws.close()
+            except Exception as err:
+                _LOGGER.debug("Error closing WebSocket: %s", err)
+        self._ws = None
+
+        # Notify connection state change
         if self._connected:
             self._connected = False
             if self._on_connection_state:
-                self._on_connection_state(False)
-
-        # Reject pending requests
-        for future in self._pending_requests.values():
-            if not future.done():
-                future.set_exception(Exception("WebSocket disconnected"))
-        self._pending_requests.clear()
+                try:
+                    self._on_connection_state(False)
+                except Exception as err:
+                    _LOGGER.warning("Error in connection state callback: %s", err)
 
     async def _run_loop(self) -> None:
         """Main loop for handling messages and reconnection."""
@@ -255,15 +307,19 @@ class EvonWsClient:
                         # Resubscribe after connection is established and message loop can process responses
                         if self._connected and self._subscriptions:
                             _LOGGER.debug("WS scheduling resubscription for %d instances", len(self._subscriptions))
-                            asyncio.create_task(self._resubscribe())
+                            self._resubscribe_task = asyncio.create_task(self._resubscribe())
                     else:
-                        # Connection failed, wait before retry
+                        # Connection failed, wait before retry with jitter
+                        delay = _calculate_reconnect_delay(
+                            self._reconnect_delay, WS_RECONNECT_MAX_DELAY
+                        )
                         _LOGGER.debug(
-                            "WebSocket reconnecting in %d seconds",
+                            "WebSocket reconnecting in %.1f seconds (base: %d)",
+                            delay,
                             self._reconnect_delay,
                         )
-                        await asyncio.sleep(self._reconnect_delay)
-                        # Exponential backoff
+                        await asyncio.sleep(delay)
+                        # Exponential backoff (without jitter, jitter applied at sleep time)
                         self._reconnect_delay = min(
                             self._reconnect_delay * 2,
                             WS_RECONNECT_MAX_DELAY,
@@ -280,7 +336,10 @@ class EvonWsClient:
                 _LOGGER.error("WebSocket loop error: %s", err)
                 await self.disconnect()
                 if self._running:
-                    await asyncio.sleep(self._reconnect_delay)
+                    delay = _calculate_reconnect_delay(
+                        self._reconnect_delay, WS_RECONNECT_MAX_DELAY
+                    )
+                    await asyncio.sleep(delay)
                     self._reconnect_delay = min(
                         self._reconnect_delay * 2,
                         WS_RECONNECT_MAX_DELAY,
@@ -299,7 +358,7 @@ class EvonWsClient:
             _LOGGER.debug(
                 "WebSocket received message: type=%s, data=%s",
                 msg.type,
-                msg.data[:500] if msg.data else None,
+                msg.data[:WS_LOG_MESSAGE_TRUNCATE] if msg.data else None,
             )
 
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -436,7 +495,7 @@ class EvonWsClient:
         self,
         method_name: str,
         args: list[Any],
-        request_timeout: float = 10.0,
+        request_timeout: float = WS_DEFAULT_REQUEST_TIMEOUT,
     ) -> Any:
         """Send a request and wait for the response.
 
@@ -452,7 +511,14 @@ class EvonWsClient:
             Exception: If the request fails or times out.
         """
         if not self.is_connected:
-            raise Exception("WebSocket not connected")
+            raise EvonWsNotConnectedError("WebSocket not connected")
+
+        # Prevent unbounded memory growth from too many pending requests
+        if len(self._pending_requests) >= WS_MAX_PENDING_REQUESTS:
+            raise EvonWsError(
+                f"Too many pending WebSocket requests ({len(self._pending_requests)}), "
+                "server may be unresponsive"
+            )
 
         sequence_id = self._sequence_id
         self._sequence_id += 1
@@ -466,18 +532,23 @@ class EvonWsClient:
             },
         }
 
-        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending_requests[sequence_id] = future
 
         try:
             _LOGGER.debug("Sending WS request: method=%s, seq=%s", method_name, sequence_id)
-            await self._ws.send_str(json.dumps(message))  # type: ignore[union-attr]
+            if not self._ws or self._ws.closed:
+                raise EvonWsNotConnectedError("WebSocket closed before send")
+            await self._ws.send_str(json.dumps(message))
             _LOGGER.debug("WS request sent, waiting for response (timeout=%s)", request_timeout)
             async with asyncio.timeout(request_timeout):
                 return await future
         except TimeoutError:
             self._pending_requests.pop(sequence_id, None)
-            raise Exception(f"Request timeout: {method_name}") from None
+            raise EvonWsTimeoutError(f"Request timeout: {method_name}") from None
+        except asyncio.CancelledError:
+            self._pending_requests.pop(sequence_id, None)
+            raise
         except Exception:
             self._pending_requests.pop(sequence_id, None)
             raise
@@ -516,7 +587,7 @@ class EvonWsClient:
             await self._send_request(
                 "RegisterValuesChanged",
                 [True, subscriptions, True, True],
-                request_timeout=30.0,
+                request_timeout=WS_SUBSCRIBE_REQUEST_TIMEOUT,
             )
             _LOGGER.info(
                 "Subscribed to %d instances for real-time updates",

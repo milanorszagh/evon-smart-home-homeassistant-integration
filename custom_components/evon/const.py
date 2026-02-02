@@ -81,6 +81,21 @@ EVON_CLASS_SECURITY_DOOR = "Security.Door"
 EVON_CLASS_INTERCOM_2N = "Security.Intercom.2N.Intercom2N"
 EVON_CLASS_INTERCOM_2N_CAM = "Security.Intercom.2N.Intercom2NCam"
 
+# Entity type keys (used in coordinator.data dictionary)
+ENTITY_TYPE_LIGHTS = "lights"
+ENTITY_TYPE_BLINDS = "blinds"
+ENTITY_TYPE_CLIMATES = "climates"
+ENTITY_TYPE_SWITCHES = "switches"
+ENTITY_TYPE_SMART_METERS = "smart_meters"
+ENTITY_TYPE_AIR_QUALITY = "air_quality"
+ENTITY_TYPE_BATHROOM_RADIATORS = "bathroom_radiators"
+ENTITY_TYPE_SCENES = "scenes"
+ENTITY_TYPE_INTERCOMS = "intercoms"
+ENTITY_TYPE_SECURITY_DOORS = "security_doors"
+ENTITY_TYPE_HOME_STATES = "home_states"
+ENTITY_TYPE_VALVES = "valves"
+ENTITY_TYPE_CAMERAS = "cameras"
+
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"
 
@@ -124,3 +139,12 @@ DEFAULT_WS_RECONNECT_DELAY = 5  # Initial reconnect delay in seconds
 WS_RECONNECT_MAX_DELAY = 300  # Maximum reconnect delay in seconds
 WS_PROTOCOL = "echo-protocol"  # WebSocket sub-protocol
 WS_POLL_INTERVAL = 60  # Safety net poll interval when WebSocket connected (seconds)
+WS_HEARTBEAT_INTERVAL = 30  # WebSocket heartbeat/ping interval (seconds)
+WS_DEFAULT_REQUEST_TIMEOUT = 10.0  # Default timeout for WebSocket RPC requests (seconds)
+WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0  # Timeout for subscription requests (many devices) (seconds)
+WS_LOG_MESSAGE_TRUNCATE = 500  # Max characters to log from WebSocket messages
+WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejecting new ones
+
+# Light identification animation timing (seconds)
+# Evon lights fade in/out over ~2.5s, so 3s provides buffer for visual effect
+LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0

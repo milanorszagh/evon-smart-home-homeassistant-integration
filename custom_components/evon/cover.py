@@ -67,6 +67,7 @@ from .base_entity import EvonEntity
 from .const import (
     COVER_STOP_DELAY,
     DOMAIN,
+    ENTITY_TYPE_BLINDS,
     OPTIMISTIC_STATE_TIMEOUT,
     OPTIMISTIC_STATE_TOLERANCE,
 )
@@ -83,8 +84,8 @@ async def async_setup_entry(
     api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
     entities = []
-    if coordinator.data and "blinds" in coordinator.data:
-        for blind in coordinator.data["blinds"]:
+    if coordinator.data and ENTITY_TYPE_BLINDS in coordinator.data:
+        for blind in coordinator.data[ENTITY_TYPE_BLINDS]:
             entities.append(
                 EvonCover(
                     coordinator,
@@ -137,7 +138,7 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_state_set_at: float | None = None
 
         # Check if this is a blind group (requires different API calls)
-        data = coordinator.get_entity_data("blinds", instance_id)
+        data = coordinator.get_entity_data(ENTITY_TYPE_BLINDS, instance_id)
         self._is_group = data.get("is_group", False) if data else False
 
         # Initialize API caches for WebSocket control
@@ -172,7 +173,7 @@ class EvonCover(EvonEntity, CoverEntity):
         if self._optimistic_position is not None:
             return self._optimistic_position
 
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         if data:
             # Evon: 0=open, 100=closed
             # Home Assistant: 0=closed, 100=open
@@ -189,7 +190,7 @@ class EvonCover(EvonEntity, CoverEntity):
         if self._optimistic_tilt is not None:
             return self._optimistic_tilt
 
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         if data:
             # Evon: 0=open (horizontal), 100=closed (blocking)
             # Home Assistant: 0=closed, 100=open
@@ -234,7 +235,7 @@ class EvonCover(EvonEntity, CoverEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         if data:
             # Evon native values (for debugging)
             attrs["evon_position"] = data.get("position", 0)  # 0=open, 100=closed
@@ -243,7 +244,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
         is_moving = coordinator_is_moving or self._optimistic_is_moving is True
@@ -265,7 +266,9 @@ class EvonCover(EvonEntity, CoverEntity):
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
-            self.async_write_ha_state()
+            # Check entity is still available before updating state
+            if self.hass is not None:
+                self.async_write_ha_state()
         else:
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
@@ -281,7 +284,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
         is_moving = coordinator_is_moving or self._optimistic_is_moving is True
@@ -303,7 +306,9 @@ class EvonCover(EvonEntity, CoverEntity):
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
-            self.async_write_ha_state()
+            # Check entity is still available before updating state
+            if self.hass is not None:
+                self.async_write_ha_state()
         else:
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
@@ -336,7 +341,9 @@ class EvonCover(EvonEntity, CoverEntity):
         # Small delay then update state again to ensure UI reflects stopped state
         # This helps when multiple blinds are stopped via group action
         await asyncio.sleep(COVER_STOP_DELAY)
-        self.async_write_ha_state()
+        # Check entity is still available before updating state
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""
@@ -406,7 +413,7 @@ class EvonCover(EvonEntity, CoverEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
-        data = self.coordinator.get_entity_data("blinds", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
         if data:
             # Update API caches for WebSocket control
             # Position is Evon native (0=open, 100=closed)

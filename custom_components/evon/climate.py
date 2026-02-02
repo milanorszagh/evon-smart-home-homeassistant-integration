@@ -26,6 +26,7 @@ from .const import (
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DOMAIN,
+    ENTITY_TYPE_CLIMATES,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
     OPTIMISTIC_STATE_TIMEOUT,
@@ -46,8 +47,8 @@ async def async_setup_entry(
     api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
     entities = []
-    if coordinator.data and "climates" in coordinator.data:
-        for climate in coordinator.data["climates"]:
+    if coordinator.data and ENTITY_TYPE_CLIMATES in coordinator.data:
+        for climate in coordinator.data[ENTITY_TYPE_CLIMATES]:
             entities.append(
                 EvonClimate(
                     coordinator,
@@ -111,7 +112,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def hvac_modes(self) -> list[HVACMode]:
         """Return the list of available HVAC modes."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data and data.get("cooling_enabled"):
             return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
         return [HVACMode.HEAT, HVACMode.OFF]
@@ -131,7 +132,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         if self._optimistic_hvac_mode is not None:
             return self._optimistic_hvac_mode
 
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if not data:
             return HVACMode.OFF
 
@@ -153,7 +154,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         This indicates whether the climate system is actively heating/cooling
         or idle (target temperature reached). Based on Evon's IsOn property.
         """
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if not data:
             return None
 
@@ -168,7 +169,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             return data.get("current_temperature")
         return None
@@ -176,7 +177,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def current_humidity(self) -> int | None:
         """Return the current humidity."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data and data.get("humidity") is not None:
             return int(data["humidity"])
         return None
@@ -196,7 +197,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         if self._optimistic_target_temp is not None:
             return self._optimistic_target_temp
 
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             temp = data.get("target_temperature")
             if temp is not None:
@@ -209,7 +210,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def min_temp(self) -> float:
         """Return the minimum temperature."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             return data.get("min_temp", DEFAULT_MIN_TEMP)
         return DEFAULT_MIN_TEMP
@@ -217,7 +218,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     @property
     def max_temp(self) -> float:
         """Return the maximum temperature."""
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             return data.get("max_temp", DEFAULT_MAX_TEMP)
         return DEFAULT_MAX_TEMP
@@ -237,7 +238,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         if self._optimistic_preset is not None:
             return self._optimistic_preset
 
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if not data:
             return CLIMATE_MODE_COMFORT
 
@@ -253,7 +254,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             is_cooling = self.coordinator.get_season_mode()
             attrs["comfort_temperature"] = data.get("comfort_temp")
@@ -314,7 +315,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
-        data = self.coordinator.get_entity_data("climates", self._instance_id)
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
             all_cleared = True
 

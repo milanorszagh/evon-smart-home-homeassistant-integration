@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, ENTITY_TYPE_SECURITY_DOORS
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,8 +34,8 @@ async def async_setup_entry(
 
     # Find security doors - create MAX_SNAPSHOTS entities for each door
     # This ensures consistent entity count across reloads
-    if coordinator.data and "security_doors" in coordinator.data:
-        for door in coordinator.data["security_doors"]:
+    if coordinator.data and ENTITY_TYPE_SECURITY_DOORS in coordinator.data:
+        for door in coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
             door_name = door.get("name", "Doorbell")
 
             # Always create MAX_SNAPSHOTS entities per door for consistency
@@ -135,7 +135,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
         if not self.coordinator.data or "security_doors" not in self.coordinator.data:
             return None
 
-        for door in self.coordinator.data["security_doors"]:
+        for door in self.coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
             if door.get("id") == self._door_id:
                 saved_pictures = door.get("saved_pictures", [])
                 if self._index < len(saved_pictures):

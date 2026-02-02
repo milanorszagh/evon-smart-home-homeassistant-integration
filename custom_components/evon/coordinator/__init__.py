@@ -17,6 +17,19 @@ from ..const import (
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    ENTITY_TYPE_AIR_QUALITY,
+    ENTITY_TYPE_BATHROOM_RADIATORS,
+    ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_CAMERAS,
+    ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_HOME_STATES,
+    ENTITY_TYPE_INTERCOMS,
+    ENTITY_TYPE_LIGHTS,
+    ENTITY_TYPE_SCENES,
+    ENTITY_TYPE_SECURITY_DOORS,
+    ENTITY_TYPE_SMART_METERS,
+    ENTITY_TYPE_SWITCHES,
+    ENTITY_TYPE_VALVES,
     REPAIR_CONNECTION_FAILED,
     WS_POLL_INTERVAL,
 )
@@ -146,19 +159,19 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.info("Connection restored, cleared connection failure repair")
 
             result = {
-                "lights": lights,
-                "blinds": blinds,
-                "climates": climates,
-                "switches": switches,
-                "smart_meters": smart_meters,
-                "air_quality": air_quality,
-                "valves": valves,
-                "home_states": home_states,
-                "bathroom_radiators": bathroom_radiators,
-                "scenes": scenes,
-                "security_doors": security_doors,
-                "intercoms": intercoms,
-                "cameras": cameras,
+                ENTITY_TYPE_LIGHTS: lights,
+                ENTITY_TYPE_BLINDS: blinds,
+                ENTITY_TYPE_CLIMATES: climates,
+                ENTITY_TYPE_SWITCHES: switches,
+                ENTITY_TYPE_SMART_METERS: smart_meters,
+                ENTITY_TYPE_AIR_QUALITY: air_quality,
+                ENTITY_TYPE_VALVES: valves,
+                ENTITY_TYPE_HOME_STATES: home_states,
+                ENTITY_TYPE_BATHROOM_RADIATORS: bathroom_radiators,
+                ENTITY_TYPE_SCENES: scenes,
+                ENTITY_TYPE_SECURITY_DOORS: security_doors,
+                ENTITY_TYPE_INTERCOMS: intercoms,
+                ENTITY_TYPE_CAMERAS: cameras,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -258,62 +271,73 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             The entity data dictionary or None if not found
         """
-        if self.data and entity_type in self.data:
-            for entity in self.data[entity_type]:
-                if entity["id"] == instance_id:
-                    return entity
+        if not self.data:
+            return None
+        entities = self.data.get(entity_type)
+        if not entities or not isinstance(entities, list):
+            return None
+        for entity in entities:
+            if entity and entity.get("id") == instance_id:
+                return entity
         return None
 
     # Legacy getter methods for backwards compatibility
     def get_light_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific light."""
-        return self.get_entity_data("lights", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_LIGHTS, instance_id)
 
     def get_blind_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific blind."""
-        return self.get_entity_data("blinds", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_BLINDS, instance_id)
 
     def get_climate_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific climate."""
-        return self.get_entity_data("climates", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_CLIMATES, instance_id)
 
     def get_switch_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific switch."""
-        return self.get_entity_data("switches", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_SWITCHES, instance_id)
 
     def get_smart_meter_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific smart meter."""
-        return self.get_entity_data("smart_meters", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_SMART_METERS, instance_id)
 
     def get_air_quality_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific air quality sensor."""
-        return self.get_entity_data("air_quality", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_AIR_QUALITY, instance_id)
 
     def get_valve_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific valve."""
-        return self.get_entity_data("valves", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_VALVES, instance_id)
 
     def get_home_state_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific home state."""
-        return self.get_entity_data("home_states", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_HOME_STATES, instance_id)
 
     def get_bathroom_radiator_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific bathroom radiator."""
-        return self.get_entity_data("bathroom_radiators", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, instance_id)
 
     def get_active_home_state(self) -> str | None:
         """Get the currently active home state ID."""
-        if self.data and "home_states" in self.data:
-            for state in self.data["home_states"]:
-                if state.get("active"):
-                    return state.get("id")
+        if not self.data:
+            return None
+        home_states = self.data.get(ENTITY_TYPE_HOME_STATES)
+        if not home_states or not isinstance(home_states, list):
+            return None
+        for state in home_states:
+            if state and state.get("active"):
+                return state.get("id")
         return None
 
     def get_home_states(self) -> list[dict[str, Any]]:
         """Get all home states."""
-        if self.data and "home_states" in self.data:
-            return self.data["home_states"]
-        return []
+        if not self.data:
+            return []
+        home_states = self.data.get(ENTITY_TYPE_HOME_STATES)
+        if not home_states or not isinstance(home_states, list):
+            return []
+        return home_states
 
     def get_season_mode(self) -> bool:
         """Get the current season mode.
@@ -327,13 +351,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def get_scene_data(self, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific scene."""
-        return self.get_entity_data("scenes", instance_id)
+        return self.get_entity_data(ENTITY_TYPE_SCENES, instance_id)
 
     def get_scenes(self) -> list[dict[str, Any]]:
         """Get all scenes."""
-        if self.data and "scenes" in self.data:
-            return self.data["scenes"]
-        return []
+        if not self.data:
+            return []
+        scenes = self.data.get(ENTITY_TYPE_SCENES)
+        if not scenes or not isinstance(scenes, list):
+            return []
+        return scenes
 
     # WebSocket methods
 
@@ -461,7 +488,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id: The instance ID that changed.
             properties: Dictionary of changed property names to values.
         """
-        if not self.data:
+        if not self.data or not properties:
             return
 
         from ..ws_mappings import CLASS_TO_TYPE, ws_to_coordinator_data
@@ -473,10 +500,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Search through all entity types to find this instance
         for etype in CLASS_TO_TYPE.values():
-            if etype not in self.data:
+            entities = self.data.get(etype)
+            if not entities or not isinstance(entities, list):
                 continue
-            for idx, entity in enumerate(self.data[etype]):
-                if entity.get("id") == instance_id:
+            for idx, entity in enumerate(entities):
+                if entity and entity.get("id") == instance_id:
                     entity_type = etype
                     entity_index = idx
                     break
@@ -492,10 +520,22 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Get existing entity data for derived value computation
-        entity = self.data[entity_type][entity_index]
+        # Double-check entity exists (defensive check for race conditions)
+        entities = self.data.get(entity_type)
+        if not entities or entity_index >= len(entities):
+            _LOGGER.debug("Entity list changed during WebSocket update for %s", instance_id)
+            return
+        entity = entities[entity_index]
+        if not entity:
+            return
 
         # Convert WebSocket properties to coordinator format
-        coord_data = ws_to_coordinator_data(entity_type, properties, entity)
+        try:
+            coord_data = ws_to_coordinator_data(entity_type, properties, entity)
+        except Exception as err:
+            _LOGGER.warning("Failed to convert WebSocket data for %s: %s", instance_id, err)
+            return
+
         if not coord_data:
             return
 
@@ -514,7 +554,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
 
                     # Fire doorbell event when doorbell_triggered transitions to True
-                    if entity_type == "intercoms" and key == "doorbell_triggered" and value is True:
+                    if entity_type == ENTITY_TYPE_INTERCOMS and key == "doorbell_triggered" and value is True:
                         self.hass.bus.async_fire(
                             f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
                         )

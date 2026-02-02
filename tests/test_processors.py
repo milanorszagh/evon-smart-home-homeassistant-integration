@@ -226,6 +226,7 @@ class TestApiImageFetch:
     @pytest.mark.asyncio
     async def test_fetch_image_success(self):
         """Test fetch_image returns image bytes on success."""
+        import time
         from unittest.mock import AsyncMock, MagicMock
         from contextlib import asynccontextmanager
 
@@ -245,8 +246,11 @@ class TestApiImageFetch:
         mock_session = MagicMock()
         mock_session.get = mock_get
 
+        # Set up session and token properly to bypass _ensure_token and _get_session
         api._session = mock_session
+        api._own_session = False  # Indicate session was provided externally
         api._token = "test_token"
+        api._token_timestamp = time.monotonic()  # Fresh token, not expired
 
         result = await api.fetch_image("/images/test.jpg")
 
@@ -255,6 +259,7 @@ class TestApiImageFetch:
     @pytest.mark.asyncio
     async def test_fetch_image_failure_returns_none(self):
         """Test fetch_image returns None on HTTP error."""
+        import time
         from unittest.mock import MagicMock
         from contextlib import asynccontextmanager
         import aiohttp
@@ -271,8 +276,11 @@ class TestApiImageFetch:
         mock_session = MagicMock()
         mock_session.get = mock_get_error
 
+        # Set up session and token properly to bypass _ensure_token and _get_session
         api._session = mock_session
+        api._own_session = False  # Indicate session was provided externally
         api._token = "test_token"
+        api._token_timestamp = time.monotonic()  # Fresh token, not expired
 
         result = await api.fetch_image("/images/test.jpg")
 
