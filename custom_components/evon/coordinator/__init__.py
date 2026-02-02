@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 from typing import TYPE_CHECKING, Any
@@ -105,20 +106,37 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Fetch season mode (global heating/cooling)
             season_mode = await self._fetch_season_mode()
 
-            # Process all device types using modular processors
-            lights = await process_lights(self.api, instances, self._get_room_name)
-            blinds = await process_blinds(self.api, instances, self._get_room_name)
-            climates = await process_climates(self.api, instances, self._get_room_name, season_mode)
-            switches = await process_switches(self.api, instances, self._get_room_name)
-            smart_meters = await process_smart_meters(self.api, instances, self._get_room_name)
-            air_quality = await process_air_quality(self.api, instances, self._get_room_name)
-            valves = await process_valves(self.api, instances, self._get_room_name)
-            home_states = await process_home_states(self.api, instances)
-            bathroom_radiators = await process_bathroom_radiators(self.api, instances, self._get_room_name)
-            scenes = await process_scenes(instances)
-            security_doors = await process_security_doors(self.api, instances, self._get_room_name)
-            intercoms = await process_intercoms(self.api, instances, self._get_room_name)
-            cameras = await process_cameras(self.api, instances, self._get_room_name)
+            # Process all device types in parallel using asyncio.gather
+            # This significantly reduces refresh time with many devices
+            (
+                lights,
+                blinds,
+                climates,
+                switches,
+                smart_meters,
+                air_quality,
+                valves,
+                home_states,
+                bathroom_radiators,
+                scenes,
+                security_doors,
+                intercoms,
+                cameras,
+            ) = await asyncio.gather(
+                process_lights(self.api, instances, self._get_room_name),
+                process_blinds(self.api, instances, self._get_room_name),
+                process_climates(self.api, instances, self._get_room_name, season_mode),
+                process_switches(self.api, instances, self._get_room_name),
+                process_smart_meters(self.api, instances, self._get_room_name),
+                process_air_quality(self.api, instances, self._get_room_name),
+                process_valves(self.api, instances, self._get_room_name),
+                process_home_states(self.api, instances),
+                process_bathroom_radiators(self.api, instances, self._get_room_name),
+                process_scenes(instances),
+                process_security_doors(self.api, instances, self._get_room_name),
+                process_intercoms(self.api, instances, self._get_room_name),
+                process_cameras(self.api, instances, self._get_room_name),
+            )
 
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
