@@ -77,8 +77,9 @@ EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
 EVON_CLASS_SCENE = "System.SceneApp"
 EVON_CLASS_LIGHT_GROUP = "SmartCOM.Light.LightGroup"
 EVON_CLASS_BLIND_GROUP = "SmartCOM.Blind.BlindGroup"
-EVON_CLASS_SECURITY_DOOR = "SmartCOM.Security.SecurityDoor"
-EVON_CLASS_INTERCOM_2N = "SmartCOM.Intercom.Intercom2N"
+EVON_CLASS_SECURITY_DOOR = "Security.Door"
+EVON_CLASS_INTERCOM_2N = "Security.Intercom.2N.Intercom2N"
+EVON_CLASS_INTERCOM_2N_CAM = "Security.Intercom.2N.Intercom2NCam"
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"

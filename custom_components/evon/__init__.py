@@ -52,6 +52,8 @@ HOME_STATE_MAP = {
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
+    Platform.CAMERA,
+    Platform.IMAGE,
     Platform.LIGHT,
     Platform.COVER,
     Platform.CLIMATE,
@@ -292,6 +294,7 @@ async def _async_cleanup_stale_entities(
         "scenes",
         "security_doors",
         "intercoms",
+        "cameras",
     ]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:

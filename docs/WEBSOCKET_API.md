@@ -885,18 +885,29 @@ See `ws-security-door.mjs` for a complete test implementation.
 
 **No `Pressed`, `State`, or `Value` properties exist.** See "Physical Switches" section below for details.
 
-## Physical Switches (Taster) - Detailed Findings
+## Physical Switches (Taster) - Detailed Findings (February 2025)
 
 ### The Problem
-Physical wall switches ("Taster" in German) in Evon systems are **action triggers**, not stateful devices. When you press a button:
+Physical wall switches ("Taster" in German) in Evon systems **operate at the hardware level and do NOT fire WebSocket events**. When you press a button:
 
-1. The button sends a signal to the Evon controller
-2. The controller executes the pre-configured action (toggle light, dim, etc.)
+1. The button sends a signal directly to the SmartCOM module
+2. The module directly signals the associated actuator (blind motor, light relay, etc.)
 3. The target device state changes
-4. **The button press itself is NOT exposed** via the WebSocket API
+4. **The button press itself bypasses the software layer entirely**
 
 ### Why This Happens
-This is typical for KNX and building automation systems. The button-to-device mapping is configured at the controller level, and the API only exposes the resulting device states, not the input events.
+This is by design for reliability - physical buttons need to work even if the software layer has issues. The button-to-device mapping is configured at the hardware/controller level, not in software.
+
+### Testing Performed (February 2025)
+We tested three different switch types via WebSocket subscription:
+
+| Switch | Instance ID | Type | Result |
+|--------|-------------|------|--------|
+| Taster Jal. WZ 3 Öffnen | SC1_M08.Switch1Up | Blind button | **0 events** |
+| Taster Jal. WZ 1 Öffnen | SC1_M07.Switch1Up | Blind button | **0 events** |
+| Taster Licht Esstisch | SC1_M04.Input3 | Light button | **0 events** |
+
+Despite pressing the physical buttons multiple times during 60-second monitoring windows, **no ValuesChanged events were received**. The subscription confirmed successfully and returned initial values, but no state changes propagated through WebSocket.
 
 ### Workaround: Indirect Detection
 You can detect button presses by monitoring the devices they control:
@@ -995,6 +1006,103 @@ ws.send(JSON.stringify({
   }
 }));
 ```
+
+## Camera Control (2N Intercom) - Verified Working (February 2025)
+
+The 2N intercom cameras support live feed via WebSocket. The mechanism works by triggering image capture and fetching the result.
+
+### Camera Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Image` | string | Path to current image (e.g., `/temp/Intercom2N1000.Cam_img.jpg?rng=...`) |
+| `ImageRequest` | boolean | Set to `true` to trigger image capture |
+| `Error` | boolean | Connection error status |
+| `IPAddress` | string | Camera IP address (internal network) |
+| `JPEGUrl` | string | Direct camera URL (requires camera credentials) |
+| `Username` | string | Camera username |
+| `Password` | string | Camera password |
+
+### Live Feed Flow
+
+1. **Subscribe to camera properties:**
+```javascript
+await ws.send(JSON.stringify({
+  methodName: "CallWithReturn",
+  request: {
+    args: [true, [{
+      Instanceid: "Intercom2N1000.Cam",
+      Properties: ["Image", "ImageRequest", "Error"]
+    }], false, false],
+    methodName: "RegisterValuesChanged",
+    sequenceId: 1
+  }
+}));
+```
+
+2. **Trigger image capture:**
+```javascript
+await ws.send(JSON.stringify({
+  methodName: "CallWithReturn",
+  request: {
+    args: ["Intercom2N1000.Cam.ImageRequest", true],
+    methodName: "SetValue",
+    sequenceId: 2
+  }
+}));
+```
+
+3. **Wait for `Image` property update** - The `Image` path changes with a new random cache buster (`?rng=...`)
+
+4. **Fetch the image via HTTP:**
+```javascript
+const imageUrl = `http://${evonHost}${imagePath}`;
+const response = await fetch(imageUrl, { cookies: { token } });
+const jpeg = await response.blob();
+```
+
+### Image Capture Cycle
+
+When `ImageRequest` is set to `true`:
+1. Evon fetches a frame from the 2N camera (using stored credentials)
+2. Saves it to `/temp/Intercom2N1000.Cam_img.jpg`
+3. Updates the `Image` property with a new `?rng=` cache buster
+4. Resets `ImageRequest` to `false`
+
+The Evon webapp creates a "live feed" by rapidly repeating this cycle.
+
+### Saved Pictures (Door Entity)
+
+Historical doorbell snapshots are available via the Door entity:
+
+```javascript
+// Subscribe to Door entity for saved pictures
+await ws.send(JSON.stringify({
+  methodName: "CallWithReturn",
+  request: {
+    args: [true, [{
+      Instanceid: "Door7586",
+      Properties: ["SavedPictures", "CamInstanceName"]
+    }], false, false],
+    methodName: "RegisterValuesChanged",
+    sequenceId: 1
+  }
+}));
+```
+
+**SavedPictures format:**
+```json
+[
+  {
+    "datetime": 1765913625935,
+    "imageUrlServer": "./Project/useruploads/snapshots/door/Door7586_xxx_img.jpg",
+    "imageUrlClient": "/images/project/snapshots/door/Door7586_xxx_img.jpg"
+  },
+  ...
+]
+```
+
+Fetch saved pictures via: `http://{evon-host}{imageUrlClient}` with token cookie.
 
 ## See Also
 

@@ -17,6 +17,8 @@ Control your [Evon Smart Home](https://www.evon-smarthome.com/) system directly 
 - **Scenes**: Trigger Evon-defined scenes from Home Assistant
 - **Security Doors**: Door state and call in progress sensors
 - **Intercoms**: Door state, connection status, and doorbell events
+- **Cameras**: Live feed from 2N intercom cameras
+- **Doorbell Snapshots**: Historical snapshots as image entities
 
 ## Configuration
 

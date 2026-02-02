@@ -33,12 +33,20 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Scenes** | Trigger Evon-defined scenes from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
 | **Intercoms** | Door open/closed state, doorbell events, connection status |
+| **Cameras** | Live feed from 2N intercom cameras |
+| **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
 
 ## Known Limitations
 
-### Physical Buttons
+### Physical Buttons (Taster)
 
-Physical wall buttons cannot be monitored by Home Assistant due to Evon API limitations. They only report momentary state (pressed/not pressed) with no event history. The buttons still work normally within the Evon system - they just can't trigger Home Assistant automations.
+Physical wall buttons (Taster) **do not fire WebSocket events**. They operate at the hardware level and directly signal their associated actuators (lights, blinds) without going through the software layer. This means:
+
+- Button presses cannot be detected or monitored by Home Assistant
+- The buttons work normally within the Evon system for controlling devices
+- State changes from button presses ARE visible (e.g., light turns on), but the button press itself is not
+
+This is by design in the Evon system - physical buttons work even if the software layer has issues.
 
 ### Controllable Switches
 
@@ -294,6 +302,44 @@ The integration fires Home Assistant events that can be used in automations:
 
 \* *Doorbell events are untested - please report issues if you have 2N intercoms*
 
+### Cameras
+
+Cameras from 2N intercoms are supported with live feed capability:
+
+- **Live feed**: Near-real-time image updates via WebSocket
+- **Snapshot on demand**: Triggers image capture from the intercom camera
+- **Error monitoring**: Shows connection status
+- **Saved pictures**: Historical doorbell snapshots available as image entities
+
+The camera entity provides a still image that updates when you view it. The integration triggers an image request via WebSocket and fetches the resulting JPEG from the Evon server.
+
+### Doorbell Snapshots
+
+When someone rings the doorbell, Evon automatically captures and stores a snapshot. These are exposed as image entities:
+
+- **Up to 10 snapshots** stored by Evon (their limit)
+- **Entities**: `image.eingangstur_snapshots_snapshot_1` through `..._snapshot_10`
+- **Attributes**: Each image includes `datetime` timestamp
+- **Dashboard ready**: Add to any Lovelace card for a visual doorbell history
+
+Example dashboard card:
+```yaml
+type: vertical-stack
+cards:
+  - type: picture-entity
+    entity: camera.2n_camera
+    name: Live Feed
+  - type: grid
+    columns: 5
+    square: true
+    cards:
+      - type: picture-entity
+        entity: image.eingangstur_snapshots_snapshot_1
+        show_state: false
+        show_name: false
+      # ... repeat for snapshot_2 through snapshot_10
+```
+
 ### Switches
 
 - Controllable relay outputs (on/off)
@@ -495,6 +541,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
+| **1.15.0** | **Camera & doorbell snapshots** - Live feed from 2N intercom cameras via WebSocket, doorbell snapshot history as image entities (up to 10), security door sensors with call-in-progress indicator. Fixed security device class names for proper discovery. |
 | **1.14.0** | **WebSocket device control** - instant response when controlling lights, blinds, and climate via HA (no more waiting for poll cycles). Security doors and intercoms with doorbell events, light/blind groups, RGBW color temperature*, climate humidity display |
 | **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |
 | **1.12.0** | Remote access via my.evon-smarthome.com, switch between local/remote in reconfigure, security improvements (SSL, input validation, token handling) |

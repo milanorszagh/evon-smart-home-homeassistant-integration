@@ -14,6 +14,7 @@ from .const import (
     EVON_CLASS_CLIMATE_UNIVERSAL,
     EVON_CLASS_HOME_STATE,
     EVON_CLASS_INTERCOM_2N,
+    EVON_CLASS_INTERCOM_2N_CAM,
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_LIGHT_GROUP,
@@ -45,6 +46,7 @@ CLASS_TO_TYPE: dict[str, str] = {
     EVON_CLASS_VALVE: "valves",
     EVON_CLASS_SECURITY_DOOR: "security_doors",
     EVON_CLASS_INTERCOM_2N: "intercoms",
+    EVON_CLASS_INTERCOM_2N_CAM: "cameras",
 }
 
 # Properties to subscribe for each entity type
@@ -73,10 +75,12 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
     "air_quality": ["Humidity", "ActualTemperature", "CO2Value"],
     # Valves: open/closed state
     "valves": ["ActValue"],
-    # Security doors: door state and call in progress
-    "security_doors": ["IsOpen", "DoorIsOpen", "CallInProgress"],
+    # Security doors: door state, call in progress, and saved pictures
+    "security_doors": ["IsOpen", "DoorIsOpen", "CallInProgress", "SavedPictures", "CamInstanceName"],
     # Intercoms: doorbell, door open, connection status
     "intercoms": ["DoorBellTriggered", "DoorOpenTriggered", "IsDoorOpen", "ConnectionToIntercomHasBeenLost"],
+    # Cameras: image path updates for live feed
+    "cameras": ["Image", "ImageRequest", "Error"],
 }
 
 # Map WebSocket property names to coordinator data keys
@@ -135,12 +139,19 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "IsOpen": "is_open",
         "DoorIsOpen": "door_is_open",
         "CallInProgress": "call_in_progress",
+        "SavedPictures": "saved_pictures",
+        "CamInstanceName": "cam_instance_name",
     },
     "intercoms": {
         "DoorBellTriggered": "doorbell_triggered",
         "DoorOpenTriggered": "door_open_triggered",
         "IsDoorOpen": "is_door_open",
         "ConnectionToIntercomHasBeenLost": "connection_lost",
+    },
+    "cameras": {
+        "Image": "image_path",
+        "ImageRequest": "image_request",
+        "Error": "error",
     },
 }
 
@@ -204,6 +215,19 @@ def ws_to_coordinator_data(
         if ws_prop in mappings:
             coord_key = mappings[ws_prop]
             result[coord_key] = value
+
+    # Special handling for security doors: transform SavedPictures array
+    if entity_type == "security_doors" and "SavedPictures" in ws_properties:
+        saved_pictures_raw = ws_properties["SavedPictures"]
+        if isinstance(saved_pictures_raw, list):
+            saved_pictures = []
+            for pic in saved_pictures_raw:
+                if isinstance(pic, dict):
+                    saved_pictures.append({
+                        "timestamp": pic.get("datetime"),
+                        "path": pic.get("imageUrlClient", ""),
+                    })
+            result["saved_pictures"] = saved_pictures
 
     # Special handling for smart meters: compute total power from P1+P2+P3
     if entity_type == "smart_meters":

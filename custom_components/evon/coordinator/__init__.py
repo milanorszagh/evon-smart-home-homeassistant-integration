@@ -23,6 +23,7 @@ from .processors import (
     process_air_quality,
     process_bathroom_radiators,
     process_blinds,
+    process_cameras,
     process_climates,
     process_home_states,
     process_intercoms,
@@ -117,6 +118,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             scenes = await process_scenes(instances)
             security_doors = await process_security_doors(self.api, instances, self._get_room_name)
             intercoms = await process_intercoms(self.api, instances, self._get_room_name)
+            cameras = await process_cameras(self.api, instances, self._get_room_name)
 
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
@@ -138,6 +140,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "scenes": scenes,
                 "security_doors": security_doors,
                 "intercoms": intercoms,
+                "cameras": cameras,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }

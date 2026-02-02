@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from tests.conftest import requires_ha_test_framework
 
@@ -40,8 +41,9 @@ class TestDeviceTriggerIntegration:
     @pytest.mark.asyncio
     async def test_get_triggers_non_intercom_device(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """Test getting triggers for a non-intercom device returns empty list."""
-        from custom_components.evon.device_trigger import async_get_triggers
         from homeassistant.helpers import device_registry as dr
+
+        from custom_components.evon.device_trigger import async_get_triggers
 
         mock_config_entry_v2.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
@@ -75,8 +77,9 @@ class TestDeviceTriggerIntegration:
     @pytest.mark.asyncio
     async def test_attach_trigger_no_device(self, hass):
         """Test attaching trigger for non-existent device returns no-op."""
-        from custom_components.evon.device_trigger import async_attach_trigger
         from homeassistant.const import CONF_DEVICE_ID
+
+        from custom_components.evon.device_trigger import async_attach_trigger
 
         config = {CONF_DEVICE_ID: "non_existent_device_id"}
         action = AsyncMock()

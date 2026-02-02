@@ -1247,3 +1247,41 @@ class TestNewFeatures:
 
         assert blind_group_sub is not None
         assert "Position" in blind_group_sub["Properties"]
+
+    def test_class_to_type_cameras(self):
+        """Test camera class mappings."""
+        assert get_entity_type("Security.Intercom.2N.Intercom2NCam") == "cameras"
+
+    def test_get_subscribe_properties_cameras(self):
+        """Test camera subscribe properties."""
+        props = get_subscribe_properties("cameras")
+        assert "Image" in props
+        assert "ImageRequest" in props
+        assert "Error" in props
+
+    def test_ws_to_coordinator_data_cameras(self):
+        """Test camera property conversion."""
+        ws_props = {
+            "Image": "/temp/Cam_img.jpg?rng=123",
+            "ImageRequest": True,
+            "Error": False,
+        }
+        coord = ws_to_coordinator_data("cameras", ws_props)
+        assert coord == {
+            "image_path": "/temp/Cam_img.jpg?rng=123",
+            "image_request": True,
+            "error": False,
+        }
+
+    def test_build_subscription_list_includes_cameras(self):
+        """Test building subscription list includes cameras."""
+        instances = [
+            {"ID": "Intercom2N1000.Cam", "ClassName": "Security.Intercom.2N.Intercom2NCam"},
+        ]
+        subs = build_subscription_list(instances)
+
+        assert len(subs) == 1
+        cam_sub = subs[0]
+        assert cam_sub["Instanceid"] == "Intercom2N1000.Cam"
+        assert "Image" in cam_sub["Properties"]
+        assert "ImageRequest" in cam_sub["Properties"]

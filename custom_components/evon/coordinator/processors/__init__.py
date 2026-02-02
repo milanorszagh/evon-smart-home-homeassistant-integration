@@ -3,6 +3,7 @@
 from .air_quality import process_air_quality
 from .bathroom_radiators import process_bathroom_radiators
 from .blinds import process_blinds
+from .cameras import process_cameras
 from .climate import process_climates
 from .home_states import process_home_states
 from .intercoms import process_intercoms
@@ -26,4 +27,5 @@ __all__ = [
     "process_scenes",
     "process_security_doors",
     "process_intercoms",
+    "process_cameras",
 ]

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from tests.conftest import requires_ha_test_framework
 

@@ -40,6 +40,16 @@ async def process_security_doors(
         instance_id = instance.get("ID", "")
         try:
             details = await api.get_instance(instance_id)
+            # Parse saved pictures - convert timestamps to ISO format
+            saved_pictures_raw = details.get("SavedPictures", [])
+            saved_pictures = []
+            if isinstance(saved_pictures_raw, list):
+                for pic in saved_pictures_raw:
+                    if isinstance(pic, dict):
+                        saved_pictures.append({
+                            "timestamp": pic.get("datetime"),
+                            "path": pic.get("imageUrlClient", ""),
+                        })
             security_doors.append(
                 {
                     "id": instance_id,
@@ -47,6 +57,8 @@ async def process_security_doors(
                     "room_name": get_room_name(instance.get("Group", "")),
                     "is_open": details.get("IsOpen", False) or details.get("DoorIsOpen", False),
                     "call_in_progress": details.get("CallInProgress", False),
+                    "cam_instance_name": details.get("CamInstanceName", ""),
+                    "saved_pictures": saved_pictures,
                 }
             )
         except EvonApiError:

@@ -263,20 +263,25 @@ The `System.HomeState` class controls home-wide modes. Key points:
 await callMethod("HomeStateNight", "Activate");
 ```
 
-### Physical Buttons (SmartCOM.Switch) - CANNOT BE MONITORED
+### Physical Buttons (SmartCOM.Switch) - HARDWARE LEVEL ONLY
 
-**CRITICAL**: Physical wall buttons (`SmartCOM.Switch` class) **cannot be reliably monitored** by external systems:
+**CRITICAL**: Physical wall buttons (`SmartCOM.Switch` class) **operate at the hardware level and do NOT fire WebSocket events**:
 
-1. **Momentary state only**: The `IsOn` property is `true` ONLY while the button is physically pressed (milliseconds)
-2. **No event history**: There is NO `LastClickType`, click log, or event history
-3. **No push notifications**: Evon API has NO WebSocket or event streaming support
-4. **Polling is ineffective**: Even 100ms polling intervals miss button presses
+1. **Hardware-level operation**: Buttons directly signal their associated actuators (blind motors, light relays) without going through the software layer
+2. **No WebSocket events**: Testing confirmed 0 ValuesChanged events even with active subscriptions
+3. **By design**: This ensures physical buttons work even if the software layer has issues
 
 **What this means for agents:**
 - Do NOT create event entities, binary sensors, or triggers for `SmartCOM.Switch` devices
 - Do NOT attempt to implement button press detection - it will not work
 - The buttons work within Evon's internal system but cannot be observed externally
 - Only `SmartCOM.Light.Light` (controllable relay outputs) should be exposed as switches
+- Device state changes from button presses ARE visible (e.g., light turns on), but the button press itself is not
+
+**Testing performed (February 2025):**
+- Tested SC1_M08.Switch1Up (Taster Jal. WZ 3 Öffnen) - 0 events
+- Tested SC1_M07.Switch1Up (Taster Jal. WZ 1 Öffnen) - 0 events
+- Tested SC1_M04.Input3 (Taster Licht Esstisch) - 0 events
 
 ### Method Naming Pattern
 
@@ -397,8 +402,8 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 - Base entity: `base_entity.py`
 - Data coordinator: `coordinator/` package
   - Main coordinator: `coordinator/__init__.py`
-  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms)
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`
+  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras)
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`, `camera.py`, `image.py` (doorbell snapshots)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
@@ -574,8 +579,9 @@ When filtering devices from the API, use these class names:
 | Scene | `System.SceneApp` | Yes (use `Execute` method) |
 | Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
-| Security Door | `SmartCOM.Security.SecurityDoor` | No (sensor only) |
-| Intercom (2N) | `SmartCOM.Intercom.Intercom2N` | No (sensor only) |
+| Security Door | `Security.Door` | No (sensor only, stores SavedPictures) |
+| Intercom (2N) | `Security.Intercom.2N.Intercom2N` | No (sensor only) |
+| Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
 
 ### Smart Meter Energy Sensors - IMPORTANT
 
@@ -759,7 +765,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ## Integration Features
 
 ### Home Assistant
-- **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor, Button
+- **Platforms**: Light, Cover, Climate, Sensor, Switch, Select, Binary Sensor, Button, Camera, Image
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
@@ -960,6 +966,7 @@ Before creating a release, ensure the following are up to date:
 
 **IMPORTANT**: Before updating version history, always check the existing entries to identify the current/latest version. Do not overwrite an already-released version with new features - create a new version number instead.
 
+- **v1.15.0**: Camera support for 2N intercom cameras and doorbell snapshot image entities. **Camera**: Live feed via WebSocket using `SetValue ImageRequest=true` to trigger capture, then fetching JPEG from `/temp/` path. **Doorbell Snapshots**: Image entities (`image.py`) for up to 10 historical snapshots from `SavedPictures` property on Security Door. Each snapshot includes timestamp in attributes. **Class name fixes**: Security Door is `Security.Door` (not `SmartCOM.Security.SecurityDoor`), Intercom 2N is `Security.Intercom.2N.Intercom2N` (not `SmartCOM.Intercom.Intercom2N`). **Physical buttons (Taster)**: Verified they operate at hardware level and do NOT fire WebSocket events (tested SC1_M08.Switch1Up, SC1_M07.Switch1Up, SC1_M04.Input3 with 0 events received). **Security Door entities**: Door open/closed state (`IsOpen`/`DoorIsOpen`) and call in progress indicator (`CallInProgress`). **Intercom entities**: Doorbell events, door open events, connection status.
 - **v1.14.0**: WebSocket-based device control for lights and blinds. Lights use `CallMethod SwitchOn/SwitchOff` for explicit on/off (not `Switch([bool])` which is inconsistent) and `BrightnessSetScaled([brightness, transition])` for dimming. Blinds use `CallMethod MoveToPosition([angle, position])` for position and tilt control with cached values. Non-dimmable lights in light groups skip API calls when already on (for combined lights with Govee). Falls back to HTTP when WebSocket unavailable. Added security doors and intercoms with doorbell events (`evon_doorbell`), RGBW light color temperature support (untested), light/blind group classes, and climate humidity display.
 - **v1.13.0**: Added WebSocket support for real-time state updates (read-only).
 - **v1.12.0**: Remote access via `my.evon-smarthome.com` relay server. Reconfigure flow now allows switching between local and remote connection types. Security improvements: explicit SSL context with connection limits, header redaction, token TTL with auto-refresh and memory cleanup on close, comprehensive input validation (instance IDs, method names, Engine ID, username, password, host port), asyncio.Lock for token access, HTTP status handling (400/403/404/429/5xx with response.reason), Content-Type validation, Engine ID redaction in diagnostics.
