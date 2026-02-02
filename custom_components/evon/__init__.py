@@ -280,11 +280,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         # Copy lights list to avoid modification during iteration
                         lights = list(coordinator.data[ENTITY_TYPE_LIGHTS])
                         for light in lights:
+                            light_id = light.get("id")
+                            if not light_id:
+                                continue
                             if light.get("is_on"):
                                 try:
-                                    await api.turn_off_light(light["id"])
+                                    await api.turn_off_light(light_id)
                                 except Exception as err:
-                                    _LOGGER.warning("Failed to turn off light %s: %s", light["id"], err)
+                                    _LOGGER.warning("Failed to turn off light %s: %s", light_id, err)
                     await coordinator.async_refresh()
 
         async def handle_all_blinds_close(call: ServiceCall) -> None:
@@ -302,10 +305,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         # Copy blinds list to avoid modification during iteration
                         blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
                         for blind in blinds:
+                            blind_id = blind.get("id")
+                            if not blind_id:
+                                continue
                             try:
-                                await api.close_blind(blind["id"])
+                                await api.close_blind(blind_id)
                             except Exception as err:
-                                _LOGGER.warning("Failed to close blind %s: %s", blind["id"], err)
+                                _LOGGER.warning("Failed to close blind %s: %s", blind_id, err)
                     await coordinator.async_refresh()
 
         async def handle_all_blinds_open(call: ServiceCall) -> None:
@@ -323,10 +329,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         # Copy blinds list to avoid modification during iteration
                         blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
                         for blind in blinds:
+                            blind_id = blind.get("id")
+                            if not blind_id:
+                                continue
                             try:
-                                await api.open_blind(blind["id"])
+                                await api.open_blind(blind_id)
                             except Exception as err:
-                                _LOGGER.warning("Failed to open blind %s: %s", blind["id"], err)
+                                _LOGGER.warning("Failed to open blind %s: %s", blind_id, err)
                     await coordinator.async_refresh()
 
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)

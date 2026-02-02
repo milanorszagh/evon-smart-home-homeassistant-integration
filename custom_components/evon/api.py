@@ -230,9 +230,10 @@ class EvonApi:
         if self._own_session and self._session:
             await self._session.close()
             self._session = None
-        # Clear token from memory for security
+        # Clear all sensitive data from memory for security
         self._token = None
         self._token_timestamp = 0.0
+        self._password = ""
 
     def set_ws_client(self, ws_client: EvonWsClient | None) -> None:
         """Set the WebSocket client for control operations.
@@ -392,6 +393,7 @@ class EvonApi:
         headers = {
             "Cookie": f"token={token}",
             "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
         }
 
         try:
