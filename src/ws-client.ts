@@ -441,7 +441,13 @@ export class EvonWsClient {
         },
       };
 
-      this.ws!.send(JSON.stringify(message));
+      if (!this.ws) {
+        clearTimeout(timeout);
+        this.pendingRequests.delete(seq);
+        reject(new Error("WebSocket not connected"));
+        return;
+      }
+      this.ws.send(JSON.stringify(message));
     });
   }
 
@@ -490,7 +496,10 @@ export class EvonWsClient {
 
     for (const [key, entry] of Object.entries(data.table)) {
       const parts = key.split(".");
-      const property = parts.pop()!;
+      const property = parts.pop();
+      if (!property) {
+        continue;
+      }
       const instanceId = parts.join(".");
 
       if (!grouped[instanceId]) {
