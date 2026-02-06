@@ -578,7 +578,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
-| **1.16.0** | **Energy Today & Energy This Month sensors** - Built-in calculated sensors for daily and monthly energy consumption. Energy Today queries HA statistics, Energy This Month combines Evon's daily data with today's consumption. No more manual utility_meter configuration needed. |
+| **1.16.0** | **Energy Today & Energy This Month sensors** - Built-in calculated sensors for daily and monthly energy consumption. Energy Today queries HA statistics, Energy This Month combines Evon's daily data with today's consumption. No more manual utility_meter configuration needed. **Also:** WebSocket stability improvements. |
 | **1.15.0** | **Camera & doorbell snapshots** - Live feed from 2N intercom cameras via WebSocket, doorbell snapshot history as image entities (up to 10), security door sensors with call-in-progress indicator. Performance improvements with parallel data processing. Security hardening (credentials removed from diagnostics, tokens removed from logs). Code quality: session management hardening, WebSocket reconnect jitter, improved input validation. |
 | **1.14.0** | **WebSocket device control** - instant response when controlling lights, blinds, and climate via HA (no more waiting for poll cycles). Security doors and intercoms with doorbell events, light/blind groups, RGBW color temperature*, climate humidity display |
 | **1.13.0** | WebSocket support for real-time updates (enabled by default), instant state sync, reduced polling when connected |

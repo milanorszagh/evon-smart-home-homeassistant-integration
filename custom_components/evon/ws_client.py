@@ -185,7 +185,7 @@ class EvonWsClient:
             )
             return True
 
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+        except (aiohttp.ClientError, TimeoutError, OSError) as err:
             _LOGGER.error("WebSocket connection failed: %s", err, exc_info=True)
             return False
         except Exception as err:  # pylint: disable=broad-except
@@ -355,7 +355,7 @@ class EvonWsClient:
 
             except asyncio.CancelledError:
                 break
-            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            except (aiohttp.ClientError, TimeoutError, OSError) as err:
                 _LOGGER.error("WebSocket loop error: %s", err, exc_info=True)
                 await self.disconnect()
                 if self._running:
@@ -442,7 +442,7 @@ class EvonWsClient:
 
         except asyncio.CancelledError:
             raise
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+        except (aiohttp.ClientError, TimeoutError, OSError) as err:
             _LOGGER.error("Error handling WebSocket message: %s", err, exc_info=True)
             await self.disconnect()
         except Exception as err:  # pylint: disable=broad-except
