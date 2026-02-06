@@ -49,3 +49,15 @@ all_blinds_close:
 all_blinds_open:
   name: Open All Blinds
   description: Open all Evon blinds at once.
+
+all_climate_comfort:
+  name: All Climate Comfort
+  description: Set all climate controls to comfort (day) mode at once.
+
+all_climate_eco:
+  name: All Climate Eco
+  description: Set all climate controls to eco (energy saving/night) mode at once.
+
+all_climate_away:
+  name: All Climate Away
+  description: Set all climate controls to away (freeze/heat protection) mode at once. Freeze protection in heating mode, heat protection in cooling mode.

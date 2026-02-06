@@ -726,6 +726,23 @@ class EvonApi:
         """Set climate target temperature."""
         await self.call_method(instance_id, "WriteCurrentSetTemperature", [temperature])
 
+    # Group climate methods (all thermostats at once)
+    async def all_climate_comfort(self) -> None:
+        """Set all climate controls to comfort (day) mode."""
+        await self.call_method("Base.ehThermostat", "AllDayMode")
+
+    async def all_climate_eco(self) -> None:
+        """Set all climate controls to eco (night/energy saving) mode."""
+        await self.call_method("Base.ehThermostat", "AllNightMode")
+
+    async def all_climate_away(self) -> None:
+        """Set all climate controls to away (freeze/heat protection) mode.
+
+        In heating mode (winter): freeze protection prevents pipes from freezing.
+        In cooling mode (summer): heat protection prevents overheating.
+        """
+        await self.call_method("Base.ehThermostat", "AllFreezeMode")
+
     # Switch methods
     async def turn_on_switch(self, instance_id: str) -> None:
         """Turn on a switch."""

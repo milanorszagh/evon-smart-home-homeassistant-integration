@@ -44,6 +44,18 @@
     "all_blinds_open": {
       "name": "Alle Jalousien öffnen",
       "description": "Alle Evon-Jalousien auf einmal öffnen."
+    },
+    "all_climate_comfort": {
+      "name": "Alle Klimasteuerungen Komfort",
+      "description": "Alle Klimasteuerungen auf Komfort-Modus (Tag) umschalten."
+    },
+    "all_climate_eco": {
+      "name": "Alle Klimasteuerungen Eco",
+      "description": "Alle Klimasteuerungen auf Eco-Modus (Energiesparen/Nacht) umschalten."
+    },
+    "all_climate_away": {
+      "name": "Alle Klimasteuerungen Abwesend",
+      "description": "Alle Klimasteuerungen auf Abwesend-Modus (Frost-/Hitzeschutz) umschalten. Frostschutz im Heizmodus, Hitzeschutz im Kühlmodus."
     }
   },
   "issues": {

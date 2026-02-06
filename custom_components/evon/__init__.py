@@ -66,6 +66,9 @@ SERVICE_SET_SEASON_MODE = "set_season_mode"
 SERVICE_ALL_LIGHTS_OFF = "all_lights_off"
 SERVICE_ALL_BLINDS_CLOSE = "all_blinds_close"
 SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
+SERVICE_ALL_CLIMATE_COMFORT = "all_climate_comfort"
+SERVICE_ALL_CLIMATE_ECO = "all_climate_eco"
+SERVICE_ALL_CLIMATE_AWAY = "all_climate_away"
 
 # Home state mapping from service values to Evon instance IDs
 HOME_STATE_MAP = {
@@ -338,6 +341,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 _LOGGER.warning("Failed to open blind %s: %s", blind_id, err)
                     await coordinator.async_refresh()
 
+        async def handle_all_climate_comfort(call: ServiceCall) -> None:
+            """Handle the all climate comfort service call."""
+            _LOGGER.info("All climate comfort service called")
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    try:
+                        await api.all_climate_comfort()
+                    except Exception as err:
+                        _LOGGER.warning("Failed to set all climate to comfort: %s", err)
+                    await coordinator.async_refresh()
+
+        async def handle_all_climate_eco(call: ServiceCall) -> None:
+            """Handle the all climate eco service call."""
+            _LOGGER.info("All climate eco service called")
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    try:
+                        await api.all_climate_eco()
+                    except Exception as err:
+                        _LOGGER.warning("Failed to set all climate to eco: %s", err)
+                    await coordinator.async_refresh()
+
+        async def handle_all_climate_away(call: ServiceCall) -> None:
+            """Handle the all climate away service call."""
+            _LOGGER.info("All climate away service called")
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    try:
+                        await api.all_climate_away()
+                    except Exception as err:
+                        _LOGGER.warning("Failed to set all climate to away: %s", err)
+                    await coordinator.async_refresh()
+
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)
         hass.services.async_register(DOMAIN, SERVICE_RECONNECT_WEBSOCKET, handle_reconnect_websocket)
         hass.services.async_register(DOMAIN, SERVICE_SET_HOME_STATE, handle_set_home_state)
@@ -345,6 +396,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, SERVICE_ALL_LIGHTS_OFF, handle_all_lights_off)
         hass.services.async_register(DOMAIN, SERVICE_ALL_BLINDS_CLOSE, handle_all_blinds_close)
         hass.services.async_register(DOMAIN, SERVICE_ALL_BLINDS_OPEN, handle_all_blinds_open)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_COMFORT, handle_all_climate_comfort)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_ECO, handle_all_climate_eco)
+        hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_AWAY, handle_all_climate_away)
 
     # Clean up stale entities
     await _async_cleanup_stale_entities(hass, entry, coordinator)
