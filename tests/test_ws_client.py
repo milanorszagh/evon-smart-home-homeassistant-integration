@@ -1397,3 +1397,588 @@ class TestWsMappingsEdgeCases:
         """Test subscribe properties for unknown type returns empty list."""
         props = get_subscribe_properties("unknown_type")
         assert props == []
+
+
+class TestWsMessageHandlingEdgeCases:
+    """Tests for WebSocket message parsing edge cases."""
+
+    def test_handle_message_malformed_json(self):
+        """Test handling of malformed JSON message."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Should not raise, just log error
+        client._handle_message("not valid json {")
+        client._handle_message("")
+        client._handle_message("null")
+
+    def test_handle_message_empty_array(self):
+        """Test handling of empty array message."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Empty array - should not crash
+        client._handle_message("[]")
+
+    def test_handle_message_missing_type(self):
+        """Test handling of message without type field."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Array with data but will fail on msg[0] being a dict
+        client._handle_message('[{"data": "test"}]')
+
+    def test_handle_callback_unknown_sequence_id(self):
+        """Test callback with unknown sequence ID is ignored."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Add a pending request with different ID
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[999] = future
+
+        # Callback with different sequence ID - should be ignored
+        msg = json.dumps(["Callback", {"sequenceId": 123, "args": ["result"]}])
+        client._handle_message(msg)
+
+        # Original future should still be pending
+        assert not future.done()
+        assert 999 in client._pending_requests
+
+    def test_handle_callback_sets_result(self):
+        """Test callback correctly sets future result."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[42] = future
+
+        msg = json.dumps(["Callback", {"sequenceId": 42, "args": ["success_result"]}])
+        client._handle_message(msg)
+
+        assert future.done()
+        assert future.result() == "success_result"
+        assert 42 not in client._pending_requests
+
+    def test_handle_callback_empty_args(self):
+        """Test callback with empty args returns None."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[100] = future
+
+        msg = json.dumps(["Callback", {"sequenceId": 100, "args": []}])
+        client._handle_message(msg)
+
+        assert future.done()
+        assert future.result() is None
+
+    def test_handle_callback_no_args_key(self):
+        """Test callback without args key returns None."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[200] = future
+
+        msg = json.dumps(["Callback", {"sequenceId": 200}])
+        client._handle_message(msg)
+
+        assert future.done()
+        assert future.result() is None
+
+    def test_handle_callback_already_done_future(self):
+        """Test callback with already-done future doesn't crash."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        future.set_result("already_set")  # Pre-set the result
+        client._pending_requests[300] = future
+
+        # Should not crash even though future is already done
+        msg = json.dumps(["Callback", {"sequenceId": 300, "args": ["new_result"]}])
+        client._handle_message(msg)
+
+        # Original result should remain
+        assert future.result() == "already_set"
+
+    def test_handle_event_values_changed(self):
+        """Test ValuesChanged event triggers callback."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {
+                "methodName": "ValuesChanged",
+                "args": [
+                    {
+                        "table": {
+                            "light_1.IsOn": {"value": {"Value": True}},
+                            "light_1.ScaledBrightness": {"value": {"Value": 75}},
+                        }
+                    }
+                ],
+            },
+        ])
+        client._handle_message(msg)
+
+        assert len(received_updates) == 1
+        instance_id, props = received_updates[0]
+        assert instance_id == "light_1"
+        assert props == {"IsOn": True, "ScaledBrightness": 75}
+
+    def test_handle_event_values_changed_multiple_instances(self):
+        """Test ValuesChanged event with multiple instances."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {
+                "methodName": "ValuesChanged",
+                "args": [
+                    {
+                        "table": {
+                            "light_1.IsOn": {"value": {"Value": True}},
+                            "blind_2.Position": {"value": {"Value": 50}},
+                            "climate_3.ActualTemperature": {"value": {"Value": 21.5}},
+                        }
+                    }
+                ],
+            },
+        ])
+        client._handle_message(msg)
+
+        assert len(received_updates) == 3
+        instance_ids = [u[0] for u in received_updates]
+        assert set(instance_ids) == {"light_1", "blind_2", "climate_3"}
+
+    def test_handle_event_values_changed_dotted_instance_id(self):
+        """Test ValuesChanged with dotted instance ID (e.g., intercom.Cam)."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {
+                "methodName": "ValuesChanged",
+                "args": [
+                    {
+                        "table": {
+                            "intercom_1.Cam.Image": {"value": {"Value": "/images/new.jpg"}},
+                        }
+                    }
+                ],
+            },
+        ])
+        client._handle_message(msg)
+
+        assert len(received_updates) == 1
+        instance_id, props = received_updates[0]
+        assert instance_id == "intercom_1.Cam"
+        assert props == {"Image": "/images/new.jpg"}
+
+    def test_handle_event_values_changed_no_callback(self):
+        """Test ValuesChanged without callback doesn't crash."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=None,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {
+                "methodName": "ValuesChanged",
+                "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
+            },
+        ])
+        # Should not crash
+        client._handle_message(msg)
+
+    def test_handle_event_values_changed_empty_table(self):
+        """Test ValuesChanged with empty table."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {"methodName": "ValuesChanged", "args": [{"table": {}}]},
+        ])
+        client._handle_message(msg)
+
+        # No updates should be triggered
+        assert len(received_updates) == 0
+
+    def test_handle_event_values_changed_no_args(self):
+        """Test ValuesChanged with missing args."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {"methodName": "ValuesChanged", "args": []},
+        ])
+        client._handle_message(msg)
+
+        assert len(received_updates) == 0
+
+    def test_handle_event_other_method(self):
+        """Test non-ValuesChanged events are ignored."""
+        received_updates = []
+
+        def on_values_changed(instance_id, properties):
+            received_updates.append((instance_id, properties))
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=on_values_changed,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {"methodName": "SomeOtherEvent", "args": [{"data": "test"}]},
+        ])
+        client._handle_message(msg)
+
+        # No updates - only ValuesChanged should trigger callback
+        assert len(received_updates) == 0
+
+    def test_handle_connected_message(self):
+        """Test Connected message is handled (no-op)."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Should not crash
+        msg = json.dumps(["Connected", {"sessionId": "abc123"}])
+        client._handle_message(msg)
+
+    def test_callback_error_does_not_crash_client(self):
+        """Test that error in callback doesn't crash message handling."""
+        def bad_callback(instance_id, properties):
+            raise ValueError("Intentional error in callback")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_values_changed=bad_callback,
+        )
+
+        msg = json.dumps([
+            "Event",
+            {
+                "methodName": "ValuesChanged",
+                "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
+            },
+        ])
+
+        # Should not raise - error is logged but client continues
+        client._handle_message(msg)
+
+
+class TestWsClientConnectionState:
+    """Tests for WebSocket client connection state management."""
+
+    def test_is_connected_false_when_no_ws(self):
+        """Test is_connected returns False when no WebSocket."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        assert client._ws is None
+        assert client.is_connected is False
+
+    def test_is_connected_false_when_ws_closed(self):
+        """Test is_connected returns False when WebSocket is closed."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_ws = MagicMock()
+        mock_ws.closed = True
+        client._ws = mock_ws
+        client._connected = True
+
+        assert client.is_connected is False
+
+    def test_is_connected_false_when_not_connected_flag(self):
+        """Test is_connected returns False when _connected is False."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+        client._ws = mock_ws
+        client._connected = False
+
+        assert client.is_connected is False
+
+    def test_is_connected_true_when_all_conditions_met(self):
+        """Test is_connected returns True when properly connected."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+        client._ws = mock_ws
+        client._connected = True
+
+        assert client.is_connected is True
+
+    def test_connection_state_callback_called(self):
+        """Test on_connection_state callback is available."""
+        state_changes = []
+
+        def on_connection_state(connected):
+            state_changes.append(connected)
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            on_connection_state=on_connection_state,
+        )
+
+        assert client._on_connection_state is not None
+
+    def test_get_valid_session_with_factory(self):
+        """Test _get_valid_session uses session factory when available."""
+        mock_session = MagicMock()
+        mock_session.closed = False
+
+        def get_session():
+            return mock_session
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            get_session=get_session,
+        )
+
+        result = client._get_valid_session()
+        assert result is mock_session
+
+    def test_get_valid_session_falls_back_to_stored(self):
+        """Test _get_valid_session falls back to stored session."""
+        mock_session = MagicMock()
+        mock_session.closed = False
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            session=mock_session,
+        )
+
+        result = client._get_valid_session()
+        assert result is mock_session
+
+    def test_get_valid_session_raises_when_no_session(self):
+        """Test _get_valid_session raises when no valid session."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        with pytest.raises(RuntimeError, match="Session is closed"):
+            client._get_valid_session()
+
+    def test_get_valid_session_raises_when_session_closed(self):
+        """Test _get_valid_session raises when stored session is closed."""
+        mock_session = MagicMock()
+        mock_session.closed = True
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            session=mock_session,
+        )
+
+        with pytest.raises(RuntimeError, match="Session is closed"):
+            client._get_valid_session()
+
+
+class TestWsReconnectDelay:
+    """Tests for WebSocket reconnect delay calculation."""
+
+    def test_calculate_reconnect_delay_within_bounds(self):
+        """Test reconnect delay is within expected bounds."""
+        from custom_components.evon.ws_client import _calculate_reconnect_delay
+
+        base_delay = 10.0
+        max_delay = 60.0
+
+        # Run multiple times to test randomness
+        for _ in range(100):
+            delay = _calculate_reconnect_delay(base_delay, max_delay)
+            # Should be within ±25% of base (7.5 to 12.5)
+            assert 7.5 <= delay <= 12.5
+            # Should not exceed max
+            assert delay <= max_delay
+
+    def test_calculate_reconnect_delay_respects_max(self):
+        """Test reconnect delay doesn't exceed max."""
+        from custom_components.evon.ws_client import _calculate_reconnect_delay
+
+        base_delay = 100.0
+        max_delay = 60.0
+
+        for _ in range(100):
+            delay = _calculate_reconnect_delay(base_delay, max_delay)
+            assert delay <= max_delay
+
+    def test_calculate_reconnect_delay_minimum_one_second(self):
+        """Test reconnect delay is at least 1 second."""
+        from custom_components.evon.ws_client import _calculate_reconnect_delay
+
+        base_delay = 0.5
+        max_delay = 60.0
+
+        for _ in range(100):
+            delay = _calculate_reconnect_delay(base_delay, max_delay)
+            assert delay >= 1.0
+
+
+class TestWsPendingRequestsLimit:
+    """Tests for WebSocket pending requests limit."""
+
+    @pytest.mark.asyncio
+    async def test_too_many_pending_requests_raises_error(self):
+        """Test that too many pending requests raises error."""
+        from custom_components.evon.api import EvonWsError
+        from custom_components.evon.const import WS_MAX_PENDING_REQUESTS
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonWsError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Set up as connected
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+        client._ws = mock_ws
+        client._connected = True
+
+        # Fill up pending requests
+        for i in range(WS_MAX_PENDING_REQUESTS):
+            future = asyncio.get_event_loop().create_future()
+            client._pending_requests[i] = future
+
+        # Next request should fail
+        with pytest.raises(EvonWsError, match="Too many pending"):
+            await client._send_request("TestMethod", [])
+
+    @pytest.mark.asyncio
+    async def test_send_request_when_not_connected(self):
+        """Test send_request raises when not connected."""
+        from custom_components.evon.api import EvonWsNotConnectedError
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        with pytest.raises(EvonWsNotConnectedError):
+            await client._send_request("TestMethod", [])

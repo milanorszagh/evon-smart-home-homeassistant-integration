@@ -955,3 +955,585 @@ class TestCreateSslContext:
         assert isinstance(ctx, ssl.SSLContext)
         # Default context should verify certificates
         assert ctx.verify_mode == ssl.CERT_REQUIRED
+
+
+class TestApiErrorHandling:
+    """Tests for API error handling paths."""
+
+    @pytest.fixture
+    def api_with_token(self):
+        """Create an API with a valid token already set."""
+        import time
+        from custom_components.evon.api import EvonApiError
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonApiError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "valid_token"
+        api._token_timestamp = time.monotonic()
+        return api
+
+    @pytest.mark.asyncio
+    async def test_request_400_bad_request(self, api_with_token):
+        """Test 400 Bad Request error handling."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 400
+        mock_response.reason = "Bad Request"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="Bad request"):
+            await api_with_token._request("POST", "/instances/test/Method")
+
+    @pytest.mark.asyncio
+    async def test_request_403_forbidden(self, api_with_token):
+        """Test 403 Forbidden error handling."""
+        from custom_components.evon.api import EvonAuthError
+
+        mock_response = MagicMock()
+        mock_response.status = 403
+        mock_response.reason = "Forbidden"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonAuthError, match="Access forbidden"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_404_not_found(self, api_with_token):
+        """Test 404 Not Found error handling."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 404
+        mock_response.reason = "Not Found"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="Resource not found"):
+            await api_with_token._request("GET", "/instances/nonexistent")
+
+    @pytest.mark.asyncio
+    async def test_request_429_rate_limited(self, api_with_token):
+        """Test 429 Too Many Requests error handling."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 429
+        mock_response.reason = "Too Many Requests"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="Rate limited"):
+            await api_with_token._request("POST", "/instances/test/Method")
+
+    @pytest.mark.asyncio
+    async def test_request_500_server_error(self, api_with_token):
+        """Test 500 Internal Server Error handling."""
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_response = MagicMock()
+        mock_response.status = 500
+        mock_response.reason = "Internal Server Error"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Server error"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_502_bad_gateway(self, api_with_token):
+        """Test 502 Bad Gateway error handling."""
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_response = MagicMock()
+        mock_response.status = 502
+        mock_response.reason = "Bad Gateway"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Server error"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_503_service_unavailable(self, api_with_token):
+        """Test 503 Service Unavailable error handling."""
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_response = MagicMock()
+        mock_response.status = 503
+        mock_response.reason = "Service Unavailable"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Server error"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_504_gateway_timeout(self, api_with_token):
+        """Test 504 Gateway Timeout error handling."""
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_response = MagicMock()
+        mock_response.status = 504
+        mock_response.reason = "Gateway Timeout"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Server error"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_unknown_error_status(self, api_with_token):
+        """Test unknown error status code handling."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 418  # I'm a teapot
+        mock_response.reason = "I'm a teapot"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="API request failed"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_204_no_content(self, api_with_token):
+        """Test 204 No Content returns empty dict."""
+        mock_response = MagicMock()
+        mock_response.status = 204
+        mock_response.reason = "No Content"
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        result = await api_with_token._request("POST", "/instances/test/Method")
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_request_missing_content_type(self, api_with_token):
+        """Test response with missing Content-Type header."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.reason = "OK"
+        mock_response.headers = {}  # No Content-Type
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="missing Content-Type"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_wrong_content_type(self, api_with_token):
+        """Test response with wrong Content-Type (HTML instead of JSON)."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.reason = "OK"
+        mock_response.headers = {"Content-Type": "text/html"}
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="Unexpected response type"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_invalid_json(self, api_with_token):
+        """Test response with invalid JSON body."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.reason = "OK"
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json = AsyncMock(side_effect=ValueError("Invalid JSON"))
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonApiError, match="Invalid JSON"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_connection_error(self, api_with_token):
+        """Test connection error during request."""
+        import aiohttp
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.side_effect = aiohttp.ClientError("Connection refused")
+
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Connection error"):
+            await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_success_200(self, api_with_token):
+        """Test successful 200 OK response."""
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.reason = "OK"
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json = AsyncMock(return_value={"data": [{"ID": "test"}]})
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        result = await api_with_token._request("GET", "/instances")
+        assert result == {"data": [{"ID": "test"}]}
+
+    @pytest.mark.asyncio
+    async def test_request_success_201_created(self, api_with_token):
+        """Test successful 201 Created response."""
+        mock_response = MagicMock()
+        mock_response.status = 201
+        mock_response.reason = "Created"
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.json = AsyncMock(return_value={"id": "new_resource"})
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.return_value = async_ctx
+
+        api_with_token._session = mock_session
+
+        result = await api_with_token._request("POST", "/instances")
+        assert result == {"id": "new_resource"}
+
+
+class TestTokenRefreshScenarios:
+    """Tests for token refresh and expiration edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_token_almost_expired_not_refreshed(self):
+        """Test that token almost at TTL but not expired is not refreshed."""
+        import time
+        from custom_components.evon.api import TOKEN_TTL_SECONDS
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "almost_expired_token"
+        # Set timestamp to 1 second before expiration
+        api._token_timestamp = time.monotonic() - TOKEN_TTL_SECONDS + 1
+
+        assert api._is_token_expired() is False
+
+    def test_token_exactly_at_ttl_is_expired(self):
+        """Test that token exactly at TTL is considered expired."""
+        import time
+        from custom_components.evon.api import TOKEN_TTL_SECONDS
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "edge_case_token"
+        # Set timestamp to exactly TTL seconds ago
+        api._token_timestamp = time.monotonic() - TOKEN_TTL_SECONDS
+
+        assert api._is_token_expired() is True
+
+    def test_token_well_within_ttl(self):
+        """Test that token well within TTL is not expired."""
+        import time
+        from custom_components.evon.api import TOKEN_TTL_SECONDS
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "fresh_token"
+        # Set timestamp to half of TTL ago
+        api._token_timestamp = time.monotonic() - (TOKEN_TTL_SECONDS / 2)
+
+        assert api._is_token_expired() is False
+
+    def test_token_timestamp_far_in_past_means_expired(self):
+        """Test that timestamp far in the past means token is expired."""
+        import time
+        from custom_components.evon.api import TOKEN_TTL_SECONDS
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "some_token"
+        # Set timestamp to well beyond TTL in the past
+        api._token_timestamp = time.monotonic() - TOKEN_TTL_SECONDS - 1000
+
+        assert api._is_token_expired() is True
+
+    def test_no_token_means_expired(self):
+        """Test that missing token is considered expired."""
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = None
+        api._token_timestamp = 100.0  # Timestamp doesn't matter
+
+        assert api._is_token_expired() is True
+
+    def test_empty_token_means_expired(self):
+        """Test that empty string token is considered expired."""
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = ""
+        api._token_timestamp = 100.0
+
+        # Empty string is falsy, so _is_token_expired checks if not self._token
+        assert api._is_token_expired() is True
+
+
+class TestLoginErrorHandling:
+    """Tests for login-specific error handling.
+
+    Note: Tests that use pytest.raises with exception classes require
+    real homeassistant package and are skipped when mocked.
+    """
+
+    @pytest.mark.asyncio
+    async def test_login_302_redirect_to_login_page(self):
+        """Test 302 redirect to login page indicates auth failure."""
+        from custom_components.evon.api import EvonAuthError
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonAuthError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="wrong_pass",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status = 302
+        mock_response.headers = {"Location": "/login.html?error=1"}
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.post.return_value = async_ctx
+
+        api._session = mock_session
+
+        with pytest.raises(EvonAuthError, match="Invalid credentials"):
+            await api.login()
+
+    @pytest.mark.asyncio
+    async def test_login_302_unexpected_redirect(self):
+        """Test 302 redirect to unexpected location."""
+        from custom_components.evon.api import EvonAuthError
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonAuthError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_response = MagicMock()
+        mock_response.status = 302
+        mock_response.headers = {"Location": "/maintenance.html"}
+
+        async_ctx = AsyncMock()
+        async_ctx.__aenter__.return_value = mock_response
+        async_ctx.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.post.return_value = async_ctx
+
+        api._session = mock_session
+
+        with pytest.raises(EvonAuthError, match="Unexpected redirect"):
+            await api.login()
+
+    @pytest.mark.asyncio
+    async def test_login_connection_error(self):
+        """Test connection error during login."""
+        import aiohttp
+        from custom_components.evon.api import EvonConnectionError
+
+        # Skip if homeassistant is mocked (exceptions are MagicMock)
+        if not isinstance(EvonConnectionError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.post.side_effect = aiohttp.ClientError("Connection refused")
+
+        api._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="Connection error"):
+            await api.login()
+
+    @pytest.mark.asyncio
+    async def test_login_timeout(self):
+        """Test timeout during login propagates."""
+        import asyncio
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.post.side_effect = asyncio.TimeoutError()
+
+        api._session = mock_session
+
+        # TimeoutError is not a ClientError, so it should propagate
+        with pytest.raises(asyncio.TimeoutError):
+            await api.login()
