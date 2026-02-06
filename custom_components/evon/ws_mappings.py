@@ -304,6 +304,11 @@ def ws_to_coordinator_data(
 
         if is_cooling is not None:
             if is_cooling:
+                if "MinSetValueCool" in ws_properties:
+                    result["min_set_value_cool"] = ws_properties.get("MinSetValueCool")
+                if "MaxSetValueCool" in ws_properties:
+                    result["max_set_value_cool"] = ws_properties.get("MaxSetValueCool")
+
                 comfort = _coalesce(
                     ws_properties.get("SetValueComfortCooling"),
                     existing_data.get("comfort_temp") if existing_data else None,
@@ -318,16 +323,21 @@ def ws_to_coordinator_data(
                 )
                 evon_min = _coalesce(
                     ws_properties.get("MinSetValueCool"),
-                    existing_data.get("min_temp") if existing_data else None,
+                    existing_data.get("min_set_value_cool") if existing_data else None,
                 )
                 evon_max = _coalesce(
                     ws_properties.get("MaxSetValueCool"),
-                    existing_data.get("max_temp") if existing_data else None,
+                    existing_data.get("max_set_value_cool") if existing_data else None,
                 )
 
                 min_temp = _min_defined(evon_min, comfort, eco, protection)
                 max_temp = _max_defined(evon_max, protection)
             else:
+                if "MinSetValueHeat" in ws_properties:
+                    result["min_set_value_heat"] = ws_properties.get("MinSetValueHeat")
+                if "MaxSetValueHeat" in ws_properties:
+                    result["max_set_value_heat"] = ws_properties.get("MaxSetValueHeat")
+
                 comfort = _coalesce(
                     ws_properties.get("SetValueComfortHeating"),
                     existing_data.get("comfort_temp") if existing_data else None,
@@ -342,11 +352,11 @@ def ws_to_coordinator_data(
                 )
                 evon_min = _coalesce(
                     ws_properties.get("MinSetValueHeat"),
-                    existing_data.get("min_temp") if existing_data else None,
+                    existing_data.get("min_set_value_heat") if existing_data else None,
                 )
                 evon_max = _coalesce(
                     ws_properties.get("MaxSetValueHeat"),
-                    existing_data.get("max_temp") if existing_data else None,
+                    existing_data.get("max_set_value_heat") if existing_data else None,
                 )
 
                 min_temp = _min_defined(evon_min, protection)
