@@ -212,13 +212,19 @@
           "sync_areas": "Sync areas from Evon",
           "non_dimmable_lights": "Non-dimmable lights",
           "http_only": "Use HTTP API only (disable WebSocket)",
-          "scan_interval": "Poll interval (seconds)"
+          "scan_interval": "Poll interval (seconds)",
+          "debug_api": "Debug logging: API",
+          "debug_websocket": "Debug logging: WebSocket",
+          "debug_coordinator": "Debug logging: Coordinator"
         },
         "data_description": {
           "sync_areas": "Automatically assign devices to Home Assistant areas based on their room assignment in the Evon system. Note: Changing this option will reload the integration.",
           "non_dimmable_lights": "Select lights that should be treated as on/off only (no dimming). Useful for LED strips connected via PWM dimmers that need full power. Note: Changing this option will reload the integration.",
           "http_only": "Disable WebSocket and use HTTP polling only. WebSocket is recommended for instant state updates. Only enable this if you experience connection issues with WebSocket. Note: Changing this option will reload the integration.",
-          "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled."
+          "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled.",
+          "debug_api": "Enable debug logging for HTTP API requests and responses. Useful for troubleshooting connection or authentication issues.",
+          "debug_websocket": "Enable debug logging for WebSocket messages. Useful for troubleshooting real-time update issues.",
+          "debug_coordinator": "Enable debug logging for the data coordinator. Useful for troubleshooting data processing and entity updates."
         }
       }
     }

@@ -19,6 +19,9 @@ import voluptuous as vol
 from .api import EvonApi, EvonApiError, EvonAuthError
 from .const import (
     CONF_CONNECTION_TYPE,
+    CONF_DEBUG_API,
+    CONF_DEBUG_COORDINATOR,
+    CONF_DEBUG_WEBSOCKET,
     CONF_ENGINE_ID,
     CONF_HTTP_ONLY,
     CONF_NON_DIMMABLE_LIGHTS,
@@ -26,6 +29,9 @@ from .const import (
     CONF_SYNC_AREAS,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_DEBUG_API,
+    DEFAULT_DEBUG_COORDINATOR,
+    DEFAULT_DEBUG_WEBSOCKET,
     DEFAULT_HTTP_ONLY,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
@@ -568,6 +574,9 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         current_sync_areas = self.config_entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
         current_http_only = self.config_entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
         current_non_dimmable = self.config_entry.options.get(CONF_NON_DIMMABLE_LIGHTS, [])
+        current_debug_api = self.config_entry.options.get(CONF_DEBUG_API, DEFAULT_DEBUG_API)
+        current_debug_ws = self.config_entry.options.get(CONF_DEBUG_WEBSOCKET, DEFAULT_DEBUG_WEBSOCKET)
+        current_debug_coord = self.config_entry.options.get(CONF_DEBUG_COORDINATOR, DEFAULT_DEBUG_COORDINATOR)
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
@@ -579,7 +588,7 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     light_name = light["name"]
                     light_options[light_id] = light_name
 
-        # Build schema - order: sync_areas, non_dimmable_lights, http_only, scan_interval
+        # Build schema - order: sync_areas, non_dimmable_lights, http_only, scan_interval, debug options
         schema_dict: dict[Any, Any] = {
             vol.Required(CONF_SYNC_AREAS, default=current_sync_areas): bool,
         }
@@ -599,11 +608,16 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                 )
             )
 
-        # Advanced options last
+        # Advanced options
         schema_dict[vol.Required(CONF_HTTP_ONLY, default=current_http_only)] = bool
         schema_dict[vol.Required(CONF_SCAN_INTERVAL, default=current_interval)] = vol.All(
             vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
         )
+
+        # Debug logging options
+        schema_dict[vol.Required(CONF_DEBUG_API, default=current_debug_api)] = bool
+        schema_dict[vol.Required(CONF_DEBUG_WEBSOCKET, default=current_debug_ws)] = bool
+        schema_dict[vol.Required(CONF_DEBUG_COORDINATOR, default=current_debug_coord)] = bool
 
         return self.async_show_form(
             step_id="init",

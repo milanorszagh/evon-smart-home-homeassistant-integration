@@ -99,6 +99,14 @@ ENTITY_TYPE_CAMERAS = "cameras"
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"
 
+# Debug logging options
+CONF_DEBUG_API = "debug_api"
+CONF_DEBUG_WEBSOCKET = "debug_websocket"
+CONF_DEBUG_COORDINATOR = "debug_coordinator"
+DEFAULT_DEBUG_API = False
+DEFAULT_DEBUG_WEBSOCKET = False
+DEFAULT_DEBUG_COORDINATOR = False
+
 # Repair issue IDs
 REPAIR_CONNECTION_FAILED = "connection_failed"
 REPAIR_STALE_ENTITIES_CLEANED = "stale_entities_cleaned"

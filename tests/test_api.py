@@ -1537,3 +1537,131 @@ class TestLoginErrorHandling:
         # TimeoutError is not a ClientError, so it should propagate
         with pytest.raises(asyncio.TimeoutError):
             await api.login()
+
+
+class TestDebugLogging:
+    """Tests for debug logging configuration."""
+
+    def test_apply_debug_logging_all_enabled(self):
+        """Test applying debug logging with all options enabled."""
+        import logging
+        from custom_components.evon import _apply_debug_logging
+        from custom_components.evon.const import (
+            CONF_DEBUG_API,
+            CONF_DEBUG_COORDINATOR,
+            CONF_DEBUG_WEBSOCKET,
+        )
+
+        # Create mock config entry
+        mock_entry = MagicMock()
+        mock_entry.options = {
+            CONF_DEBUG_API: True,
+            CONF_DEBUG_WEBSOCKET: True,
+            CONF_DEBUG_COORDINATOR: True,
+        }
+
+        _apply_debug_logging(mock_entry)
+
+        # Check loggers are set to DEBUG
+        api_logger = logging.getLogger("custom_components.evon.api")
+        ws_logger = logging.getLogger("custom_components.evon.ws_client")
+        coord_logger = logging.getLogger("custom_components.evon.coordinator")
+
+        assert api_logger.level == logging.DEBUG
+        assert ws_logger.level == logging.DEBUG
+        assert coord_logger.level == logging.DEBUG
+
+    def test_apply_debug_logging_all_disabled(self):
+        """Test applying debug logging with all options disabled."""
+        import logging
+        from custom_components.evon import _apply_debug_logging
+        from custom_components.evon.const import (
+            CONF_DEBUG_API,
+            CONF_DEBUG_COORDINATOR,
+            CONF_DEBUG_WEBSOCKET,
+        )
+
+        # Create mock config entry
+        mock_entry = MagicMock()
+        mock_entry.options = {
+            CONF_DEBUG_API: False,
+            CONF_DEBUG_WEBSOCKET: False,
+            CONF_DEBUG_COORDINATOR: False,
+        }
+
+        _apply_debug_logging(mock_entry)
+
+        # Check loggers are set to INFO
+        api_logger = logging.getLogger("custom_components.evon.api")
+        ws_logger = logging.getLogger("custom_components.evon.ws_client")
+        coord_logger = logging.getLogger("custom_components.evon.coordinator")
+
+        assert api_logger.level == logging.INFO
+        assert ws_logger.level == logging.INFO
+        assert coord_logger.level == logging.INFO
+
+    def test_apply_debug_logging_partial(self):
+        """Test applying debug logging with only some options enabled."""
+        import logging
+        from custom_components.evon import _apply_debug_logging
+        from custom_components.evon.const import (
+            CONF_DEBUG_API,
+            CONF_DEBUG_COORDINATOR,
+            CONF_DEBUG_WEBSOCKET,
+        )
+
+        # Create mock config entry - only API debug enabled
+        mock_entry = MagicMock()
+        mock_entry.options = {
+            CONF_DEBUG_API: True,
+            CONF_DEBUG_WEBSOCKET: False,
+            CONF_DEBUG_COORDINATOR: False,
+        }
+
+        _apply_debug_logging(mock_entry)
+
+        api_logger = logging.getLogger("custom_components.evon.api")
+        ws_logger = logging.getLogger("custom_components.evon.ws_client")
+        coord_logger = logging.getLogger("custom_components.evon.coordinator")
+
+        assert api_logger.level == logging.DEBUG
+        assert ws_logger.level == logging.INFO
+        assert coord_logger.level == logging.INFO
+
+    def test_apply_debug_logging_defaults(self):
+        """Test applying debug logging with missing options uses defaults."""
+        import logging
+        from custom_components.evon import _apply_debug_logging
+
+        # Create mock config entry with empty options
+        mock_entry = MagicMock()
+        mock_entry.options = {}
+
+        _apply_debug_logging(mock_entry)
+
+        # All should default to INFO (defaults are False)
+        api_logger = logging.getLogger("custom_components.evon.api")
+        ws_logger = logging.getLogger("custom_components.evon.ws_client")
+        coord_logger = logging.getLogger("custom_components.evon.coordinator")
+
+        assert api_logger.level == logging.INFO
+        assert ws_logger.level == logging.INFO
+        assert coord_logger.level == logging.INFO
+
+    def test_debug_constants_exist(self):
+        """Test that debug logging constants are defined."""
+        from custom_components.evon.const import (
+            CONF_DEBUG_API,
+            CONF_DEBUG_COORDINATOR,
+            CONF_DEBUG_WEBSOCKET,
+            DEFAULT_DEBUG_API,
+            DEFAULT_DEBUG_COORDINATOR,
+            DEFAULT_DEBUG_WEBSOCKET,
+        )
+
+        assert CONF_DEBUG_API == "debug_api"
+        assert CONF_DEBUG_WEBSOCKET == "debug_websocket"
+        assert CONF_DEBUG_COORDINATOR == "debug_coordinator"
+        assert DEFAULT_DEBUG_API is False
+        assert DEFAULT_DEBUG_WEBSOCKET is False
+        assert DEFAULT_DEBUG_COORDINATOR is False

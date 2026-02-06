@@ -14,6 +14,9 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import EvonApi
 from .const import (
     CONF_CONNECTION_TYPE,
+    CONF_DEBUG_API,
+    CONF_DEBUG_COORDINATOR,
+    CONF_DEBUG_WEBSOCKET,
     CONF_ENGINE_ID,
     CONF_HOST,
     CONF_HTTP_ONLY,
@@ -23,6 +26,9 @@ from .const import (
     CONF_USERNAME,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_DEBUG_API,
+    DEFAULT_DEBUG_COORDINATOR,
+    DEFAULT_DEBUG_WEBSOCKET,
     DEFAULT_HTTP_ONLY,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
@@ -46,6 +52,36 @@ from .const import (
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _apply_debug_logging(entry: ConfigEntry) -> None:
+    """Apply debug logging settings from config entry options.
+
+    This sets the log level for specific evon loggers based on user preferences.
+    Changes take effect immediately without requiring a restart.
+    """
+    debug_api = entry.options.get(CONF_DEBUG_API, DEFAULT_DEBUG_API)
+    debug_ws = entry.options.get(CONF_DEBUG_WEBSOCKET, DEFAULT_DEBUG_WEBSOCKET)
+    debug_coord = entry.options.get(CONF_DEBUG_COORDINATOR, DEFAULT_DEBUG_COORDINATOR)
+
+    # API logger (custom_components.evon.api)
+    api_logger = logging.getLogger("custom_components.evon.api")
+    api_logger.setLevel(logging.DEBUG if debug_api else logging.INFO)
+
+    # WebSocket logger (custom_components.evon.ws_client)
+    ws_logger = logging.getLogger("custom_components.evon.ws_client")
+    ws_logger.setLevel(logging.DEBUG if debug_ws else logging.INFO)
+
+    # Coordinator logger (custom_components.evon.coordinator)
+    coord_logger = logging.getLogger("custom_components.evon.coordinator")
+    coord_logger.setLevel(logging.DEBUG if debug_coord else logging.INFO)
+
+    _LOGGER.info(
+        "Debug logging: API=%s, WebSocket=%s, Coordinator=%s",
+        "DEBUG" if debug_api else "INFO",
+        "DEBUG" if debug_ws else "INFO",
+        "DEBUG" if debug_coord else "INFO",
+    )
 
 def _get_service_lock(hass: HomeAssistant) -> asyncio.Lock:
     """Get or create the service lock for this hass instance.
@@ -144,6 +180,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "username": entry.data[CONF_USERNAME],
         "password": entry.data[CONF_PASSWORD],
     }
+
+    # Apply debug logging settings
+    _apply_debug_logging(entry)
 
     # Set up WebSocket for real-time updates (both local and remote connections)
     if use_websocket:
@@ -588,6 +627,9 @@ async def _async_cleanup_stale_entities(
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
     coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+    # Apply debug logging settings (no reload required)
+    _apply_debug_logging(entry)
 
     # Update scan interval
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
