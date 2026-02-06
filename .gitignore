@@ -18,6 +18,7 @@ logs/
 
 # Test files
 test-api.mjs
+scripts/
 
 # Python
 .venv/
