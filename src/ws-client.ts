@@ -419,6 +419,26 @@ export class EvonWsClient {
       await this.connect();
     }
 
+    if (!this.isConnected()) {
+      throw new Error("WebSocket not connected after connect");
+    }
+
+    try {
+      return await this.callWithReturn<T>(methodName, args);
+    } catch (error) {
+      if (error instanceof Error && error.message === "WebSocket not connected") {
+        this.connected = false;
+        await this.connect();
+        if (!this.isConnected()) {
+          throw new Error("WebSocket not connected after reconnect");
+        }
+        return this.callWithReturn<T>(methodName, args);
+      }
+      throw error;
+    }
+  }
+
+  private callWithReturn<T>(methodName: string, args: unknown[]): Promise<T | null> {
     return new Promise((resolve, reject) => {
       const seq = this.sequenceId++;
       const timeout = setTimeout(() => {
