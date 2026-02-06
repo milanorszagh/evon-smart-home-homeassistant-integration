@@ -109,10 +109,7 @@ class EvonCamera(EvonEntity, Camera):
         for door in self.coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
             cam_instance = door.get("cam_instance_name", "")
             # CamInstanceName might be just "Cam" or full "Intercom2N1000.Cam"
-            if cam_instance and (
-                cam_instance == self._instance_id
-                or self._instance_id.endswith(f".{cam_instance}")
-            ):
+            if cam_instance and (cam_instance == self._instance_id or self._instance_id.endswith(f".{cam_instance}")):
                 return door.get("saved_pictures", [])
         return []
 

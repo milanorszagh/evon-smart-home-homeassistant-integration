@@ -155,8 +155,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 process_cameras(self.api, instances, self._get_room_name),
             )
 
-            _LOGGER.debug("Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d",
-                          len(lights), len(climates), len(smart_meters), len(blinds))
+            _LOGGER.debug(
+                "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d",
+                len(lights),
+                len(climates),
+                len(smart_meters),
+                len(blinds),
+            )
 
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
@@ -550,8 +555,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             coord_data = ws_to_coordinator_data(entity_type, properties, entity)
         except Exception as err:
             _LOGGER.error(
-                "Failed to convert WebSocket data for %s (%s): %s. "
-                "Requesting coordinator refresh to sync state.",
+                "Failed to convert WebSocket data for %s (%s): %s. Requesting coordinator refresh to sync state.",
                 instance_id,
                 entity_type,
                 err,
@@ -630,9 +634,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             force,
         )
 
-    async def _calculate_energy_today_and_month(
-        self, smart_meters: list[dict[str, Any]]
-    ) -> None:
+    async def _calculate_energy_today_and_month(self, smart_meters: list[dict[str, Any]]) -> None:
         """Calculate energy_today and energy_this_month for smart meters.
 
         Uses HA statistics to get today's consumption and combines with
@@ -644,7 +646,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         _LOGGER.debug(
             "Calculating energy for %d smart meters, today_day=%d, start_of_day=%s",
-            len(smart_meters), today_day, start_of_day.isoformat()
+            len(smart_meters),
+            today_day,
+            start_of_day.isoformat(),
         )
 
         for meter in smart_meters:
@@ -693,7 +697,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "energy_data_month for %s: %d items, last 5: %s",
                 meter_name,
                 len(energy_data_month) if energy_data_month else 0,
-                energy_data_month[-5:] if energy_data_month else "None"
+                energy_data_month[-5:] if energy_data_month else "None",
             )
 
             if energy_data_month and isinstance(energy_data_month, list):
@@ -704,8 +708,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if days_this_month_excluding_today > 0 and len(energy_data_month) >= days_this_month_excluding_today:
                     relevant_days = energy_data_month[-days_this_month_excluding_today:]
                     _LOGGER.debug(
-                        "Using %d days from energy_data_month: %s",
-                        days_this_month_excluding_today, relevant_days
+                        "Using %d days from energy_data_month: %s", days_this_month_excluding_today, relevant_days
                     )
                     for v in relevant_days:
                         if isinstance(v, (int, float)):
@@ -718,7 +721,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 meter["energy_this_month_calculated"] = round(month_sum, 2)
                 _LOGGER.debug(
                     "Set energy_this_month_calculated=%s for %s (month_sum=%s + today=%s)",
-                    meter["energy_this_month_calculated"], meter_name, month_sum - (energy_today or 0), energy_today
+                    meter["energy_this_month_calculated"],
+                    meter_name,
+                    month_sum - (energy_today or 0),
+                    energy_today,
                 )
             else:
                 meter["energy_this_month_calculated"] = energy_today

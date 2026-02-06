@@ -12,7 +12,6 @@ from homeassistant.components.repairs import RepairsFlow
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -287,8 +286,6 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "invalid_auth"
                 except EvonApiError:
                     errors["base"] = "cannot_connect"
-                except AbortFlow:
-                    raise  # Re-raise flow control exceptions
                 except Exception as ex:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception: %s", ex)
                     errors["base"] = "unknown"
@@ -355,8 +352,6 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "invalid_auth"
                 except EvonApiError:
                     errors["base"] = "cannot_connect"
-                except AbortFlow:
-                    raise  # Re-raise flow control exceptions
                 except Exception as ex:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception: %s", ex)
                     errors["base"] = "unknown"
@@ -463,8 +458,6 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "invalid_auth"
                 except EvonApiError:
                     errors["base"] = "cannot_connect"
-                except AbortFlow:
-                    raise  # Re-raise flow control exceptions
                 except Exception as ex:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
                     errors["base"] = "unknown"
@@ -541,8 +534,6 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "invalid_auth"
                 except EvonApiError:
                     errors["base"] = "cannot_connect"
-                except AbortFlow:
-                    raise  # Re-raise flow control exceptions
                 except Exception as ex:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception during reconfigure: %s", ex)
                     errors["base"] = "unknown"

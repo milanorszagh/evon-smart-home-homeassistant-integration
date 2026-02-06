@@ -83,6 +83,7 @@ def _apply_debug_logging(entry: ConfigEntry) -> None:
         "DEBUG" if debug_coord else "INFO",
     )
 
+
 def _get_service_lock(hass: HomeAssistant) -> asyncio.Lock:
     """Get or create the service lock for this hass instance.
 
@@ -307,7 +308,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 # Take a snapshot of entries to iterate over
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -332,7 +333,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 # Take a snapshot of entries to iterate over
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -356,7 +357,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 # Take a snapshot of entries to iterate over
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -379,7 +380,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("All climate comfort service called")
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -395,7 +396,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("All climate eco service called")
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -411,7 +412,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("All climate away service called")
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
-                for entry_id, entry_data in entries:
+                for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
@@ -499,7 +500,18 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
             # Handle suffixes like _call, _connection, _power, _energy, etc.
             # Instance IDs can contain dots (e.g., SC1_M01.Light1)
             # Strip known suffixes
-            for suffix in ("_call", "_connection", "_power", "_energy", "_co2", "_humidity", "_temperature", "_pm25", "_pm10", "_voc"):
+            for suffix in (
+                "_call",
+                "_connection",
+                "_power",
+                "_energy",
+                "_co2",
+                "_humidity",
+                "_temperature",
+                "_pm25",
+                "_pm10",
+                "_voc",
+            ):
                 if remainder.endswith(suffix):
                     remainder = remainder[: -len(suffix)]
                     break
@@ -507,15 +519,25 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
             # Known meter sensor keys from SMART_METER_SENSORS (ordered longest first)
             if prefix == "evon_meter_":
                 meter_keys = [
-                    "feed_in_month_", "feed_in_today_", "feed_in_energy_",
-                    "energy_month_", "energy_today_", "energy_24h_",
-                    "voltage_l1_", "voltage_l2_", "voltage_l3_",
-                    "current_l1_", "current_l2_", "current_l3_",
-                    "frequency_", "energy_", "power_",
+                    "feed_in_month_",
+                    "feed_in_today_",
+                    "feed_in_energy_",
+                    "energy_month_",
+                    "energy_today_",
+                    "energy_24h_",
+                    "voltage_l1_",
+                    "voltage_l2_",
+                    "voltage_l3_",
+                    "current_l1_",
+                    "current_l2_",
+                    "current_l3_",
+                    "frequency_",
+                    "energy_",
+                    "power_",
                 ]
                 for key in meter_keys:
                     if remainder.startswith(key):
-                        return remainder[len(key):]
+                        return remainder[len(key) :]
                 # Fallback: try to find a part with a dot (old format)
                 parts = remainder.split("_")
                 for i, part in enumerate(parts):
@@ -668,10 +690,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """
     # Clean up devices associated with this config entry
     device_registry = dr.async_get(hass)
-    devices_to_remove = [
-        device.id
-        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)
-    ]
+    devices_to_remove = [device.id for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id)]
     for device_id in devices_to_remove:
         device_registry.async_remove_device(device_id)
         _LOGGER.debug("Removed device %s for config entry %s", device_id, entry.entry_id)

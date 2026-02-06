@@ -143,9 +143,9 @@ BLIND_MAPPINGS: dict[str, WsControlMapping] = {
 CLIMATE_MAPPINGS: dict[str, WsControlMapping] = {
     # Preset switching - use these to change modes (verified working on both thermostat types)
     # fire_and_forget=True because these methods don't send MethodReturn response
-    "WriteDayMode": WsControlMapping(None, "WriteDayMode", lambda params: [], True),      # → comfort
-    "WriteNightMode": WsControlMapping(None, "WriteNightMode", lambda params: [], True),  # → eco
-    "WriteFreezeMode": WsControlMapping(None, "WriteFreezeMode", lambda params: [], True),  # → away
+    "WriteDayMode": WsControlMapping(None, "WriteDayMode", lambda _params: [], True),  # → comfort
+    "WriteNightMode": WsControlMapping(None, "WriteNightMode", lambda _params: [], True),  # → eco
+    "WriteFreezeMode": WsControlMapping(None, "WriteFreezeMode", lambda _params: [], True),  # → away
     # Temperature - sets target temp for the CURRENT preset only
     "WriteCurrentSetTemperature": WsControlMapping(
         None, "WriteCurrentSetTemperature", lambda params: [params[0]] if params else [0], True

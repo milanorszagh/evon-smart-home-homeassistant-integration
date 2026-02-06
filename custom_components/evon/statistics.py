@@ -46,10 +46,7 @@ import logging
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.models.statistics import StatisticMeanType
-from homeassistant.components.recorder.statistics import (
-    async_add_external_statistics,
-    get_last_statistics,
-)
+from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -61,7 +58,6 @@ MIN_IMPORT_INTERVAL = timedelta(hours=1)
 
 # Track last import time per meter to implement rate limiting
 _last_import_times: dict[str, datetime] = {}
-
 
 
 async def import_energy_statistics(
@@ -89,8 +85,11 @@ async def import_energy_statistics(
                          last = previous month. Does NOT include current month.
         force: If True, bypass rate limiting (for initial backfill)
     """
-    _LOGGER.debug("Importing energy statistics for %s with %d days of data",
-                   meter_id, len(energy_data_month) if energy_data_month else 0)
+    _LOGGER.debug(
+        "Importing energy statistics for %s with %d days of data",
+        meter_id,
+        len(energy_data_month) if energy_data_month else 0,
+    )
 
     if not energy_data_month:
         _LOGGER.debug("No energy data to import for %s", meter_id)
@@ -196,7 +195,10 @@ async def _import_meter_statistics(
 
     _LOGGER.debug(
         "Importing statistics for %s: %d days from %s to %s (yesterday)",
-        statistic_id, num_days, window_start.date(), yesterday.date()
+        statistic_id,
+        num_days,
+        window_start.date(),
+        yesterday.date(),
     )
 
     # Build statistics data with a baseline point before the window
@@ -311,7 +313,10 @@ async def _import_monthly_statistics(
 
     _LOGGER.debug(
         "Importing monthly statistics for %s: %d months from %s to %s",
-        statistic_id, num_months, window_start.strftime("%Y-%m"), prev_month_start.strftime("%Y-%m")
+        statistic_id,
+        num_months,
+        window_start.strftime("%Y-%m"),
+        prev_month_start.strftime("%Y-%m"),
     )
 
     # Build statistics data with a baseline point before the window

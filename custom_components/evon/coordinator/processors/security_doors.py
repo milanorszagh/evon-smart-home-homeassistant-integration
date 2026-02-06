@@ -46,10 +46,12 @@ async def process_security_doors(
             if isinstance(saved_pictures_raw, list):
                 for pic in saved_pictures_raw:
                     if isinstance(pic, dict):
-                        saved_pictures.append({
-                            "timestamp": pic.get("datetime"),
-                            "path": pic.get("imageUrlClient", ""),
-                        })
+                        saved_pictures.append(
+                            {
+                                "timestamp": pic.get("datetime"),
+                                "path": pic.get("imageUrlClient", ""),
+                            }
+                        )
             security_doors.append(
                 {
                     "id": instance_id,

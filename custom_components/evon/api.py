@@ -857,15 +857,12 @@ class EvonApi:
 
         # Validate the response - IsCool should be a boolean
         if is_cool is None:
-            _LOGGER.warning(
-                "Season mode response missing 'IsCool' field, defaulting to heating mode"
-            )
+            _LOGGER.warning("Season mode response missing 'IsCool' field, defaulting to heating mode")
             return False
 
         if not isinstance(is_cool, bool):
             _LOGGER.warning(
-                "Season mode 'IsCool' has unexpected type %s (value: %s), "
-                "attempting to interpret as boolean",
+                "Season mode 'IsCool' has unexpected type %s (value: %s), attempting to interpret as boolean",
                 type(is_cool).__name__,
                 is_cool,
             )
@@ -944,9 +941,7 @@ class EvonApi:
             cookies = {"token": token}
             timeout = aiohttp.ClientTimeout(total=IMAGE_FETCH_TIMEOUT)
 
-            async with session.get(
-                url, cookies=cookies, timeout=timeout
-            ) as resp:
+            async with session.get(url, cookies=cookies, timeout=timeout) as resp:
                 if resp.status == 200:
                     return await resp.read()
                 _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)

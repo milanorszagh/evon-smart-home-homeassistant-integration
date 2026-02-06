@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -29,9 +28,6 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt as dt_util
-
-_LOGGER = logging.getLogger(__name__)
 
 from .base_entity import EvonEntity
 from .const import (
@@ -41,6 +37,8 @@ from .const import (
     ENTITY_TYPE_SMART_METERS,
 )
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)

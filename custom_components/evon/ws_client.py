@@ -20,6 +20,7 @@ from .const import (
     WS_LOG_MESSAGE_TRUNCATE,
     WS_MAX_PENDING_REQUESTS,
     WS_PROTOCOL,
+    WS_RECONNECT_JITTER,
     WS_RECONNECT_MAX_DELAY,
     WS_SUBSCRIBE_REQUEST_TIMEOUT,
 )
@@ -30,10 +31,6 @@ _LOGGER = logging.getLogger(__name__)
 WS_MSG_CONNECTED = "Connected"
 WS_MSG_CALLBACK = "Callback"
 WS_MSG_EVENT = "Event"
-
-# Jitter factor for reconnect delays (0.0 to 1.0)
-# Adds randomness to prevent thundering herd on server recovery
-WS_RECONNECT_JITTER = 0.25
 
 
 def _calculate_reconnect_delay(base_delay: float, max_delay: float) -> float:
@@ -338,9 +335,7 @@ class EvonWsClient:
                             self._resubscribe_task = asyncio.create_task(self._resubscribe())
                     else:
                         # Connection failed, wait before retry with jitter
-                        delay = _calculate_reconnect_delay(
-                            self._reconnect_delay, WS_RECONNECT_MAX_DELAY
-                        )
+                        delay = _calculate_reconnect_delay(self._reconnect_delay, WS_RECONNECT_MAX_DELAY)
                         _LOGGER.debug(
                             "WebSocket reconnecting in %.1f seconds (base: %d)",
                             delay,
@@ -364,9 +359,7 @@ class EvonWsClient:
                 _LOGGER.error("WebSocket loop error: %s", err)
                 await self.disconnect()
                 if self._running:
-                    delay = _calculate_reconnect_delay(
-                        self._reconnect_delay, WS_RECONNECT_MAX_DELAY
-                    )
+                    delay = _calculate_reconnect_delay(self._reconnect_delay, WS_RECONNECT_MAX_DELAY)
                     await asyncio.sleep(delay)
                     self._reconnect_delay = min(
                         self._reconnect_delay * 2,
@@ -544,8 +537,7 @@ class EvonWsClient:
         # Prevent unbounded memory growth from too many pending requests
         if len(self._pending_requests) >= WS_MAX_PENDING_REQUESTS:
             raise EvonWsError(
-                f"Too many pending WebSocket requests ({len(self._pending_requests)}), "
-                "server may be unresponsive"
+                f"Too many pending WebSocket requests ({len(self._pending_requests)}), server may be unresponsive"
             )
 
         sequence_id = self._sequence_id

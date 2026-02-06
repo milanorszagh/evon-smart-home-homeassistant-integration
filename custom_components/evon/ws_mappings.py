@@ -380,10 +380,12 @@ def ws_to_coordinator_data(
             saved_pictures = []
             for pic in saved_pictures_raw:
                 if isinstance(pic, dict):
-                    saved_pictures.append({
-                        "timestamp": pic.get("datetime"),
-                        "path": pic.get("imageUrlClient", ""),
-                    })
+                    saved_pictures.append(
+                        {
+                            "timestamp": pic.get("datetime"),
+                            "path": pic.get("imageUrlClient", ""),
+                        }
+                    )
             result["saved_pictures"] = saved_pictures
 
     # Special handling for smart meters: compute total power from P1+P2+P3
