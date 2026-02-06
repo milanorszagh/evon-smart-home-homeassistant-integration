@@ -185,11 +185,11 @@ class EvonWsClient:
             )
             return True
 
-        except aiohttp.ClientError as err:
-            _LOGGER.error("WebSocket connection failed: %s", err)
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.error("WebSocket connection failed: %s", err, exc_info=True)
             return False
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("Unexpected error during WebSocket connection: %s", err)
+            _LOGGER.error("Unexpected error during WebSocket connection: %s", err, exc_info=True)
             return False
 
     async def _login(self) -> str | None:
@@ -355,8 +355,18 @@ class EvonWsClient:
 
             except asyncio.CancelledError:
                 break
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+                _LOGGER.error("WebSocket loop error: %s", err, exc_info=True)
+                await self.disconnect()
+                if self._running:
+                    delay = _calculate_reconnect_delay(self._reconnect_delay, WS_RECONNECT_MAX_DELAY)
+                    await asyncio.sleep(delay)
+                    self._reconnect_delay = min(
+                        self._reconnect_delay * 2,
+                        WS_RECONNECT_MAX_DELAY,
+                    )
             except Exception as err:  # pylint: disable=broad-except
-                _LOGGER.error("WebSocket loop error: %s", err)
+                _LOGGER.error("Unexpected WebSocket loop error: %s", err, exc_info=True)
                 await self.disconnect()
                 if self._running:
                     delay = _calculate_reconnect_delay(self._reconnect_delay, WS_RECONNECT_MAX_DELAY)
@@ -432,8 +442,11 @@ class EvonWsClient:
 
         except asyncio.CancelledError:
             raise
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.error("Error handling WebSocket message: %s", err, exc_info=True)
+            await self.disconnect()
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("Error handling WebSocket message: %s", err)
+            _LOGGER.error("Unexpected error handling WebSocket message: %s", err, exc_info=True)
             await self.disconnect()
 
     def _handle_message(self, data: str) -> None:

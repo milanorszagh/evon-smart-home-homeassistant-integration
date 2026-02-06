@@ -48,6 +48,9 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
+      - name: Run MCP tests
+        run: npm run test:mcp
+
   test:
     name: Test
     runs-on: ubuntu-latest

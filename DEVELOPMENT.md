@@ -937,6 +937,22 @@ Key files: `const.py` (constants), `coordinator.py` (connection tracking), `__in
 
 ---
 
+## Logging Guidelines
+
+- Use `error` when the operation failed and user intervention or data loss is likely.
+- Use `warning` for recoverable issues where the system will retry or fallback.
+- Use `debug` for transient retries, protocol details, and high-volume state updates.
+- Log exceptions with `exc_info=True` to preserve stack traces.
+
+## WebSocket Error Handling Policy
+
+The WebSocket loop favors availability over strict failure handling. It catches expected network
+errors (timeouts, disconnects, client errors) and retries with backoff. Only `CancelledError`
+terminates the loop. Keep a broad catch as a last-resort safety net, but prefer explicit exception
+types for diagnostics.
+
+---
+
 ## Testing
 
 ### Manual API Testing
@@ -969,7 +985,17 @@ pip install -r requirements-test.txt
 pytest -v
 ```
 
-Tests are in `tests/` - some require Home Assistant installed.
+Tests are in `tests/` - some require Home Assistant installed. CI skips many tests that need a full
+HA runtime or optional dependencies; that is expected unless running in a full HA dev environment.
+
+### MCP Server Tests
+
+```bash
+npm run build
+npm run test:mcp
+```
+
+These tests run against the compiled `dist/` output and mock network calls.
 
 ### Test Coverage
 

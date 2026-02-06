@@ -518,6 +518,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # First, find what type of entity this is
         entity_type: str | None = None
         entity_index: int | None = None
+        entities_ref: list[dict[str, Any]] | None = None
 
         # Search through all entity types to find this instance
         for etype in CLASS_TO_TYPE.values():
@@ -528,11 +529,12 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if entity and entity.get("id") == instance_id:
                     entity_type = etype
                     entity_index = idx
+                    entities_ref = entities
                     break
             if entity_type:
                 break
 
-        if entity_type is None or entity_index is None:
+        if entity_type is None or entity_index is None or entities_ref is None:
             # Unknown instance, might be a type we don't track
             _LOGGER.debug(
                 "WebSocket update for unknown instance: %s",
@@ -542,11 +544,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Get existing entity data for derived value computation
         # Double-check entity exists (defensive check for race conditions)
-        entities = self.data.get(entity_type)
-        if not entities or entity_index >= len(entities):
+        if self.data.get(entity_type) is not entities_ref:
+            _LOGGER.debug("Entity list replaced during WebSocket update for %s", instance_id)
+            return
+        if entity_index >= len(entities_ref):
             _LOGGER.debug("Entity list changed during WebSocket update for %s", instance_id)
             return
-        entity = entities[entity_index]
+        entity = entities_ref[entity_index]
         if not entity:
             return
 
