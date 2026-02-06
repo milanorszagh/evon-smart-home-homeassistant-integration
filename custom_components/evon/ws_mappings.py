@@ -69,7 +69,29 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
     # Climate: Subscribe to BOTH ModeSaved AND MainState because different thermostat types use different properties:
     # - SmartCOM.Clima.ClimateControl uses MainState (only MainState exists)
     # - Heating.ClimateControlUniversal uses ModeSaved (only ModeSaved exists)
-    ENTITY_TYPE_CLIMATES: ["SetTemperature", "ActualTemperature", "ModeSaved", "MainState", "IsOn", "Mode", "Humidity"],
+    ENTITY_TYPE_CLIMATES: [
+        "SetTemperature",
+        "ActualTemperature",
+        "ModeSaved",
+        "MainState",
+        "IsOn",
+        "Mode",
+        "Humidity",
+        "CoolingMode",
+        "DisableCooling",
+        # Heating setpoints and limits
+        "SetValueComfortHeating",
+        "SetValueEnergySavingHeating",
+        "SetValueFreezeProtection",
+        "MinSetValueHeat",
+        "MaxSetValueHeat",
+        # Cooling setpoints and limits
+        "SetValueComfortCooling",
+        "SetValueEnergySavingCooling",
+        "SetValueHeatProtection",
+        "MinSetValueCool",
+        "MaxSetValueCool",
+    ],
     ENTITY_TYPE_SWITCHES: ["IsOn", "State"],
     ENTITY_TYPE_HOME_STATES: ["Active"],
     ENTITY_TYPE_BATHROOM_RADIATORS: ["Output", "NextSwitchPoint"],
@@ -128,6 +150,7 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "MainState": "mode_saved",  # SmartCOM.Clima.ClimateControl uses MainState
         "IsOn": "is_on",
         "Mode": "mode",
+        "CoolingMode": "is_cooling",
         "Humidity": "humidity",
     },
     ENTITY_TYPE_SWITCHES: {
@@ -250,6 +273,95 @@ def ws_to_coordinator_data(
         if ws_prop in mappings:
             coord_key = mappings[ws_prop]
             result[coord_key] = value
+
+    # Special handling for climate devices: derive setpoint ranges and presets
+    if entity_type == ENTITY_TYPE_CLIMATES:
+        is_cooling = None
+        if "CoolingMode" in ws_properties:
+            is_cooling = ws_properties.get("CoolingMode")
+        elif existing_data:
+            is_cooling = existing_data.get("is_cooling")
+
+        # Update cooling_enabled if DisableCooling changed
+        if "DisableCooling" in ws_properties:
+            disable_cooling = ws_properties.get("DisableCooling")
+            if disable_cooling is not None:
+                result["cooling_enabled"] = not bool(disable_cooling)
+
+        def _coalesce(*vals: Any) -> Any:
+            for val in vals:
+                if val is not None:
+                    return val
+            return None
+
+        def _min_defined(*vals: Any) -> Any:
+            defined = [v for v in vals if v is not None]
+            return min(defined) if defined else None
+
+        def _max_defined(*vals: Any) -> Any:
+            defined = [v for v in vals if v is not None]
+            return max(defined) if defined else None
+
+        if is_cooling is not None:
+            if is_cooling:
+                comfort = _coalesce(
+                    ws_properties.get("SetValueComfortCooling"),
+                    existing_data.get("comfort_temp") if existing_data else None,
+                )
+                eco = _coalesce(
+                    ws_properties.get("SetValueEnergySavingCooling"),
+                    existing_data.get("energy_saving_temp") if existing_data else None,
+                )
+                protection = _coalesce(
+                    ws_properties.get("SetValueHeatProtection"),
+                    existing_data.get("protection_temp") if existing_data else None,
+                )
+                evon_min = _coalesce(
+                    ws_properties.get("MinSetValueCool"),
+                    existing_data.get("min_temp") if existing_data else None,
+                )
+                evon_max = _coalesce(
+                    ws_properties.get("MaxSetValueCool"),
+                    existing_data.get("max_temp") if existing_data else None,
+                )
+
+                min_temp = _min_defined(evon_min, comfort, eco, protection)
+                max_temp = _max_defined(evon_max, protection)
+            else:
+                comfort = _coalesce(
+                    ws_properties.get("SetValueComfortHeating"),
+                    existing_data.get("comfort_temp") if existing_data else None,
+                )
+                eco = _coalesce(
+                    ws_properties.get("SetValueEnergySavingHeating"),
+                    existing_data.get("energy_saving_temp") if existing_data else None,
+                )
+                protection = _coalesce(
+                    ws_properties.get("SetValueFreezeProtection"),
+                    existing_data.get("protection_temp") if existing_data else None,
+                )
+                evon_min = _coalesce(
+                    ws_properties.get("MinSetValueHeat"),
+                    existing_data.get("min_temp") if existing_data else None,
+                )
+                evon_max = _coalesce(
+                    ws_properties.get("MaxSetValueHeat"),
+                    existing_data.get("max_temp") if existing_data else None,
+                )
+
+                min_temp = _min_defined(evon_min, protection)
+                max_temp = _max_defined(evon_max, comfort, eco)
+
+            if comfort is not None:
+                result["comfort_temp"] = comfort
+            if eco is not None:
+                result["energy_saving_temp"] = eco
+            if protection is not None:
+                result["protection_temp"] = protection
+            if min_temp is not None:
+                result["min_temp"] = min_temp
+            if max_temp is not None:
+                result["max_temp"] = max_temp
 
     # Special handling for security doors: transform SavedPictures array
     if entity_type == ENTITY_TYPE_SECURITY_DOORS and "SavedPictures" in ws_properties:
