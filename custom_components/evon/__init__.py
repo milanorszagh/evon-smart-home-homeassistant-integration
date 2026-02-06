@@ -95,6 +95,31 @@ def _get_service_lock(hass: HomeAssistant) -> asyncio.Lock:
     return hass.data[lock_key]
 
 
+async def _async_setup_websocket(
+    hass: HomeAssistant,
+    coordinator: EvonDataUpdateCoordinator,
+    config_entry: ConfigEntry,
+) -> None:
+    """Set up WebSocket connection for a coordinator based on config entry."""
+    connection_type = config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+    if connection_type == CONNECTION_TYPE_LOCAL:
+        await coordinator.async_setup_websocket(
+            session=async_get_clientsession(hass),
+            host=config_entry.data[CONF_HOST],
+            username=config_entry.data[CONF_USERNAME],
+            password=config_entry.data[CONF_PASSWORD],
+        )
+    else:
+        await coordinator.async_setup_websocket(
+            session=async_get_clientsession(hass),
+            host=None,
+            username=config_entry.data[CONF_USERNAME],
+            password=config_entry.data[CONF_PASSWORD],
+            is_remote=True,
+            engine_id=config_entry.data[CONF_ENGINE_ID],
+        )
+
+
 SERVICE_REFRESH = "refresh"
 SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
 SERVICE_SET_HOME_STATE = "set_home_state"
@@ -186,23 +211,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Set up WebSocket for real-time updates (both local and remote connections)
     if use_websocket:
-        if connection_type == CONNECTION_TYPE_LOCAL:
-            await coordinator.async_setup_websocket(
-                session=session,
-                host=entry.data[CONF_HOST],
-                username=entry.data[CONF_USERNAME],
-                password=entry.data[CONF_PASSWORD],
-            )
-        else:
-            # Remote connection via my.evon-smarthome.com
-            await coordinator.async_setup_websocket(
-                session=session,
-                host=None,
-                username=entry.data[CONF_USERNAME],
-                password=entry.data[CONF_PASSWORD],
-                is_remote=True,
-                engine_id=entry.data[CONF_ENGINE_ID],
-            )
+        # Remote connection via my.evon-smarthome.com handled in helper
+        await _async_setup_websocket(hass, coordinator, entry)
 
     # Create hub device that child devices reference via via_device
     device_registry = dr.async_get(hass)
@@ -249,23 +259,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     continue
                 try:
                     await coordinator.async_shutdown_websocket()
-                    connection_type = config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
-                    if connection_type == CONNECTION_TYPE_LOCAL:
-                        await coordinator.async_setup_websocket(
-                            session=async_get_clientsession(hass),
-                            host=config_entry.data[CONF_HOST],
-                            username=config_entry.data[CONF_USERNAME],
-                            password=config_entry.data[CONF_PASSWORD],
-                        )
-                    else:
-                        await coordinator.async_setup_websocket(
-                            session=async_get_clientsession(hass),
-                            host=None,
-                            username=config_entry.data[CONF_USERNAME],
-                            password=config_entry.data[CONF_PASSWORD],
-                            is_remote=True,
-                            engine_id=config_entry.data[CONF_ENGINE_ID],
-                        )
+                    await _async_setup_websocket(hass, coordinator, config_entry)
                 except Exception as err:
                     _LOGGER.error("Failed to reconnect WebSocket for %s: %s", entry_id, err)
 
