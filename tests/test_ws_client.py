@@ -109,7 +109,7 @@ class TestWsMappings:
         """Test climate property conversion."""
         ws_props = {"SetTemperature": 22.5, "ActualTemperature": 21.0, "ModeSaved": 4}
         coord = ws_to_coordinator_data("climates", ws_props)
-        assert coord == {"target_temp": 22.5, "current_temp": 21.0, "mode_saved": 4}
+        assert coord == {"target_temperature": 22.5, "current_temperature": 21.0, "mode_saved": 4}
 
     def test_ws_to_coordinator_data_home_states(self):
         """Test home state property conversion."""
@@ -670,20 +670,32 @@ class TestWsControlMappings:
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "AmznSetPercentage") is None
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetAngle") is None
 
-    def test_climate_mappings_set_preset(self):
-        """Test climate preset mapping uses SetValue on ModeSaved.
+    def test_climate_mappings_preset_methods(self):
+        """Test climate preset mappings use CallMethod with fire-and-forget.
 
-        Presets use SetValue ModeSaved with different values for heating/cooling:
-        - Heating: 2 (away), 3 (eco), 4 (comfort)
-        - Cooling: 5 (away), 6 (eco), 7 (comfort)
+        Presets use CallMethod instead of SetValue because SetValue only updates UI:
+        - WriteDayMode -> comfort
+        - WriteNightMode -> eco
+        - WriteFreezeMode -> away
         """
-        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "SetPreset")
+        # Test comfort preset (WriteDayMode)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteDayMode")
         assert mapping is not None
-        assert mapping.property_name == "ModeSaved"
-        assert mapping.method_name is None  # Uses SetValue, not CallMethod
-        # Test value extraction
-        assert mapping.get_value([4]) == 4  # Comfort in heating
-        assert mapping.get_value([7]) == 7  # Comfort in cooling
+        assert mapping.property_name is None  # Uses CallMethod, not SetValue
+        assert mapping.method_name == "WriteDayMode"
+        assert mapping.fire_and_forget is True  # No MethodReturn response
+
+        # Test eco preset (WriteNightMode)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteNightMode")
+        assert mapping is not None
+        assert mapping.method_name == "WriteNightMode"
+        assert mapping.fire_and_forget is True
+
+        # Test away preset (WriteFreezeMode)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteFreezeMode")
+        assert mapping is not None
+        assert mapping.method_name == "WriteFreezeMode"
+        assert mapping.fire_and_forget is True
 
     def test_climate_mappings_temperature(self):
         """Test climate temperature mapping uses CallMethod."""
@@ -696,9 +708,15 @@ class TestWsControlMappings:
 
     def test_climate_universal_mappings(self):
         """Test Heating.ClimateControlUniversal uses same mappings."""
-        mapping = get_ws_control_mapping("Heating.ClimateControlUniversal", "SetPreset")
+        # Test that ClimateControlUniversal has same mappings as ClimateControl
+        mapping = get_ws_control_mapping("Heating.ClimateControlUniversal", "WriteDayMode")
         assert mapping is not None
-        assert mapping.property_name == "ModeSaved"
+        assert mapping.method_name == "WriteDayMode"
+        assert mapping.fire_and_forget is True
+
+        mapping = get_ws_control_mapping("Heating.ClimateControlUniversal", "WriteCurrentSetTemperature")
+        assert mapping is not None
+        assert mapping.method_name == "WriteCurrentSetTemperature"
 
     def test_switch_mappings_turn_on_uses_http(self):
         """Test switch turn on has no WS mapping (uses HTTP fallback)."""
@@ -1010,13 +1028,15 @@ class TestApiBlindCaching:
 
 
 class TestClimateWebSocketControl:
-    """Tests for climate WebSocket control - verified working January 2025.
+    """Tests for climate WebSocket control - verified working February 2026.
 
-    All climate controls work via WebSocket:
-    - Temperature: CallMethod WriteCurrentSetTemperature([temp]) - REQUIRED (SetValue only updates UI!)
-    - Presets: SetValue ModeSaved = 2/3/4 (heating) or 5/6/7 (cooling)
+    All climate controls work via WebSocket with CallMethod (fire-and-forget):
+    - Temperature: CallMethod WriteCurrentSetTemperature([temp])
+    - Presets: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode([])
     - Season mode: SetValue Base.ehThermostat.IsCool = bool
-    - BROKEN: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode - acknowledged but no effect!
+
+    IMPORTANT: SetValue on ModeSaved/MainState/SetTemperature only updates UI, NOT the thermostat!
+    Always use CallMethod for actual control.
     """
 
     def test_climate_temperature_uses_callmethod(self):
@@ -1032,45 +1052,51 @@ class TestClimateWebSocketControl:
         assert mapping is not None
         assert mapping.property_name is None  # Uses CallMethod, not SetValue!
         assert mapping.method_name == "WriteCurrentSetTemperature"
+        assert mapping.fire_and_forget is True  # No MethodReturn response
         assert mapping.get_value([23.5]) == [23.5]
         assert mapping.get_value([21]) == [21]
 
-    def test_climate_preset_uses_setvalue_modesaved(self):
-        """VERIFIED: Climate presets use SetValue on ModeSaved property.
+    def test_climate_preset_uses_callmethod(self):
+        """VERIFIED: Climate presets use CallMethod with fire-and-forget.
 
-        The ModeSaved values differ by seasonal mode:
-        - Heating mode: 2 (away), 3 (eco), 4 (comfort)
-        - Cooling mode: 5 (away), 6 (eco), 7 (comfort)
+        Presets use CallMethod instead of SetValue because SetValue only updates UI:
+        - WriteDayMode -> comfort (recalls comfort temperature)
+        - WriteNightMode -> eco (recalls eco temperature)
+        - WriteFreezeMode -> away (recalls away temperature)
 
-        Example WebSocket call for comfort in heating mode:
-        {"methodName":"CallWithReturn","request":{"args":["ClimateControlUniversal1","ModeSaved",4],"methodName":"SetValue","sequenceId":N}}
+        Example WebSocket call for comfort mode:
+        {"methodName":"CallWithReturn","request":{"args":["SC1_M05.Thermostat1.WriteDayMode",[]],"methodName":"CallMethod","sequenceId":N}}
 
-        Note: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode does NOT work via WebSocket!
+        Note: These methods don't send a MethodReturn response (fire-and-forget).
         """
-        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "SetPreset")
+        # Test WriteDayMode (comfort)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteDayMode")
         assert mapping is not None
-        assert mapping.property_name == "ModeSaved"  # Uses SetValue
-        assert mapping.method_name is None  # Not CallMethod
+        assert mapping.property_name is None  # Uses CallMethod, not SetValue
+        assert mapping.method_name == "WriteDayMode"
+        assert mapping.fire_and_forget is True
 
-        # Test heating mode values
-        assert mapping.get_value([2]) == 2  # Away in heating
-        assert mapping.get_value([3]) == 3  # Eco in heating
-        assert mapping.get_value([4]) == 4  # Comfort in heating
+        # Test WriteNightMode (eco)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteNightMode")
+        assert mapping is not None
+        assert mapping.method_name == "WriteNightMode"
+        assert mapping.fire_and_forget is True
 
-        # Test cooling mode values
-        assert mapping.get_value([5]) == 5  # Away in cooling
-        assert mapping.get_value([6]) == 6  # Eco in cooling
-        assert mapping.get_value([7]) == 7  # Comfort in cooling
+        # Test WriteFreezeMode (away)
+        mapping = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", "WriteFreezeMode")
+        assert mapping is not None
+        assert mapping.method_name == "WriteFreezeMode"
+        assert mapping.fire_and_forget is True
 
     def test_climate_universal_has_same_mappings(self):
         """Test Heating.ClimateControlUniversal uses same mappings as ClimateControl."""
-        for method in ["SetPreset", "WriteCurrentSetTemperature"]:
+        for method in ["WriteDayMode", "WriteNightMode", "WriteFreezeMode", "WriteCurrentSetTemperature"]:
             mapping1 = get_ws_control_mapping("SmartCOM.Clima.ClimateControl", method)
             mapping2 = get_ws_control_mapping("Heating.ClimateControlUniversal", method)
-            assert mapping1 is not None
-            assert mapping2 is not None
+            assert mapping1 is not None, f"ClimateControl missing mapping for {method}"
+            assert mapping2 is not None, f"ClimateControlUniversal missing mapping for {method}"
             assert mapping1.method_name == mapping2.method_name
-            assert mapping1.property_name == mapping2.property_name
+            assert mapping1.fire_and_forget == mapping2.fire_and_forget
 
     def test_modesaved_values_by_season(self):
         """Document and verify ModeSaved values for each preset and season.
@@ -1188,7 +1214,7 @@ class TestNewFeatures:
         """Test climate humidity property conversion."""
         ws_props = {"SetTemperature": 22.5, "Humidity": 45.5}
         coord = ws_to_coordinator_data("climates", ws_props)
-        assert coord["target_temp"] == 22.5
+        assert coord["target_temperature"] == 22.5
         assert coord["humidity"] == 45.5
 
     def test_ws_to_coordinator_data_lights_color_temp(self):

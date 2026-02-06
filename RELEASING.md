@@ -12,11 +12,18 @@ This document describes how to create releases for the Evon Smart Home integrati
 Use this for planned releases where all changes are already on `main`.
 
 ```bash
-# 1. Update version in manifest.json
+# 1. Update version in ALL FOUR files (they must match!)
+#    - custom_components/evon/manifest.json
+#    - pyproject.toml
+#    - package.json
+#    - package-lock.json (run: npm install --package-lock-only)
 edit custom_components/evon/manifest.json  # Change "version": "X.Y.Z"
+edit pyproject.toml                         # Change version = "X.Y.Z"
+edit package.json                           # Change "version": "X.Y.Z"
+npm install --package-lock-only             # Sync package-lock.json
 
 # 2. Commit the version bump
-git add custom_components/evon/manifest.json
+git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json
 git commit -m "Release vX.Y.Z"
 git push origin main
 
@@ -40,8 +47,11 @@ git checkout -b release/vX.Y.Z vX.Y.(Z-1)
 git cherry-pick <commit-hash>
 # or make changes directly
 
-# 3. Update version in manifest.json
+# 3. Update version in ALL FOUR files
 edit custom_components/evon/manifest.json  # Change "version": "X.Y.Z"
+edit pyproject.toml                         # Change version = "X.Y.Z"
+edit package.json                           # Change "version": "X.Y.Z"
+npm install --package-lock-only             # Sync package-lock.json
 
 # 4. Commit
 git add -A
@@ -87,8 +97,11 @@ Examples:
 
 Before releasing:
 - [ ] All tests pass (`python3 -m pytest tests/`)
-- [ ] Version updated in `manifest.json`
+- [ ] Version updated in ALL FOUR files: `manifest.json`, `pyproject.toml`, `package.json`, `package-lock.json`
+- [ ] Linting passes (`ruff check custom_components/evon/ && npm run lint`)
+- [ ] TypeScript builds (`npm run build`)
 - [ ] Changes tested on real hardware (if applicable)
+- [ ] Documentation updated (README.md, DEVELOPMENT.md, AGENTS.md as needed)
 
 After releasing:
 - [ ] GitHub release created with release notes

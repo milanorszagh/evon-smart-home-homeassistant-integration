@@ -103,7 +103,7 @@ src/
 │  │  (ws_client.py)             │   │  (api.py)                   │         │
 │  │                             │   │                             │         │
 │  │  ┌─────────────────────┐    │   │  • Initial data fetch       │         │
-│  │  │ State Updates (IN)  │◄───┼───┼─── Fallback polling (300s)  │         │
+│  │  │ State Updates (IN)  │◄───┼───┼─── Fallback polling (60s)   │         │
 │  │  │ • ValuesChanged     │    │   │                             │         │
 │  │  │ • <100ms latency    │    │   │  • Fallback control         │         │
 │  │  └─────────────────────┘    │   │  • Auth & token refresh     │         │
@@ -151,7 +151,7 @@ DEVICE CONTROL (user taps light in HA):
 14. WebSocket confirms actual state
 
 FALLBACK:
-• HTTP polling continues at 300s as safety net
+• HTTP polling continues at 60s as safety net
 • If WebSocket unavailable, control falls back to HTTP automatically
 ```
 
@@ -363,13 +363,13 @@ coordinator/       # Integrates WebSocket with data updates
 |-------------|-------------------|-----------------|
 | lights | `IsOn`, `ScaledBrightness`, `ColorTemp` | `is_on`, `brightness`, `color_temp` |
 | blinds | `Position`, `Angle` | `position`, `angle` |
-| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `Humidity` | `target_temp`, `current_temp`, `mode_saved`, `humidity` |
+| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `MainState`, `Humidity` | `target_temperature`, `current_temperature`, `mode_saved`, `humidity` |
 | switches | `IsOn` | `is_on` |
 | home_states | `Active` | `active` |
-| bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `next_switch_point` |
+| bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `time_remaining` |
 | security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress` | `is_open`, `door_is_open`, `call_in_progress` |
 | intercoms | `DoorBellTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
-| cameras | `ImagePath` | `image_path` |
+| cameras | `Image` | `image_path` |
 
 ### Constants
 
@@ -380,7 +380,7 @@ DEFAULT_HTTP_ONLY = False              # WebSocket enabled by default (recommend
 DEFAULT_WS_RECONNECT_DELAY = 5         # Initial reconnect delay (seconds)
 WS_RECONNECT_MAX_DELAY = 300           # Max reconnect delay (seconds)
 WS_PROTOCOL = "echo-protocol"          # WebSocket sub-protocol
-WS_POLL_INTERVAL = 300                 # Reduced poll interval when WS connected
+WS_POLL_INTERVAL = 60                  # Safety net poll interval when WS connected
 WS_HEARTBEAT_INTERVAL = 30             # WebSocket heartbeat/ping interval (seconds)
 WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (seconds)
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
@@ -703,7 +703,7 @@ Body: {"value": true}   // COOLING
 |--------|------------|-------------|
 | `SetValue ImageRequest` | `true` | Request new image capture |
 
-**Properties**: `ImagePath` (string - path to JPEG on Evon server)
+**Properties**: `Image` (string - path to JPEG on Evon server)
 
 **Class**: `Security.Intercom.2N.Intercom2NCam`
 
@@ -713,7 +713,7 @@ Body: {"value": true}   // COOLING
 - Historical buffer: 30 seconds (`time` parameter: -30 to 0)
 - Image format: JPEG
 
-**Image Fetch:** After requesting an image via WebSocket, wait ~0.5 seconds (`CAMERA_IMAGE_CAPTURE_DELAY`) before fetching via HTTP at the `ImagePath` URL with token authentication.
+**Image Fetch:** After requesting an image via WebSocket, wait ~0.5 seconds (`CAMERA_IMAGE_CAPTURE_DELAY`) before fetching via HTTP at the `Image` path URL with token authentication.
 
 ### Smart Meter Properties
 

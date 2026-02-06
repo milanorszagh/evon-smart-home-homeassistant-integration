@@ -21,11 +21,40 @@ Blind Control:
     - TRAP: SetValue on Position updates the value but doesn't move the hardware
 
 Climate Control:
-    - CallMethod WriteCurrentSetTemperature([temp]): Set target temperature (REQUIRED - SetValue only updates UI!)
-    - SetValue ModeSaved = 2/3/4 (heating) or 5/6/7 (cooling) for presets (VERIFIED WORKING)
-    - SetValue Base.ehThermostat.IsCool = bool: Set global season mode (heating/cooling)
-    - BROKEN: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode - acknowledged but no effect!
-    - TRAP: SetValue SetTemperature updates UI only, doesn't change actual thermostat target!
+    READING current mode (properties):
+        - ModeSaved: Current mode for ClimateControlUniversal (bathrooms)
+        - MainState: Current mode for SmartCOM.Clima.ClimateControl (other rooms)
+        - Values: 2=away, 3=eco, 4=comfort (heating) | 5=away, 6=eco, 7=comfort (cooling)
+
+    CHANGING preset (CallMethod - the correct way):
+        - WriteDayMode([])      → switches to comfort, recalls comfort temperature
+        - WriteNightMode([])    → switches to eco, recalls eco temperature
+        - WriteFreezeMode([])   → switches to away, recalls away temperature
+        - WriteCurrentSetTemperature([temp]) → sets target temp for CURRENT preset
+
+    TRAPS (SetValue - DON'T use for control):
+        - SetValue ModeSaved/MainState = N  → Only updates UI number, does NOT change preset or temperature!
+        - SetValue SetTemperature = N       → Only updates UI, does NOT change actual thermostat target!
+
+    Fire-and-forget mode:
+        - Climate methods don't send MethodReturn response
+        - Use fire_and_forget=True to avoid timeout waiting for response
+        - Commands execute successfully despite no response
+
+    Timing (WebSocket vs HTTP):
+        - WebSocket push: ~0.8-1.5 seconds for state updates
+        - HTTP polling: ~5-7 seconds and may return stale data
+        - IMPORTANT: Don't trigger HTTP refresh after WS commands (causes race condition)
+
+    Home Assistant integration:
+        - Use optimistic state for immediate UI feedback
+        - Let WebSocket push actual values (no HTTP refresh needed)
+        - Subscribe to both MainState AND ModeSaved (different thermostat types)
+
+    Global presets (all thermostats at once):
+        - CallMethod Base.ehThermostat.AllDayMode([])    → comfort for all
+        - CallMethod Base.ehThermostat.AllNightMode([])  → eco for all
+        - CallMethod Base.ehThermostat.AllFreezeMode([]) → away for all
 
 Switch Control:
     - WebSocket CallMethod doesn't work for switches - must use HTTP API fallback
@@ -60,11 +89,13 @@ class WsControlMapping:
         property_name: Property name for SetValue, or None for CallMethod.
         method_name: Method name for CallMethod (used when property_name is None).
         value_fn: Function to compute value from params, or static value.
+        fire_and_forget: If True, don't wait for response (for methods that don't send MethodReturn).
     """
 
     property_name: str | None
     method_name: str | None
     value_fn: Any | Callable[[list | None], Any]
+    fire_and_forget: bool = False
 
     def get_value(self, params: list | None) -> Any:
         """Get the value to set, evaluating value_fn if needed."""
@@ -101,28 +132,23 @@ BLIND_MAPPINGS: dict[str, WsControlMapping] = {
 }
 
 # Climate control mappings (SmartCOM.Clima.ClimateControl, ClimateControlUniversal)
-# All mappings below are VERIFIED WORKING via WebSocket (February 2026).
+# VERIFIED WORKING February 2026 - tested on both thermostat types.
 #
-# Presets - SetValue ModeSaved is the working approach:
-# - Heating mode: 2 (away), 3 (eco), 4 (comfort)
-# - Cooling mode: 5 (away), 6 (eco), 7 (comfort)
-# Note: CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode does NOT work via WebSocket!
+# KEY INSIGHT: Use CallMethod to CHANGE presets, not SetValue!
+#   - CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode → actually switches preset AND recalls temperature
+#   - SetValue ModeSaved/MainState → TRAP! Only updates the UI number, doesn't change anything
 #
-# Global presets (all units at once):
-# - CallMethod Base.ehThermostat.AllDayMode([]) - comfort for all
-# - CallMethod Base.ehThermostat.AllNightMode([]) - eco for all
-# - CallMethod Base.ehThermostat.AllFreezeMode([]) - away for all
-#
-# Temperature:
-# - CallMethod WriteCurrentSetTemperature([temp]) - sets actual target temperature
-# - SetValue SetTemperature only updates UI, NOT the actual thermostat!
-# - CallMethod IncreaseSetTemperature([]) / DecreaseSetTemperature([]) for +/- 0.5°C
+# The server doesn't send MethodReturn response for climate methods, but commands execute successfully.
+# Each preset remembers its own target temperature - switching presets recalls the saved temp.
 CLIMATE_MAPPINGS: dict[str, WsControlMapping] = {
-    # SetPreset uses ModeSaved with value computed by API based on is_cooling
-    "SetPreset": WsControlMapping("ModeSaved", None, lambda params: params[0] if params else 4),
-    # WriteCurrentSetTemperature must use CallMethod - SetValue only updates UI!
+    # Preset switching - use these to change modes (verified working on both thermostat types)
+    # fire_and_forget=True because these methods don't send MethodReturn response
+    "WriteDayMode": WsControlMapping(None, "WriteDayMode", lambda params: [], True),      # → comfort
+    "WriteNightMode": WsControlMapping(None, "WriteNightMode", lambda params: [], True),  # → eco
+    "WriteFreezeMode": WsControlMapping(None, "WriteFreezeMode", lambda params: [], True),  # → away
+    # Temperature - sets target temp for the CURRENT preset only
     "WriteCurrentSetTemperature": WsControlMapping(
-        None, "WriteCurrentSetTemperature", lambda params: [params[0]] if params else [0]
+        None, "WriteCurrentSetTemperature", lambda params: [params[0]] if params else [0], True
     ),
 }
 

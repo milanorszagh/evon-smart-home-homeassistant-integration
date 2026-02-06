@@ -250,8 +250,8 @@ The Evon WebSocket API supports two mechanisms for device control:
 | Blind Open/Close/Stop | ✅ `CallMethod Open/Close/Stop` | `[instanceId.Open, []]` | `Open/Close/Stop` |
 | Blind Position | ✅ `CallMethod MoveToPosition` | `[instanceId.MoveToPosition, [angle, position]]` | `AmznSetPercentage` |
 | Blind Tilt | ✅ `CallMethod MoveToPosition` | `[instanceId.MoveToPosition, [angle, position]]` | `SetAngle` |
-| Climate Temperature | ✅ `SetValue SetTemperature` | `[instanceId, SetTemperature, value]` | `WriteCurrentSetTemperature` |
-| Climate Presets | ✅ `CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode` | `[instanceId.WriteDayMode, []]` | Same |
+| Climate Temperature | ✅ `CallMethod WriteCurrentSetTemperature` | `[instanceId.WriteCurrentSetTemperature, [temp]]` | Same |
+| Climate Presets | ✅ `CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode` | `[instanceId.WriteDayMode, []]` (fire-and-forget*) | Same |
 | Bathroom Radiator On | ✅ `CallMethod SwitchOneTime` | `[instanceId.SwitchOneTime, []]` | `SwitchOneTime` |
 | Bathroom Radiator Off | ✅ `CallMethod Switch` | `[instanceId.Switch, []]` (toggle) | `Switch` |
 | Switch On/Off | ❌ Does not work | - | ✅ `AmznTurnOn/Off` |
@@ -262,11 +262,12 @@ The Evon WebSocket API supports two mechanisms for device control:
 | Valves | ✅ `RegisterValuesChanged` | Subscribe to ActValue | Read-only |
 
 *CallMethod must use format `[instanceId.methodName, params]` (not `[instanceId, methodName, params]`)
+*Fire-and-forget: Climate methods don't send MethodReturn response - send and assume success
 
 **Summary:**
 - **Lights**: Use `CallMethod SwitchOn/SwitchOff([])` and `BrightnessSetScaled([brightness, 0])`
 - **Blinds**: Use `CallMethod Open/Close/Stop([])` and `MoveToPosition([angle, position])`
-- **Climate**: Use `SetValue SetTemperature` and `CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode`
+- **Climate**: Use `CallMethod WriteCurrentSetTemperature([temp])` for temperature, `WriteDayMode/WriteNightMode/WriteFreezeMode` for presets (fire-and-forget)
 - **Bathroom Radiators**: Use `CallMethod SwitchOneTime([])` to turn on, `Switch([])` to toggle off
 - **Smart Meters**: Subscribe via `RegisterValuesChanged` for real-time power/voltage/current updates
 - **Air Quality**: Subscribe via `RegisterValuesChanged` for humidity, temperature, CO2 updates
@@ -452,21 +453,49 @@ Tested on: `SC1_M09.Blind2` (Jal. Zi3 1, SmartCOM.Blind.Blind)
 | SetValue Position | ❌ FAIL | Value updates but hardware doesn't move |
 | Old CallMethod format | ❌ FAIL | Returns success but no hardware movement |
 
-### Climate Control (Verified Working)
+### Climate Control (Verified Working - February 2026)
 
-**Key Discovery:** Climate control works via both `SetValue` and `CallMethod` operations.
+**Key Discovery:** Climate control requires understanding the READ vs CHANGE distinction:
+
+- **READ (Properties):** `ModeSaved` (ClimateControlUniversal) or `MainState` (ClimateControl) - READ the current mode
+- **CHANGE (Methods):** `WriteDayMode`, `WriteNightMode`, `WriteFreezeMode` - CHANGE the preset AND recall its temperature
+
+**⚠️ CRITICAL TRAP:** Using `SetValue` on `ModeSaved` or `MainState` only updates the UI number - it does NOT actually change the preset or target temperature! Always use the CallMethod variants.
+
+**Thermostat Types:**
+- `Heating.ClimateControlUniversal` - Bathrooms, uses `ModeSaved` property
+- `SmartCOM.Clima.ClimateControl` - Other rooms, uses `MainState` property
+
+**Mode Values:**
+- Heating: 2=away, 3=eco, 4=comfort
+- Cooling: 5=away, 6=eco, 7=comfort
+
+**Fire-and-Forget Behavior:**
+Climate CallMethod operations (`WriteDayMode`, `WriteNightMode`, `WriteFreezeMode`, `WriteCurrentSetTemperature`) do NOT send a `MethodReturn` response. Send the command and assume success - waiting for a response will timeout. The Home Assistant integration uses fire-and-forget mode for these.
+
+**Timing Notes:**
+- WebSocket property updates arrive in **~0.8-1.5 seconds** after command
+- HTTP API polling is much slower (~5-7 seconds) and can return stale data
+- Always prefer WebSocket subscriptions over HTTP polling for state updates
+
+**Home Assistant Integration Notes:**
+- Use **optimistic state** for immediate UI feedback (preset changes shown instantly)
+- **Do NOT trigger HTTP refresh** after WebSocket commands - it causes race conditions where stale HTTP data overwrites correct WebSocket state
+- Subscribe to both `ModeSaved` AND `MainState` properties (different thermostat types use different properties)
+- Temperature recall works automatically when switching presets via WebSocket CallMethod
 
 **Temperature Control:**
 ```javascript
-// ✅ Set absolute temperature via SetValue
+// ✅ Set target temperature for CURRENT preset via CallMethod (fire-and-forget)
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
-    args: ["SC1_M06.Thermostat3", "SetTemperature", 23.5],
-    methodName: "SetValue",
+    args: ["SC1_M06.Thermostat3.WriteCurrentSetTemperature", [23.5]],
+    methodName: "CallMethod",
     sequenceId: seq++
   }
 }));
+// Note: Don't wait for MethodReturn - it won't come
 
 // ✅ Alternative: Increment temperature by 0.5°C
 await ws.send(JSON.stringify({
@@ -489,9 +518,9 @@ await ws.send(JSON.stringify({
 }));
 ```
 
-**Preset Control:**
+**Preset Control (fire-and-forget):**
 ```javascript
-// ✅ Set comfort preset via CallMethod WriteDayMode
+// ✅ Set comfort preset - also recalls comfort temperature
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
@@ -500,8 +529,9 @@ await ws.send(JSON.stringify({
     sequenceId: seq++
   }
 }));
+// Note: Don't wait for MethodReturn - it won't come
 
-// ✅ Set eco preset via CallMethod WriteNightMode
+// ✅ Set eco preset - also recalls eco temperature
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
@@ -511,7 +541,7 @@ await ws.send(JSON.stringify({
   }
 }));
 
-// ✅ Set away/protection preset via CallMethod WriteFreezeMode
+// ✅ Set away/protection preset - also recalls away temperature
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
@@ -521,18 +551,24 @@ await ws.send(JSON.stringify({
   }
 }));
 
-// ✅ Alternative: Set preset via ModeSaved property
-// Heating: 2=away, 3=eco, 4=comfort
-// Cooling: 5=away, 6=eco, 7=comfort
-await ws.send(JSON.stringify({
-  methodName: "CallWithReturn",
-  request: {
-    args: ["ClimateControlUniversal1", "ModeSaved", 3],  // eco mode in heating
-    methodName: "SetValue",
-    sequenceId: seq++
-  }
-}));
+// ❌ TRAP: SetValue on ModeSaved/MainState - DON'T USE FOR CONTROL
+// This only updates the UI number, does NOT change preset or temperature!
+// await ws.send(JSON.stringify({
+//   methodName: "CallWithReturn",
+//   request: {
+//     args: ["ClimateControlUniversal1", "ModeSaved", 3],
+//     methodName: "SetValue",
+//     sequenceId: seq++
+//   }
+// }));
 ```
+
+**Temperature Recall Behavior:**
+Each preset remembers its own target temperature. When switching presets:
+1. `WriteDayMode` → recalls saved comfort temperature
+2. `WriteNightMode` → recalls saved eco temperature
+3. `WriteFreezeMode` → recalls saved away/protection temperature
+4. `WriteCurrentSetTemperature([temp])` → sets temperature for the CURRENT preset only
 
 **Global Preset Control (All Thermostats):**
 ```javascript
@@ -590,18 +626,36 @@ await ws.send(JSON.stringify({
 }));
 ```
 
-**Test Results (January 2025):**
+**Test Results (February 2026):**
 
-Tested on: `SC1_M06.Thermostat3` (Raumklima Zi3, SmartCOM.Clima.ClimateControl)
+Tested on:
+- `SC1_M05.Thermostat1` (Raumklima WZ, SmartCOM.Clima.ClimateControl) - uses `MainState`
+- `ClimateControlUniversal1` (Raumklima Bad 1, Heating.ClimateControlUniversal) - uses `ModeSaved`
 
-| Test | Result | Observation |
-|------|--------|-------------|
-| SetValue SetTemperature | ✅ PASS | Temperature changes immediately |
-| CallMethod WriteDayMode | ✅ PASS | Preset changes to comfort |
-| CallMethod WriteNightMode | ✅ PASS | Preset changes to eco |
-| CallMethod WriteFreezeMode | ✅ PASS | Preset changes to away |
-| SetValue ModeSaved | ✅ PASS | Alternative preset method works |
-| SetValue IsCool (Base.ehThermostat) | ✅ PASS | Season mode changes globally |
+| Test | Result | Timing | Observation |
+|------|--------|--------|-------------|
+| Service call (preset change) | ✅ PASS | 0.01s | Instant with optimistic state |
+| WebSocket temp update | ✅ PASS | ~0.8s | Push notification from server |
+| CallMethod WriteDayMode | ✅ PASS | fire-and-forget | Preset → comfort + recalls saved temp |
+| CallMethod WriteNightMode | ✅ PASS | fire-and-forget | Preset → eco + recalls saved temp |
+| CallMethod WriteFreezeMode | ✅ PASS | fire-and-forget | Preset → away + recalls saved temp |
+| CallMethod WriteCurrentSetTemperature | ✅ PASS | fire-and-forget | Sets temp for current preset |
+| Temperature recall (Living Room) | ✅ PASS | 0.62s | SmartCOM.Clima.ClimateControl |
+| Temperature recall (Bathroom) | ✅ PASS | 0.79s | ClimateControlUniversal |
+| Global preset (all 6 thermostats) | ✅ PASS | instant | All switch simultaneously |
+| SetValue ModeSaved | ❌ TRAP | - | Only updates UI, does NOT change preset! |
+| SetValue SetTemperature | ❌ TRAP | - | Only updates UI, does NOT change target! |
+
+**Property Availability by Thermostat Type:**
+| Property | SmartCOM.Clima.ClimateControl | Heating.ClimateControlUniversal |
+|----------|------------------------------|--------------------------------|
+| `MainState` | ✅ Present | ❌ Not present |
+| `ModeSaved` | ❌ Not present | ✅ Present |
+| `SetTemperature` | ✅ Present | ✅ Present |
+
+**Temperature Range:**
+- All thermostats have min_temp=18°C (includes freeze protection range)
+- max_temp varies by room and season mode
 
 ### Bathroom Radiator Control (Verified Working)
 
@@ -758,18 +812,39 @@ This is because switches in Evon systems are typically physical relays that requ
 ### Climate
 | Class | Description |
 |-------|-------------|
-| `SmartCOM.Clima.ClimateControl` | Climate zones/thermostats |
+| `SmartCOM.Clima.ClimateControl` | Standard thermostats (uses `MainState` for mode) |
+| `Heating.ClimateControlUniversal` | Bathroom thermostats (uses `ModeSaved` for mode) |
 
 **Properties:**
 | Property | Type | Description |
 |----------|------|-------------|
 | `ID` | string | Instance identifier |
 | `Name` | string | Display name |
-| `SetTemperature` | number | Target temperature |
+| `SetTemperature` | number | Target temperature (READ ONLY - use WriteCurrentSetTemperature to change) |
 | `ActualTemperature` | number | Current temperature |
-| `Mode` | number | Climate mode (0=off, 1=comfort, 2=eco, 3=away) |
+| `ModeSaved` | number | Current mode for ClimateControlUniversal (READ ONLY) |
+| `MainState` | number | Current mode for ClimateControl (READ ONLY) |
 | `Humidity` | number | Humidity (if available) |
 | `Error` | boolean | Error state |
+| `MinSetValueHeat` | number | Min temp for heating mode |
+| `MaxSetValueHeat` | number | Max temp for heating mode |
+| `MinSetValueCool` | number | Min temp for cooling mode |
+| `MaxSetValueCool` | number | Max temp for cooling mode |
+| `SetValueFreezeProtection` | number | Away/protection preset temperature |
+| `SetValueComfortHeating` | number | Comfort preset temperature (heating) |
+| `SetValueEnergySavingHeating` | number | Eco preset temperature (heating) |
+
+**Mode Values (ModeSaved/MainState):**
+| Value | Heating | Cooling |
+|-------|---------|---------|
+| 2 | away | - |
+| 3 | eco | - |
+| 4 | comfort | - |
+| 5 | - | away |
+| 6 | - | eco |
+| 7 | - | comfort |
+
+**⚠️ Important:** `ModeSaved`, `MainState`, and `SetTemperature` are for READING state only. To CHANGE presets or temperature, use CallMethod with `WriteDayMode`, `WriteNightMode`, `WriteFreezeMode`, or `WriteCurrentSetTemperature`. See "Climate Control" section above.
 
 ### Home States
 | Class | Description |
@@ -1106,7 +1181,13 @@ Fetch saved pictures via: `http://{evon-host}{imageUrlClient}` with token cookie
 
 ## See Also
 
-- `src/ws-client.ts` - TypeScript WebSocket client implementation
-- `ws-switch-listener.mjs` - Test script for exploring physical switch events
-- `ws-security-door.mjs` - Test script for security door and doorbell events
-- `src/api-client.ts` - HTTP API client (alternative to WebSocket)
+**Home Assistant Integration Files:**
+- `custom_components/evon/ws_client.py` - WebSocket client implementation
+- `custom_components/evon/ws_control.py` - WebSocket control mappings (device → WS method)
+- `custom_components/evon/ws_mappings.py` - Property subscriptions and data mapping
+- `custom_components/evon/api.py` - HTTP API client with WebSocket fallback
+- `custom_components/evon/climate.py` - Climate entity with optimistic state
+
+**Test Scripts:**
+- `scripts/test-evon-ws-temp-recall.py` - Temperature recall test via WebSocket
+- `scripts/test-ha-temp-recall.py` - End-to-end HA climate test

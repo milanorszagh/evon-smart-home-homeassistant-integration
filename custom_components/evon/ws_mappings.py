@@ -66,7 +66,10 @@ CLASS_TO_TYPE: dict[str, str] = {
 SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
     ENTITY_TYPE_LIGHTS: ["IsOn", "ScaledBrightness", "ColorTemp", "MinColorTemperature", "MaxColorTemperature"],
     ENTITY_TYPE_BLINDS: ["Position", "Angle"],
-    ENTITY_TYPE_CLIMATES: ["SetTemperature", "ActualTemperature", "ModeSaved", "IsOn", "Mode", "Humidity"],
+    # Climate: Subscribe to BOTH ModeSaved AND MainState because different thermostat types use different properties:
+    # - SmartCOM.Clima.ClimateControl uses MainState (only MainState exists)
+    # - Heating.ClimateControlUniversal uses ModeSaved (only ModeSaved exists)
+    ENTITY_TYPE_CLIMATES: ["SetTemperature", "ActualTemperature", "ModeSaved", "MainState", "IsOn", "Mode", "Humidity"],
     ENTITY_TYPE_SWITCHES: ["IsOn", "State"],
     ENTITY_TYPE_HOME_STATES: ["Active"],
     ENTITY_TYPE_BATHROOM_RADIATORS: ["Output", "NextSwitchPoint"],
@@ -119,9 +122,10 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "Angle": "angle",
     },
     ENTITY_TYPE_CLIMATES: {
-        "SetTemperature": "target_temp",
-        "ActualTemperature": "current_temp",
+        "SetTemperature": "target_temperature",
+        "ActualTemperature": "current_temperature",
         "ModeSaved": "mode_saved",
+        "MainState": "mode_saved",  # SmartCOM.Clima.ClimateControl uses MainState
         "IsOn": "is_on",
         "Mode": "mode",
         "Humidity": "humidity",

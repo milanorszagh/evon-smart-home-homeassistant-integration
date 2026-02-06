@@ -88,6 +88,16 @@ if not importlib.util.find_spec("homeassistant"):
     sys.modules["homeassistant.components.scene"] = mock_ha.components.scene
     sys.modules["homeassistant.components.camera"] = mock_ha.components.camera
     sys.modules["homeassistant.components.image"] = mock_ha.components.image
+
+    # Recorder component for statistics (used by energy sensors)
+    mock_recorder = MagicMock()
+    mock_recorder_statistics = MagicMock()
+    mock_recorder_statistics.statistics_during_period = MagicMock(return_value={})
+    mock_recorder.statistics = mock_recorder_statistics
+    mock_ha.components.recorder = mock_recorder
+    sys.modules["homeassistant.components.recorder"] = mock_ha.components.recorder
+    sys.modules["homeassistant.components.recorder.statistics"] = mock_recorder_statistics
+
     sys.modules["homeassistant.exceptions"] = mock_ha.exceptions
     sys.modules["homeassistant.util"] = mock_ha.util
     sys.modules["homeassistant.util.dt"] = mock_ha.util.dt

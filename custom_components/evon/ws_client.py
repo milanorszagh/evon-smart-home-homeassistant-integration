@@ -581,6 +581,44 @@ class EvonWsClient:
             self._pending_requests.pop(sequence_id, None)
             raise
 
+    async def _send_fire_and_forget(
+        self,
+        method_name: str,
+        args: list[Any],
+    ) -> None:
+        """Send a request without waiting for response.
+
+        Use for methods that execute successfully but don't send MethodReturn.
+        Examples: climate preset methods (WriteDayMode, WriteNightMode, WriteFreezeMode).
+
+        Args:
+            method_name: The method to call.
+            args: The arguments to pass.
+
+        Raises:
+            EvonWsNotConnectedError: If WebSocket is not connected.
+        """
+        if not self.is_connected:
+            raise EvonWsNotConnectedError("WebSocket not connected")
+
+        sequence_id = self._sequence_id
+        self._sequence_id += 1
+
+        message = {
+            "methodName": "CallWithReturn",
+            "request": {
+                "args": args,
+                "methodName": method_name,
+                "sequenceId": sequence_id,
+            },
+        }
+
+        _LOGGER.debug("Sending WS fire-and-forget: method=%s, seq=%s", method_name, sequence_id)
+        if not self._ws or self._ws.closed:
+            raise EvonWsNotConnectedError("WebSocket closed before send")
+        await self._ws.send_str(json.dumps(message))
+        _LOGGER.debug("WS fire-and-forget sent successfully")
+
     async def subscribe_instances(
         self,
         subscriptions: list[dict[str, Any]],
@@ -687,6 +725,7 @@ class EvonWsClient:
         instance_id: str,
         method: str,
         params: list[Any] | None = None,
+        fire_and_forget: bool = False,
     ) -> bool:
         """Call a method on an instance via WebSocket.
 
@@ -697,6 +736,8 @@ class EvonWsClient:
             instance_id: The instance ID (e.g., "SC1_M09.Blind2").
             method: The method name (e.g., "Open", "MoveToPosition").
             params: Optional list of parameters.
+            fire_and_forget: If True, send without waiting for response.
+                Use for methods that don't return MethodReturn (e.g., climate presets).
 
         Returns:
             True if the request was sent successfully, False otherwise.
@@ -705,17 +746,26 @@ class EvonWsClient:
             return False
 
         try:
-            # Format: [instanceId.methodName, params]
-            # This matches the Evon web app's WebSocket protocol
-            await self._send_request(
-                "CallMethod",
-                [f"{instance_id}.{method}", params or []],
-            )
+            if fire_and_forget:
+                # Send without waiting for response - some methods (like climate presets)
+                # don't send MethodReturn but still execute successfully
+                await self._send_fire_and_forget(
+                    "CallMethod",
+                    [f"{instance_id}.{method}", params or []],
+                )
+            else:
+                # Format: [instanceId.methodName, params]
+                # This matches the Evon web app's WebSocket protocol
+                await self._send_request(
+                    "CallMethod",
+                    [f"{instance_id}.{method}", params or []],
+                )
             _LOGGER.debug(
-                "Control via WebSocket: CallMethod %s.%s(%s)",
+                "Control via WebSocket: CallMethod %s.%s(%s) fire_and_forget=%s",
                 instance_id,
                 method,
                 params or [],
+                fire_and_forget,
             )
             return True
         except Exception as err:  # pylint: disable=broad-except

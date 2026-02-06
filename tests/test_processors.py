@@ -244,6 +244,7 @@ class TestApiImageFetch:
             yield mock_response
 
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_session.get = mock_get
 
         # Set up session and token properly to bypass _ensure_token and _get_session
@@ -274,6 +275,7 @@ class TestApiImageFetch:
             yield  # Never reached
 
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_session.get = mock_get_error
 
         # Set up session and token properly to bypass _ensure_token and _get_session

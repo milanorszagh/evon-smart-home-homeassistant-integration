@@ -276,7 +276,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
             await self._api.set_climate_freeze_protection_mode(self._instance_id)
         else:
             await self._api.set_climate_comfort_mode(self._instance_id)
-        await self.coordinator.async_request_refresh()
+        # WebSocket will push the actual state change - no HTTP refresh needed
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -290,7 +290,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
             self.async_write_ha_state()
 
             await self._api.set_climate_temperature(self._instance_id, temperature)
-            await self.coordinator.async_request_refresh()
+            # WebSocket will push the actual state change - no HTTP refresh needed
+            # (HTTP refresh can return stale data and overwrite correct WS state)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
@@ -301,16 +302,15 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        # Get seasonal mode to pass correct ModeSaved value for WebSocket
-        is_cooling = self.coordinator.get_season_mode()
-
         if preset_mode == CLIMATE_MODE_COMFORT:
-            await self._api.set_climate_comfort_mode(self._instance_id, is_cooling)
+            await self._api.set_climate_comfort_mode(self._instance_id)
         elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
-            await self._api.set_climate_energy_saving_mode(self._instance_id, is_cooling)
+            await self._api.set_climate_energy_saving_mode(self._instance_id)
         elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
-            await self._api.set_climate_freeze_protection_mode(self._instance_id, is_cooling)
-        await self.coordinator.async_request_refresh()
+            await self._api.set_climate_freeze_protection_mode(self._instance_id)
+        # WebSocket will push the actual state change (~0.8s) - no HTTP refresh needed
+        # IMPORTANT: Do NOT trigger HTTP refresh here - it causes a race condition where
+        # stale HTTP data overwrites the correct WebSocket state, causing preset flapping
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

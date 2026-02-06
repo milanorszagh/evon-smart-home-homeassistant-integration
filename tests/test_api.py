@@ -102,6 +102,7 @@ class TestEvonApiLogin:
     def mock_session_success(self):
         """Create a mock session with successful login response."""
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.headers = {"x-elocs-token": "test_token"}
@@ -118,6 +119,7 @@ class TestEvonApiLogin:
     def mock_session_auth_failure(self):
         """Create a mock session with auth failure response."""
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_response = MagicMock()
         mock_response.status = 401
         mock_response.reason = "Unauthorized"
@@ -133,6 +135,7 @@ class TestEvonApiLogin:
     def mock_session_no_token(self):
         """Create a mock session with successful response but no token."""
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.headers = {}
@@ -214,6 +217,7 @@ class TestEvonApiEnsureToken:
     async def test_ensure_token_calls_login(self):
         """Test that login is called when no token."""
         mock_session = MagicMock()
+        mock_session.closed = False  # Prevent _get_session from creating new session
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.headers = {"x-elocs-token": "new_token"}
@@ -308,44 +312,44 @@ class TestEvonApiMethods:
     @pytest.mark.asyncio
     async def test_set_climate_comfort_mode_heating(self, mock_api):
         """Test setting climate to comfort mode in heating season."""
-        # In heating mode (is_cooling=False), comfort uses ModeSaved=4
+        # Uses WriteDayMode CallMethod (is_cooling param is unused, kept for API compat)
         await mock_api.set_climate_comfort_mode("climate_1", is_cooling=False)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [4])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteDayMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_comfort_mode_cooling(self, mock_api):
         """Test setting climate to comfort mode in cooling season."""
-        # In cooling mode (is_cooling=True), comfort uses ModeSaved=7
+        # Uses WriteDayMode CallMethod (same in both seasons, Evon handles internally)
         await mock_api.set_climate_comfort_mode("climate_1", is_cooling=True)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [7])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteDayMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_energy_saving_mode_heating(self, mock_api):
         """Test setting climate to energy saving mode in heating season."""
-        # In heating mode (is_cooling=False), eco uses ModeSaved=3
+        # Uses WriteNightMode CallMethod
         await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=False)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [3])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteNightMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_energy_saving_mode_cooling(self, mock_api):
         """Test setting climate to energy saving mode in cooling season."""
-        # In cooling mode (is_cooling=True), eco uses ModeSaved=6
+        # Uses WriteNightMode CallMethod (same in both seasons)
         await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=True)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [6])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteNightMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_freeze_protection_mode_heating(self, mock_api):
         """Test setting climate to freeze protection mode in heating season."""
-        # In heating mode (is_cooling=False), away uses ModeSaved=2
+        # Uses WriteFreezeMode CallMethod
         await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=False)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [2])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteFreezeMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_freeze_protection_mode_cooling(self, mock_api):
         """Test setting climate to freeze protection mode in cooling season."""
-        # In cooling mode (is_cooling=True), away uses ModeSaved=5
+        # Uses WriteFreezeMode CallMethod (same in both seasons)
         await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=True)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/SetPreset", [5])
+        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteFreezeMode", [])
 
     @pytest.mark.asyncio
     async def test_set_climate_temperature(self, mock_api):
@@ -475,8 +479,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.turn_on_light("Light1")
 
-        # WebSocket call_method should be called with SwitchOn (no params)
-        mock_ws.call_method.assert_called_once_with("Light1", "SwitchOn", None)
+        # WebSocket call_method should be called with SwitchOn (no params, fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Light1", "SwitchOn", None, False)
         # HTTP should NOT be called (WS succeeded)
         mock_api_with_ws._request.assert_not_called()
 
@@ -491,8 +495,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.turn_off_light("Light1")
 
-        # WebSocket call_method should be called with SwitchOff (no params)
-        mock_ws.call_method.assert_called_once_with("Light1", "SwitchOff", None)
+        # WebSocket call_method should be called with SwitchOff (no params, fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Light1", "SwitchOff", None, False)
         # HTTP should NOT be called (WS succeeded)
         mock_api_with_ws._request.assert_not_called()
 
@@ -506,8 +510,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.set_light_brightness("Light1", 75)
 
-        # WebSocket call_method should be called with BrightnessSetScaled([brightness, transition])
-        mock_ws.call_method.assert_called_once_with("Light1", "BrightnessSetScaled", [75, 0])
+        # WebSocket call_method should be called with BrightnessSetScaled([brightness, transition], fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Light1", "BrightnessSetScaled", [75, 0], False)
         # HTTP should NOT be called
         mock_api_with_ws._request.assert_not_called()
 
@@ -570,8 +574,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.open_blind("Blind1")
 
-        # WebSocket call_method should be used for Open
-        mock_ws.call_method.assert_called_once_with("Blind1", "Open", None)
+        # WebSocket call_method should be used for Open (fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Blind1", "Open", None, False)
         # HTTP should NOT be called
         mock_api_with_ws._request.assert_not_called()
 
@@ -603,8 +607,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.set_blind_position("Blind1", 50)
 
-        # WebSocket call_method should be called with MoveToPosition([angle, position])
-        mock_ws.call_method.assert_called_once_with("Blind1", "MoveToPosition", [45, 50])
+        # WebSocket call_method should be called with MoveToPosition([angle, position], fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Blind1", "MoveToPosition", [45, 50], False)
         # HTTP should NOT be called (WS succeeded)
         mock_api_with_ws._request.assert_not_called()
 
@@ -636,8 +640,8 @@ class TestEvonApiWebSocketControl:
 
         await mock_api_with_ws.set_blind_tilt("Blind1", 75)
 
-        # WebSocket call_method should be called with MoveToPosition([angle, position])
-        mock_ws.call_method.assert_called_once_with("Blind1", "MoveToPosition", [75, 30])
+        # WebSocket call_method should be called with MoveToPosition([angle, position], fire_and_forget=False)
+        mock_ws.call_method.assert_called_once_with("Blind1", "MoveToPosition", [75, 30], False)
         # HTTP should NOT be called (WS succeeded)
         mock_api_with_ws._request.assert_not_called()
 

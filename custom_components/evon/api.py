@@ -562,7 +562,7 @@ class EvonApi:
                     class_name,
                 )
                 result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                    instance_id, "MoveToPosition", [cached_angle, new_position]
+                    instance_id, "MoveToPosition", [cached_angle, new_position], False
                 )
                 _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
@@ -582,7 +582,7 @@ class EvonApi:
                     class_name,
                 )
                 result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                    instance_id, "MoveToPosition", [new_angle, cached_position]
+                    instance_id, "MoveToPosition", [new_angle, cached_position], False
                 )
                 _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
@@ -607,14 +607,15 @@ class EvonApi:
             # CallMethod operation - use get_value to transform params if needed
             method_params = mapping.get_value(params)
             _LOGGER.info(
-                "WS control: CallMethod %s.%s(%s) (class: %s)",
+                "WS control: CallMethod %s.%s(%s) (class: %s, fire_and_forget: %s)",
                 instance_id,
                 mapping.method_name,
                 method_params,
                 class_name,
+                mapping.fire_and_forget,
             )
             result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                instance_id, mapping.method_name, method_params
+                instance_id, mapping.method_name, method_params, mapping.fire_and_forget
             )
             _LOGGER.debug("WS control: CallMethod result = %s", result)
             return result
@@ -694,33 +695,30 @@ class EvonApi:
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: True if in cooling mode (summer), False for heating (winter).
+            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
-        # WebSocket uses SetValue ModeSaved: 4 (heating) or 7 (cooling)
-        mode_saved = 7 if is_cooling else 4
-        await self.call_method(instance_id, "SetPreset", [mode_saved])
+        await self.call_method(instance_id, "WriteDayMode")
 
     async def set_climate_energy_saving_mode(self, instance_id: str, is_cooling: bool = False) -> None:
         """Set climate to energy saving (night) mode.
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: True if in cooling mode (summer), False for heating (winter).
+            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
-        # WebSocket uses SetValue ModeSaved: 3 (heating) or 6 (cooling)
-        mode_saved = 6 if is_cooling else 3
-        await self.call_method(instance_id, "SetPreset", [mode_saved])
+        await self.call_method(instance_id, "WriteNightMode")
 
     async def set_climate_freeze_protection_mode(self, instance_id: str, is_cooling: bool = False) -> None:
-        """Set climate to freeze protection mode.
+        """Set climate to freeze/heat protection mode.
+
+        In heating mode (winter): freeze protection prevents pipes from freezing.
+        In cooling mode (summer): heat protection prevents overheating.
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: True if in cooling mode (summer), False for heating (winter).
+            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
-        # WebSocket uses SetValue ModeSaved: 2 (heating) or 5 (cooling)
-        mode_saved = 5 if is_cooling else 2
-        await self.call_method(instance_id, "SetPreset", [mode_saved])
+        await self.call_method(instance_id, "WriteFreezeMode")
 
     async def set_climate_temperature(self, instance_id: str, temperature: float) -> None:
         """Set climate target temperature."""
