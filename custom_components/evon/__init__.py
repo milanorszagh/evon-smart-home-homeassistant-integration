@@ -92,9 +92,7 @@ def _get_service_lock(hass: HomeAssistant) -> asyncio.Lock:
     event loop and isolated per HA instance.
     """
     lock_key = f"{DOMAIN}_service_lock"
-    if lock_key not in hass.data:
-        hass.data[lock_key] = asyncio.Lock()
-    return hass.data[lock_key]
+    return hass.data.setdefault(lock_key, asyncio.Lock())
 
 
 async def _async_setup_websocket(
@@ -717,7 +715,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
         hass.config_entries.async_update_entry(config_entry, data=new_data, version=3, minor_version=0)
         _LOGGER.info("Migration to version 3 successful")
 
-    if config_entry.version > 3:
+    elif config_entry.version > 3:
         # Future version - can't migrate forward
         _LOGGER.error(
             "Cannot migrate Evon config entry from version %s (current integration supports up to version 3)",

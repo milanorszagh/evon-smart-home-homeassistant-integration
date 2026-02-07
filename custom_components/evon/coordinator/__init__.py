@@ -574,25 +574,26 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Update the entity data in place
+        # Note: ws_to_coordinator_data already validates which keys to return,
+        # so we apply all keys including ones not in the initial HTTP poll
         for key, value in coord_data.items():
-            if key in entity:
-                old_value = entity[key]
-                entity[key] = value
-                if old_value != value:
-                    _LOGGER.debug(
-                        "WebSocket update: %s.%s: %s -> %s",
-                        instance_id,
-                        key,
-                        old_value,
-                        value,
-                    )
+            old_value = entity.get(key)
+            entity[key] = value
+            if old_value != value:
+                _LOGGER.debug(
+                    "WebSocket update: %s.%s: %s -> %s",
+                    instance_id,
+                    key,
+                    old_value,
+                    value,
+                )
 
-                    # Fire doorbell event when doorbell_triggered transitions to True
-                    if entity_type == ENTITY_TYPE_INTERCOMS and key == "doorbell_triggered" and value is True:
-                        self.hass.bus.async_fire(
-                            f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
-                        )
-                        _LOGGER.info("Doorbell event fired for %s", instance_id)
+                # Fire doorbell event when doorbell_triggered transitions to True
+                if entity_type == ENTITY_TYPE_INTERCOMS and key == "doorbell_triggered" and value is True:
+                    self.hass.bus.async_fire(
+                        f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
+                    )
+                    _LOGGER.info("Doorbell event fired for %s", instance_id)
 
         # Import energy statistics when smart meter data is received
         if entity_type == ENTITY_TYPE_SMART_METERS:

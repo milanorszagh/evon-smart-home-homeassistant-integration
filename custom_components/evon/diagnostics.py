@@ -16,9 +16,12 @@ from .const import (
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_INTERCOMS,
     ENTITY_TYPE_LIGHTS,
     ENTITY_TYPE_SCENES,
+    ENTITY_TYPE_SECURITY_DOORS,
     ENTITY_TYPE_SMART_METERS,
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
@@ -48,6 +51,9 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             ENTITY_TYPE_VALVES: len(coordinator.data.get(ENTITY_TYPE_VALVES, [])),
             ENTITY_TYPE_SCENES: len(coordinator.data.get(ENTITY_TYPE_SCENES, [])),
             ENTITY_TYPE_BATHROOM_RADIATORS: len(coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])),
+            ENTITY_TYPE_SECURITY_DOORS: len(coordinator.data.get(ENTITY_TYPE_SECURITY_DOORS, [])),
+            ENTITY_TYPE_INTERCOMS: len(coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])),
+            ENTITY_TYPE_CAMERAS: len(coordinator.data.get(ENTITY_TYPE_CAMERAS, [])),
             "rooms": len(coordinator.data.get("rooms", {})),
         }
 
@@ -141,11 +147,40 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Bathroom radiators summary
         device_summaries[ENTITY_TYPE_BATHROOM_RADIATORS] = [
             {
-                "id": radiator["id"],
-                "name": radiator["name"],
+                "id": radiator.get("id"),
+                "name": radiator.get("name"),
                 "is_on": radiator.get("is_on"),
             }
             for radiator in coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])
+        ]
+
+        # Security doors summary
+        device_summaries[ENTITY_TYPE_SECURITY_DOORS] = [
+            {
+                "id": door.get("id"),
+                "name": door.get("name"),
+                "is_locked": door.get("is_locked"),
+            }
+            for door in coordinator.data.get(ENTITY_TYPE_SECURITY_DOORS, [])
+        ]
+
+        # Intercoms summary
+        device_summaries[ENTITY_TYPE_INTERCOMS] = [
+            {
+                "id": intercom.get("id"),
+                "name": intercom.get("name"),
+            }
+            for intercom in coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])
+        ]
+
+        # Cameras summary
+        device_summaries[ENTITY_TYPE_CAMERAS] = [
+            {
+                "id": camera.get("id"),
+                "name": camera.get("name"),
+                "error": camera.get("error"),
+            }
+            for camera in coordinator.data.get(ENTITY_TYPE_CAMERAS, [])
         ]
 
     return {

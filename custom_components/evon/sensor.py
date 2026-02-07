@@ -411,15 +411,14 @@ class EvonEnergyTodaySensor(EvonEntity, SensorEntity):
         return self._build_device_info("Smart Meter")
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return today's energy consumption (calculated in coordinator)."""
         data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
         if data:
             value = data.get("energy_today_calculated")
             if value is not None:
                 return value
-        # Return 0.0 when data is unavailable or not yet calculated
-        return 0.0
+        return None
 
 
 class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
@@ -449,12 +448,11 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
         return self._build_device_info("Smart Meter")
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """Return this month's energy consumption (calculated in coordinator)."""
         data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
         if data:
             value = data.get("energy_this_month_calculated")
             if value is not None:
                 return value
-        # Return 0.0 when data is unavailable or not yet calculated
-        return 0.0
+        return None

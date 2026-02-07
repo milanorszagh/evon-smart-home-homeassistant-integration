@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, ENTITY_TYPE_SECURITY_DOORS
 from .coordinator import EvonDataUpdateCoordinator
@@ -102,6 +103,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
             name=f"{self._door_name} Snapshots",
             manufacturer="Evon",
             model="Doorbell Snapshots",
+            via_device=(DOMAIN, self._entry.entry_id),
         )
 
     @property
@@ -116,7 +118,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
             ts = snapshot.get("timestamp")
             if ts:
                 attrs["timestamp"] = ts
-                attrs["datetime"] = datetime.fromtimestamp(ts / 1000).isoformat()
+                attrs["datetime"] = dt_util.utc_from_timestamp(ts / 1000).isoformat()
             attrs["path"] = snapshot.get("path", "")
         return attrs
 
@@ -127,7 +129,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
         if snapshot:
             ts = snapshot.get("timestamp")
             if ts:
-                return datetime.fromtimestamp(ts / 1000)
+                return dt_util.utc_from_timestamp(ts / 1000)
         return None
 
     def _get_snapshot(self) -> dict[str, Any] | None:
