@@ -65,4 +65,7 @@ export const HOME_STATE_IDS = {
 } as const;
 
 export const API_TIMEOUT_MS = 10000;
+// MCP server uses a longer TTL (27 days) since it starts fresh each session.
+// The HA integration uses 1 hour (see api.py TOKEN_TTL_SECONDS) because it
+// maintains a persistent connection and can re-login cheaply.
 export const TOKEN_VALIDITY_DAYS = 27;

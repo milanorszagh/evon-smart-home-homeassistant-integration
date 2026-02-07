@@ -296,126 +296,75 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_refresh()
 
-        async def handle_all_lights_off(call: ServiceCall) -> None:
-            """Handle the all lights off service call."""
-            _LOGGER.info("All lights off service called")
+        async def _bulk_api_call(
+            service_name: str,
+            api_method: str,
+        ) -> None:
+            """Execute a bulk API method across all entries."""
+            _LOGGER.info("%s service called", service_name)
             async with _get_service_lock(hass):
-                # Take a snapshot of entries to iterate over
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
                     if "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
-                    if coordinator.data and ENTITY_TYPE_LIGHTS in coordinator.data:
-                        # Copy lights list to avoid modification during iteration
-                        lights = list(coordinator.data[ENTITY_TYPE_LIGHTS])
-                        for light in lights:
-                            light_id = light.get("id")
-                            if not light_id:
-                                continue
-                            if light.get("is_on"):
-                                try:
-                                    await api.turn_off_light(light_id)
-                                except Exception as err:
-                                    _LOGGER.warning("Failed to turn off light %s: %s", light_id, err)
+                    try:
+                        await getattr(api, api_method)()
+                    except Exception as err:
+                        _LOGGER.warning("Failed %s: %s", service_name, err)
                     await coordinator.async_refresh()
+
+        async def _bulk_entity_call(
+            service_name: str,
+            entity_type: str,
+            api_method: str,
+            filter_fn=None,
+        ) -> None:
+            """Execute a per-entity API method across all entries."""
+            _LOGGER.info("%s service called", service_name)
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for _entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data or "api" not in entry_data:
+                        continue
+                    coordinator = entry_data["coordinator"]
+                    api = entry_data["api"]
+                    if coordinator.data and entity_type in coordinator.data:
+                        for entity in list(coordinator.data[entity_type]):
+                            entity_id = entity.get("id")
+                            if not entity_id:
+                                continue
+                            if filter_fn and not filter_fn(entity):
+                                continue
+                            try:
+                                await getattr(api, api_method)(entity_id)
+                            except Exception as err:
+                                _LOGGER.warning("Failed %s for %s: %s", service_name, entity_id, err)
+                    await coordinator.async_refresh()
+
+        async def handle_all_lights_off(call: ServiceCall) -> None:
+            await _bulk_entity_call(
+                "All lights off",
+                ENTITY_TYPE_LIGHTS,
+                "turn_off_light",
+                filter_fn=lambda light: light.get("is_on"),
+            )
 
         async def handle_all_blinds_close(call: ServiceCall) -> None:
-            """Handle the all blinds close service call."""
-            _LOGGER.info("All blinds close service called")
-            async with _get_service_lock(hass):
-                # Take a snapshot of entries to iterate over
-                entries = list(hass.data.get(DOMAIN, {}).items())
-                for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
-                        continue
-                    coordinator = entry_data["coordinator"]
-                    api = entry_data["api"]
-                    if coordinator.data and ENTITY_TYPE_BLINDS in coordinator.data:
-                        # Copy blinds list to avoid modification during iteration
-                        blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
-                        for blind in blinds:
-                            blind_id = blind.get("id")
-                            if not blind_id:
-                                continue
-                            try:
-                                await api.close_blind(blind_id)
-                            except Exception as err:
-                                _LOGGER.warning("Failed to close blind %s: %s", blind_id, err)
-                    await coordinator.async_refresh()
+            await _bulk_entity_call("All blinds close", ENTITY_TYPE_BLINDS, "close_blind")
 
         async def handle_all_blinds_open(call: ServiceCall) -> None:
-            """Handle the all blinds open service call."""
-            _LOGGER.info("All blinds open service called")
-            async with _get_service_lock(hass):
-                # Take a snapshot of entries to iterate over
-                entries = list(hass.data.get(DOMAIN, {}).items())
-                for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
-                        continue
-                    coordinator = entry_data["coordinator"]
-                    api = entry_data["api"]
-                    if coordinator.data and ENTITY_TYPE_BLINDS in coordinator.data:
-                        # Copy blinds list to avoid modification during iteration
-                        blinds = list(coordinator.data[ENTITY_TYPE_BLINDS])
-                        for blind in blinds:
-                            blind_id = blind.get("id")
-                            if not blind_id:
-                                continue
-                            try:
-                                await api.open_blind(blind_id)
-                            except Exception as err:
-                                _LOGGER.warning("Failed to open blind %s: %s", blind_id, err)
-                    await coordinator.async_refresh()
+            await _bulk_entity_call("All blinds open", ENTITY_TYPE_BLINDS, "open_blind")
 
         async def handle_all_climate_comfort(call: ServiceCall) -> None:
-            """Handle the all climate comfort service call."""
-            _LOGGER.info("All climate comfort service called")
-            async with _get_service_lock(hass):
-                entries = list(hass.data.get(DOMAIN, {}).items())
-                for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
-                        continue
-                    coordinator = entry_data["coordinator"]
-                    api = entry_data["api"]
-                    try:
-                        await api.all_climate_comfort()
-                    except Exception as err:
-                        _LOGGER.warning("Failed to set all climate to comfort: %s", err)
-                    await coordinator.async_refresh()
+            await _bulk_api_call("All climate comfort", "all_climate_comfort")
 
         async def handle_all_climate_eco(call: ServiceCall) -> None:
-            """Handle the all climate eco service call."""
-            _LOGGER.info("All climate eco service called")
-            async with _get_service_lock(hass):
-                entries = list(hass.data.get(DOMAIN, {}).items())
-                for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
-                        continue
-                    coordinator = entry_data["coordinator"]
-                    api = entry_data["api"]
-                    try:
-                        await api.all_climate_eco()
-                    except Exception as err:
-                        _LOGGER.warning("Failed to set all climate to eco: %s", err)
-                    await coordinator.async_refresh()
+            await _bulk_api_call("All climate eco", "all_climate_eco")
 
         async def handle_all_climate_away(call: ServiceCall) -> None:
-            """Handle the all climate away service call."""
-            _LOGGER.info("All climate away service called")
-            async with _get_service_lock(hass):
-                entries = list(hass.data.get(DOMAIN, {}).items())
-                for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
-                        continue
-                    coordinator = entry_data["coordinator"]
-                    api = entry_data["api"]
-                    try:
-                        await api.all_climate_away()
-                    except Exception as err:
-                        _LOGGER.warning("Failed to set all climate to away: %s", err)
-                    await coordinator.async_refresh()
+            await _bulk_api_call("All climate away", "all_climate_away")
 
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)
         hass.services.async_register(DOMAIN, SERVICE_RECONNECT_WEBSOCKET, handle_reconnect_websocket)

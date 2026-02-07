@@ -30,7 +30,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Token TTL in seconds (refresh token after this time)
+# Token TTL in seconds (refresh token after this time).
+# The HA integration refreshes aggressively (1 hour) since it maintains a persistent
+# connection and can re-login cheaply. The MCP server uses a longer TTL (27 days)
+# because it starts fresh each session and tokens are valid for ~30 days on the Evon API.
 TOKEN_TTL_SECONDS = 3600  # 1 hour
 
 # Validation patterns for API parameters
@@ -555,7 +558,7 @@ class EvonApi:
                     _LOGGER.debug("WS control: No cached angle for blind %s, using HTTP", instance_id)
                     return False
                 new_position = params[0]
-                _LOGGER.info(
+                _LOGGER.debug(
                     "WS control: CallMethod %s.MoveToPosition([%s, %s]) (class: %s)",
                     instance_id,
                     cached_angle,
@@ -575,7 +578,7 @@ class EvonApi:
                     _LOGGER.debug("WS control: No cached position for blind %s, using HTTP", instance_id)
                     return False
                 new_angle = params[0]
-                _LOGGER.info(
+                _LOGGER.debug(
                     "WS control: CallMethod %s.MoveToPosition([%s, %s]) (class: %s)",
                     instance_id,
                     new_angle,
@@ -596,7 +599,7 @@ class EvonApi:
         if mapping.property_name:
             # SetValue operation
             value = mapping.get_value(params)
-            _LOGGER.info(
+            _LOGGER.debug(
                 "WS control: SetValue %s.%s = %s (class: %s)", instance_id, mapping.property_name, value, class_name
             )
             result = await self._ws_client.set_value(  # type: ignore[union-attr]
@@ -607,7 +610,7 @@ class EvonApi:
         else:
             # CallMethod operation - use get_value to transform params if needed
             method_params = mapping.get_value(params)
-            _LOGGER.info(
+            _LOGGER.debug(
                 "WS control: CallMethod %s.%s(%s) (class: %s, fire_and_forget: %s)",
                 instance_id,
                 mapping.method_name,
@@ -889,7 +892,7 @@ class EvonApi:
         # Try WebSocket first if available
         ws_attempted = self._ws_client and self._ws_client.is_connected
         if ws_attempted:
-            _LOGGER.info("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
+            _LOGGER.debug("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
             result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
             _LOGGER.debug("WS control: SetValue result = %s", result)
             if result:
