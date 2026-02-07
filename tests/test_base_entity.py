@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 import sys
+from unittest.mock import MagicMock
 
 import pytest
 

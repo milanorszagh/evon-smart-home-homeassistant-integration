@@ -1543,20 +1543,22 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {
-                "methodName": "ValuesChanged",
-                "args": [
-                    {
-                        "table": {
-                            "light_1.IsOn": {"value": {"Value": True}},
-                            "light_1.ScaledBrightness": {"value": {"Value": 75}},
+        msg = json.dumps(
+            [
+                "Event",
+                {
+                    "methodName": "ValuesChanged",
+                    "args": [
+                        {
+                            "table": {
+                                "light_1.IsOn": {"value": {"Value": True}},
+                                "light_1.ScaledBrightness": {"value": {"Value": 75}},
+                            }
                         }
-                    }
-                ],
-            },
-        ])
+                    ],
+                },
+            ]
+        )
         client._handle_message(msg)
 
         assert len(received_updates) == 1
@@ -1578,21 +1580,23 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {
-                "methodName": "ValuesChanged",
-                "args": [
-                    {
-                        "table": {
-                            "light_1.IsOn": {"value": {"Value": True}},
-                            "blind_2.Position": {"value": {"Value": 50}},
-                            "climate_3.ActualTemperature": {"value": {"Value": 21.5}},
+        msg = json.dumps(
+            [
+                "Event",
+                {
+                    "methodName": "ValuesChanged",
+                    "args": [
+                        {
+                            "table": {
+                                "light_1.IsOn": {"value": {"Value": True}},
+                                "blind_2.Position": {"value": {"Value": 50}},
+                                "climate_3.ActualTemperature": {"value": {"Value": 21.5}},
+                            }
                         }
-                    }
-                ],
-            },
-        ])
+                    ],
+                },
+            ]
+        )
         client._handle_message(msg)
 
         assert len(received_updates) == 3
@@ -1613,19 +1617,21 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {
-                "methodName": "ValuesChanged",
-                "args": [
-                    {
-                        "table": {
-                            "intercom_1.Cam.Image": {"value": {"Value": "/images/new.jpg"}},
+        msg = json.dumps(
+            [
+                "Event",
+                {
+                    "methodName": "ValuesChanged",
+                    "args": [
+                        {
+                            "table": {
+                                "intercom_1.Cam.Image": {"value": {"Value": "/images/new.jpg"}},
+                            }
                         }
-                    }
-                ],
-            },
-        ])
+                    ],
+                },
+            ]
+        )
         client._handle_message(msg)
 
         assert len(received_updates) == 1
@@ -1642,13 +1648,15 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=None,
         )
 
-        msg = json.dumps([
-            "Event",
-            {
-                "methodName": "ValuesChanged",
-                "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
-            },
-        ])
+        msg = json.dumps(
+            [
+                "Event",
+                {
+                    "methodName": "ValuesChanged",
+                    "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
+                },
+            ]
+        )
         # Should not crash
         client._handle_message(msg)
 
@@ -1666,10 +1674,12 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {"methodName": "ValuesChanged", "args": [{"table": {}}]},
-        ])
+        msg = json.dumps(
+            [
+                "Event",
+                {"methodName": "ValuesChanged", "args": [{"table": {}}]},
+            ]
+        )
         client._handle_message(msg)
 
         # No updates should be triggered
@@ -1689,10 +1699,12 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {"methodName": "ValuesChanged", "args": []},
-        ])
+        msg = json.dumps(
+            [
+                "Event",
+                {"methodName": "ValuesChanged", "args": []},
+            ]
+        )
         client._handle_message(msg)
 
         assert len(received_updates) == 0
@@ -1711,10 +1723,12 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=on_values_changed,
         )
 
-        msg = json.dumps([
-            "Event",
-            {"methodName": "SomeOtherEvent", "args": [{"data": "test"}]},
-        ])
+        msg = json.dumps(
+            [
+                "Event",
+                {"methodName": "SomeOtherEvent", "args": [{"data": "test"}]},
+            ]
+        )
         client._handle_message(msg)
 
         # No updates - only ValuesChanged should trigger callback
@@ -1734,6 +1748,7 @@ class TestWsMessageHandlingEdgeCases:
 
     def test_callback_error_does_not_crash_client(self):
         """Test that error in callback doesn't crash message handling."""
+
         def bad_callback(instance_id, properties):
             raise ValueError("Intentional error in callback")
 
@@ -1744,13 +1759,15 @@ class TestWsMessageHandlingEdgeCases:
             on_values_changed=bad_callback,
         )
 
-        msg = json.dumps([
-            "Event",
-            {
-                "methodName": "ValuesChanged",
-                "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
-            },
-        ])
+        msg = json.dumps(
+            [
+                "Event",
+                {
+                    "methodName": "ValuesChanged",
+                    "args": [{"table": {"light_1.IsOn": {"value": {"Value": True}}}}],
+                },
+            ]
+        )
 
         # Should not raise - error is logged but client continues
         client._handle_message(msg)

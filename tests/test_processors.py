@@ -226,9 +226,9 @@ class TestApiImageFetch:
     @pytest.mark.asyncio
     async def test_fetch_image_success(self):
         """Test fetch_image returns image bytes on success."""
+        from contextlib import asynccontextmanager
         import time
         from unittest.mock import AsyncMock, MagicMock
-        from contextlib import asynccontextmanager
 
         from custom_components.evon.api import EvonApi
 
@@ -260,9 +260,10 @@ class TestApiImageFetch:
     @pytest.mark.asyncio
     async def test_fetch_image_failure_returns_none(self):
         """Test fetch_image returns None on HTTP error."""
+        from contextlib import asynccontextmanager
         import time
         from unittest.mock import MagicMock
-        from contextlib import asynccontextmanager
+
         import aiohttp
 
         from custom_components.evon.api import EvonApi
@@ -951,13 +952,13 @@ class TestConstants:
     def test_device_class_constants(self):
         """Test various device class constants."""
         from custom_components.evon.const import (
-            EVON_CLASS_LIGHT,
-            EVON_CLASS_LIGHT_DIM,
             EVON_CLASS_BLIND,
             EVON_CLASS_CLIMATE,
-            EVON_CLASS_VALVE,
-            EVON_CLASS_SCENE,
             EVON_CLASS_HOME_STATE,
+            EVON_CLASS_LIGHT,
+            EVON_CLASS_LIGHT_DIM,
+            EVON_CLASS_SCENE,
+            EVON_CLASS_VALVE,
         )
 
         assert EVON_CLASS_LIGHT == "SmartCOM.Light.Light"

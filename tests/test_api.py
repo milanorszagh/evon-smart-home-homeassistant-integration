@@ -895,6 +895,7 @@ class TestIsTokenExpired:
     def test_not_expired_when_fresh(self):
         """Test token is not expired when recently set."""
         import time
+
         from custom_components.evon.api import EvonApi
 
         api = EvonApi("http://192.168.1.100", "user", "pass")
@@ -906,7 +907,8 @@ class TestIsTokenExpired:
     def test_expired_after_ttl(self):
         """Test token is expired after TTL period."""
         import time
-        from custom_components.evon.api import EvonApi, TOKEN_TTL_SECONDS
+
+        from custom_components.evon.api import TOKEN_TTL_SECONDS, EvonApi
 
         api = EvonApi("http://192.168.1.100", "user", "pass")
         api._token = "valid_token"
@@ -948,6 +950,7 @@ class TestCreateSslContext:
     def test_creates_ssl_context(self):
         """Test that function creates a valid SSL context."""
         import ssl
+
         from custom_components.evon.api import _create_ssl_context
 
         ctx = _create_ssl_context()
@@ -964,6 +967,7 @@ class TestApiErrorHandling:
     def api_with_token(self):
         """Create an API with a valid token already set."""
         import time
+
         from custom_components.evon.api import EvonApiError
 
         # Skip if homeassistant is mocked (exceptions are MagicMock)
@@ -1271,6 +1275,7 @@ class TestApiErrorHandling:
     async def test_request_connection_error(self, api_with_token):
         """Test connection error during request."""
         import aiohttp
+
         from custom_components.evon.api import EvonConnectionError
 
         mock_session = MagicMock()
@@ -1334,6 +1339,7 @@ class TestTokenRefreshScenarios:
     async def test_token_almost_expired_not_refreshed(self):
         """Test that token almost at TTL but not expired is not refreshed."""
         import time
+
         from custom_components.evon.api import TOKEN_TTL_SECONDS
 
         api = EvonApi(
@@ -1350,6 +1356,7 @@ class TestTokenRefreshScenarios:
     def test_token_exactly_at_ttl_is_expired(self):
         """Test that token exactly at TTL is considered expired."""
         import time
+
         from custom_components.evon.api import TOKEN_TTL_SECONDS
 
         api = EvonApi(
@@ -1366,6 +1373,7 @@ class TestTokenRefreshScenarios:
     def test_token_well_within_ttl(self):
         """Test that token well within TTL is not expired."""
         import time
+
         from custom_components.evon.api import TOKEN_TTL_SECONDS
 
         api = EvonApi(
@@ -1382,6 +1390,7 @@ class TestTokenRefreshScenarios:
     def test_token_timestamp_far_in_past_means_expired(self):
         """Test that timestamp far in the past means token is expired."""
         import time
+
         from custom_components.evon.api import TOKEN_TTL_SECONDS
 
         api = EvonApi(
@@ -1496,6 +1505,7 @@ class TestLoginErrorHandling:
     async def test_login_connection_error(self):
         """Test connection error during login."""
         import aiohttp
+
         from custom_components.evon.api import EvonConnectionError
 
         # Skip if homeassistant is mocked (exceptions are MagicMock)
@@ -1530,7 +1540,7 @@ class TestLoginErrorHandling:
 
         mock_session = MagicMock()
         mock_session.closed = False
-        mock_session.post.side_effect = asyncio.TimeoutError()
+        mock_session.post.side_effect = TimeoutError()
 
         api._session = mock_session
 
@@ -1545,6 +1555,7 @@ class TestDebugLogging:
     def test_apply_debug_logging_all_enabled(self):
         """Test applying debug logging with all options enabled."""
         import logging
+
         from custom_components.evon import _apply_debug_logging
         from custom_components.evon.const import (
             CONF_DEBUG_API,
@@ -1574,6 +1585,7 @@ class TestDebugLogging:
     def test_apply_debug_logging_all_disabled(self):
         """Test applying debug logging with all options disabled."""
         import logging
+
         from custom_components.evon import _apply_debug_logging
         from custom_components.evon.const import (
             CONF_DEBUG_API,
@@ -1603,6 +1615,7 @@ class TestDebugLogging:
     def test_apply_debug_logging_partial(self):
         """Test applying debug logging with only some options enabled."""
         import logging
+
         from custom_components.evon import _apply_debug_logging
         from custom_components.evon.const import (
             CONF_DEBUG_API,
@@ -1631,6 +1644,7 @@ class TestDebugLogging:
     def test_apply_debug_logging_defaults(self):
         """Test applying debug logging with missing options uses defaults."""
         import logging
+
         from custom_components.evon import _apply_debug_logging
 
         # Create mock config entry with empty options

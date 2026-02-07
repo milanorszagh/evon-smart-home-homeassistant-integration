@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-
 class TestDomainConstants:
     """Tests for domain and configuration constants."""
 
@@ -173,7 +172,9 @@ class TestDeviceClassConstants:
         assert EVON_CLASS_LIGHT_DIM == "SmartCOM.Light.LightDim"
         assert EVON_CLASS_LIGHT_GROUP == "SmartCOM.Light.LightGroup"
         # All should start with SmartCOM.Light
-        assert all(c.startswith("SmartCOM.Light") for c in [EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP])
+        assert all(
+            c.startswith("SmartCOM.Light") for c in [EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP]
+        )
 
     def test_blind_classes(self):
         """Test blind class constants."""

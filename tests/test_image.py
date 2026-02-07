@@ -43,6 +43,7 @@ async def test_image_unique_id(hass, mock_config_entry_v2, mock_evon_api_class):
     await hass.async_block_till_done()
 
     from homeassistant.helpers import entity_registry as er
+
     entity_registry = er.async_get(hass)
     entry = entity_registry.async_get("image.front_door_snapshots_snapshot_1")
     assert entry is not None

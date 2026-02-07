@@ -247,12 +247,14 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.get_season_mode = AsyncMock(return_value=False)  # False = heating mode
         mock_api.set_season_mode = AsyncMock()
         # Rooms for sync_areas
-        mock_api.get_rooms = AsyncMock(return_value={
-            "room_living": "Living Room",
-            "room_kitchen": "Kitchen",
-            "room_bedroom": "Bedroom",
-            "room_bathroom": "Bathroom",
-        })
+        mock_api.get_rooms = AsyncMock(
+            return_value={
+                "room_living": "Living Room",
+                "room_kitchen": "Kitchen",
+                "room_bedroom": "Bedroom",
+                "room_bathroom": "Bathroom",
+            }
+        )
         # Bathroom radiator methods
         mock_api.toggle_bathroom_radiator = AsyncMock()
         # Scene methods
@@ -269,7 +271,9 @@ if HAS_HA_TEST_FRAMEWORK:
         # Blind position/angle cache methods (synchronous, not async)
         mock_api._blind_positions = {}
         mock_api._blind_angles = {}
-        mock_api.update_blind_position = lambda instance_id, position: mock_api._blind_positions.update({instance_id: position})
+        mock_api.update_blind_position = lambda instance_id, position: mock_api._blind_positions.update(
+            {instance_id: position}
+        )
         mock_api.update_blind_angle = lambda instance_id, angle: mock_api._blind_angles.update({instance_id: angle})
         mock_api.get_blind_position = lambda instance_id: mock_api._blind_positions.get(instance_id)
         mock_api.get_blind_angle = lambda instance_id: mock_api._blind_angles.get(instance_id)
