@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![IoT Class](https://img.shields.io/badge/IoT_Class-local_push-blue.svg)](https://developers.home-assistant.io/docs/creating_integration_manifest#iot-class)
 [![HA Version](https://img.shields.io/badge/Home_Assistant-2024.1+-blue.svg)](https://www.home-assistant.io/)
-[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.12%20|%203.13-blue.svg)](https://www.python.org/)
 
 Home Assistant custom integration for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 
@@ -119,6 +119,9 @@ After installation, configure via **Settings** → **Devices & Services** → **
 | **Poll interval** | How often to fetch device states (5-300 seconds). Used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled. |
 | **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
 | **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
+| **Debug logging: API** | Enable debug logging for HTTP API requests and responses. Useful for troubleshooting connection or authentication issues. |
+| **Debug logging: WebSocket** | Enable debug logging for WebSocket messages. Useful for troubleshooting real-time update issues. |
+| **Debug logging: Coordinator** | Enable debug logging for the data coordinator. Useful for troubleshooting data processing and entity updates. |
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
 
@@ -397,6 +400,9 @@ The integration provides the following services that can be called from automati
 | `evon.all_lights_off` | Turn off all Evon lights at once |
 | `evon.all_blinds_close` | Close all Evon blinds at once |
 | `evon.all_blinds_open` | Open all Evon blinds at once |
+| `evon.all_climate_comfort` | Set all climate devices to Comfort preset |
+| `evon.all_climate_eco` | Set all climate devices to Eco (energy saving) preset |
+| `evon.all_climate_away` | Set all climate devices to Away (freeze/heat protection) preset |
 
 ### Example Automations
 
@@ -462,6 +468,18 @@ automation:
         at: "00:00:00"
     action:
       - service: evon.all_lights_off
+```
+
+**Eco mode when leaving home:**
+```yaml
+automation:
+  - alias: "Eco climate when away"
+    trigger:
+      - platform: state
+        entity_id: person.me
+        from: "home"
+    action:
+      - service: evon.all_climate_eco
 ```
 
 **Switch to cooling in summer:**
@@ -563,7 +581,17 @@ If WebSocket keeps disconnecting:
 
 ### Debug Logging
 
-To enable debug logging, add to `configuration.yaml`:
+The easiest way to enable debug logging is via the integration options:
+
+**Settings** → **Devices & Services** → **Evon Smart Home** → **Configure** → Enable the relevant debug toggle(s):
+
+| Option | What it logs |
+|--------|-------------|
+| **Debug logging: API** | HTTP requests, responses, authentication |
+| **Debug logging: WebSocket** | WebSocket messages, connection events |
+| **Debug logging: Coordinator** | Data processing, entity updates |
+
+Alternatively, enable full debug logging via `configuration.yaml`:
 
 ```yaml
 logger:
