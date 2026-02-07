@@ -199,8 +199,7 @@
     },
     "abort": {
       "already_configured": "This Evon system is already configured",
-      "reconfigure_successful": "Configuration updated successfully",
-      "reconfigure_failed": "Reconfiguration failed"
+      "reconfigure_successful": "Configuration updated successfully"
     }
   },
   "options": {

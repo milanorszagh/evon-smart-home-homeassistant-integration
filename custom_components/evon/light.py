@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
     CONF_NON_DIMMABLE_LIGHTS,
@@ -99,7 +99,7 @@ class EvonLight(EvonEntity, LightEntity):
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_is_on: bool | None = None
         self._optimistic_brightness: int | None = None  # HA scale 0-255
-        self._optimistic_color_temp: int | None = None  # Mireds
+        self._optimistic_color_temp_kelvin: int | None = None
         # Store last known brightness for optimistic turn_on (HA scale 0-255)
         self._last_brightness: int | None = None
         # Timestamp when optimistic state was set (for timeout-based clearance)
@@ -113,7 +113,7 @@ class EvonLight(EvonEntity, LightEntity):
         ):
             self._optimistic_is_on = None
             self._optimistic_brightness = None
-            self._optimistic_color_temp = None
+            self._optimistic_color_temp_kelvin = None
             self._optimistic_state_set_at = None
 
     @property
@@ -164,8 +164,8 @@ class EvonLight(EvonEntity, LightEntity):
         return None
 
     @property
-    def color_temp(self) -> int | None:
-        """Return the color temperature in mireds."""
+    def color_temp_kelvin(self) -> int | None:
+        """Return the color temperature in Kelvin."""
         if not self._supports_color_temp:
             return None
 
@@ -173,43 +173,36 @@ class EvonLight(EvonEntity, LightEntity):
         self._clear_optimistic_state_if_expired()
 
         # Return optimistic value if set (prevents UI flicker during updates)
-        if self._optimistic_color_temp is not None:
-            return self._optimistic_color_temp
+        if self._optimistic_color_temp_kelvin is not None:
+            return self._optimistic_color_temp_kelvin
 
         data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
         if data and data.get("color_temp") is not None:
-            # Convert from Kelvin to mireds
             kelvin = data["color_temp"]
             if kelvin > 0:
-                return int(1000000 / kelvin)
+                return kelvin
         return None
 
     @property
-    def min_mireds(self) -> int | None:
-        """Return the minimum color temperature in mireds (from max Kelvin)."""
-        if not self._supports_color_temp:
-            return None
-
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
-        if data and data.get("max_color_temp") is not None:
-            # Min mireds = 1000000 / max_kelvin
-            max_kelvin = data["max_color_temp"]
-            if max_kelvin > 0:
-                return int(1000000 / max_kelvin)
-        return None
-
-    @property
-    def max_mireds(self) -> int | None:
-        """Return the maximum color temperature in mireds (from min Kelvin)."""
+    def min_color_temp_kelvin(self) -> int | None:
+        """Return the minimum color temperature in Kelvin."""
         if not self._supports_color_temp:
             return None
 
         data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
         if data and data.get("min_color_temp") is not None:
-            # Max mireds = 1000000 / min_kelvin
-            min_kelvin = data["min_color_temp"]
-            if min_kelvin > 0:
-                return int(1000000 / min_kelvin)
+            return data["min_color_temp"]
+        return None
+
+    @property
+    def max_color_temp_kelvin(self) -> int | None:
+        """Return the maximum color temperature in Kelvin."""
+        if not self._supports_color_temp:
+            return None
+
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        if data and data.get("max_color_temp") is not None:
+            return data["max_color_temp"]
         return None
 
     @property
@@ -238,9 +231,7 @@ class EvonLight(EvonEntity, LightEntity):
             # from Evon's turn-off animation (87% → 0%)
             self._optimistic_brightness = self._last_brightness
         if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
-            # Store as mireds for internal use (HA still uses mireds for color_temp property)
-            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
-            self._optimistic_color_temp = int(1000000 / kelvin) if kelvin > 0 else 250
+            self._optimistic_color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
@@ -254,19 +245,28 @@ class EvonLight(EvonEntity, LightEntity):
             _LOGGER.debug("Skipping API call for non-dimmable light %s (already on)", self._instance_id)
             return
 
-        # Handle color temperature change
-        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
-            kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
-            await self._api.set_light_color_temp(self._instance_id, kelvin)
+        try:
+            # Handle color temperature change
+            if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
+                kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
+                await self._api.set_light_color_temp(self._instance_id, kelvin)
 
-        # Handle brightness change
-        if ATTR_BRIGHTNESS in kwargs and (self._is_dimmable or self._supports_color_temp):
-            # Convert from Home Assistant 0-255 to Evon 0-100 and clamp to valid range
-            brightness = max(0, min(100, int(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
-            await self._api.set_light_brightness(self._instance_id, brightness)
-        elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
-            # Only turn on if no brightness or color temp change
-            await self._api.turn_on_light(self._instance_id)
+            # Handle brightness change
+            if ATTR_BRIGHTNESS in kwargs and (self._is_dimmable or self._supports_color_temp):
+                # Convert from Home Assistant 0-255 to Evon 0-100 and clamp to valid range
+                brightness = max(0, min(100, int(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
+                await self._api.set_light_brightness(self._instance_id, brightness)
+            elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
+                # Only turn on if no brightness or color temp change
+                await self._api.turn_on_light(self._instance_id)
+        except EvonApiError:
+            # Reset optimistic state so UI shows actual device state
+            self._optimistic_is_on = None
+            self._optimistic_brightness = None
+            self._optimistic_color_temp_kelvin = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         # Only request refresh if WebSocket is not connected
         # When WS is connected, we trust optimistic state + WS ValuesChanged events
         if not self.coordinator.ws_connected:
@@ -279,7 +279,13 @@ class EvonLight(EvonEntity, LightEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.turn_off_light(self._instance_id)
+        try:
+            await self._api.turn_off_light(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_on = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         # Only request refresh if WebSocket is not connected
         # When WS is connected, we trust optimistic state + WS ValuesChanged events
         if not self.coordinator.ws_connected:
@@ -331,13 +337,11 @@ class EvonLight(EvonEntity, LightEntity):
                 else:
                     all_cleared = False
 
-            if self._optimistic_color_temp is not None:
-                kelvin = data.get("color_temp")
-                if kelvin and kelvin > 0:
-                    actual_mireds = int(1000000 / kelvin)
-                    # Allow small tolerance for rounding differences (mireds)
-                    if abs(actual_mireds - self._optimistic_color_temp) <= OPTIMISTIC_STATE_TOLERANCE:
-                        self._optimistic_color_temp = None
+            if self._optimistic_color_temp_kelvin is not None:
+                actual_kelvin = data.get("color_temp")
+                if actual_kelvin and actual_kelvin > 0:
+                    if abs(actual_kelvin - self._optimistic_color_temp_kelvin) <= OPTIMISTIC_STATE_TOLERANCE:
+                        self._optimistic_color_temp_kelvin = None
                     else:
                         all_cleared = False
 

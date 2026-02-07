@@ -12,7 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -134,7 +134,13 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
-            await self._api.activate_home_state(option)
+            try:
+                await self._api.activate_home_state(option)
+            except EvonApiError:
+                self._optimistic_option = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     @callback
@@ -231,7 +237,13 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
             self.async_write_ha_state()
 
             is_cooling = option == SEASON_MODE_COOLING
-            await self._api.set_season_mode(is_cooling)
+            try:
+                await self._api.set_season_mode(is_cooling)
+            except EvonApiError:
+                self._optimistic_option = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     @callback

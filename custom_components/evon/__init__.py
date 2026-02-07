@@ -8,6 +8,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -182,8 +183,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Test connection
     if not await api.test_connection():
-        _LOGGER.error("Failed to connect to Evon Smart Home")
-        return False
+        raise ConfigEntryNotReady("Failed to connect to Evon Smart Home")
 
     # Get options
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
@@ -201,10 +201,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
-        "session": session,
-        "host": entry.data.get(CONF_HOST) if connection_type == CONNECTION_TYPE_LOCAL else None,
-        "username": entry.data[CONF_USERNAME],
-        "password": entry.data[CONF_PASSWORD],
     }
 
     # Apply debug logging settings

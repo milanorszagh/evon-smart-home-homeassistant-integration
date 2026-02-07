@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
     CLIMATE_MODE_COMFORT,
@@ -149,10 +149,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     @property
     def hvac_action(self) -> HVACAction | None:
-        """Return the current running hvac action (heating, cooling, idle).
+        """Return the current running hvac action (heating, cooling, off).
 
         This indicates whether the climate system is actively heating/cooling
-        or idle (target temperature reached). Based on Evon's IsOn property.
+        or off. Based on Evon's IsOn and CoolingMode properties.
         """
         data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if not data:
@@ -160,11 +160,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
         is_on = data.get("is_on", False)
         if not is_on:
-            return HVACAction.IDLE
+            return HVACAction.OFF
 
-        # Actively heating or cooling based on season mode
-        is_cooling_season = self.coordinator.get_season_mode()
-        return HVACAction.COOLING if is_cooling_season else HVACAction.HEATING
+        # Actively heating or cooling based on per-device mode
+        is_cooling = data.get("is_cooling", False)
+        return HVACAction.COOLING if is_cooling else HVACAction.HEATING
 
     @property
     def current_temperature(self) -> float | None:
@@ -272,10 +272,16 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        if hvac_mode == HVACMode.OFF:
-            await self._api.set_climate_freeze_protection_mode(self._instance_id)
-        else:
-            await self._api.set_climate_comfort_mode(self._instance_id)
+        try:
+            if hvac_mode == HVACMode.OFF:
+                await self._api.set_climate_freeze_protection_mode(self._instance_id)
+            else:
+                await self._api.set_climate_comfort_mode(self._instance_id)
+        except EvonApiError:
+            self._optimistic_hvac_mode = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         # WebSocket will push the actual state change - no HTTP refresh needed
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
@@ -289,7 +295,13 @@ class EvonClimate(EvonEntity, ClimateEntity):
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
-            await self._api.set_climate_temperature(self._instance_id, temperature)
+            try:
+                await self._api.set_climate_temperature(self._instance_id, temperature)
+            except EvonApiError:
+                self._optimistic_target_temp = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             # WebSocket will push the actual state change - no HTTP refresh needed
             # (HTTP refresh can return stale data and overwrite correct WS state)
 
@@ -302,12 +314,18 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        if preset_mode == CLIMATE_MODE_COMFORT:
-            await self._api.set_climate_comfort_mode(self._instance_id)
-        elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
-            await self._api.set_climate_energy_saving_mode(self._instance_id)
-        elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
-            await self._api.set_climate_freeze_protection_mode(self._instance_id)
+        try:
+            if preset_mode == CLIMATE_MODE_COMFORT:
+                await self._api.set_climate_comfort_mode(self._instance_id)
+            elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
+                await self._api.set_climate_energy_saving_mode(self._instance_id)
+            elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
+                await self._api.set_climate_freeze_protection_mode(self._instance_id)
+        except EvonApiError:
+            self._optimistic_preset = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         # WebSocket will push the actual state change (~0.8s) - no HTTP refresh needed
         # IMPORTANT: Do NOT trigger HTTP refresh here - it causes a race condition where
         # stale HTTP data overwrites the correct WebSocket state, causing preset flapping

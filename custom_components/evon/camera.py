@@ -126,7 +126,7 @@ class EvonCamera(EvonEntity, Camera):
                     return self._last_image
 
                 # Request a new image via WebSocket
-                ws_client = self.coordinator._ws_client
+                ws_client = self.coordinator.ws_client
                 if ws_client and ws_client.is_connected:
                     await self._request_image_via_ws(ws_client)
                     # Wait for image to be captured

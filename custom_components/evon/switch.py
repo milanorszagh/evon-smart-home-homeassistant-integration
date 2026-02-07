@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
     DOMAIN,
@@ -124,7 +124,13 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.turn_on_switch(self._instance_id)
+        try:
+            await self._api.turn_on_switch(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_on = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -133,7 +139,13 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.turn_off_switch(self._instance_id)
+        try:
+            await self._api.turn_off_switch(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_on = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
@@ -249,7 +261,14 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.turn_on_bathroom_radiator(self._instance_id)
+        try:
+            await self._api.turn_on_bathroom_radiator(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_on = None
+            self._optimistic_time_remaining_mins = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -265,7 +284,14 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
 
-            await self._api.turn_off_bathroom_radiator(self._instance_id)
+            try:
+                await self._api.turn_off_bathroom_radiator(self._instance_id)
+            except EvonApiError:
+                self._optimistic_is_on = None
+                self._optimistic_time_remaining_mins = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:

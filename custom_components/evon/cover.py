@@ -62,7 +62,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .api import EvonApi
+from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
     COVER_STOP_DELAY,
@@ -259,10 +259,16 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_direction = None
             self.async_write_ha_state()
 
-            if self._is_group:
-                await self._api.open_all_blinds()
-            else:
-                await self._api.open_blind(self._instance_id)
+            try:
+                if self._is_group:
+                    await self._api.open_all_blinds()
+                else:
+                    await self._api.open_blind(self._instance_id)
+            except EvonApiError:
+                self._optimistic_is_moving = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
@@ -276,10 +282,18 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_direction = "opening"
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
-            if self._is_group:
-                await self._api.open_all_blinds()
-            else:
-                await self._api.open_blind(self._instance_id)
+            try:
+                if self._is_group:
+                    await self._api.open_all_blinds()
+                else:
+                    await self._api.open_blind(self._instance_id)
+            except EvonApiError:
+                self._optimistic_position = None
+                self._optimistic_is_moving = None
+                self._optimistic_direction = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
@@ -299,10 +313,16 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_direction = None
             self.async_write_ha_state()
 
-            if self._is_group:
-                await self._api.close_all_blinds()
-            else:
-                await self._api.close_blind(self._instance_id)
+            try:
+                if self._is_group:
+                    await self._api.close_all_blinds()
+                else:
+                    await self._api.close_blind(self._instance_id)
+            except EvonApiError:
+                self._optimistic_is_moving = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
 
             # Small delay then update state again to ensure UI reflects stopped state
             await asyncio.sleep(COVER_STOP_DELAY)
@@ -316,10 +336,18 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_direction = "closing"
             self._optimistic_state_set_at = time.monotonic()
             self.async_write_ha_state()
-            if self._is_group:
-                await self._api.close_all_blinds()
-            else:
-                await self._api.close_blind(self._instance_id)
+            try:
+                if self._is_group:
+                    await self._api.close_all_blinds()
+                else:
+                    await self._api.close_blind(self._instance_id)
+            except EvonApiError:
+                self._optimistic_position = None
+                self._optimistic_is_moving = None
+                self._optimistic_direction = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
@@ -333,10 +361,16 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_direction = None
         self.async_write_ha_state()
 
-        if self._is_group:
-            await self._api.stop_all_blinds()
-        else:
-            await self._api.stop_blind(self._instance_id)
+        try:
+            if self._is_group:
+                await self._api.stop_all_blinds()
+            else:
+                await self._api.stop_blind(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_moving = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
 
         # Small delay then update state again to ensure UI reflects stopped state
         # This helps when multiple blinds are stopped via group action
@@ -357,7 +391,13 @@ class EvonCover(EvonEntity, CoverEntity):
 
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
             evon_position = 100 - ha_position
-            await self._api.set_blind_position(self._instance_id, evon_position)
+            try:
+                await self._api.set_blind_position(self._instance_id, evon_position)
+            except EvonApiError:
+                self._optimistic_position = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
@@ -371,7 +411,13 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.set_blind_tilt(self._instance_id, 0)
+        try:
+            await self._api.set_blind_tilt(self._instance_id, 0)
+        except EvonApiError:
+            self._optimistic_tilt = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
@@ -385,7 +431,13 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_state_set_at = time.monotonic()
         self.async_write_ha_state()
 
-        await self._api.set_blind_tilt(self._instance_id, 100)
+        try:
+            await self._api.set_blind_tilt(self._instance_id, 100)
+        except EvonApiError:
+            self._optimistic_tilt = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
         await self.coordinator.async_request_refresh()
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
@@ -407,7 +459,13 @@ class EvonCover(EvonEntity, CoverEntity):
 
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
             evon_angle = 100 - ha_tilt
-            await self._api.set_blind_tilt(self._instance_id, evon_angle)
+            try:
+                await self._api.set_blind_tilt(self._instance_id, evon_angle)
+            except EvonApiError:
+                self._optimistic_tilt = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                raise
             await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:

@@ -509,7 +509,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_id: The instance ID that changed.
             properties: Dictionary of changed property names to values.
         """
-        if not self.data or not properties:
+        # Capture data reference at start to detect concurrent replacement by HTTP poll
+        data_snapshot = self.data
+        if not data_snapshot or not properties:
             return
 
         from ..ws_mappings import CLASS_TO_TYPE, ws_to_coordinator_data
@@ -522,7 +524,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Search through all entity types to find this instance
         for etype in CLASS_TO_TYPE.values():
-            entities = self.data.get(etype)
+            entities = data_snapshot.get(etype)
             if not entities or not isinstance(entities, list):
                 continue
             for idx, entity in enumerate(entities):
@@ -544,7 +546,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Get existing entity data for derived value computation
         # Double-check entity exists (defensive check for race conditions)
-        if self.data.get(entity_type) is not entities_ref:
+        if data_snapshot.get(entity_type) is not entities_ref:
             _LOGGER.debug("Entity list replaced during WebSocket update for %s", instance_id)
             return
         if entity_index >= len(entities_ref):
@@ -596,8 +598,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if entity_type == ENTITY_TYPE_SMART_METERS:
             self._maybe_import_energy_statistics(instance_id, entity)
 
-        # Notify listeners of the update
-        self.async_set_updated_data(self.data)
+        # Notify listeners of the update only if data hasn't been replaced by HTTP poll
+        if self.data is data_snapshot:
+            self.async_set_updated_data(data_snapshot)
+        else:
+            _LOGGER.debug("Data replaced during WebSocket update for %s, skipping notification", instance_id)
 
     def _maybe_import_energy_statistics(
         self,
@@ -733,6 +738,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 meter["energy_this_month_calculated"] = energy_today
                 _LOGGER.debug("No energy_data_month, set energy_this_month_calculated=%s", energy_today)
+
+    @property
+    def ws_client(self) -> EvonWsClient | None:
+        """Return the WebSocket client instance."""
+        return self._ws_client
 
     @property
     def ws_connected(self) -> bool:

@@ -411,7 +411,7 @@ class EvonApi:
                     async with self._token_lock:
                         self._token = None
                         self._token_timestamp = 0.0
-                    await self.login()
+                        await self.login()
                     return await self._request(method, endpoint, data, retry=False)
 
                 # Handle specific error status codes
