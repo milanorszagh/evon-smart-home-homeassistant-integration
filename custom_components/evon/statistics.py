@@ -85,26 +85,20 @@ async def import_energy_statistics(
                          last = previous month. Does NOT include current month.
         force: If True, bypass rate limiting (for initial backfill)
     """
-    _LOGGER.debug(
-        "Importing energy statistics for %s with %d days of data",
-        meter_id,
-        len(energy_data_month) if energy_data_month else 0,
-    )
-
     if not energy_data_month:
-        _LOGGER.debug("No energy data to import for %s", meter_id)
         return
 
     # Rate limiting: avoid importing too frequently (unless forced)
     now = dt_util.now()
     last_import = _last_import_times.get(meter_id)
     if not force and last_import and (now - last_import) < MIN_IMPORT_INTERVAL:
-        _LOGGER.debug(
-            "Skipping statistics import for %s (last import: %s ago)",
-            meter_id,
-            now - last_import,
-        )
         return
+
+    _LOGGER.debug(
+        "Importing energy statistics for %s with %d days of data",
+        meter_id,
+        len(energy_data_month),
+    )
 
     # Check if recorder is available
     if not get_instance(hass):

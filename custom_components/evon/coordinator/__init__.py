@@ -638,7 +638,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 force=force,
             )
         )
-        _LOGGER.info(
+        _LOGGER.debug(
             "Triggered energy statistics import for %s (force=%s)",
             instance_id,
             force,
