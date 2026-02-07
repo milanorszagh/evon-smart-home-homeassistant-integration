@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.evon.api import EvonWsError, EvonWsNotConnectedError
 from custom_components.evon.ws_client import (
     EvonWsClient,
 )
@@ -1937,7 +1938,6 @@ class TestWsPendingRequestsLimit:
     @pytest.mark.asyncio
     async def test_too_many_pending_requests_raises_error(self):
         """Test that too many pending requests raises error."""
-        from custom_components.evon.api import EvonWsError
         from custom_components.evon.const import WS_MAX_PENDING_REQUESTS
 
         # Skip if homeassistant is mocked (exceptions are MagicMock)
@@ -1968,8 +1968,6 @@ class TestWsPendingRequestsLimit:
     @pytest.mark.asyncio
     async def test_send_request_when_not_connected(self):
         """Test send_request raises when not connected."""
-        from custom_components.evon.api import EvonWsNotConnectedError
-
         # Skip if homeassistant is mocked (exceptions are MagicMock)
         if not isinstance(EvonWsNotConnectedError, type):
             pytest.skip("Requires real homeassistant package")

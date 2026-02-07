@@ -12,6 +12,7 @@ from homeassistant.components.repairs import RepairsFlow
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -282,6 +283,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         )
                     else:
                         errors["base"] = "cannot_connect"
+                except AbortFlow:
+                    raise
                 except EvonAuthError:
                     errors["base"] = "invalid_auth"
                 except EvonApiError:
@@ -348,6 +351,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         )
                     else:
                         errors["base"] = "cannot_connect"
+                except AbortFlow:
+                    raise
                 except EvonAuthError:
                     errors["base"] = "invalid_auth"
                 except EvonApiError:

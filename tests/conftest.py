@@ -313,7 +313,8 @@ if HAS_HA_TEST_FRAMEWORK:
         # Cleanup: Unload any evon config entries to stop coordinator tasks
         # This prevents "lingering tasks" errors from pytest-homeassistant-custom-component
         for entry in list(hass.config_entries.async_entries("evon")):
-            await hass.config_entries.async_unload(entry.entry_id)
+            with contextlib.suppress(Exception):
+                await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
 
     @pytest.fixture
