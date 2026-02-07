@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -29,7 +28,6 @@ from .const import (
     ENTITY_TYPE_CLIMATES,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
-    OPTIMISTIC_STATE_TIMEOUT,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -90,24 +88,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self._optimistic_preset: str | None = None
         self._optimistic_target_temp: float | None = None
         self._optimistic_hvac_mode: HVACMode | None = None
-        # Timestamp when optimistic state was set (for timeout-based clearance)
-        self._optimistic_state_set_at: float | None = None
 
-    def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired.
-
-        This prevents stale UI state when recovering from network issues.
-        If the coordinator hasn't confirmed the state within the timeout period,
-        we clear the optimistic state so the UI shows real device state.
-        """
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
-        ):
-            self._optimistic_preset = None
-            self._optimistic_target_temp = None
-            self._optimistic_hvac_mode = None
-            self._optimistic_state_set_at = None
+    def _reset_optimistic_state(self) -> None:
+        """Reset climate-specific optimistic state fields."""
+        self._optimistic_preset = None
+        self._optimistic_target_temp = None
+        self._optimistic_hvac_mode = None
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
@@ -269,7 +255,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         """Set new target HVAC mode."""
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_hvac_mode = hvac_mode
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         try:
@@ -292,7 +278,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
             temperature = max(self.min_temp, min(self.max_temp, float(temperature)))
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_target_temp = temperature
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             try:
@@ -311,7 +297,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # Don't set optimistic target temp - let WebSocket push the actual value
         # (Evon may clamp the temp to device min/max limits)
         self._optimistic_preset = preset_mode
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         try:

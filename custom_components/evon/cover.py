@@ -47,7 +47,6 @@ rejected because:
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -68,7 +67,6 @@ from .const import (
     COVER_STOP_DELAY,
     DOMAIN,
     ENTITY_TYPE_BLINDS,
-    OPTIMISTIC_STATE_TIMEOUT,
     OPTIMISTIC_STATE_TOLERANCE,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -134,8 +132,6 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_tilt: int | None = None
         self._optimistic_is_moving: bool | None = None
         self._optimistic_direction: str | None = None  # "opening" or "closing"
-        # Timestamp when optimistic state was set (for timeout-based clearance)
-        self._optimistic_state_set_at: float | None = None
 
         # Check if this is a blind group (requires different API calls)
         data = coordinator.get_entity_data(ENTITY_TYPE_BLINDS, instance_id)
@@ -146,17 +142,12 @@ class EvonCover(EvonEntity, CoverEntity):
             api.update_blind_position(instance_id, data.get("position", 0))
             api.update_blind_angle(instance_id, data.get("angle", 0))
 
-    def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired."""
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
-        ):
-            self._optimistic_position = None
-            self._optimistic_tilt = None
-            self._optimistic_is_moving = None
-            self._optimistic_direction = None
-            self._optimistic_state_set_at = None
+    def _reset_optimistic_state(self) -> None:
+        """Reset cover-specific optimistic state fields."""
+        self._optimistic_position = None
+        self._optimistic_tilt = None
+        self._optimistic_is_moving = None
+        self._optimistic_direction = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -280,7 +271,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_position = 100
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self._optimistic_direction = "opening"
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
             try:
                 if self._is_group:
@@ -334,7 +325,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_position = 0
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self._optimistic_direction = "closing"
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
             try:
                 if self._is_group:
@@ -386,7 +377,7 @@ class EvonCover(EvonEntity, CoverEntity):
             ha_position = max(0, min(100, int(kwargs[ATTR_POSITION])))
             # Set optimistic value immediately
             self._optimistic_position = ha_position
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)
@@ -408,7 +399,7 @@ class EvonCover(EvonEntity, CoverEntity):
         """
         # HA tilt 100 = open (horizontal), Evon angle 0 = open
         self._optimistic_tilt = 100
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         try:
@@ -428,7 +419,7 @@ class EvonCover(EvonEntity, CoverEntity):
         """
         # HA tilt 0 = closed (blocking), Evon angle 100 = closed
         self._optimistic_tilt = 0
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         try:
@@ -454,7 +445,7 @@ class EvonCover(EvonEntity, CoverEntity):
             # Clamp to valid range 0-100
             ha_tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
             self._optimistic_tilt = ha_tilt
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             # Convert from HA (0=closed, 100=open) to Evon (0=open, 100=closed)

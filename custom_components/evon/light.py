@@ -24,7 +24,6 @@ from .const import (
     DOMAIN,
     ENTITY_TYPE_LIGHTS,
     OPTIMISTIC_SETTLING_PERIOD,
-    OPTIMISTIC_STATE_TIMEOUT,
     OPTIMISTIC_STATE_TOLERANCE,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -102,19 +101,12 @@ class EvonLight(EvonEntity, LightEntity):
         self._optimistic_color_temp_kelvin: int | None = None
         # Store last known brightness for optimistic turn_on (HA scale 0-255)
         self._last_brightness: int | None = None
-        # Timestamp when optimistic state was set (for timeout-based clearance)
-        self._optimistic_state_set_at: float | None = None
 
-    def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired."""
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
-        ):
-            self._optimistic_is_on = None
-            self._optimistic_brightness = None
-            self._optimistic_color_temp_kelvin = None
-            self._optimistic_state_set_at = None
+    def _reset_optimistic_state(self) -> None:
+        """Reset light-specific optimistic state fields."""
+        self._optimistic_is_on = None
+        self._optimistic_brightness = None
+        self._optimistic_color_temp_kelvin = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -232,7 +224,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_brightness = self._last_brightness
         if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
             self._optimistic_color_temp_kelvin = kwargs[ATTR_COLOR_TEMP_KELVIN]
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         # For non-dimmable lights that are already on, skip the API call.
@@ -276,7 +268,7 @@ class EvonLight(EvonEntity, LightEntity):
         """Turn off the light."""
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_is_on = False
-        self._optimistic_state_set_at = time.monotonic()
+        self._set_optimistic_timestamp()
         self.async_write_ha_state()
 
         try:

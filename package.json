@@ -31,7 +31,7 @@
     "url": "git+https://github.com/milanorszagh/evon-smart-home-homeassistant-integration.git"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "dotenv": "^17.2.3",
     "ws": "^8.19.0",
     "zod": "^4.3.5"
