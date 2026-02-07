@@ -147,7 +147,7 @@ class TestBaseEntityLogic:
         coordinator = MagicMock()
         coordinator.last_update_success = True
         coordinator.data = {}
-        coordinator._ws_connected = True
+        coordinator.ws_connected = True
 
         entry = MagicMock()
         entry.entry_id = "test_entry"

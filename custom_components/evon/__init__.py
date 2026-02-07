@@ -662,11 +662,15 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Shut down WebSocket client first
+    # Shut down WebSocket client and API first
     if entry.entry_id in hass.data.get(DOMAIN, {}):
-        coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id].get("coordinator")
+        entry_data = hass.data[DOMAIN][entry.entry_id]
+        coordinator: EvonDataUpdateCoordinator = entry_data.get("coordinator")
         if coordinator:
             await coordinator.async_shutdown_websocket()
+        api: EvonApi = entry_data.get("api")
+        if api:
+            await api.close()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 

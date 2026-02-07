@@ -63,8 +63,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Lights summary
         device_summaries[ENTITY_TYPE_LIGHTS] = [
             {
-                "id": light["id"],
-                "name": light["name"],
+                "id": light.get("id"),
+                "name": light.get("name"),
                 "is_on": light.get("is_on"),
                 "has_brightness": "brightness" in light,
             }
@@ -74,8 +74,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Blinds summary
         device_summaries[ENTITY_TYPE_BLINDS] = [
             {
-                "id": blind["id"],
-                "name": blind["name"],
+                "id": blind.get("id"),
+                "name": blind.get("name"),
                 "position": blind.get("position"),
                 "has_tilt": "angle" in blind,
             }
@@ -85,8 +85,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Climates summary
         device_summaries[ENTITY_TYPE_CLIMATES] = [
             {
-                "id": climate["id"],
-                "name": climate["name"],
+                "id": climate.get("id"),
+                "name": climate.get("name"),
                 "current_temp": climate.get("current_temperature"),
                 "target_temp": climate.get("target_temperature"),
             }
@@ -96,8 +96,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Switches summary
         device_summaries[ENTITY_TYPE_SWITCHES] = [
             {
-                "id": switch["id"],
-                "name": switch["name"],
+                "id": switch.get("id"),
+                "name": switch.get("name"),
                 "is_on": switch.get("is_on"),
             }
             for switch in coordinator.data.get(ENTITY_TYPE_SWITCHES, [])
@@ -106,8 +106,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Smart meters summary
         device_summaries[ENTITY_TYPE_SMART_METERS] = [
             {
-                "id": meter["id"],
-                "name": meter["name"],
+                "id": meter.get("id"),
+                "name": meter.get("name"),
                 "power": meter.get("power"),
                 "energy": meter.get("energy"),
             }
@@ -117,8 +117,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Air quality summary
         device_summaries[ENTITY_TYPE_AIR_QUALITY] = [
             {
-                "id": aq["id"],
-                "name": aq["name"],
+                "id": aq.get("id"),
+                "name": aq.get("name"),
                 "has_co2": aq.get("co2") is not None,
                 "has_humidity": aq.get("humidity") is not None,
             }
@@ -128,8 +128,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Valves summary
         device_summaries[ENTITY_TYPE_VALVES] = [
             {
-                "id": valve["id"],
-                "name": valve["name"],
+                "id": valve.get("id"),
+                "name": valve.get("name"),
                 "is_open": valve.get("is_open"),
             }
             for valve in coordinator.data.get(ENTITY_TYPE_VALVES, [])
@@ -138,8 +138,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         # Scenes summary
         device_summaries[ENTITY_TYPE_SCENES] = [
             {
-                "id": scene["id"],
-                "name": scene["name"],
+                "id": scene.get("id"),
+                "name": scene.get("name"),
             }
             for scene in coordinator.data.get(ENTITY_TYPE_SCENES, [])
         ]

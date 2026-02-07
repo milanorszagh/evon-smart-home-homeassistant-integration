@@ -52,8 +52,8 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         if self._room_name:
             attrs["room"] = self._room_name
         # Add WebSocket connection status
-        if hasattr(self.coordinator, "_ws_connected"):
-            attrs["websocket_connected"] = self.coordinator._ws_connected
+        if hasattr(self.coordinator, "ws_connected"):
+            attrs["websocket_connected"] = self.coordinator.ws_connected
         return attrs
 
     def _build_device_info(self, model: str) -> DeviceInfo:

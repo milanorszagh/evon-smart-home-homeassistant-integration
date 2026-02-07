@@ -234,6 +234,7 @@ class EvonApi:
         # Clear all sensitive data from memory for security
         self._token = None
         self._token_timestamp = 0.0
+        self._username = ""
         self._password = ""
 
     def set_ws_client(self, ws_client: EvonWsClient | None) -> None:
