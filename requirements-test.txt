@@ -5,3 +5,4 @@ pytest-homeassistant-custom-component>=0.12.0
 ruff>=0.9.0
 mypy>=1.0.0
 aiohttp>=3.8.0
+PyTurboJPEG>=1.7.0

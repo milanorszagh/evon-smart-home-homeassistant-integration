@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from pathlib import Path
 
@@ -178,6 +179,15 @@ def _find_camera_entity(hass: HomeAssistant, entity_id: str):
                     if isinstance(entity, CameraClass):
                         return entity
     return None
+
+
+def _ensure_recordings_dir(recordings_dir: str) -> None:
+    """Create recordings directory and media browser symlink (runs in executor)."""
+    Path(recordings_dir).mkdir(parents=True, exist_ok=True)
+    media_symlink = Path("/media/evon_recordings")
+    if not media_symlink.exists():
+        with contextlib.suppress(OSError):
+            media_symlink.symlink_to(recordings_dir)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -442,15 +452,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         from homeassistant.components.http import StaticPathConfig
 
         recordings_dir = hass.config.path("media/evon_recordings")
-        Path(recordings_dir).mkdir(parents=True, exist_ok=True)
-
-        # Ensure /media/evon_recordings symlink exists for HA media browser
-        media_symlink = Path("/media/evon_recordings")
-        if not media_symlink.exists():
-            try:
-                media_symlink.symlink_to(recordings_dir)
-            except OSError:
-                _LOGGER.debug("Could not create media symlink: %s", recordings_dir)
+        await hass.async_add_executor_job(_ensure_recordings_dir, recordings_dir)
 
         await hass.http.async_register_static_paths(
             [

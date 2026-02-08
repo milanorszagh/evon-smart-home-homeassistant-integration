@@ -545,6 +545,10 @@ async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
                 "http_only": False,
                 "scan_interval": 60,
             },
+            "recording": {
+                "max_recording_duration": 300,
+                "recording_output_format": "mp4",
+            },
             "debug": {
                 "debug_api": False,
                 "debug_websocket": False,
@@ -583,6 +587,10 @@ async def test_options_flow_http_only(hass, mock_config_entry_v2, mock_evon_api_
             "connection": {
                 "http_only": True,
                 "scan_interval": 30,
+            },
+            "recording": {
+                "max_recording_duration": 300,
+                "recording_output_format": "mp4",
             },
             "debug": {
                 "debug_api": False,

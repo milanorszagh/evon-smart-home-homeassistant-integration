@@ -160,7 +160,6 @@ if HAS_HA_TEST_FRAMEWORK:
 
     @pytest.fixture(autouse=True)
     def verify_cleanup(
-        event_loop: asyncio.AbstractEventLoop,
         expected_lingering_tasks: bool,
         expected_lingering_timers: bool,
     ) -> Generator[None]:
@@ -170,11 +169,12 @@ if HAS_HA_TEST_FRAMEWORK:
         to also allow _run_safe_shutdown_loop threads which are created by
         asyncio during event loop handling.
         """
+        loop = asyncio.get_event_loop()
         threads_before = frozenset(threading.enumerate())
-        tasks_before = asyncio.all_tasks(event_loop)
+        tasks_before = asyncio.all_tasks(loop)
         yield
 
-        event_loop.run_until_complete(event_loop.shutdown_default_executor())
+        loop.run_until_complete(loop.shutdown_default_executor())
 
         if len(INSTANCES) >= 2:
             count = len(INSTANCES)
@@ -183,7 +183,7 @@ if HAS_HA_TEST_FRAMEWORK:
             pytest.exit(f"Detected non stopped instances ({count}), aborting test run")
 
         # Warn and clean-up lingering tasks and timers
-        tasks = asyncio.all_tasks(event_loop) - tasks_before
+        tasks = asyncio.all_tasks(loop) - tasks_before
         for task in tasks:
             if expected_lingering_tasks:
                 _LOGGER.warning("Lingering task after test %r", task)
@@ -191,9 +191,9 @@ if HAS_HA_TEST_FRAMEWORK:
                 pytest.fail(f"Lingering task after test {task!r}")
             task.cancel()
         if tasks:
-            event_loop.run_until_complete(asyncio.wait(tasks))
+            loop.run_until_complete(asyncio.wait(tasks))
 
-        for handle in get_scheduled_timer_handles(event_loop):
+        for handle in get_scheduled_timer_handles(loop):
             if not handle.cancelled():
                 with long_repr_strings():
                     if expected_lingering_timers:
