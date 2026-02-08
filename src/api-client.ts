@@ -14,12 +14,17 @@ export async function login(): Promise<string> {
     return currentToken;
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  try {
   const response = await fetch(`${EVON_HOST}/login`, {
     method: "POST",
     headers: {
       "x-elocs-username": EVON_USERNAME,
       "x-elocs-password": EVON_PASSWORD,
     },
+    signal: controller.signal,
   });
 
   if (!response.ok) {
@@ -35,6 +40,14 @@ export async function login(): Promise<string> {
   tokenExpiry = Date.now() + TOKEN_VALIDITY_DAYS * 24 * 60 * 60 * 1000;
 
   return token;
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Login timeout after ${API_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function apiRequest<T>(
@@ -60,15 +73,26 @@ export async function apiRequest<T>(
 
     let response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
 
-    // Handle token expiry with retry
+    // Handle token expiry with retry using a fresh timeout
     if (response.status === 302 || response.status === 401) {
+      clearTimeout(timeoutId);
       currentToken = null;
       const newToken = await login();
-      fetchOptions.headers = {
-        Cookie: `token=${newToken}`,
-        "Content-Type": "application/json",
-      };
-      response = await fetch(`${EVON_HOST}/api${endpoint}`, fetchOptions);
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), API_TIMEOUT_MS);
+      try {
+        response = await fetch(`${EVON_HOST}/api${endpoint}`, {
+          method,
+          headers: {
+            Cookie: `token=${newToken}`,
+            "Content-Type": "application/json",
+          },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+          signal: retryController.signal,
+        });
+      } finally {
+        clearTimeout(retryTimeoutId);
+      }
     }
 
     if (!response.ok) {

@@ -592,8 +592,8 @@ export async function wsGetLightState(
   const props = values[instanceId] || {};
   return {
     name: (props.Name as string) || instanceId,
-    isOn: (props.IsOn as boolean) || false,
-    brightness: (props.ScaledBrightness as number) || 0,
+    isOn: (props.IsOn as boolean) ?? false,
+    brightness: (props.ScaledBrightness as number) ?? 0,
   };
 }
 
@@ -613,8 +613,8 @@ export async function wsGetBlindState(
   const props = values[instanceId] || {};
   return {
     name: (props.Name as string) || instanceId,
-    position: (props.Position as number) || 0,
-    angle: (props.Angle as number) || 0,
+    position: (props.Position as number) ?? 0,
+    angle: (props.Angle as number) ?? 0,
   };
 }
 
@@ -679,9 +679,9 @@ export async function wsGetClimateState(
   const props = values[instanceId] || {};
   return {
     name: (props.Name as string) || instanceId,
-    setTemperature: (props.SetTemperature as number) || 0,
-    actualTemperature: (props.ActualTemperature as number) || 0,
-    mode: (props.Mode as number) || 0,
+    setTemperature: (props.SetTemperature as number) ?? 0,
+    actualTemperature: (props.ActualTemperature as number) ?? 0,
+    mode: (props.Mode as number) ?? 0,
   };
 }
 
@@ -728,7 +728,7 @@ export async function wsGetHomeStateStatus(
   const props = values[instanceId] || {};
   return {
     name: (props.Name as string) || instanceId,
-    active: (props.Active as boolean) || false,
+    active: (props.Active as boolean) ?? false,
   };
 }
 
@@ -775,10 +775,10 @@ export async function wsGetBathroomRadiatorState(
   const props = values[instanceId] || {};
   return {
     name: (props.Name as string) || instanceId,
-    isOn: (props.Output as boolean) || false,
-    timerMinutes: (props.EnableForMins as number) || 0,
-    permanentlyOn: (props.PermanentlyOn as boolean) || false,
-    permanentlyOff: (props.PermanentlyOff as boolean) || false,
+    isOn: (props.Output as boolean) ?? false,
+    timerMinutes: (props.EnableForMins as number) ?? 0,
+    permanentlyOn: (props.PermanentlyOn as boolean) ?? false,
+    permanentlyOff: (props.PermanentlyOff as boolean) ?? false,
   };
 }
 

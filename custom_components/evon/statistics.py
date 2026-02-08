@@ -56,8 +56,15 @@ _LOGGER = logging.getLogger(__name__)
 # Minimum interval between statistics imports (avoid spamming)
 MIN_IMPORT_INTERVAL = timedelta(hours=1)
 
-# Track last import time per meter to implement rate limiting
-_last_import_times: dict[str, datetime] = {}
+# Key for storing rate-limit state in hass.data (survives reloads correctly)
+_HASS_DATA_KEY = "evon_statistics_last_import_times"
+
+
+def _get_last_import_times(hass: HomeAssistant) -> dict[str, datetime]:
+    """Get the per-meter last import times dict from hass.data."""
+    if _HASS_DATA_KEY not in hass.data:
+        hass.data[_HASS_DATA_KEY] = {}
+    return hass.data[_HASS_DATA_KEY]
 
 
 async def import_energy_statistics(
@@ -90,7 +97,8 @@ async def import_energy_statistics(
 
     # Rate limiting: avoid importing too frequently (unless forced)
     now = dt_util.now()
-    last_import = _last_import_times.get(meter_id)
+    last_import_times = _get_last_import_times(hass)
+    last_import = last_import_times.get(meter_id)
     if not force and last_import and (now - last_import) < MIN_IMPORT_INTERVAL:
         return
 
@@ -135,7 +143,7 @@ async def import_energy_statistics(
         )
 
     # Update last import time for rate limiting
-    _last_import_times[meter_id] = dt_util.now()
+    _get_last_import_times(hass)[meter_id] = dt_util.now()
 
 
 async def _import_meter_statistics(

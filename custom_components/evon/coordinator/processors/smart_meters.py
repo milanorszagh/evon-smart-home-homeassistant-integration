@@ -73,8 +73,8 @@ async def process_smart_meters(
                     "energy_data_year": details.get("EnergyDataYear", []),
                 }
             )
-            _LOGGER.info("Added smart meter: %s with power=%s", instance_id, details.get("PowerActual"))
+            _LOGGER.debug("Added smart meter: %s with power=%s", instance_id, details.get("PowerActual"))
         except EvonApiError as err:
             _LOGGER.warning("Failed to get details for smart meter %s: %s", instance_id, err)
-    _LOGGER.info("Processed %d smart meters total", len(smart_meters))
+    _LOGGER.debug("Processed %d smart meters total", len(smart_meters))
     return smart_meters

@@ -626,6 +626,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
+        # Unregister services when the last config entry is unloaded
+        if not hass.data[DOMAIN]:
+            for service_name in (
+                SERVICE_REFRESH,
+                SERVICE_RECONNECT_WEBSOCKET,
+                SERVICE_SET_HOME_STATE,
+                SERVICE_SET_SEASON_MODE,
+                SERVICE_ALL_LIGHTS_OFF,
+                SERVICE_ALL_BLINDS_CLOSE,
+                SERVICE_ALL_BLINDS_OPEN,
+                SERVICE_ALL_CLIMATE_COMFORT,
+                SERVICE_ALL_CLIMATE_ECO,
+                SERVICE_ALL_CLIMATE_AWAY,
+            ):
+                hass.services.async_remove(DOMAIN, service_name)
+            _LOGGER.debug("Unregistered all Evon services (last entry removed)")
+
     return unload_ok
 
 

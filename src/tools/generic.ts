@@ -7,6 +7,14 @@ import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
 import { getInstances } from "../helpers.js";
 
+// Validate instance_id to prevent path traversal (must be alphanumeric with dots/underscores)
+function sanitizeId(id: string): string {
+  if (!/^[\w.]+$/.test(id)) {
+    throw new Error(`Invalid instance ID: ${id}`);
+  }
+  return id;
+}
+
 export function registerGenericTools(server: McpServer): void {
   server.tool(
     "list_apps",
@@ -54,7 +62,7 @@ export function registerGenericTools(server: McpServer): void {
       instance_id: z.string().describe("The instance ID (e.g., 'SC1_M01.Light1')"),
     },
     async ({ instance_id }) => {
-      const result = await apiRequest<Record<string, unknown>>(`/instances/${instance_id}`);
+      const result = await apiRequest<Record<string, unknown>>(`/instances/${sanitizeId(instance_id)}`);
       return {
         content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
       };
@@ -69,7 +77,7 @@ export function registerGenericTools(server: McpServer): void {
       property: z.string().describe("The property name (e.g., 'IsOn', 'ScaledBrightness', 'Position')"),
     },
     async ({ instance_id, property }) => {
-      const result = await apiRequest<unknown>(`/instances/${instance_id}/${property}`);
+      const result = await apiRequest<unknown>(`/instances/${sanitizeId(instance_id)}/${sanitizeId(property)}`);
       return {
         content: [{ type: "text", text: JSON.stringify(result.data, null, 2) }],
       };
@@ -85,7 +93,7 @@ export function registerGenericTools(server: McpServer): void {
       params: z.array(z.unknown()).optional().describe("Parameters as an array"),
     },
     async ({ instance_id, method, params }) => {
-      const result = await callMethod(instance_id, method, params);
+      const result = await callMethod(sanitizeId(instance_id), sanitizeId(method), params);
       return {
         content: [{ type: "text", text: `Method ${method} called on ${instance_id}: ${result.statusText}` }],
       };

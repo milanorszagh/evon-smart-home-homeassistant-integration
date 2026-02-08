@@ -573,6 +573,24 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not coord_data:
             return
 
+        # Re-check data reference before mutating — if HTTP poll replaced self.data
+        # between our snapshot and now, apply updates to the NEW data instead of the old one
+        current_data = self.data
+        if current_data is not data_snapshot:
+            _LOGGER.debug("Data replaced during WebSocket processing for %s, retargeting to new data", instance_id)
+            # Re-find the entity in the new data
+            new_entities = current_data.get(entity_type) if current_data else None
+            if new_entities and isinstance(new_entities, list):
+                entity = None
+                for e in new_entities:
+                    if e and e.get("id") == instance_id:
+                        entity = e
+                        break
+            if entity is None:
+                _LOGGER.debug("Entity %s not found in new data, dropping WS update", instance_id)
+                return
+            data_snapshot = current_data
+
         # Update the entity data in place
         # Note: ws_to_coordinator_data already validates which keys to return,
         # so we apply all keys including ones not in the initial HTTP poll
@@ -599,11 +617,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if entity_type == ENTITY_TYPE_SMART_METERS:
             self._maybe_import_energy_statistics(instance_id, entity)
 
-        # Notify listeners of the update only if data hasn't been replaced by HTTP poll
-        if self.data is data_snapshot:
-            self.async_set_updated_data(data_snapshot)
-        else:
-            _LOGGER.debug("Data replaced during WebSocket update for %s, skipping notification", instance_id)
+        # Notify listeners
+        self.async_set_updated_data(data_snapshot)
 
     def _maybe_import_energy_statistics(
         self,
