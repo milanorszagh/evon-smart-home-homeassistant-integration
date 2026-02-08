@@ -1545,7 +1545,7 @@ class TestLoginErrorHandling:
         api._session = mock_session
 
         # TimeoutError is not a ClientError, so it should propagate
-        with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises(TimeoutError):
             await api.login()
 
 
