@@ -1,10 +1,10 @@
 refresh:
   name: Refresh
-  description: Force refresh all device states from the Evon system.
+  description: Refresh all device states from the Evon system.
 
 reconnect_websocket:
   name: Reconnect WebSocket
-  description: Reconnect the WebSocket connection to the Evon system. Use this if real-time updates have stopped working.
+  description: Reconnect the WebSocket connection to the Evon system. Use this if real-time updates stop working.
 
 set_home_state:
   name: Set Home State

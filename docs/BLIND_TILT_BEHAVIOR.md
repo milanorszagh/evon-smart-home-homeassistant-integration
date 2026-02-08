@@ -98,9 +98,10 @@ async def _normalize_tilt_direction(self):
 **Concept**: Use the same convention as the Evon app without any workarounds.
 
 **Implementation**:
-- Tilt 0 = slats OPEN (horizontal, letting light through)
-- Tilt 100 = slats CLOSED (blocking light)
-- Pass tilt values directly to the API without modification
+- HA Tilt 0 = slats CLOSED (blocking light), Tilt 100 = slats OPEN (horizontal)
+- Evon angle 0 = open, 100 = closed (inverted from HA convention)
+- Values are inverted when sending to the API: `evon_angle = 100 - ha_tilt`
+- Optimistic state updates provide instant UI feedback
 
 **Rationale**:
 1. Matches user expectations from the Evon app
@@ -114,17 +115,29 @@ The Home Assistant integration uses **Option 4** (match Evon app behavior):
 
 ```python
 async def async_open_cover_tilt(self, **kwargs):
-    """Open the cover tilt (slats horizontal)."""
+    """Open the cover tilt (slats horizontal, letting light through)."""
+    # HA tilt 100 = open, Evon angle 0 = open
+    self._optimistic_tilt = 100
+    self.async_write_ha_state()
     await self._api.set_blind_tilt(self._instance_id, 0)
 
 async def async_close_cover_tilt(self, **kwargs):
-    """Close the cover tilt (slats blocking light)."""
+    """Close the cover tilt (slats angled to block light)."""
+    # HA tilt 0 = closed, Evon angle 100 = closed
+    self._optimistic_tilt = 0
+    self.async_write_ha_state()
     await self._api.set_blind_tilt(self._instance_id, 100)
 
 async def async_set_cover_tilt_position(self, **kwargs):
-    """Set the cover tilt position (0=open, 100=closed)."""
-    tilt = kwargs[ATTR_TILT_POSITION]
-    await self._api.set_blind_tilt(self._instance_id, tilt)
+    """Set the cover tilt position.
+    HA: 0=closed (blocking), 100=open (horizontal)
+    Evon: 0=open, 100=closed (inverted)
+    """
+    ha_tilt = kwargs[ATTR_TILT_POSITION]
+    evon_angle = 100 - ha_tilt  # Invert for Evon
+    self._optimistic_tilt = ha_tilt
+    self.async_write_ha_state()
+    await self._api.set_blind_tilt(self._instance_id, evon_angle)
 ```
 
 ## User Impact

@@ -23,7 +23,7 @@ The SmartMeter provides `EnergyDataMonth` via the WebSocket API - a rolling wind
 | **Array Length** | 31 elements (rolling window) |
 | **First Element** | Energy consumption from 31 days ago |
 | **Last Element** | Energy consumption from **yesterday** (NOT today) |
-| **Today's Value** | NOT in this array - use HA's utility_meter |
+| **Today's Value** | NOT in this array - see built-in Energy Today sensor |
 | **Unit** | kWh |
 | **Update Frequency** | Daily (values finalized at midnight) |
 
@@ -42,13 +42,12 @@ The SmartMeter provides `EnergyDataMonth` via the WebSocket API - a rolling wind
 
 ### Other Available Data Arrays (Reference)
 
-The Evon API also provides these arrays (not currently used by the integration):
-
-| Array | Length | Description |
-|-------|--------|-------------|
-| `EnergyDataWeek` | 7 | Daily values for past 7 days (last = yesterday) |
-| `EnergyDataDay` | 24 | Hourly values, rolling 24h window |
-| `EnergyDataActual` | 96 | 15-min intervals, rolling 24h window (last = now) |
+| Array | Length | Description | Used |
+|-------|--------|-------------|------|
+| `EnergyDataDay` | 24 | Hourly values, rolling 24h window | Yes (today's consumption) |
+| `EnergyDataYear` | 12 | Monthly values, rolling 12-month window | Yes (monthly statistics) |
+| `EnergyDataWeek` | 7 | Daily values for past 7 days (last = yesterday) | No |
+| `EnergyDataActual` | 96 | 15-min intervals, rolling 24h window (last = now) | No |
 
 ## How Data is Imported into Home Assistant
 
@@ -135,12 +134,12 @@ This shows daily consumption for the **past 31 days** (up to yesterday). Today i
 
 ### Energy Today (Text Display)
 
-Use the utility_meter sensor:
+Use the built-in Energy Today sensor:
 
 ```yaml
 type: entities
 entities:
-  - entity: sensor.energy_today
+  - entity: sensor.smart_meter_energy_today
     name: Energy Today
 ```
 
@@ -172,7 +171,7 @@ cards:
 
 ### Chart Shows Data for Today with 0 or Low Value
 
-The statistics only include data up to **yesterday**. Today's value is not in the chart - this is intentional. Use the `sensor.energy_today` utility_meter for today's consumption.
+The statistics only include data up to **yesterday**. Today's value is not in the chart - this is intentional. Use the built-in `sensor.smart_meter_energy_today` sensor for today's consumption.
 
 ### Wrong Dates in Chart
 

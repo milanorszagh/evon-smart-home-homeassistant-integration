@@ -14,6 +14,12 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 import voluptuous as vol
 
 from .api import EvonApi, EvonApiError, EvonAuthError
@@ -169,14 +175,20 @@ def validate_username(username: str) -> str | None:
     return None
 
 
+CONNECTION_TYPE_OPTIONS = SelectSelector(
+    SelectSelectorConfig(
+        options=[
+            SelectOptionDict(value=CONNECTION_TYPE_LOCAL, label="local"),
+            SelectOptionDict(value=CONNECTION_TYPE_REMOTE, label="remote"),
+        ],
+        mode=SelectSelectorMode.DROPDOWN,
+        translation_key="connection_type",
+    )
+)
+
 STEP_CONNECTION_TYPE_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPE_LOCAL): vol.In(
-            {
-                CONNECTION_TYPE_LOCAL: "Local network (recommended)",
-                CONNECTION_TYPE_REMOTE: "Remote access (via my.evon-smarthome.com)",
-            }
-        ),
+        vol.Required(CONF_CONNECTION_TYPE, default=CONNECTION_TYPE_LOCAL): CONNECTION_TYPE_OPTIONS,
     }
 )
 
@@ -393,12 +405,7 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_CONNECTION_TYPE, default=current_type): vol.In(
-                        {
-                            CONNECTION_TYPE_LOCAL: "Local network (recommended)",
-                            CONNECTION_TYPE_REMOTE: "Remote access (via my.evon-smarthome.com)",
-                        }
-                    ),
+                    vol.Required(CONF_CONNECTION_TYPE, default=current_type): CONNECTION_TYPE_OPTIONS,
                 }
             ),
             description_placeholders={"current_connection": current_type_label},
@@ -590,12 +597,6 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         }
 
         if light_options:
-            from homeassistant.helpers.selector import (
-                SelectSelector,
-                SelectSelectorConfig,
-                SelectSelectorMode,
-            )
-
             schema_dict[vol.Optional(CONF_NON_DIMMABLE_LIGHTS, default=current_non_dimmable)] = SelectSelector(
                 SelectSelectorConfig(
                     options=[{"value": k, "label": v} for k, v in light_options.items()],

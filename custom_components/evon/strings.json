@@ -126,6 +126,14 @@
       }
     }
   },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "Local network (recommended)",
+        "remote": "Remote access (via my.evon-smarthome.com)"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {

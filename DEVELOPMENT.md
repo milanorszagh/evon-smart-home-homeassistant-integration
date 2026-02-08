@@ -47,6 +47,8 @@ custom_components/evon/
 ├── button.py            # Button platform (scenes)
 ├── camera.py            # Camera platform (2N intercoms)
 ├── image.py             # Image platform (doorbell snapshots)
+├── device_trigger.py    # Device triggers (doorbell press)
+├── statistics.py        # External energy statistics import
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
 └── translations/        # Localization files (en.json, de.json)
@@ -234,6 +236,11 @@ The server auto-detects plain text or encoded passwords.
 
 | Tool | Description |
 |------|-------------|
+| `list_apps` | List all available apps in the system |
+| `list_instances` | List all instances (devices, sensors, logic blocks) with optional filter |
+| `get_instance` | Get detailed properties of a specific instance |
+| `get_property` | Get a specific property value of an instance |
+| `call_method` | Call a method on an instance (use specific tools for common operations) |
 | `list_lights` | List all lights with current state |
 | `light_control` | Control a single light (on/off/brightness) |
 | `light_control_all` | Control all lights at once |
@@ -385,11 +392,17 @@ WS_HEARTBEAT_INTERVAL = 30             # WebSocket heartbeat/ping interval (seco
 WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (seconds)
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
+WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
 
-# Animation timing
+# Optimistic state and animation timing
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
 OPTIMISTIC_SETTLING_PERIOD = 2.5       # Window to ignore WS updates after control action
+OPTIMISTIC_SETTLING_PERIOD_SHORT = 1.0 # Shorter settling for bathroom radiators (no animation)
 OPTIMISTIC_STATE_TIMEOUT = 30.0        # Clears stale optimistic state on network recovery
+OPTIMISTIC_STATE_TOLERANCE = 2         # Small rounding differences tolerance
+COVER_STOP_DELAY = 0.3                 # Delay after cover stop for UI update (seconds)
+CAMERA_IMAGE_CAPTURE_DELAY = 0.5       # Wait after requesting image capture (seconds)
+IMAGE_FETCH_TIMEOUT = 10               # Timeout for fetching images from Evon server (seconds)
 ```
 
 **Note:** The setting is inverted - `http_only = False` means WebSocket is enabled. This allows users to disable WebSocket (by checking "Use HTTP API only") if they experience connection issues, while keeping WebSocket as the recommended default.
@@ -1005,7 +1018,8 @@ pytest --cov=custom_components/evon --cov-report=term-missing
 
 Test files:
 - `test_api.py` - API client tests
-- `test_ws_client.py` - WebSocket client and mapping tests
+- `test_ws_client.py` - WebSocket client tests
+- `test_ws_mappings.py` - WebSocket property mapping tests
 - `test_config_flow.py` / `test_config_flow_unit.py` - Configuration flow tests
 - `test_coordinator.py` - Coordinator and getter method tests
 - `test_diagnostics.py` - Diagnostics export tests
@@ -1013,8 +1027,13 @@ Test files:
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
 - `test_camera.py`, `test_image.py` - Camera and image platform tests
+- `test_base_entity.py` - Base entity and optimistic state tests
+- `test_constants.py` - Constants validation tests
+- `test_device_trigger.py` - Device trigger tests
+- `test_processors.py` - Data processor tests
+- `test_services.py` - Service handler tests
 
-Current coverage: ~85% (180+ tests)
+Current coverage: 494 tests
 
 ---
 
@@ -1039,7 +1058,7 @@ Current coverage: ~85% (180+ tests)
 ## Version Compatibility
 
 - Home Assistant: 2024.1.0+
-- Python: 3.11+
+- Python: 3.12+
 - Node.js (MCP): 18+
 
 ---
