@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -14,12 +15,17 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
+    CONF_MAX_RECORDING_DURATION,
+    DEFAULT_MAX_RECORDING_DURATION,
     DOMAIN,
     ENTITY_TYPE_BATHROOM_RADIATORS,
+    ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_SWITCHES,
     OPTIMISTIC_SETTLING_PERIOD_SHORT,
 )
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -58,6 +64,19 @@ async def async_setup_entry(
                     radiator.get("room_name", ""),
                     entry,
                     api,
+                )
+            )
+
+    # Camera recording switches (one per camera)
+    if coordinator.data and ENTITY_TYPE_CAMERAS in coordinator.data:
+        for camera_data in coordinator.data[ENTITY_TYPE_CAMERAS]:
+            entities.append(
+                EvonCameraRecordingSwitch(
+                    coordinator,
+                    camera_data["id"],
+                    camera_data["name"],
+                    camera_data.get("room_name", ""),
+                    entry,
                 )
             )
 
@@ -314,3 +333,79 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
                     self._optimistic_time_remaining_mins = None
                     self._optimistic_state_set_at = None
         super()._handle_coordinator_update()
+
+
+class EvonCameraRecordingSwitch(EvonEntity, SwitchEntity):
+    """Switch entity to toggle camera recording on/off."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "camera_recording"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the recording switch."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self._attr_unique_id = f"evon_camera_recording_{instance_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info linking to the same device as the camera."""
+        return self._build_device_info("Intercom Camera")
+
+    @property
+    def icon(self) -> str:
+        """Return icon based on recording state."""
+        return "mdi:record-circle" if self.is_on else "mdi:record-circle-outline"
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if recording is active."""
+        camera = self._get_camera_entity()
+        if camera:
+            return camera.recorder.is_recording
+        return False
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        attrs = super().extra_state_attributes
+        camera = self._get_camera_entity()
+        if camera:
+            attrs.update(camera.recorder.get_extra_attributes())
+        return attrs
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Start recording."""
+        camera = self._get_camera_entity()
+        if camera:
+            max_dur = self._entry.options.get(CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION)
+            await camera.async_start_recording(duration=max_dur)
+            self.async_write_ha_state()
+        else:
+            _LOGGER.warning("Camera entity not found for recording switch %s", self.entity_id)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Stop recording."""
+        camera = self._get_camera_entity()
+        if camera:
+            await camera.async_stop_recording()
+            self.async_write_ha_state()
+        else:
+            _LOGGER.warning("Camera entity not found for recording switch %s", self.entity_id)
+
+    def _get_camera_entity(self):
+        """Find the linked EvonCamera entity."""
+        from .camera import EvonCamera
+
+        entity_comp = self.hass.data.get("entity_components", {}).get("camera")
+        if entity_comp:
+            for entity in entity_comp.entities:
+                if isinstance(entity, EvonCamera) and entity._instance_id == self._instance_id:
+                    return entity
+        return None

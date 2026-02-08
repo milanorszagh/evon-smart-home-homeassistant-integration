@@ -30,7 +30,9 @@ from .const import (
     CONF_DEBUG_WEBSOCKET,
     CONF_ENGINE_ID,
     CONF_HTTP_ONLY,
+    CONF_MAX_RECORDING_DURATION,
     CONF_NON_DIMMABLE_LIGHTS,
+    CONF_RECORDING_OUTPUT_FORMAT,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
     CONNECTION_TYPE_LOCAL,
@@ -39,15 +41,21 @@ from .const import (
     DEFAULT_DEBUG_COORDINATOR,
     DEFAULT_DEBUG_WEBSOCKET,
     DEFAULT_HTTP_ONLY,
+    DEFAULT_MAX_RECORDING_DURATION,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
     DOMAIN,
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
+    ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_LIGHTS,
     MAX_POLL_INTERVAL,
+    MAX_RECORDING_DURATION,
     MIN_PASSWORD_LENGTH,
     MIN_POLL_INTERVAL,
+    MIN_RECORDING_DURATION,
+    RECORDING_OUTPUT_MP4,
+    RECORDING_OUTPUT_MP4_AND_FRAMES,
 )
 
 # Validation constants
@@ -587,16 +595,24 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         current_debug_api = self.config_entry.options.get(CONF_DEBUG_API, DEFAULT_DEBUG_API)
         current_debug_ws = self.config_entry.options.get(CONF_DEBUG_WEBSOCKET, DEFAULT_DEBUG_WEBSOCKET)
         current_debug_coord = self.config_entry.options.get(CONF_DEBUG_COORDINATOR, DEFAULT_DEBUG_COORDINATOR)
+        current_max_recording = self.config_entry.options.get(
+            CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION
+        )
+        current_recording_format = self.config_entry.options.get(CONF_RECORDING_OUTPUT_FORMAT, RECORDING_OUTPUT_MP4)
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
+        has_cameras = False
         if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
-            if coordinator and coordinator.data and ENTITY_TYPE_LIGHTS in coordinator.data:
-                for light in coordinator.data[ENTITY_TYPE_LIGHTS]:
-                    light_id = light["id"]
-                    light_name = light["name"]
-                    light_options[light_id] = light_name
+            if coordinator and coordinator.data:
+                if ENTITY_TYPE_LIGHTS in coordinator.data:
+                    for light in coordinator.data[ENTITY_TYPE_LIGHTS]:
+                        light_id = light["id"]
+                        light_name = light["name"]
+                        light_options[light_id] = light_name
+                if ENTITY_TYPE_CAMERAS in coordinator.data and coordinator.data[ENTITY_TYPE_CAMERAS]:
+                    has_cameras = True
 
         # Build schema with sections for better organization
         schema_dict: dict[Any, Any] = {
@@ -624,6 +640,30 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             ),
             {"collapsed": True},
         )
+
+        # Camera recording section: only shown when cameras are present
+        if has_cameras:
+            schema_dict[vol.Required("recording")] = section(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_MAX_RECORDING_DURATION, default=current_max_recording): vol.All(
+                            vol.Coerce(int),
+                            vol.Range(min=MIN_RECORDING_DURATION, max=MAX_RECORDING_DURATION),
+                        ),
+                        vol.Required(CONF_RECORDING_OUTPUT_FORMAT, default=current_recording_format): SelectSelector(
+                            SelectSelectorConfig(
+                                options=[
+                                    SelectOptionDict(value=RECORDING_OUTPUT_MP4, label="mp4"),
+                                    SelectOptionDict(value=RECORDING_OUTPUT_MP4_AND_FRAMES, label="mp4_and_frames"),
+                                ],
+                                mode=SelectSelectorMode.DROPDOWN,
+                                translation_key="recording_output_format",
+                            )
+                        ),
+                    }
+                ),
+                {"collapsed": True},
+            )
 
         # Debug logging section: collapsed by default
         schema_dict[vol.Required("debug")] = section(

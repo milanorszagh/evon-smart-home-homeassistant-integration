@@ -33,7 +33,7 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Scenes** | Trigger Evon-defined scenes from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
 | **Intercoms** | Door open/closed state, doorbell events, connection status |
-| **Cameras** | Live feed from 2N intercom cameras |
+| **Cameras** | Live feed from 2N intercom cameras, snapshot-based video recording |
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
 
 ## Known Limitations
@@ -124,6 +124,13 @@ After installation, configure via **Settings** → **Devices & Services** → **
 |--------|-------------|
 | **Use HTTP API only** | Disable WebSocket and use HTTP polling only. WebSocket is recommended and enabled by default. Only enable this if you experience connection issues. |
 | **Poll interval** | How often to fetch device states (5-300 seconds). Used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled. |
+
+**Camera Recording** (collapsible section, shown when cameras are present):
+
+| Option | Description |
+|--------|-------------|
+| **Max recording duration** | Maximum recording duration in seconds (30-3600, default: 300). Prevents forgotten recordings from filling disk. |
+| **Recording output format** | Choose "MP4 only" or "MP4 + JPEG frames" to also save individual frames. |
 
 **Debug Logging** (collapsible section):
 
@@ -358,6 +365,19 @@ Cameras from 2N intercoms are supported with live feed capability:
 
 The camera entity provides a still image that updates when you view it. The integration triggers an image request via WebSocket and fetches the resulting JPEG from the Evon server.
 
+**Camera Recording:**
+
+Since Evon cameras are snapshot-based (no RTSP stream), the integration provides a custom recording feature that rapidly polls snapshots and stitches them into an MP4 video:
+
+- **Start/Stop via services**: `evon.start_recording` and `evon.stop_recording`
+- **Recording switch**: Toggle entity for easy dashboard control
+- **Timestamp overlay**: Each frame includes a burned-in timestamp
+- **Configurable output**: MP4 only, or MP4 + individual JPEG frames
+- **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings
+- **Output location**: Saved to `/media/evon_recordings/` in your HA instance
+
+**Note:** Frame rate is limited by hardware response time (~0.5-2 FPS). The result is more of a timelapse than smooth video, but is useful for security and monitoring purposes.
+
 **2N Intercom Camera Specifications:**
 - Frame rate: Up to 10 fps for streaming
 - Resolutions: 160×120 to 1280×960 (model dependent)
@@ -413,6 +433,8 @@ The integration provides the following services that can be called from automati
 | `evon.all_climate_comfort` | Set all climate devices to Comfort preset |
 | `evon.all_climate_eco` | Set all climate devices to Eco (energy saving) preset |
 | `evon.all_climate_away` | Set all climate devices to Away (freeze/heat protection) preset |
+| `evon.start_recording` | Start recording snapshots from a camera (target entity_id + optional duration) |
+| `evon.stop_recording` | Stop an active camera recording and save the video |
 
 ### Example Automations
 

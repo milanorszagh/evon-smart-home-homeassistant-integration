@@ -56,6 +56,30 @@
     "all_climate_away": {
       "name": "Alle Klimasteuerungen Abwesend",
       "description": "Alle Klimasteuerungen auf Abwesend-Modus (Frost-/Hitzeschutz) umschalten. Frostschutz im Heizmodus, Hitzeschutz im Kühlmodus."
+    },
+    "start_recording": {
+      "name": "Aufnahme starten",
+      "description": "Schnappschüsse von einer Evon-Kamera als Videodatei aufnehmen.",
+      "fields": {
+        "entity_id": {
+          "name": "Kamera-Entität",
+          "description": "Die Kamera-Entität, von der aufgenommen werden soll."
+        },
+        "duration": {
+          "name": "Dauer",
+          "description": "Maximale Aufnahmedauer in Sekunden."
+        }
+      }
+    },
+    "stop_recording": {
+      "name": "Aufnahme stoppen",
+      "description": "Eine aktive Kameraaufnahme stoppen und die Videodatei speichern.",
+      "fields": {
+        "entity_id": {
+          "name": "Kamera-Entität",
+          "description": "Die Kamera-Entität, deren Aufnahme gestoppt werden soll."
+        }
+      }
     }
   },
   "issues": {
@@ -83,6 +107,11 @@
     "button": {
       "identify": {
         "name": "Identifizieren"
+      }
+    },
+    "switch": {
+      "camera_recording": {
+        "name": "Aufnahme"
       }
     },
     "binary_sensor": {
@@ -131,6 +160,12 @@
       "options": {
         "local": "Lokales Netzwerk (empfohlen)",
         "remote": "Fernzugriff (via my.evon-smarthome.com)"
+      }
+    },
+    "recording_output_format": {
+      "options": {
+        "mp4": "Nur MP4",
+        "mp4_and_frames": "MP4 + JPEG-Einzelbilder"
       }
     }
   },
@@ -233,6 +268,17 @@
             "data_description": {
               "http_only": "WebSocket deaktivieren und nur HTTP-Abfragen verwenden. WebSocket wird für sofortige Statusaktualisierungen empfohlen. Aktivieren Sie dies nur, wenn Sie Verbindungsprobleme mit WebSocket haben. Hinweis: Das Ändern dieser Option lädt die Integration neu.",
               "scan_interval": "Wie oft Gerätezustände über HTTP-Abfragen abgerufen werden. Wird als Fallback verwendet, wenn WebSocket aktiviert ist, oder als primäre Methode, wenn Nur-HTTP-Modus aktiviert ist."
+            }
+          },
+          "recording": {
+            "name": "Kamera-Aufnahme",
+            "data": {
+              "max_recording_duration": "Maximale Aufnahmedauer (Sekunden)",
+              "recording_output_format": "Aufnahme-Ausgabeformat"
+            },
+            "data_description": {
+              "max_recording_duration": "Maximale Dauer für Kameraaufnahmen in Sekunden (30-3600). Verhindert, dass vergessene Aufnahmen den Speicher füllen.",
+              "recording_output_format": "Wählen Sie, ob nur das MP4-Video oder auch einzelne JPEG-Bilder gespeichert werden sollen."
             }
           },
           "debug": {

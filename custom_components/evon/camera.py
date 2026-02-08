@@ -13,7 +13,17 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import CAMERA_IMAGE_UPDATE_TIMEOUT, DOMAIN, ENTITY_TYPE_CAMERAS, ENTITY_TYPE_SECURITY_DOORS
+from .camera_recorder import EvonCameraRecorder
+from .const import (
+    CAMERA_IMAGE_UPDATE_TIMEOUT,
+    CONF_MAX_RECORDING_DURATION,
+    CONF_RECORDING_OUTPUT_FORMAT,
+    DEFAULT_MAX_RECORDING_DURATION,
+    DOMAIN,
+    ENTITY_TYPE_CAMERAS,
+    ENTITY_TYPE_SECURITY_DOORS,
+    RECORDING_OUTPUT_MP4,
+)
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +78,7 @@ class EvonCamera(EvonEntity, Camera):
         self._image_lock = asyncio.Lock()
         self._image_event = asyncio.Event()
         self._tracked_image_path: str = ""
+        self._recorder = EvonCameraRecorder(coordinator.hass, self)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -99,6 +110,11 @@ class EvonCamera(EvonEntity, Camera):
         return False
 
     @property
+    def recorder(self) -> EvonCameraRecorder:
+        """Return the camera recorder instance."""
+        return self._recorder
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
@@ -111,6 +127,10 @@ class EvonCamera(EvonEntity, Camera):
         saved_pictures = self._get_saved_pictures()
         if saved_pictures:
             attrs["saved_pictures"] = saved_pictures
+
+        # Recording state
+        attrs.update(self._recorder.get_extra_attributes())
+
         return attrs
 
     def _get_saved_pictures(self) -> list[dict[str, Any]]:
@@ -212,3 +232,28 @@ class EvonCamera(EvonEntity, Camera):
             return None
 
         return await self._fetch_image(path)
+
+    async def async_start_recording(self, duration: int | None = None) -> None:
+        """Start recording snapshots to video.
+
+        Args:
+            duration: Optional max duration in seconds. Uses config value if None.
+        """
+        max_dur = duration or self._entry.options.get(CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION)
+        output_fmt = self._entry.options.get(CONF_RECORDING_OUTPUT_FORMAT, RECORDING_OUTPUT_MP4)
+        await self._recorder.async_start(max_duration=max_dur, output_format=output_fmt)
+        self.async_write_ha_state()
+
+    async def async_stop_recording(self) -> str | None:
+        """Stop recording and return path to the MP4 file."""
+        path = await self._recorder.async_stop()
+        self.async_write_ha_state()
+        if path:
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_recording_finished",
+                {
+                    "entity_id": self.entity_id,
+                    "path": path,
+                },
+            )
+        return path

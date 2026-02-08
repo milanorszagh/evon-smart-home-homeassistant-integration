@@ -46,6 +46,7 @@ custom_components/evon/
 ├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
 ├── button.py            # Button platform (scenes)
 ├── camera.py            # Camera platform (2N intercoms)
+├── camera_recorder.py   # Camera recording manager (snapshot → MP4)
 ├── image.py             # Image platform (doorbell snapshots)
 ├── device_trigger.py    # Device triggers (doorbell press)
 ├── statistics.py        # External energy statistics import
@@ -1034,6 +1035,7 @@ Test files:
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
 - `test_camera.py`, `test_image.py` - Camera and image platform tests
+- `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration)
 - `test_base_entity.py` - Base entity and optimistic state tests
 - `test_constants.py` - Constants validation tests
 - `test_device_trigger.py` - Device trigger tests

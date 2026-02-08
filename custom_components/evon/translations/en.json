@@ -56,6 +56,30 @@
     "all_climate_away": {
       "name": "All Climate Away",
       "description": "Set all climate controls to away (freeze/heat protection) mode at once. Freeze protection in heating mode, heat protection in cooling mode."
+    },
+    "start_recording": {
+      "name": "Start Recording",
+      "description": "Start recording snapshots from an Evon camera into a video file.",
+      "fields": {
+        "entity_id": {
+          "name": "Camera Entity",
+          "description": "The camera entity to record from."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Maximum recording duration in seconds."
+        }
+      }
+    },
+    "stop_recording": {
+      "name": "Stop Recording",
+      "description": "Stop an active camera recording and save the video file.",
+      "fields": {
+        "entity_id": {
+          "name": "Camera Entity",
+          "description": "The camera entity to stop recording."
+        }
+      }
     }
   },
   "issues": {
@@ -83,6 +107,11 @@
     "button": {
       "identify": {
         "name": "Identify"
+      }
+    },
+    "switch": {
+      "camera_recording": {
+        "name": "Recording"
       }
     },
     "binary_sensor": {
@@ -131,6 +160,12 @@
       "options": {
         "local": "Local network (recommended)",
         "remote": "Remote access (via my.evon-smarthome.com)"
+      }
+    },
+    "recording_output_format": {
+      "options": {
+        "mp4": "MP4 only",
+        "mp4_and_frames": "MP4 + JPEG frames"
       }
     }
   },
@@ -233,6 +268,17 @@
             "data_description": {
               "http_only": "Disable WebSocket and use HTTP polling only. WebSocket is recommended for instant state updates. Only enable this if you experience connection issues with WebSocket. Note: Changing this option will reload the integration.",
               "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled."
+            }
+          },
+          "recording": {
+            "name": "Camera Recording",
+            "data": {
+              "max_recording_duration": "Max recording duration (seconds)",
+              "recording_output_format": "Recording output format"
+            },
+            "data_description": {
+              "max_recording_duration": "Maximum duration for camera recordings in seconds (30-3600). Prevents forgotten recordings from filling up disk space.",
+              "recording_output_format": "Choose whether to save only the MP4 video, or also keep individual JPEG frames."
             }
           },
           "debug": {

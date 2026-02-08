@@ -130,6 +130,8 @@ SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
 SERVICE_ALL_CLIMATE_COMFORT = "all_climate_comfort"
 SERVICE_ALL_CLIMATE_ECO = "all_climate_eco"
 SERVICE_ALL_CLIMATE_AWAY = "all_climate_away"
+SERVICE_START_RECORDING = "start_recording"
+SERVICE_STOP_RECORDING = "stop_recording"
 
 # Home state mapping from service values to Evon instance IDs
 HOME_STATE_MAP = {
@@ -151,6 +153,30 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SELECT,
 ]
+
+
+def _find_camera_entity(hass: HomeAssistant, entity_id: str):
+    """Find an EvonCamera entity object by entity_id.
+
+    Returns the EvonCamera instance or None.
+    """
+    from .camera import EvonCamera
+
+    entity_comp = hass.data.get("entity_components", {}).get("camera")
+    if entity_comp:
+        for entity in entity_comp.entities:
+            if entity.entity_id == entity_id and isinstance(entity, EvonCamera):
+                return entity
+    # Fallback: search via entity platform
+    for platform_data in hass.data.get("entity_platform", {}).get(DOMAIN, []):
+        if hasattr(platform_data, "entities"):
+            for entity in platform_data.entities.values():
+                if entity.entity_id == entity_id:
+                    from .camera import EvonCamera as CameraClass
+
+                    if isinstance(entity, CameraClass):
+                        return entity
+    return None
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -366,6 +392,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_all_climate_away(call: ServiceCall) -> None:
             await _bulk_api_call("All climate away", "all_climate_away")
 
+        async def handle_start_recording(call: ServiceCall) -> None:
+            """Handle the start recording service call."""
+            entity_id = call.data.get("entity_id")
+            duration = call.data.get("duration")
+            if not entity_id:
+                _LOGGER.error("entity_id is required for start_recording")
+                return
+            entity = hass.states.get(entity_id)
+            if not entity:
+                _LOGGER.error("Entity %s not found", entity_id)
+                return
+            # Find the camera entity object
+            camera_entity = _find_camera_entity(hass, entity_id)
+            if camera_entity:
+                await camera_entity.async_start_recording(duration=duration)
+            else:
+                _LOGGER.error("Camera entity %s not found", entity_id)
+
+        async def handle_stop_recording(call: ServiceCall) -> None:
+            """Handle the stop recording service call."""
+            entity_id = call.data.get("entity_id")
+            if not entity_id:
+                _LOGGER.error("entity_id is required for stop_recording")
+                return
+            camera_entity = _find_camera_entity(hass, entity_id)
+            if camera_entity:
+                await camera_entity.async_stop_recording()
+            else:
+                _LOGGER.error("Camera entity %s not found", entity_id)
+
         hass.services.async_register(DOMAIN, SERVICE_REFRESH, handle_refresh)
         hass.services.async_register(DOMAIN, SERVICE_RECONNECT_WEBSOCKET, handle_reconnect_websocket)
         hass.services.async_register(DOMAIN, SERVICE_SET_HOME_STATE, handle_set_home_state)
@@ -376,6 +432,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_COMFORT, handle_all_climate_comfort)
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_ECO, handle_all_climate_eco)
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_AWAY, handle_all_climate_away)
+        hass.services.async_register(DOMAIN, SERVICE_START_RECORDING, handle_start_recording)
+        hass.services.async_register(DOMAIN, SERVICE_STOP_RECORDING, handle_stop_recording)
 
     # Clean up stale entities
     await _async_cleanup_stale_entities(hass, entry, coordinator)
@@ -422,6 +480,7 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
     # Known type prefixes - order matters (longer prefixes first to avoid partial matches)
     type_prefixes = [
         "evon_security_door_",
+        "evon_camera_recording_",
         "evon_intercom_",
         "evon_snapshot_",
         "evon_radiator_",
@@ -627,6 +686,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 SERVICE_ALL_CLIMATE_COMFORT,
                 SERVICE_ALL_CLIMATE_ECO,
                 SERVICE_ALL_CLIMATE_AWAY,
+                SERVICE_START_RECORDING,
+                SERVICE_STOP_RECORDING,
             ):
                 hass.services.async_remove(DOMAIN, service_name)
             _LOGGER.debug("Unregistered all Evon services (last entry removed)")

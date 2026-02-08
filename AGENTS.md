@@ -403,7 +403,7 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 - Data coordinator: `coordinator/` package
   - Main coordinator: `coordinator/__init__.py`
   - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras)
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`, `camera.py`, `image.py` (doorbell snapshots)
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`, `camera.py`, `camera_recorder.py` (snapshot→MP4 recording), `image.py` (doorbell snapshots)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 
 ## Testing Changes
@@ -769,7 +769,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
-- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging, camera recording settings
 - **Non-dimmable Lights**: Mark lights as on/off only (useful for LED strips with PWM controllers)
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -856,6 +856,7 @@ Tests are in the `tests/` directory (490+ tests):
 - `test_binary_sensor.py` - Binary sensor tests (valves)
 - `test_button.py` - Button entity tests (scenes)
 - `test_camera.py` - Camera entity tests
+- `test_camera_recorder.py` - Camera recording tests
 - `test_image.py` - Image entity tests
 
 **Core tests:**

@@ -158,3 +158,13 @@ WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejec
 # Light identification animation timing (seconds)
 # Evon lights fade in/out over ~2.5s, so 3s provides buffer for visual effect
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0
+
+# Camera recording settings
+CONF_MAX_RECORDING_DURATION = "max_recording_duration"
+CONF_RECORDING_OUTPUT_FORMAT = "recording_output_format"
+DEFAULT_MAX_RECORDING_DURATION = 300  # seconds (5 minutes)
+MIN_RECORDING_DURATION = 30  # seconds
+MAX_RECORDING_DURATION = 3600  # seconds (1 hour)
+RECORDING_MEDIA_DIR = "evon_recordings"
+RECORDING_OUTPUT_MP4 = "mp4"
+RECORDING_OUTPUT_MP4_AND_FRAMES = "mp4_and_frames"

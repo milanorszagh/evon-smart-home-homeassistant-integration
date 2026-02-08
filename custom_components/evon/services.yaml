@@ -61,3 +61,41 @@ all_climate_eco:
 all_climate_away:
   name: All Climate Away
   description: Set all climate controls to away (freeze/heat protection) mode at once. Freeze protection in heating mode, heat protection in cooling mode.
+
+start_recording:
+  name: Start Recording
+  description: Start recording snapshots from an Evon camera into a video file.
+  fields:
+    entity_id:
+      name: Camera Entity
+      description: The camera entity to record from.
+      required: true
+      example: "camera.intercom_camera"
+      selector:
+        entity:
+          domain: camera
+          integration: evon
+    duration:
+      name: Duration
+      description: Maximum recording duration in seconds. Uses the configured default if not specified.
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 30
+          max: 3600
+          unit_of_measurement: seconds
+
+stop_recording:
+  name: Stop Recording
+  description: Stop an active camera recording and save the video file.
+  fields:
+    entity_id:
+      name: Camera Entity
+      description: The camera entity to stop recording.
+      required: true
+      example: "camera.intercom_camera"
+      selector:
+        entity:
+          domain: camera
+          integration: evon
