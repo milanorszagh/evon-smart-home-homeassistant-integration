@@ -931,11 +931,11 @@ class TestBathroomRadiatorProcessor:
 class TestConstants:
     """Tests for camera/image related constants."""
 
-    def test_camera_image_capture_delay(self):
-        """Test CAMERA_IMAGE_CAPTURE_DELAY constant."""
-        from custom_components.evon.const import CAMERA_IMAGE_CAPTURE_DELAY
+    def test_camera_image_update_timeout(self):
+        """Test CAMERA_IMAGE_UPDATE_TIMEOUT constant."""
+        from custom_components.evon.const import CAMERA_IMAGE_UPDATE_TIMEOUT
 
-        assert CAMERA_IMAGE_CAPTURE_DELAY == 0.5
+        assert CAMERA_IMAGE_UPDATE_TIMEOUT == 5.0
 
     def test_image_fetch_timeout(self):
         """Test IMAGE_FETCH_TIMEOUT constant."""

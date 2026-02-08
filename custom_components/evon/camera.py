@@ -8,12 +8,12 @@ from typing import Any
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import CAMERA_IMAGE_CAPTURE_DELAY, DOMAIN, ENTITY_TYPE_CAMERAS, ENTITY_TYPE_SECURITY_DOORS
+from .const import CAMERA_IMAGE_UPDATE_TIMEOUT, DOMAIN, ENTITY_TYPE_CAMERAS, ENTITY_TYPE_SECURITY_DOORS
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -66,6 +66,19 @@ class EvonCamera(EvonEntity, Camera):
         self._is_streaming = False
         self._last_image: bytes | None = None
         self._image_lock = asyncio.Lock()
+        self._image_event = asyncio.Event()
+        self._tracked_image_path: str = ""
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+        if data:
+            new_path = data.get("image_path", "")
+            if new_path and new_path != self._tracked_image_path:
+                self._tracked_image_path = new_path
+                self._image_event.set()
+        super()._handle_coordinator_update()
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -116,26 +129,33 @@ class EvonCamera(EvonEntity, Camera):
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
         """Return a still image from the camera.
 
-        This triggers a fresh image request via WebSocket and fetches it.
+        When WebSocket is connected, requests a fresh image capture and waits
+        for the Evon system to update the image path via ValuesChanged event.
+        Falls back to the last known image path when WS is unavailable.
         """
         async with self._image_lock:
             try:
-                # Get camera data
                 data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
                 if not data:
                     return self._last_image
 
-                # Request a new image via WebSocket
+                # Request a new image via WebSocket and wait for the path to update
                 ws_client = self.coordinator.ws_client
                 if ws_client and ws_client.is_connected:
+                    self._image_event.clear()
                     await self._request_image_via_ws(ws_client)
-                    # Wait for image to be captured
-                    await asyncio.sleep(CAMERA_IMAGE_CAPTURE_DELAY)
-                    # Refresh data to get new image path
+                    try:
+                        await asyncio.wait_for(
+                            self._image_event.wait(),
+                            timeout=CAMERA_IMAGE_UPDATE_TIMEOUT,
+                        )
+                    except TimeoutError:
+                        _LOGGER.debug("Timeout waiting for camera image update from WS")
+                    # Re-read data after WS update
                     data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
 
                 # Fetch the image via HTTP
-                image_path = data.get("image_path", "")
+                image_path = data.get("image_path", "") if data else ""
                 if not image_path:
                     return self._last_image
 

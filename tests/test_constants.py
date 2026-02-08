@@ -315,19 +315,18 @@ class TestRepairConstants:
 class TestCameraConstants:
     """Tests for camera/image related constants."""
 
-    def test_camera_image_capture_delay(self):
-        """Test camera image capture delay."""
-        from custom_components.evon.const import CAMERA_IMAGE_CAPTURE_DELAY
+    def test_camera_image_update_timeout(self):
+        """Test camera image update timeout."""
+        from custom_components.evon.const import CAMERA_IMAGE_UPDATE_TIMEOUT
 
-        assert CAMERA_IMAGE_CAPTURE_DELAY == 0.5
-        assert 0 < CAMERA_IMAGE_CAPTURE_DELAY < 5.0
+        assert CAMERA_IMAGE_UPDATE_TIMEOUT == 5.0
+        assert 0 < CAMERA_IMAGE_UPDATE_TIMEOUT <= 10.0
 
     def test_image_fetch_timeout(self):
         """Test image fetch timeout."""
-        from custom_components.evon.const import CAMERA_IMAGE_CAPTURE_DELAY, IMAGE_FETCH_TIMEOUT
+        from custom_components.evon.const import IMAGE_FETCH_TIMEOUT
 
         assert IMAGE_FETCH_TIMEOUT == 10
-        assert IMAGE_FETCH_TIMEOUT > CAMERA_IMAGE_CAPTURE_DELAY
 
 
 class TestBathroomRadiatorConstants:

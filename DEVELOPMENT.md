@@ -404,7 +404,7 @@ OPTIMISTIC_SETTLING_PERIOD_SHORT = 1.0 # Shorter settling for bathroom radiators
 OPTIMISTIC_STATE_TIMEOUT = 30.0        # Clears stale optimistic state on network recovery
 OPTIMISTIC_STATE_TOLERANCE = 2         # Small rounding differences tolerance
 COVER_STOP_DELAY = 0.3                 # Delay after cover stop for UI update (seconds)
-CAMERA_IMAGE_CAPTURE_DELAY = 0.5       # Wait after requesting image capture (seconds)
+CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0      # Wait for WS image_path update after ImageRequest (seconds)
 IMAGE_FETCH_TIMEOUT = 10               # Timeout for fetching images from Evon server (seconds)
 ```
 
@@ -729,7 +729,7 @@ Body: {"value": true}   // COOLING
 - Historical buffer: 30 seconds (`time` parameter: -30 to 0)
 - Image format: JPEG
 
-**Image Fetch:** After requesting an image via WebSocket, wait ~0.5 seconds (`CAMERA_IMAGE_CAPTURE_DELAY`) before fetching via HTTP at the `Image` path URL with token authentication.
+**Image Fetch:** After requesting an image via WebSocket (`ImageRequest=True`), the camera waits for the `Image` property to update via a `ValuesChanged` event (up to `CAMERA_IMAGE_UPDATE_TIMEOUT` seconds), then fetches the JPEG via HTTP with token authentication. This event-driven approach replaces the previous blind sleep and ensures the image is ready before fetching.
 
 ### Smart Meter Properties
 

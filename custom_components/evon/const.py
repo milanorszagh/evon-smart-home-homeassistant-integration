@@ -127,7 +127,7 @@ COVER_STOP_DELAY = 0.3
 OPTIMISTIC_STATE_TIMEOUT = 30.0
 
 # Camera/Image fetch settings
-CAMERA_IMAGE_CAPTURE_DELAY = 0.5  # seconds to wait after requesting image capture
+CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0  # seconds to wait for WS image_path update after ImageRequest
 IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server
 
 # Settling period after control actions (seconds)
