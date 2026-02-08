@@ -230,8 +230,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
         mode_saved = data.get("mode_saved", 4)
 
-        # Use appropriate mapping based on season mode
-        is_cooling = self.coordinator.get_season_mode()
+        # Use per-device is_cooling (from CoolingMode property) for consistency
+        # with hvac_mode/hvac_action which also use per-device state
+        is_cooling = data.get("is_cooling", False)
         if is_cooling:
             return EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
         return EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
@@ -242,7 +243,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         attrs = super().extra_state_attributes
         data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
         if data:
-            is_cooling = self.coordinator.get_season_mode()
+            is_cooling = data.get("is_cooling", False)
             attrs["comfort_temperature"] = data.get("comfort_temp")
             attrs["eco_temperature"] = data.get("energy_saving_temp")
             attrs["protection_temperature"] = data.get("protection_temp")
@@ -325,8 +326,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
             if self._optimistic_preset is not None:
                 mode_saved = data.get("mode_saved", 4)
-                # Use appropriate mapping based on season mode
-                is_cooling = self.coordinator.get_season_mode()
+                # Use per-device is_cooling for consistency
+                is_cooling = data.get("is_cooling", False)
                 if is_cooling:
                     actual_preset = EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
                 else:
