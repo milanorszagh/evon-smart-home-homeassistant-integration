@@ -55,6 +55,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
         value_fn=lambda data: data.get("power"),
     ),
     EvonSensorEntityDescription(
@@ -63,6 +64,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
         value_fn=lambda data: data.get("energy"),
     ),
     # NOTE: Energy24h from Evon is a ROLLING 24-hour window, not daily reset.
@@ -74,6 +76,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         name="Energy (24h Rolling)",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
         value_fn=lambda data: data.get("energy_24h"),
     ),
     EvonSensorEntityDescription(
@@ -82,6 +85,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("voltage_l1"),
     ),
@@ -91,6 +95,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("voltage_l2"),
     ),
@@ -100,6 +105,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("voltage_l3"),
     ),
@@ -109,6 +115,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("current_l1"),
     ),
@@ -118,6 +125,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("current_l2"),
     ),
@@ -127,6 +135,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("current_l3"),
     ),
@@ -136,6 +145,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.FREQUENCY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda data: data.get("frequency"),
     ),
@@ -145,6 +155,7 @@ SMART_METER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
         value_fn=lambda data: data.get("feed_in_energy"),
     ),
 )
@@ -263,9 +274,11 @@ async def async_setup_entry(
 class EvonTemperatureSensor(EvonEntity, SensorEntity):
     """Representation of an Evon temperature sensor."""
 
+    _attr_icon = "mdi:thermometer"
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 1
     _attr_translation_key = "temperature"
 
     def __init__(
