@@ -297,6 +297,110 @@ class TestMP4Encoding:
         assert len(jpg_files) == 2
 
 
+class TestRecentRecordings:
+    """Test get_recent_recordings method."""
+
+    def test_empty_when_no_directory(self, recorder, mock_hass):
+        """Test returns empty list when recordings directory doesn't exist."""
+        # Default mock path won't exist
+        result = recorder.get_recent_recordings()
+        assert result == []
+
+    def test_empty_when_no_files(self, recorder, mock_hass, tmp_path):
+        """Test returns empty list when directory exists but has no matching files."""
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        result = recorder.get_recent_recordings()
+        assert result == []
+
+    def test_returns_matching_recordings(self, recorder, mock_hass, mock_camera, tmp_path):
+        """Test returns MP4 files matching camera name prefix."""
+        import time
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        # Create test MP4 files (camera name is "Test Camera" -> safe name "Test_Camera")
+        files = []
+        for i in range(3):
+            f = recordings_dir / f"Test_Camera_2024010{i}_120000.mp4"
+            f.write_bytes(b"\x00" * (1024 * (i + 1)))
+            files.append(f)
+            time.sleep(0.05)  # Ensure different mtime
+
+        result = recorder.get_recent_recordings()
+        assert len(result) == 3
+        # Newest first (last created file)
+        assert result[0]["filename"] == "Test_Camera_20240102_120000.mp4"
+        assert result[1]["filename"] == "Test_Camera_20240101_120000.mp4"
+        assert result[2]["filename"] == "Test_Camera_20240100_120000.mp4"
+
+    def test_respects_limit(self, recorder, mock_hass, tmp_path):
+        """Test limit parameter caps the number of results."""
+        import time
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        for i in range(7):
+            f = recordings_dir / f"Test_Camera_2024010{i}_120000.mp4"
+            f.write_bytes(b"\x00" * 1024)
+            time.sleep(0.05)
+
+        result = recorder.get_recent_recordings(limit=3)
+        assert len(result) == 3
+
+    def test_ignores_other_cameras(self, recorder, mock_hass, tmp_path):
+        """Test only returns files matching this camera's safe name prefix."""
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        # Matching file
+        (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 2048)
+        # Non-matching file
+        (recordings_dir / "Other_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 2048)
+
+        result = recorder.get_recent_recordings()
+        assert len(result) == 1
+        assert result[0]["filename"] == "Test_Camera_20240101_120000.mp4"
+
+    def test_field_contents(self, recorder, mock_hass, tmp_path):
+        """Test returned dict fields have correct contents."""
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        f = recordings_dir / "Test_Camera_20240115_190100.mp4"
+        f.write_bytes(b"\x00" * (180 * 1024))  # 180 KB
+
+        result = recorder.get_recent_recordings()
+        assert len(result) == 1
+        rec = result[0]
+        assert rec["filename"] == "Test_Camera_20240115_190100.mp4"
+        assert "url" in rec
+        assert rec["url"] == "/evon/recordings/Test_Camera_20240115_190100.mp4"
+        assert "KB" in rec["size"]
+        assert rec["timestamp"]  # Non-empty timestamp string
+
+    def test_large_file_size_in_mb(self, recorder, mock_hass, tmp_path):
+        """Test files >= 1 MB show size in MB."""
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        f = recordings_dir / "Test_Camera_20240115_190100.mp4"
+        f.write_bytes(b"\x00" * (2 * 1024 * 1024))  # 2 MB
+
+        result = recorder.get_recent_recordings()
+        assert len(result) == 1
+        assert "MB" in result[0]["size"]
+
+
 # ============================================================================
 # Integration tests (require HA test framework)
 # ============================================================================

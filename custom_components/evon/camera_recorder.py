@@ -288,6 +288,48 @@ class EvonCameraRecorder:
         finally:
             container.close()
 
+    def get_recent_recordings(self, limit: int = 5) -> list[dict[str, str]]:
+        """Return recent recordings for this camera.
+
+        Scans the recordings directory for MP4 files matching this camera's
+        safe name prefix, sorted by modification time (newest first).
+
+        Args:
+            limit: Maximum number of recordings to return.
+
+        Returns:
+            List of dicts with filename, timestamp, size, and url.
+        """
+        media_dir = Path(self._hass.config.path("media")) / RECORDING_MEDIA_DIR
+        if not media_dir.is_dir():
+            return []
+
+        camera_name = self._camera.name or "camera"
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in camera_name)
+
+        mp4_files = sorted(
+            (f for f in media_dir.glob(f"{safe_name}_*.mp4") if f.is_file()),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+
+        results: list[dict[str, str]] = []
+        for f in mp4_files[:limit]:
+            stat = f.stat()
+            mtime = datetime.fromtimestamp(stat.st_mtime)
+            size_bytes = stat.st_size
+            size_str = f"{size_bytes / 1_048_576:.1f} MB" if size_bytes >= 1_048_576 else f"{size_bytes / 1024:.0f} KB"
+
+            results.append(
+                {
+                    "filename": f.name,
+                    "timestamp": mtime.strftime("%-b %-d at %-I:%M %p"),
+                    "size": size_str,
+                    "url": f"/evon/recordings/{f.name}",
+                }
+            )
+        return results
+
     def get_extra_attributes(self) -> dict[str, Any]:
         """Return recording-related extra state attributes."""
         attrs: dict[str, Any] = {

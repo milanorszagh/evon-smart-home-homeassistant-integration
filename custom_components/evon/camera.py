@@ -131,6 +131,9 @@ class EvonCamera(EvonEntity, Camera):
         # Recording state
         attrs.update(self._recorder.get_extra_attributes())
 
+        # Recent recordings
+        attrs["recent_recordings"] = self._recorder.get_recent_recordings()
+
         return attrs
 
     def _get_saved_pictures(self) -> list[dict[str, Any]]:

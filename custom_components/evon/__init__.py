@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -434,6 +435,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_AWAY, handle_all_climate_away)
         hass.services.async_register(DOMAIN, SERVICE_START_RECORDING, handle_start_recording)
         hass.services.async_register(DOMAIN, SERVICE_STOP_RECORDING, handle_stop_recording)
+
+    # Register frontend card and recordings static paths (once per HA instance)
+    frontend_key = f"{DOMAIN}_frontend_registered"
+    if frontend_key not in hass.data:
+        from homeassistant.components.http import StaticPathConfig
+
+        recordings_dir = hass.config.path("media/evon_recordings")
+        Path(recordings_dir).mkdir(parents=True, exist_ok=True)
+
+        # Ensure /media/evon_recordings symlink exists for HA media browser
+        media_symlink = Path("/media/evon_recordings")
+        if not media_symlink.exists():
+            try:
+                media_symlink.symlink_to(recordings_dir)
+            except OSError:
+                _LOGGER.debug("Could not create media symlink: %s", recordings_dir)
+
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    "/evon/evon-camera-recording-card.js",
+                    hass.config.path("custom_components/evon/www/evon-camera-recording-card.js"),
+                    cache_headers=False,
+                ),
+                StaticPathConfig(
+                    "/evon/recordings",
+                    recordings_dir,
+                    cache_headers=False,
+                ),
+            ]
+        )
+        hass.data[frontend_key] = True
 
     # Clean up stale entities
     await _async_cleanup_stale_entities(hass, entry, coordinator)
