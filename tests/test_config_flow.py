@@ -536,17 +536,25 @@ async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
     assert result["type"] == "form"
     assert result["step_id"] == "init"
 
-    # Submit options (including http_only which defaults to False)
+    # Submit options with section-grouped data
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            "http_only": False,
-            "scan_interval": 60,
             "sync_areas": True,
+            "connection": {
+                "http_only": False,
+                "scan_interval": 60,
+            },
+            "debug": {
+                "debug_api": False,
+                "debug_websocket": False,
+                "debug_coordinator": False,
+            },
         },
     )
 
     assert result["type"] == "create_entry"
+    # Data is flattened from sections before storage
     assert result["data"]["http_only"] is False
     assert result["data"]["scan_interval"] == 60
     assert result["data"]["sync_areas"] is True
@@ -571,13 +579,21 @@ async def test_options_flow_http_only(hass, mock_config_entry_v2, mock_evon_api_
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         {
-            "http_only": True,
-            "scan_interval": 30,
             "sync_areas": False,
+            "connection": {
+                "http_only": True,
+                "scan_interval": 30,
+            },
+            "debug": {
+                "debug_api": False,
+                "debug_websocket": False,
+                "debug_coordinator": False,
+            },
         },
     )
 
     assert result["type"] == "create_entry"
+    # Data is flattened from sections before storage
     assert result["data"]["http_only"] is True
     assert result["data"]["scan_interval"] == 30
     assert result["data"]["sync_areas"] is False

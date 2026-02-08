@@ -12,7 +12,7 @@ from homeassistant.components.repairs import RepairsFlow
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import AbortFlow
+from homeassistant.data_entry_flow import AbortFlow, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
@@ -571,7 +571,14 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Flatten section data back to a flat dict for storage
+            flat_data: dict[str, Any] = {}
+            for key, value in user_input.items():
+                if isinstance(value, dict):
+                    flat_data.update(value)
+                else:
+                    flat_data[key] = value
+            return self.async_create_entry(title="", data=flat_data)
 
         current_interval = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         current_sync_areas = self.config_entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
@@ -591,7 +598,7 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     light_name = light["name"]
                     light_options[light_id] = light_name
 
-        # Build schema - order: sync_areas, non_dimmable_lights, http_only, scan_interval, debug options
+        # Build schema with sections for better organization
         schema_dict: dict[Any, Any] = {
             vol.Required(CONF_SYNC_AREAS, default=current_sync_areas): bool,
         }
@@ -605,16 +612,30 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                 )
             )
 
-        # Advanced options
-        schema_dict[vol.Required(CONF_HTTP_ONLY, default=current_http_only)] = bool
-        schema_dict[vol.Required(CONF_SCAN_INTERVAL, default=current_interval)] = vol.All(
-            vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
+        # Connection section: http_only + poll interval grouped together
+        schema_dict[vol.Required("connection")] = section(
+            vol.Schema(
+                {
+                    vol.Required(CONF_HTTP_ONLY, default=current_http_only): bool,
+                    vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
+                        vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
+                    ),
+                }
+            ),
+            {"collapsed": True},
         )
 
-        # Debug logging options
-        schema_dict[vol.Required(CONF_DEBUG_API, default=current_debug_api)] = bool
-        schema_dict[vol.Required(CONF_DEBUG_WEBSOCKET, default=current_debug_ws)] = bool
-        schema_dict[vol.Required(CONF_DEBUG_COORDINATOR, default=current_debug_coord)] = bool
+        # Debug logging section: collapsed by default
+        schema_dict[vol.Required("debug")] = section(
+            vol.Schema(
+                {
+                    vol.Required(CONF_DEBUG_API, default=current_debug_api): bool,
+                    vol.Required(CONF_DEBUG_WEBSOCKET, default=current_debug_ws): bool,
+                    vol.Required(CONF_DEBUG_COORDINATOR, default=current_debug_coord): bool,
+                }
+            ),
+            {"collapsed": True},
+        )
 
         return self.async_show_form(
             step_id="init",
