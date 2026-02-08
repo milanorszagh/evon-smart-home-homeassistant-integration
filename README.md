@@ -375,8 +375,21 @@ Since Evon cameras are snapshot-based (no RTSP stream), the integration provides
 - **Configurable output**: MP4 only, or MP4 + individual JPEG frames
 - **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings
 - **Output location**: Saved to `/media/evon_recordings/` in your HA instance
+- **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, recent recordings list with inline video playback, and a link to the media browser
+- **Media browser access**: Recordings are accessible via HA's media browser under **My media → evon_recordings**
 
 **Note:** Frame rate is limited by hardware response time (~0.5-2 FPS). The result is more of a timelapse than smooth video, but is useful for security and monitoring purposes.
+
+**Recording Card Usage:**
+
+Add the recording card to any dashboard (works great inside Bubble Card popups):
+```yaml
+type: custom:evon-camera-recording-card
+entity: camera.your_camera_entity
+recording_switch: switch.your_camera_recording  # optional, auto-derived from entity if omitted
+```
+
+The card auto-registers as a Lovelace resource on integration setup — no manual YAML imports needed.
 
 **2N Intercom Camera Specifications:**
 - Frame rate: Up to 10 fps for streaming

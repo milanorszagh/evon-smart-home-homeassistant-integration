@@ -47,6 +47,8 @@ custom_components/evon/
 ├── button.py            # Button platform (scenes)
 ├── camera.py            # Camera platform (2N intercoms)
 ├── camera_recorder.py   # Camera recording manager (snapshot → MP4)
+├── www/                 # Frontend assets (auto-registered)
+│   └── evon-camera-recording-card.js  # Custom Lovelace card for recording UI
 ├── image.py             # Image platform (doorbell snapshots)
 ├── device_trigger.py    # Device triggers (doorbell press)
 ├── statistics.py        # External energy statistics import
