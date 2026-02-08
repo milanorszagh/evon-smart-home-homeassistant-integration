@@ -303,7 +303,7 @@ The integration now supports WebSocket-based device control for faster, more res
 | Light Brightness | `BrightnessSetScaled` | `CallMethod [instanceId.BrightnessSetScaled, [brightness, transition]]` | ✅ transition=0 for instant |
 | Blind Open/Close/Stop | `Open/Close/Stop` | `CallMethod [instanceId.Open, []]` | ✅ Verified |
 | Blind Position+Tilt | `MoveToPosition` | `CallMethod [instanceId.MoveToPosition, [angle, position]]` | ✅ Angle comes FIRST! |
-| Climate Temperature | `SetTemperature` | `SetValue [instanceId, "SetTemperature", value]` | ✅ Verified working |
+| Climate Temperature | `WriteCurrentSetTemperature` | `CallMethod [instanceId.WriteCurrentSetTemperature, [value]]` | ✅ Verified working |
 | Climate Comfort | `WriteDayMode` | `CallMethod [instanceId.WriteDayMode, []]` | ✅ Verified working |
 | Climate Eco | `WriteNightMode` | `CallMethod [instanceId.WriteNightMode, []]` | ✅ Verified working |
 | Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
@@ -769,7 +769,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
-- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging
 - **Non-dimmable Lights**: Mark lights as on/off only (useful for LED strips with PWM controllers)
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -839,12 +839,12 @@ npm run lint:fix
 
 ### Quick CI Check (run before committing)
 ```bash
-ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
 ```
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (130+ tests, ~84% coverage):
+Tests are in the `tests/` directory (490+ tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -855,16 +855,25 @@ Tests are in the `tests/` directory (130+ tests, ~84% coverage):
 - `test_select.py` - Select entity tests (home state, season mode)
 - `test_binary_sensor.py` - Binary sensor tests (valves)
 - `test_button.py` - Button entity tests (scenes)
+- `test_camera.py` - Camera entity tests
+- `test_image.py` - Image entity tests
 
 **Core tests:**
 - `test_api.py` - API client tests (mocks homeassistant, works without HA installed)
 - `test_config_flow.py` / `test_config_flow_unit.py` - Config and options flow tests
 - `test_coordinator.py` - Data coordinator and getter method tests
 - `test_diagnostics.py` - Diagnostics export tests
+- `test_base_entity.py` - Base entity class tests
+- `test_constants.py` - Constants validation tests
+- `test_services.py` - Service handler tests
+- `test_processors.py` - Data processor tests
+- `test_ws_client.py` - WebSocket client tests
+- `test_ws_mappings.py` - WebSocket mapping tests
+- `test_device_trigger.py` - Device trigger tests
 
 ### Test Architecture
 
-**The CI only runs linting, NOT pytest.** This is because many tests require homeassistant which is a heavy dependency.
+**CI runs both linting and pytest.** Tests that require homeassistant use `@requires_homeassistant` skip markers and are skipped in environments without HA installed.
 
 Tests are split by dependency:
 | Test File | Requires HA | How It Works |
@@ -897,15 +906,18 @@ pytest -v
 ### CI Checks
 
 The CI workflow (`.github/workflows/ci.yml`) runs:
-1. `ruff check` - Python linting
+1. `ruff check` - Python linting (custom_components/evon/ and tests/)
 2. `ruff format --check` - Python formatting
-3. `npm run lint` - TypeScript linting
-4. `npm run build` - TypeScript compilation
+3. `mypy` - Python type checking
+4. `npm run lint` - TypeScript linting
+5. `npm run build` - TypeScript compilation
+6. `pytest` - Python tests (matrix: Python 3.12, 3.13)
+7. HACS validation - Custom component structure check
 
 **Before committing, always run:**
 ```bash
-ruff check custom_components/evon/
-ruff format custom_components/evon/
+ruff check custom_components/evon/ tests/
+ruff format custom_components/evon/ tests/
 npm run lint
 ```
 
@@ -922,7 +934,7 @@ npm run lint
 
 2. **Run linting** before committing:
    ```bash
-   ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+   ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
    ```
 
 3. **Check for undocumented API discoveries** - Any new properties, methods, or behaviors found during development should be documented.
@@ -952,7 +964,7 @@ Before creating a release, ensure the following are up to date:
 
 4. **Linting** - Run all CI checks:
    ```bash
-   ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+   ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
    ```
 
 5. **Build TypeScript** - Ensure MCP server compiles:
