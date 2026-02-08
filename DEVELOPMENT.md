@@ -1036,7 +1036,7 @@ Test files:
 - `test_processors.py` - Data processor tests
 - `test_services.py` - Service handler tests
 
-Current coverage: 494 tests
+Current coverage: 498 tests
 
 ---
 

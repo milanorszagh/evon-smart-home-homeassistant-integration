@@ -286,3 +286,43 @@ class TestServiceIntegration:
         )
 
         # Service should complete without error
+
+    @pytest.mark.asyncio
+    async def test_services_registered_after_setup(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Test that all Evon services are registered after setup."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        expected_services = [
+            SERVICE_REFRESH,
+            SERVICE_RECONNECT_WEBSOCKET,
+            SERVICE_SET_HOME_STATE,
+            SERVICE_SET_SEASON_MODE,
+            SERVICE_ALL_LIGHTS_OFF,
+            SERVICE_ALL_BLINDS_CLOSE,
+            SERVICE_ALL_BLINDS_OPEN,
+            "all_climate_comfort",
+            "all_climate_eco",
+            "all_climate_away",
+        ]
+        for service_name in expected_services:
+            assert hass.services.has_service("evon", service_name), f"Service evon.{service_name} not registered"
+
+    @pytest.mark.asyncio
+    async def test_services_unregistered_after_last_unload(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Test that services are unregistered when the last entry is unloaded."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        # Verify services exist before unload
+        assert hass.services.has_service("evon", SERVICE_REFRESH)
+
+        # Unload the entry
+        await hass.config_entries.async_unload(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        # Services should be removed after last entry unloaded
+        assert not hass.services.has_service("evon", SERVICE_REFRESH)
+        assert not hass.services.has_service("evon", SERVICE_SET_HOME_STATE)

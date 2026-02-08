@@ -78,3 +78,97 @@ test("apiRequest retries once after auth failure", async () => {
     global.fetch = originalFetch;
   }
 });
+
+test("login deduplicates concurrent calls into single fetch", async () => {
+  process.env.EVON_HOST = "http://example.com";
+  process.env.EVON_USERNAME = "user";
+  process.env.EVON_PASSWORD = "pass";
+
+  const originalFetch = global.fetch;
+  let loginCalls = 0;
+  global.fetch = async () => {
+    loginCalls += 1;
+    // Small delay to simulate network latency
+    await new Promise((r) => setTimeout(r, 10));
+    return new Response("", {
+      status: 200,
+      headers: { "x-elocs-token": "dedup-token" },
+    });
+  };
+
+  try {
+    const { login } = await importFresh(API_CLIENT_URL);
+    // Fire 3 concurrent login calls
+    const [t1, t2, t3] = await Promise.all([login(), login(), login()]);
+    assert.equal(t1, "dedup-token");
+    assert.equal(t2, "dedup-token");
+    assert.equal(t3, "dedup-token");
+    // Only one actual fetch should have been made
+    assert.equal(loginCalls, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("apiRequest throws on invalid JSON response", async () => {
+  process.env.EVON_HOST = "http://example.com";
+  process.env.EVON_USERNAME = "user";
+  process.env.EVON_PASSWORD = "pass";
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (url.endsWith("/login")) {
+      return new Response("", {
+        status: 200,
+        headers: { "x-elocs-token": "token-json" },
+      });
+    }
+    // Return non-JSON response
+    return new Response("not json", { status: 200 });
+  };
+
+  try {
+    const { apiRequest } = await importFresh(API_CLIENT_URL);
+    await assert.rejects(
+      () => apiRequest("/bad-endpoint"),
+      (err) => {
+        assert.ok(err.message.includes("Invalid JSON response"));
+        assert.ok(err.message.includes("/bad-endpoint"));
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("callMethod wraps error with instance and method context", async () => {
+  process.env.EVON_HOST = "http://example.com";
+  process.env.EVON_USERNAME = "user";
+  process.env.EVON_PASSWORD = "pass";
+
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (url.endsWith("/login")) {
+      return new Response("", {
+        status: 200,
+        headers: { "x-elocs-token": "token-err" },
+      });
+    }
+    return new Response("", { status: 500 });
+  };
+
+  try {
+    const { callMethod } = await importFresh(API_CLIENT_URL);
+    await assert.rejects(
+      () => callMethod("SC1_M01.Light1", "SwitchOn", []),
+      (err) => {
+        assert.ok(err.message.includes("SwitchOn"));
+        assert.ok(err.message.includes("SC1_M01.Light1"));
+        return true;
+      }
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
