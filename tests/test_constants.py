@@ -166,14 +166,17 @@ class TestDeviceClassConstants:
             EVON_CLASS_LIGHT,
             EVON_CLASS_LIGHT_DIM,
             EVON_CLASS_LIGHT_GROUP,
+            EVON_CLASS_LIGHT_RGBW,
         )
 
         assert EVON_CLASS_LIGHT == "SmartCOM.Light.Light"
         assert EVON_CLASS_LIGHT_DIM == "SmartCOM.Light.LightDim"
         assert EVON_CLASS_LIGHT_GROUP == "SmartCOM.Light.LightGroup"
+        assert EVON_CLASS_LIGHT_RGBW == "SmartCOM.Light.DynamicRGBWLight"
         # All should start with SmartCOM.Light
         assert all(
-            c.startswith("SmartCOM.Light") for c in [EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP]
+            c.startswith("SmartCOM.Light")
+            for c in [EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW]
         )
 
     def test_blind_classes(self):

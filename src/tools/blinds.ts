@@ -32,10 +32,13 @@ export function registerBlindTools(server: McpServer): void {
     },
     async ({ blind_id, action, position, angle }) => {
       const id = sanitizeId(blind_id);
+      if (action === "position" && position == null) throw new Error("position parameter is required for position action");
+      if (action === "angle" && angle == null) throw new Error("angle parameter is required for angle action");
+
       const methodMap: Record<string, { method: string; params: unknown[] }> = {
         ...BLIND_METHODS,
-        position: { method: "AmznSetPercentage", params: [position ?? 50] },
-        angle: { method: "SetAngle", params: [angle ?? 50] },
+        position: { method: "AmznSetPercentage", params: [position ?? 0] },
+        angle: { method: "SetAngle", params: [angle ?? 0] },
       };
 
       const { method, params } = methodMap[action];
@@ -59,10 +62,13 @@ export function registerBlindTools(server: McpServer): void {
       const instances = await getInstances();
       const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
 
+      if (action === "position" && position == null) throw new Error("position parameter is required for position action");
+      if (action === "angle" && angle == null) throw new Error("angle parameter is required for angle action");
+
       const methodMap: Record<string, { method: string; params: unknown[] }> = {
         ...BLIND_METHODS,
-        position: { method: "AmznSetPercentage", params: [position ?? 50] },
-        angle: { method: "SetAngle", params: [angle ?? 50] },
+        position: { method: "AmznSetPercentage", params: [position ?? 0] },
+        angle: { method: "SetAngle", params: [angle ?? 0] },
       };
 
       const { method, params } = methodMap[action];

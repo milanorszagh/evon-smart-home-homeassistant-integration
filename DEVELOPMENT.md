@@ -368,17 +368,20 @@ coordinator/       # Integrates WebSocket with data updates
 
 ### Property Mappings
 
-| Entity Type | WebSocket Property | Coordinator Key |
-|-------------|-------------------|-----------------|
-| lights | `IsOn`, `ScaledBrightness`, `ColorTemp` | `is_on`, `brightness`, `color_temp` |
+| Entity Type | WebSocket Properties | Key Coordinator Mappings |
+|-------------|---------------------|--------------------------|
+| lights | `IsOn`, `ScaledBrightness`, `ColorTemp`, `MinColorTemperature`, `MaxColorTemperature` | `is_on`, `brightness`, `color_temp` |
 | blinds | `Position`, `Angle` | `position`, `angle` |
-| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `MainState`, `Humidity` | `target_temperature`, `current_temperature`, `mode_saved`, `humidity` |
-| switches | `IsOn` | `is_on` |
+| climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `MainState`, `IsOn`, `Mode`, `Humidity`, `CoolingMode`, `DisableCooling`, + heating/cooling setpoints and limits | `target_temperature`, `current_temperature`, `mode_saved` (both `ModeSaved` and `MainState` map here), `humidity` |
+| switches | `IsOn`, `State` | `is_on` |
 | home_states | `Active` | `active` |
 | bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `time_remaining` |
-| security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress` | `is_open`, `door_is_open`, `call_in_progress` |
-| intercoms | `DoorBellTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
-| cameras | `Image` | `image_path` |
+| smart_meters | `P1`, `P2`, `P3`, `IL1-3`, `UL1N-3N`, `Frequency`, `Energy`, `Energy24h`, `EnergyDataDay/Month/Year`, `FeedInEnergy`, `FeedIn24h`, `FeedInDataMonth` | `power` (computed P1+P2+P3), per-phase values, energy totals |
+| air_quality | `Humidity`, `ActualTemperature`, `CO2Value` | `humidity`, `temperature`, `co2` |
+| valves | `ActValue` | `position` |
+| security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress`, `SavedPictures`, `CamInstanceName` | `is_open`, `door_is_open`, `call_in_progress`, `saved_pictures` |
+| intercoms | `DoorBellTriggered`, `DoorOpenTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
+| cameras | `Image`, `ImageRequest`, `Error` | `image_path` |
 
 ### Constants
 
@@ -537,13 +540,13 @@ All requests require: `Cookie: token=<token>`
 | Class Name | Type | Controllable |
 |------------|------|--------------|
 | `SmartCOM.Light.LightDim` | Dimmable light | Yes |
-| `SmartCOM.Light.Light` | Relay output | Yes |
+| `SmartCOM.Light.Light` | Relay output (processed as **switch**) | Yes |
 | `SmartCOM.Light.DynamicRGBWLight` | RGBW light | Yes |
 | `SmartCOM.Light.LightGroup` | Light group | Yes |
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
 | `SmartCOM.Blind.BlindGroup` | Blind group | Yes |
 | `SmartCOM.Clima.ClimateControl` | Climate control | Yes |
-| `*ClimateControlUniversal*` | Universal climate | Yes |
+| `Heating.ClimateControlUniversal` | Universal climate (substring match) | Yes |
 | `Base.ehThermostat` | Season mode | Yes |
 | `System.HomeState` | Home state | Yes |
 | `Heating.BathroomRadiator` | Bathroom heater | Yes |
@@ -607,7 +610,7 @@ The integration supports WebSocket-based control for faster response times. When
 **Climate (via WebSocket):**
 | WS Method/Property | Parameters | HTTP Equivalent | Notes |
 |--------------------|------------|-----------------|-------|
-| `SetValue SetTemperature` | `value` | `WriteCurrentSetTemperature` | ✅ Verified working |
+| `CallMethod WriteCurrentSetTemperature` | `[value]` | `WriteCurrentSetTemperature` | ✅ Verified working (NOT SetValue!) |
 | `CallMethod WriteDayMode` | `[]` | `WriteDayMode` | ✅ Comfort preset |
 | `CallMethod WriteNightMode` | `[]` | `WriteNightMode` | ✅ Eco preset |
 | `CallMethod WriteFreezeMode` | `[]` | `WriteFreezeMode` | ✅ Away preset |
@@ -735,7 +738,8 @@ Body: {"value": true}   // COOLING
 
 | Property | Unit | Description |
 |----------|------|-------------|
-| `PowerActual` | W | Current power consumption |
+| `PowerActual` | W | Current power consumption (HTTP API); via WebSocket, computed from `P1 + P2 + P3` |
+| `P1`, `P2`, `P3` | W | Active power per phase (WebSocket only, summed for total power) |
 | `Energy` | kWh | Total energy consumption |
 | `Energy24h` | kWh | Rolling 24-hour energy (can decrease) |
 | `EnergyDataDay` | kWh | Today's consumption data |
@@ -748,7 +752,7 @@ Body: {"value": true}   // COOLING
 | `IL2` | A | Current phase L2 |
 | `IL3` | A | Current phase L3 |
 | `Frequency` | Hz | Grid frequency |
-| `FeedIn` | W | Power fed to grid (negative = consuming) |
+| `FeedIn` | W | Power fed to grid (HTTP API only; no WS subscription or sensor entity) |
 | `FeedInEnergy` | kWh | Total energy fed to grid |
 
 **Note**: For HA Energy Dashboard, use `Energy` (total_increasing), not `Energy24h` which is a rolling window.
@@ -785,7 +789,7 @@ The integration provides two calculated sensors that don't exist in the Evon API
 
 ## Known Limitations
 
-### Physical Buttons (`SmartCOM.Switch` / `Base.bSwitchUniversal`)
+### Physical Buttons (`SmartCOM.Switch` / `Base.bSwitch`)
 
 Cannot be monitored due to API limitations:
 

@@ -10,12 +10,12 @@ if TYPE_CHECKING:
     from ...api import EvonApi
 
 from ...api import EvonApiError
-from ...const import EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP
+from ...const import EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW
 
 _LOGGER = logging.getLogger(__name__)
 
 # Light classes to process
-LIGHT_CLASSES = {EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, "SmartCOM.Light.DynamicRGBWLight"}
+LIGHT_CLASSES = {EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW}
 
 
 async def process_lights(
@@ -46,7 +46,7 @@ async def process_lights(
             details = await api.get_instance(instance_id)
 
             # Check if this light supports color temperature (RGBW lights)
-            supports_color_temp = class_name == "SmartCOM.Light.DynamicRGBWLight"
+            supports_color_temp = class_name == EVON_CLASS_LIGHT_RGBW
 
             light_data: dict[str, Any] = {
                 "id": instance_id,

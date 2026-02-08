@@ -115,13 +115,23 @@ After installation, configure via **Settings** → **Devices & Services** → **
 
 | Option | Description |
 |--------|-------------|
-| **Use HTTP API only** | Disable WebSocket and use HTTP polling only. WebSocket is recommended and enabled by default. Only enable this if you experience connection issues. |
-| **Poll interval** | How often to fetch device states (5-300 seconds). Used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled. |
 | **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
 | **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
-| **Debug logging: API** | Enable debug logging for HTTP API requests and responses. Useful for troubleshooting connection or authentication issues. |
-| **Debug logging: WebSocket** | Enable debug logging for WebSocket messages. Useful for troubleshooting real-time update issues. |
-| **Debug logging: Coordinator** | Enable debug logging for the data coordinator. Useful for troubleshooting data processing and entity updates. |
+
+**HTTP API vs WebSocket** (collapsible section):
+
+| Option | Description |
+|--------|-------------|
+| **Use HTTP API only** | Disable WebSocket and use HTTP polling only. WebSocket is recommended and enabled by default. Only enable this if you experience connection issues. |
+| **Poll interval** | How often to fetch device states (5-300 seconds). Used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled. |
+
+**Debug Logging** (collapsible section):
+
+| Option | Description |
+|--------|-------------|
+| **API** | Enable debug logging for HTTP API requests and responses. |
+| **WebSocket** | Enable debug logging for WebSocket messages. |
+| **Coordinator** | Enable debug logging for the data coordinator. |
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
 

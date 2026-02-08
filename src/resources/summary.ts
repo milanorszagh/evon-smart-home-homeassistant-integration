@@ -25,66 +25,50 @@ export function registerSummaryResources(server: McpServer): void {
       const homeStates = filterHomeStates(instances);
       const radiators = filterByClass(instances, DEVICE_CLASSES.BATHROOM_RADIATOR);
 
+      // Fetch all device details in parallel for performance
+      const [lightDetails, blindDetails, climateDetails, homeStateDetails, radiatorDetails] = await Promise.all([
+        Promise.all(lights.map((l) => apiRequest<LightState>(`/instances/${l.ID}`).catch(() => null))),
+        Promise.all(blinds.map((b) => apiRequest<BlindState>(`/instances/${b.ID}`).catch(() => null))),
+        Promise.all(climates.map((c) => apiRequest<ClimateState>(`/instances/${c.ID}`).catch(() => null))),
+        Promise.all(homeStates.map((s) => apiRequest<HomeStateState>(`/instances/${s.ID}`).catch(() => null))),
+        Promise.all(radiators.map((r) => apiRequest<BathroomRadiatorState>(`/instances/${r.ID}`).catch(() => null))),
+      ]);
+
       // Count on lights
       let lightsOn = 0;
-      for (const light of lights) {
-        try {
-          const details = await apiRequest<LightState>(`/instances/${light.ID}`);
-          if (details.data.IsOn) lightsOn++;
-        } catch {
-          // Skip unresponsive devices in count
-        }
+      for (const details of lightDetails) {
+        if (details?.data.IsOn) lightsOn++;
       }
 
       // Count open blinds
       let blindsOpen = 0;
-      for (const blind of blinds) {
-        try {
-          const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
-          if ((details.data.Position ?? 0) < 50) blindsOpen++;
-        } catch {
-          // Skip unresponsive devices in count
-        }
+      for (const details of blindDetails) {
+        if (details && (details.data.Position ?? 0) < 50) blindsOpen++;
       }
 
       // Get average temperature
       let totalTemp = 0;
       let tempCount = 0;
-      for (const climate of climates) {
-        try {
-          const details = await apiRequest<ClimateState>(`/instances/${climate.ID}`);
-          if (details.data.ActualTemperature) {
-            totalTemp += details.data.ActualTemperature;
-            tempCount++;
-          }
-        } catch {
-          // Skip unresponsive devices in count
+      for (const details of climateDetails) {
+        if (details && details.data.ActualTemperature != null) {
+          totalTemp += details.data.ActualTemperature;
+          tempCount++;
         }
       }
 
       // Get current home state
       let currentHomeState = "unknown";
-      for (const state of homeStates) {
-        try {
-          const details = await apiRequest<HomeStateState>(`/instances/${state.ID}`);
-          if (details.data.Active) {
-            currentHomeState = state.Name;
-            break;
-          }
-        } catch {
-          // Skip unresponsive devices
+      for (let i = 0; i < homeStateDetails.length; i++) {
+        if (homeStateDetails[i]?.data.Active) {
+          currentHomeState = homeStates[i].Name;
+          break;
         }
       }
 
       // Count bathroom radiators on
       let radiatorsOn = 0;
-      for (const radiator of radiators) {
-        try {
-          const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
-          if (details.data.Output) radiatorsOn++;
-        } catch {
-          // Skip unresponsive devices
-        }
+      for (const details of radiatorDetails) {
+        if (details?.data.Output) radiatorsOn++;
       }
 
       const summary = {

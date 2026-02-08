@@ -32,7 +32,10 @@ export function registerClimateTools(server: McpServer): void {
     async ({ climate_id, action, temperature }) => {
       const id = sanitizeId(climate_id);
       const method = CLIMATE_METHODS[action];
-      const params: unknown[] = action === "set_temperature" ? [temperature ?? 21] : [];
+      if (action === "set_temperature" && temperature == null) {
+        throw new Error("temperature parameter is required for set_temperature action");
+      }
+      const params: unknown[] = action === "set_temperature" ? [temperature] : [];
 
       await callMethod(id, method, params);
 

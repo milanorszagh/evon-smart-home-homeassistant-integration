@@ -48,8 +48,9 @@ export function registerLightTools(server: McpServer): void {
           break;
         }
         case "brightness":
+          if (brightness == null) throw new Error("brightness parameter is required for brightness action");
           method = "AmznSetBrightness";
-          params = [brightness ?? 50];
+          params = [brightness];
           break;
         default:
           throw new Error(`Unknown light action: ${action as string}`);
