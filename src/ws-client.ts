@@ -125,7 +125,6 @@ export class EvonWsClient {
   >();
   private subscriptions = new Map<string, ValuesChangedCallback>();
   private connected = false;
-  private reconnecting = false;
   private userData: WsUserData | null = null;
 
   private host: string;
@@ -144,11 +143,27 @@ export class EvonWsClient {
    * Connect to the Evon WebSocket server.
    * Automatically logs in via HTTP first to get a token.
    */
+  private connectPromise: Promise<void> | null = null;
+
   async connect(): Promise<void> {
     if (this.connected && this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
 
+    // Deduplicate concurrent connect calls
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+
+    this.connectPromise = this.performConnect();
+    try {
+      await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
+    }
+  }
+
+  private async performConnect(): Promise<void> {
     // Get token via HTTP login
     this.token = await this.login();
 
@@ -206,6 +221,7 @@ export class EvonWsClient {
     }
     this.connected = false;
     this.token = null;
+    this.subscriptions.clear();
   }
 
   /**
@@ -283,42 +299,58 @@ export class EvonWsClient {
     subscriptions: PropertySubscription[]
   ): Promise<Record<string, Record<string, unknown>>> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("getPropertyValues timeout"));
-      }, API_TIMEOUT_MS);
-
       const results: Record<string, Record<string, unknown>> = {};
       const expectedIds = new Set(subscriptions.map((s) => s.Instanceid));
+
+      // Save original callbacks so we can restore them on cleanup
+      const originalCallbacks = new Map<string, ValuesChangedCallback | undefined>();
+      for (const sub of subscriptions) {
+        originalCallbacks.set(sub.Instanceid, this.subscriptions.get(sub.Instanceid));
+      }
+
+      const cleanup = () => {
+        // Restore original callbacks or remove temp ones
+        for (const [id, original] of originalCallbacks) {
+          if (original) {
+            this.subscriptions.set(id, original);
+          } else {
+            this.subscriptions.delete(id);
+          }
+        }
+      };
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error("getPropertyValues timeout"));
+      }, API_TIMEOUT_MS);
 
       // Temporary callback to capture values
       const tempCallback: ValuesChangedCallback = (instanceId, properties) => {
         results[instanceId] = { ...results[instanceId], ...properties };
 
         // Check if we have all expected instances
-        const receivedIds = new Set(Object.keys(results));
-        if ([...expectedIds].every((id) => receivedIds.has(id))) {
+        if ([...expectedIds].every((id) => id in results)) {
           clearTimeout(timeout);
-          // Remove temp callbacks
-          for (const id of expectedIds) {
-            if (!this.subscriptions.has(id)) {
-              // Only remove if not a permanent subscription
-            }
-          }
+          cleanup();
           resolve(results);
         }
       };
 
-      // Register temp callbacks
+      // Register temp callbacks (chain with existing if any)
       for (const sub of subscriptions) {
-        const existingCallback = this.subscriptions.get(sub.Instanceid);
+        const existing = originalCallbacks.get(sub.Instanceid);
         this.subscriptions.set(sub.Instanceid, (id, props) => {
           tempCallback(id, props);
-          if (existingCallback) existingCallback(id, props);
+          if (existing) existing(id, props);
         });
       }
 
       // Make the call
-      this.call("RegisterValuesChanged", [true, subscriptions, true, true]).catch(reject);
+      this.call("RegisterValuesChanged", [true, subscriptions, true, true]).catch((err) => {
+        clearTimeout(timeout);
+        cleanup();
+        reject(err);
+      });
     });
   }
 
@@ -394,24 +426,37 @@ export class EvonWsClient {
   // --------------------------------------------------------------------------
 
   private async login(): Promise<string> {
-    const response = await fetch(`${this.host}/login`, {
-      method: "POST",
-      headers: {
-        "x-elocs-username": EVON_USERNAME,
-        "x-elocs-password": EVON_PASSWORD,
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-    if (!response.ok) {
-      throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(`${this.host}/login`, {
+        method: "POST",
+        headers: {
+          "x-elocs-username": EVON_USERNAME,
+          "x-elocs-password": EVON_PASSWORD,
+        },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Login failed: ${response.status} ${response.statusText}`);
+      }
+
+      const token = response.headers.get("x-elocs-token");
+      if (!token) {
+        throw new Error("No token received from login");
+      }
+
+      return token;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`WS login timeout after ${API_TIMEOUT_MS}ms`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const token = response.headers.get("x-elocs-token");
-    if (!token) {
-      throw new Error("No token received from login");
-    }
-
-    return token;
   }
 
   private async call<T>(methodName: string, args: unknown[]): Promise<T | null> {

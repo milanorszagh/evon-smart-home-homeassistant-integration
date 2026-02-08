@@ -260,7 +260,12 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         """Turn off the radiator.
 
         Uses Switch (toggle) only if currently on to prevent toggling ON.
+        Skips if an optimistic off is already pending to prevent double-toggle.
         """
+        # Guard against double-tap: if we already sent a turn-off, don't toggle again
+        if self._optimistic_is_on is False:
+            return
+
         data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
         if data and data.get("is_on", False):
             self._optimistic_is_on = False

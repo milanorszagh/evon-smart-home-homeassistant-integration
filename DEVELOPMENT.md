@@ -289,6 +289,8 @@ src/
 | **Lower latency** | Faster than HTTP API for device control |
 | **Batch queries** | Request multiple device properties in a single call |
 | **Automatic reconnection** | Handles connection drops gracefully |
+| **Connection deduplication** | Concurrent connect/login calls are coalesced into a single request |
+| **Parallel bulk control** | `controlAllDevices` sends commands in parallel via `Promise.all` |
 
 ### Usage
 
@@ -385,6 +387,7 @@ coordinator/       # Integrates WebSocket with data updates
 CONF_HTTP_ONLY = "http_only"
 DEFAULT_HTTP_ONLY = False              # WebSocket enabled by default (recommended)
 DEFAULT_WS_RECONNECT_DELAY = 5         # Initial reconnect delay (seconds)
+WS_RECONNECT_JITTER = 0.25            # Jitter factor for reconnect delays (0.0 to 1.0)
 WS_RECONNECT_MAX_DELAY = 300           # Max reconnect delay (seconds)
 WS_PROTOCOL = "echo-protocol"          # WebSocket sub-protocol
 WS_POLL_INTERVAL = 60                  # Safety net poll interval when WS connected

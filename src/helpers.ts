@@ -55,17 +55,17 @@ export async function controlAllDevices(
   method: string,
   params: unknown[] = []
 ): Promise<string[]> {
-  const results: string[] = [];
-  for (const device of devices) {
-    try {
-      await callMethod(device.ID, method, params);
-      results.push(`${device.Name}: success`);
-    } catch (error: unknown) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      results.push(`${device.Name}: failed (${errorMsg})`);
-    }
-  }
-  return results;
+  return Promise.all(
+    devices.map(async (device) => {
+      try {
+        await callMethod(device.ID, method, params);
+        return `${device.Name}: success`;
+      } catch (error: unknown) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        return `${device.Name}: failed (${errorMsg})`;
+      }
+    })
+  );
 }
 
 // Fetch functions with state

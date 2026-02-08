@@ -584,28 +584,16 @@ async def _async_cleanup_stale_entities(
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
-    coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    """Handle options update.
 
-    # Apply debug logging settings (no reload required)
+    Debug logging is applied instantly. All other changes (scan interval,
+    sync areas, WebSocket mode, non-dimmable lights) are applied via
+    a full reload to ensure consistent state.
+    """
+    # Apply debug logging immediately (takes effect without reload)
     _apply_debug_logging(entry)
 
-    # Update scan interval
-    scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-    coordinator.set_update_interval(scan_interval)
-    _LOGGER.debug("Updated scan interval to %s seconds", scan_interval)
-
-    # Update sync areas setting
-    sync_areas = entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
-    coordinator.set_sync_areas(sync_areas)
-    _LOGGER.debug("Updated sync areas to %s", sync_areas)
-
-    # Update WebSocket setting
-    http_only = entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
-    coordinator.set_use_websocket(not http_only)
-    _LOGGER.debug("Updated http_only to %s (use_websocket=%s)", http_only, not http_only)
-
-    # Reload integration to apply changes
+    # Reload integration to apply all other option changes
     await hass.config_entries.async_reload(entry.entry_id)
 
 
