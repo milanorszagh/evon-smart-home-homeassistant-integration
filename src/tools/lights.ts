@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
 import { DEVICE_CLASSES } from "../constants.js";
-import { getInstances, filterByClass, controlAllDevices, fetchLightsWithState } from "../helpers.js";
+import { getInstances, filterByClass, controlAllDevices, fetchLightsWithState, sanitizeId } from "../helpers.js";
 import type { LightState } from "../types.js";
 
 export function registerLightTools(server: McpServer): void {
@@ -31,6 +31,7 @@ export function registerLightTools(server: McpServer): void {
       brightness: z.number().min(0).max(100).optional().describe("Brightness level (0-100)"),
     },
     async ({ light_id, action, brightness }) => {
+      const id = sanitizeId(light_id);
       let method: string;
       let params: unknown[] = [];
 
@@ -42,7 +43,7 @@ export function registerLightTools(server: McpServer): void {
           method = "AmznTurnOff";
           break;
         case "toggle": {
-          const state = await apiRequest<LightState>(`/instances/${light_id}`);
+          const state = await apiRequest<LightState>(`/instances/${id}`);
           method = state.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
           break;
         }
@@ -50,9 +51,11 @@ export function registerLightTools(server: McpServer): void {
           method = "AmznSetBrightness";
           params = [brightness ?? 50];
           break;
+        default:
+          throw new Error(`Unknown light action: ${action as string}`);
       }
 
-      await callMethod(light_id, method, params);
+      await callMethod(id, method, params);
       return {
         content: [{ type: "text", text: `Light ${light_id}: ${action}${brightness !== undefined ? ` (${brightness}%)` : ""}` }],
       };

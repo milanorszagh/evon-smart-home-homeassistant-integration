@@ -18,6 +18,14 @@ import type {
   RadiatorWithState,
 } from "./types.js";
 
+/** Validate instance_id to prevent path traversal (must be alphanumeric with dots/underscores). */
+export function sanitizeId(id: string): string {
+  if (!/^[\w.]+$/.test(id)) {
+    throw new Error(`Invalid instance ID: ${id}`);
+  }
+  return id;
+}
+
 export async function getInstances(): Promise<EvonInstance[]> {
   const result = await apiRequest<EvonInstance[]>("/instances");
   return result.data;

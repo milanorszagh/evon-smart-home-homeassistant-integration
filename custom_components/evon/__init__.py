@@ -266,16 +266,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
             evon_state = HOME_STATE_MAP[state]
             _LOGGER.info("Set home state service called: %s -> %s", state, evon_state)
-            # Take a snapshot of entries to iterate over
-            entries = list(hass.data.get(DOMAIN, {}).values())
-            for entry_data in entries:
-                if "api" in entry_data:
-                    try:
-                        await entry_data["api"].activate_home_state(evon_state)
-                    except Exception as err:
-                        _LOGGER.warning("Failed to set home state: %s", err)
-                if "coordinator" in entry_data:
-                    await entry_data["coordinator"].async_refresh()
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).values())
+                for entry_data in entries:
+                    if "api" in entry_data:
+                        try:
+                            await entry_data["api"].activate_home_state(evon_state)
+                        except Exception as err:
+                            _LOGGER.warning("Failed to set home state: %s", err)
+                    if "coordinator" in entry_data:
+                        await entry_data["coordinator"].async_refresh()
 
         async def handle_set_season_mode(call: ServiceCall) -> None:
             """Handle the set season mode service call."""
@@ -285,16 +285,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 return
             is_cooling = mode == "cooling"
             _LOGGER.info("Set season mode service called: %s", mode)
-            # Take a snapshot of entries to iterate over
-            entries = list(hass.data.get(DOMAIN, {}).values())
-            for entry_data in entries:
-                if "api" in entry_data:
-                    try:
-                        await entry_data["api"].set_season_mode(is_cooling)
-                    except Exception as err:
-                        _LOGGER.warning("Failed to set season mode: %s", err)
-                if "coordinator" in entry_data:
-                    await entry_data["coordinator"].async_refresh()
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).values())
+                for entry_data in entries:
+                    if "api" in entry_data:
+                        try:
+                            await entry_data["api"].set_season_mode(is_cooling)
+                        except Exception as err:
+                            _LOGGER.warning("Failed to set season mode: %s", err)
+                    if "coordinator" in entry_data:
+                        await entry_data["coordinator"].async_refresh()
 
         async def _bulk_api_call(
             service_name: str,

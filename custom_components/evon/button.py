@@ -131,7 +131,7 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
             # Get current state for restoration
             data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
             was_on = data.get("is_on", False) if data else False
-            original_brightness = data.get("brightness", 100) if data else 100
+            original_brightness = max(0, min(100, data.get("brightness", 100))) if data else 100
 
             # Always do off -> on -> restore (works regardless of state detection)
             await self._api.turn_off_light(self._instance_id)

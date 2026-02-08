@@ -457,10 +457,16 @@ class EvonWsClient:
         """
         try:
             msg = json.loads(data)
+            if not isinstance(msg, list) or len(msg) < 1:
+                _LOGGER.warning("Unexpected WebSocket message format: %s", type(msg).__name__)
+                return
             msg_type = msg[0]
 
             if msg_type == WS_MSG_CALLBACK:
                 # Response to a request
+                if len(msg) < 2 or not isinstance(msg[1], dict):
+                    _LOGGER.warning("Malformed Callback message: expected [type, payload]")
+                    return
                 payload = msg[1]
                 sequence_id = payload.get("sequenceId")
                 _LOGGER.debug("Callback received: seq=%s, pending=%s", sequence_id, list(self._pending_requests.keys()))
@@ -472,6 +478,9 @@ class EvonWsClient:
 
             elif msg_type == WS_MSG_EVENT:
                 # Event from the server
+                if len(msg) < 2 or not isinstance(msg[1], dict):
+                    _LOGGER.warning("Malformed Event message: expected [type, payload]")
+                    return
                 payload = msg[1]
                 if payload.get("methodName") == "ValuesChanged":
                     self._handle_values_changed(payload.get("args", []))
@@ -492,6 +501,10 @@ class EvonWsClient:
             args: The event arguments containing the table of changed values.
         """
         if not args or not self._on_values_changed:
+            return
+
+        if not isinstance(args[0], dict):
+            _LOGGER.warning("ValuesChanged args[0] is not a dict: %s", type(args[0]).__name__)
             return
 
         table = args[0].get("table", {})

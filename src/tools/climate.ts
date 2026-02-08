@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callMethod } from "../api-client.js";
 import { CLIMATE_METHODS } from "../constants.js";
-import { getInstances, filterClimateDevices, controlAllDevices, fetchClimateWithState } from "../helpers.js";
+import { getInstances, filterClimateDevices, controlAllDevices, fetchClimateWithState, sanitizeId } from "../helpers.js";
 
 export function registerClimateTools(server: McpServer): void {
   server.tool(
@@ -27,13 +27,14 @@ export function registerClimateTools(server: McpServer): void {
     {
       climate_id: z.string().describe("The climate control instance ID"),
       action: z.enum(["comfort", "eco", "away", "set_temperature"]).describe("Climate action: comfort, eco (energy saving), away (protection), or set_temperature"),
-      temperature: z.number().optional().describe("Target temperature (for set_temperature action)"),
+      temperature: z.number().min(5).max(40).optional().describe("Target temperature in °C, 5-40 (for set_temperature action)"),
     },
     async ({ climate_id, action, temperature }) => {
+      const id = sanitizeId(climate_id);
       const method = CLIMATE_METHODS[action];
       const params: unknown[] = action === "set_temperature" ? [temperature ?? 21] : [];
 
-      await callMethod(climate_id, method, params);
+      await callMethod(id, method, params);
 
       return {
         content: [{ type: "text", text: `Climate ${climate_id}: ${action}${params.length > 0 ? ` (${params[0]}°C)` : ""}` }],

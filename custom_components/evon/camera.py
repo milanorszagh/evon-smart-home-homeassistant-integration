@@ -145,7 +145,7 @@ class EvonCamera(EvonEntity, Camera):
                 return self._last_image
 
             except Exception as err:
-                _LOGGER.warning("Error getting camera image: %s", err)
+                _LOGGER.warning("Error getting camera image: %s", err, exc_info=True)
                 return self._last_image
 
     async def _request_image_via_ws(self, ws_client: Any) -> None:

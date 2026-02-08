@@ -5,15 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
-import { getInstances } from "../helpers.js";
-
-// Validate instance_id to prevent path traversal (must be alphanumeric with dots/underscores)
-function sanitizeId(id: string): string {
-  if (!/^[\w.]+$/.test(id)) {
-    throw new Error(`Invalid instance ID: ${id}`);
-  }
-  return id;
-}
+import { getInstances, sanitizeId } from "../helpers.js";
 
 export function registerGenericTools(server: McpServer): void {
   server.tool(

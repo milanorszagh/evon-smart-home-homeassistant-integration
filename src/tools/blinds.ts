@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callMethod } from "../api-client.js";
 import { DEVICE_CLASSES, BLIND_METHODS } from "../constants.js";
-import { getInstances, filterByClass, controlAllDevices, fetchBlindsWithState } from "../helpers.js";
+import { getInstances, filterByClass, controlAllDevices, fetchBlindsWithState, sanitizeId } from "../helpers.js";
 
 export function registerBlindTools(server: McpServer): void {
   server.tool(
@@ -31,6 +31,7 @@ export function registerBlindTools(server: McpServer): void {
       angle: z.number().min(0).max(100).optional().describe("Slat angle (0-100)"),
     },
     async ({ blind_id, action, position, angle }) => {
+      const id = sanitizeId(blind_id);
       const methodMap: Record<string, { method: string; params: unknown[] }> = {
         ...BLIND_METHODS,
         position: { method: "AmznSetPercentage", params: [position ?? 50] },
@@ -38,7 +39,7 @@ export function registerBlindTools(server: McpServer): void {
       };
 
       const { method, params } = methodMap[action];
-      await callMethod(blind_id, method, params);
+      await callMethod(id, method, params);
 
       return {
         content: [{ type: "text", text: `Blind ${blind_id}: ${action}${params.length > 0 ? ` (${params[0]})` : ""}` }],
