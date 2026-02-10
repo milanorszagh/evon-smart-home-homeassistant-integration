@@ -310,45 +310,21 @@ class TestEvonApiMethods:
         mock_api._request.assert_called_with("POST", "/instances/blind_1/SetAngle", [45])
 
     @pytest.mark.asyncio
-    async def test_set_climate_comfort_mode_heating(self, mock_api):
-        """Test setting climate to comfort mode in heating season."""
-        # Uses WriteDayMode CallMethod (is_cooling param is unused, kept for API compat)
-        await mock_api.set_climate_comfort_mode("climate_1", is_cooling=False)
+    async def test_set_climate_comfort_mode(self, mock_api):
+        """Test setting climate to comfort mode."""
+        await mock_api.set_climate_comfort_mode("climate_1")
         mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteDayMode", [])
 
     @pytest.mark.asyncio
-    async def test_set_climate_comfort_mode_cooling(self, mock_api):
-        """Test setting climate to comfort mode in cooling season."""
-        # Uses WriteDayMode CallMethod (same in both seasons, Evon handles internally)
-        await mock_api.set_climate_comfort_mode("climate_1", is_cooling=True)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteDayMode", [])
-
-    @pytest.mark.asyncio
-    async def test_set_climate_energy_saving_mode_heating(self, mock_api):
-        """Test setting climate to energy saving mode in heating season."""
-        # Uses WriteNightMode CallMethod
-        await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=False)
+    async def test_set_climate_energy_saving_mode(self, mock_api):
+        """Test setting climate to energy saving mode."""
+        await mock_api.set_climate_energy_saving_mode("climate_1")
         mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteNightMode", [])
 
     @pytest.mark.asyncio
-    async def test_set_climate_energy_saving_mode_cooling(self, mock_api):
-        """Test setting climate to energy saving mode in cooling season."""
-        # Uses WriteNightMode CallMethod (same in both seasons)
-        await mock_api.set_climate_energy_saving_mode("climate_1", is_cooling=True)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteNightMode", [])
-
-    @pytest.mark.asyncio
-    async def test_set_climate_freeze_protection_mode_heating(self, mock_api):
-        """Test setting climate to freeze protection mode in heating season."""
-        # Uses WriteFreezeMode CallMethod
-        await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=False)
-        mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteFreezeMode", [])
-
-    @pytest.mark.asyncio
-    async def test_set_climate_freeze_protection_mode_cooling(self, mock_api):
-        """Test setting climate to freeze protection mode in cooling season."""
-        # Uses WriteFreezeMode CallMethod (same in both seasons)
-        await mock_api.set_climate_freeze_protection_mode("climate_1", is_cooling=True)
+    async def test_set_climate_freeze_protection_mode(self, mock_api):
+        """Test setting climate to freeze protection mode."""
+        await mock_api.set_climate_freeze_protection_mode("climate_1")
         mock_api._request.assert_called_with("POST", "/instances/climate_1/WriteFreezeMode", [])
 
     @pytest.mark.asyncio

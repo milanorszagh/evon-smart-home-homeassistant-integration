@@ -14,9 +14,12 @@ import enum
 import io
 import logging
 from pathlib import Path
+import time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DEFAULT_MAX_RECORDING_DURATION,
@@ -32,6 +35,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Minimum delay between frame captures to avoid hammering the device
 _MIN_FRAME_INTERVAL = 0.5  # seconds
+
+# TTL for the recordings filesystem cache (seconds)
+_RECORDINGS_CACHE_TTL = 300  # 5 minutes
 
 
 class RecordingState(enum.Enum):
@@ -60,6 +66,8 @@ class EvonCameraRecorder:
         self._last_recording_path: str | None = None
         self._max_duration: int = DEFAULT_MAX_RECORDING_DURATION
         self._output_format: str = "mp4"
+        self._recordings_cache: list[dict[str, str]] | None = None
+        self._recordings_cache_time: float = 0.0
 
     @property
     def state(self) -> RecordingState:
@@ -75,7 +83,7 @@ class EvonCameraRecorder:
     def recording_duration(self) -> float | None:
         """Return current recording duration in seconds."""
         if self._recording_start and self._state == RecordingState.RECORDING:
-            return (datetime.now() - self._recording_start).total_seconds()
+            return (dt_util.now() - self._recording_start).total_seconds()
         return None
 
     @property
@@ -106,7 +114,7 @@ class EvonCameraRecorder:
 
         self._state = RecordingState.RECORDING
         self._frames = []
-        self._recording_start = datetime.now()
+        self._recording_start = dt_util.now()
 
         _LOGGER.info(
             "Starting recording for %s (max %ds, format: %s)",
@@ -138,9 +146,9 @@ class EvonCameraRecorder:
     async def _recording_loop(self) -> None:
         """Background task that captures frames."""
         try:
-            start = asyncio.get_event_loop().time()
+            start = time.monotonic()
             while self._state == RecordingState.RECORDING:
-                elapsed = asyncio.get_event_loop().time() - start
+                elapsed = time.monotonic() - start
                 if elapsed >= self._max_duration:
                     _LOGGER.info(
                         "Max recording duration reached (%ds) for %s",
@@ -150,16 +158,16 @@ class EvonCameraRecorder:
                     break
 
                 # Capture a frame
-                frame_start = asyncio.get_event_loop().time()
+                frame_start = time.monotonic()
                 try:
                     image = await self._camera.async_camera_image()
                     if image:
-                        self._frames.append((image, datetime.now()))
+                        self._frames.append((image, dt_util.now()))
                 except Exception:
                     _LOGGER.debug("Failed to capture frame", exc_info=True)
 
                 # Ensure minimum interval between captures
-                frame_elapsed = asyncio.get_event_loop().time() - frame_start
+                frame_elapsed = time.monotonic() - frame_start
                 if frame_elapsed < _MIN_FRAME_INTERVAL:
                     await asyncio.sleep(_MIN_FRAME_INTERVAL - frame_elapsed)
 
@@ -224,6 +232,7 @@ class EvonCameraRecorder:
         finally:
             self._frames = []
             self._state = RecordingState.IDLE
+            self._recordings_cache = None
 
     def _save_jpeg_frames(self, frames_dir: Path) -> None:
         """Save individual JPEG frames to disk (runs in executor)."""
@@ -240,8 +249,18 @@ class EvonCameraRecorder:
         """
         from fractions import Fraction
 
-        import av
-        from PIL import Image
+        try:
+            import av
+            from PIL import Image
+        except ImportError as err:
+            _LOGGER.error(
+                "Camera recording requires PyAV and Pillow packages. "
+                "Install with: pip install PyAV Pillow"
+            )
+            raise HomeAssistantError(
+                "Recording failed: PyAV package not installed. "
+                "Try reinstalling the Evon integration."
+            ) from err
 
         mp4_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -293,6 +312,7 @@ class EvonCameraRecorder:
 
         Scans the recordings directory for MP4 files matching this camera's
         safe name prefix, sorted by modification time (newest first).
+        Results are cached for ``_RECORDINGS_CACHE_TTL`` seconds.
 
         Args:
             limit: Maximum number of recordings to return.
@@ -300,8 +320,14 @@ class EvonCameraRecorder:
         Returns:
             List of dicts with filename, timestamp, size, and url.
         """
+        now = time.monotonic()
+        if self._recordings_cache is not None and now - self._recordings_cache_time < _RECORDINGS_CACHE_TTL:
+            return self._recordings_cache[:limit]
+
         media_dir = Path(self._hass.config.path("media")) / RECORDING_MEDIA_DIR
         if not media_dir.is_dir():
+            self._recordings_cache = []
+            self._recordings_cache_time = now
             return []
 
         camera_name = self._camera.name or "camera"
@@ -314,9 +340,9 @@ class EvonCameraRecorder:
         )
 
         results: list[dict[str, str]] = []
-        for f in mp4_files[:limit]:
+        for f in mp4_files:
             stat = f.stat()
-            mtime = datetime.fromtimestamp(stat.st_mtime)
+            mtime = dt_util.utc_from_timestamp(stat.st_mtime)
             size_bytes = stat.st_size
             size_str = f"{size_bytes / 1_048_576:.1f} MB" if size_bytes >= 1_048_576 else f"{size_bytes / 1024:.0f} KB"
 
@@ -328,7 +354,10 @@ class EvonCameraRecorder:
                     "url": f"/evon/recordings/{f.name}",
                 }
             )
-        return results
+
+        self._recordings_cache = results
+        self._recordings_cache_time = now
+        return results[:limit]
 
     def get_extra_attributes(self) -> dict[str, Any]:
         """Return recording-related extra state attributes."""
@@ -336,7 +365,7 @@ class EvonCameraRecorder:
             "recording": self.is_recording,
         }
         if self.is_recording and self._recording_start:
-            attrs["recording_duration"] = round((datetime.now() - self._recording_start).total_seconds(), 1)
+            attrs["recording_duration"] = round((dt_util.now() - self._recording_start).total_seconds(), 1)
             attrs["recording_frames"] = len(self._frames)
         if self._last_recording_path:
             attrs["last_recording_path"] = self._last_recording_path

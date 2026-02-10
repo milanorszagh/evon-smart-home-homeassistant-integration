@@ -8,6 +8,7 @@ import contextlib
 import json
 import logging
 import random
+import time
 from typing import Any
 
 import aiohttp
@@ -556,7 +557,7 @@ class EvonWsClient:
         if not self._pending_request_times:
             return
 
-        now = asyncio.get_event_loop().time()
+        now = time.monotonic()
         stale_threshold = 2 * WS_DEFAULT_REQUEST_TIMEOUT
         stale_ids = [
             seq_id
@@ -617,7 +618,7 @@ class EvonWsClient:
 
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending_requests[sequence_id] = future
-        self._pending_request_times[sequence_id] = asyncio.get_event_loop().time()
+        self._pending_request_times[sequence_id] = time.monotonic()
 
         try:
             _LOGGER.debug("Sending WS request: method=%s, seq=%s", method_name, sequence_id)

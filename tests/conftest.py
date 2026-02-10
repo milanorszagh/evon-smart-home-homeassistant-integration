@@ -55,9 +55,22 @@ if not importlib.util.find_spec("homeassistant"):
     mock_image = MagicMock()
     mock_image.ImageEntity = type("ImageEntity", (), {"__init__": lambda self, hass: None})
     mock_ha.components.image = mock_image
-    mock_ha.exceptions = MagicMock()
+    # Exceptions need to be real exception classes so they can be raised/caught
+    mock_exceptions = MagicMock()
+
+    class _HomeAssistantError(Exception):
+        """Mock HomeAssistantError."""
+
+    mock_exceptions.HomeAssistantError = _HomeAssistantError
+    mock_ha.exceptions = mock_exceptions
     mock_ha.util = MagicMock()
-    mock_ha.util.dt = MagicMock()
+    # Provide real dt_util functions so camera_recorder gets real datetimes
+    from datetime import datetime, timezone
+
+    mock_dt = MagicMock()
+    mock_dt.now = lambda: datetime.now(tz=timezone.utc)
+    mock_dt.utc_from_timestamp = lambda ts: datetime.fromtimestamp(ts, tz=timezone.utc)
+    mock_ha.util.dt = mock_dt
     mock_ha.components.repairs = MagicMock()
     mock_ha.loader = MagicMock()
     mock_ha.helpers.config_validation = MagicMock()

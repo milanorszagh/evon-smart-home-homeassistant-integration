@@ -697,25 +697,23 @@ class EvonApi:
         await self.call_method(instance_id, "SetAngle", [angle])
 
     # Climate methods
-    async def set_climate_comfort_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+    async def set_climate_comfort_mode(self, instance_id: str) -> None:
         """Set climate to comfort (day) mode.
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
         await self.call_method(instance_id, "WriteDayMode")
 
-    async def set_climate_energy_saving_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+    async def set_climate_energy_saving_mode(self, instance_id: str) -> None:
         """Set climate to energy saving (night) mode.
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
         await self.call_method(instance_id, "WriteNightMode")
 
-    async def set_climate_freeze_protection_mode(self, instance_id: str, is_cooling: bool = False) -> None:
+    async def set_climate_freeze_protection_mode(self, instance_id: str) -> None:
         """Set climate to freeze/heat protection mode.
 
         In heating mode (winter): freeze protection prevents pipes from freezing.
@@ -723,7 +721,6 @@ class EvonApi:
 
         Args:
             instance_id: The climate instance ID.
-            is_cooling: Unused, kept for API compatibility. Evon handles season mode internally.
         """
         await self.call_method(instance_id, "WriteFreezeMode")
 

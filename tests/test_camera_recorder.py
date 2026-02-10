@@ -401,6 +401,91 @@ class TestRecentRecordings:
         assert "MB" in result[0]["size"]
 
 
+class TestRecordingsCache:
+    """Test get_recent_recordings() TTL cache."""
+
+    def test_cache_avoids_repeated_scan(self, recorder, mock_hass, tmp_path):
+        """Test that second call within TTL returns cached results without re-scanning."""
+        import time
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
+
+        result1 = recorder.get_recent_recordings()
+        assert len(result1) == 1
+
+        # Add another file — should NOT appear because cache is still fresh
+        (recordings_dir / "Test_Camera_20240102_120000.mp4").write_bytes(b"\x00" * 1024)
+
+        result2 = recorder.get_recent_recordings()
+        assert len(result2) == 1  # Still cached
+
+    def test_cache_expires_after_ttl(self, recorder, mock_hass, tmp_path):
+        """Test that cache expires and re-scans after TTL."""
+        from custom_components.evon.camera_recorder import _RECORDINGS_CACHE_TTL
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
+
+        result1 = recorder.get_recent_recordings()
+        assert len(result1) == 1
+
+        # Simulate TTL expiry by backdating the cache time
+        recorder._recordings_cache_time -= _RECORDINGS_CACHE_TTL + 1
+
+        # Add another file — should now appear
+        import time as _time
+
+        _time.sleep(0.05)  # Ensure different mtime
+        (recordings_dir / "Test_Camera_20240102_120000.mp4").write_bytes(b"\x00" * 1024)
+
+        result2 = recorder.get_recent_recordings()
+        assert len(result2) == 2
+
+    def test_cache_invalidated_on_finalize(self, recorder, mock_hass, tmp_path):
+        """Test that _finalize_recording invalidates the cache."""
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
+        recorder.get_recent_recordings()
+        assert recorder._recordings_cache is not None
+
+        # Simulate finalize by setting cache to None (same as _finalize_recording does)
+        recorder._recordings_cache = None
+
+        (recordings_dir / "Test_Camera_20240102_120000.mp4").write_bytes(b"\x00" * 1024)
+        result = recorder.get_recent_recordings()
+        assert len(result) == 2
+
+    def test_cache_stores_all_returns_sliced(self, recorder, mock_hass, tmp_path):
+        """Test that cache stores all results and slices on return."""
+        import time
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        for i in range(7):
+            f = recordings_dir / f"Test_Camera_2024010{i}_120000.mp4"
+            f.write_bytes(b"\x00" * 1024)
+            time.sleep(0.05)
+
+        result3 = recorder.get_recent_recordings(limit=3)
+        assert len(result3) == 3
+
+        # Same call with different limit uses cache
+        result5 = recorder.get_recent_recordings(limit=5)
+        assert len(result5) == 5
+
+
 # ============================================================================
 # Integration tests (require HA test framework)
 # ============================================================================

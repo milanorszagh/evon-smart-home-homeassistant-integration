@@ -1125,3 +1125,189 @@ class TestCameraWillRemoveFromHass:
 
         # Verify registration in shared registry
         assert '["cameras"][self._instance_id] = self' in source
+
+
+class TestMigrationChain:
+    """Tests for async_migrate_entry in __init__.py."""
+
+    def test_migration_uses_while_loop(self):
+        """Test that migration uses a while loop instead of if/if/elif."""
+        with open("custom_components/evon/__init__.py") as f:
+            source = f.read()
+
+        # Should use while loop pattern
+        assert "while config_entry.version < 3:" in source
+
+    def test_migration_v1_to_v3_via_while(self):
+        """Test that v1 entry migrates through v2 to v3 in one call."""
+        from custom_components.evon.__init__ import async_migrate_entry
+        from custom_components.evon.const import CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL
+
+        hass = MagicMock()
+
+        config_entry = MagicMock()
+        config_entry.version = 1
+        config_entry.data = {"host": "http://test"}
+
+        # Track version updates
+        versions = []
+
+        def track_update(*args, **kwargs):
+            if "version" in kwargs:
+                config_entry.version = kwargs["version"]
+                versions.append(kwargs["version"])
+            if "data" in kwargs:
+                config_entry.data = kwargs["data"]
+
+        hass.config_entries.async_update_entry = track_update
+
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+
+        assert result is True
+        assert config_entry.version == 3
+        assert versions == [2, 3]
+        assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
+
+    def test_migration_v2_to_v3(self):
+        """Test that v2 entry migrates to v3."""
+        from custom_components.evon.__init__ import async_migrate_entry
+        from custom_components.evon.const import CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL
+
+        hass = MagicMock()
+
+        config_entry = MagicMock()
+        config_entry.version = 2
+        config_entry.data = {"host": "http://test"}
+
+        def track_update(*args, **kwargs):
+            if "version" in kwargs:
+                config_entry.version = kwargs["version"]
+            if "data" in kwargs:
+                config_entry.data = kwargs["data"]
+
+        hass.config_entries.async_update_entry = track_update
+
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+
+        assert result is True
+        assert config_entry.version == 3
+        assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
+
+    def test_migration_v3_is_noop(self):
+        """Test that v3 entry is already current."""
+        from custom_components.evon.__init__ import async_migrate_entry
+
+        hass = MagicMock()
+
+        config_entry = MagicMock()
+        config_entry.version = 3
+
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+
+        assert result is True
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_migration_future_version_fails(self):
+        """Test that future version returns False."""
+        from custom_components.evon.__init__ import async_migrate_entry
+
+        hass = MagicMock()
+
+        config_entry = MagicMock()
+        config_entry.version = 99
+
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+
+        assert result is False
+
+
+class TestSelectEntitiesInheritance:
+    """Tests for select entity base class (source inspection)."""
+
+    def test_home_state_select_extends_evon_entity(self):
+        """Test that EvonHomeStateSelect extends EvonEntity."""
+        import ast
+
+        with open("custom_components/evon/select.py") as f:
+            tree = ast.parse(f.read())
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "EvonHomeStateSelect":
+                base_names = [
+                    b.attr if isinstance(b, ast.Attribute) else b.id if isinstance(b, ast.Name) else ""
+                    for b in node.bases
+                ]
+                assert "EvonEntity" in base_names
+                assert "SelectEntity" in base_names
+                assert "CoordinatorEntity" not in base_names
+                return
+        pytest.fail("EvonHomeStateSelect class not found")
+
+    def test_season_mode_select_extends_evon_entity(self):
+        """Test that EvonSeasonModeSelect extends EvonEntity."""
+        import ast
+
+        with open("custom_components/evon/select.py") as f:
+            tree = ast.parse(f.read())
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "EvonSeasonModeSelect":
+                base_names = [
+                    b.attr if isinstance(b, ast.Attribute) else b.id if isinstance(b, ast.Name) else ""
+                    for b in node.bases
+                ]
+                assert "EvonEntity" in base_names
+                assert "SelectEntity" in base_names
+                assert "CoordinatorEntity" not in base_names
+                return
+        pytest.fail("EvonSeasonModeSelect class not found")
+
+    def test_select_imports_evon_entity(self):
+        """Test that select.py imports from base_entity."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert "from .base_entity import EvonEntity" in source
+
+    def test_select_does_not_import_coordinator_entity(self):
+        """Test that select.py no longer imports CoordinatorEntity directly."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert "from homeassistant.helpers.update_coordinator import CoordinatorEntity" not in source
+
+    def test_select_does_not_import_time(self):
+        """Test that select.py no longer imports time (uses EvonEntity methods)."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert "import time" not in source
+
+    def test_select_uses_set_optimistic_timestamp(self):
+        """Test that select.py uses _set_optimistic_timestamp() from EvonEntity."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert "_set_optimistic_timestamp()" in source
+
+    def test_select_has_reset_optimistic_state(self):
+        """Test that both select classes override _reset_optimistic_state."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert source.count("def _reset_optimistic_state(self)") == 2
+
+    def test_select_calls_super_extra_state_attributes(self):
+        """Test that both select classes call super().extra_state_attributes."""
+        with open("custom_components/evon/select.py") as f:
+            source = f.read()
+
+        assert source.count("super().extra_state_attributes") == 2

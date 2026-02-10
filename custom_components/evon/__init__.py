@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from pathlib import Path
 
@@ -169,12 +168,8 @@ def _find_camera_entity(hass: HomeAssistant, entity_id: str):
 
 
 def _ensure_recordings_dir(recordings_dir: str) -> None:
-    """Create recordings directory and media browser symlink (runs in executor)."""
+    """Create recordings directory (runs in executor)."""
     Path(recordings_dir).mkdir(parents=True, exist_ok=True)
-    media_symlink = Path("/media/evon_recordings")
-    if not media_symlink.exists():
-        with contextlib.suppress(OSError):
-            media_symlink.symlink_to(recordings_dir)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -741,23 +736,25 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
     """Migrate old config entry to new version."""
     _LOGGER.debug("Migrating Evon config entry from version %s", config_entry.version)
 
-    if config_entry.version == 1:
-        # Migration from v1 to v2
-        # v2 adds non_dimmable_lights option (defaults to empty list, no action needed)
-        _LOGGER.info("Migrating Evon config entry from version 1 to 2")
-        hass.config_entries.async_update_entry(config_entry, version=2, minor_version=0)
-        _LOGGER.info("Migration to version 2 successful")
+    while config_entry.version < 3:
+        if config_entry.version == 1:
+            # Migration from v1 to v2
+            # v2 adds non_dimmable_lights option (defaults to empty list, no action needed)
+            _LOGGER.info("Migrating Evon config entry from version 1 to 2")
+            hass.config_entries.async_update_entry(config_entry, version=2, minor_version=0)
+            _LOGGER.info("Migration to version 2 successful")
+        elif config_entry.version == 2:
+            # Migration from v2 to v3
+            # v3 adds connection_type (defaults to local for existing configs)
+            _LOGGER.info("Migrating Evon config entry from version 2 to 3")
+            new_data = dict(config_entry.data)
+            new_data[CONF_CONNECTION_TYPE] = CONNECTION_TYPE_LOCAL
+            hass.config_entries.async_update_entry(config_entry, data=new_data, version=3, minor_version=0)
+            _LOGGER.info("Migration to version 3 successful")
+        else:
+            break
 
-    if config_entry.version == 2:
-        # Migration from v2 to v3
-        # v3 adds connection_type (defaults to local for existing configs)
-        _LOGGER.info("Migrating Evon config entry from version 2 to 3")
-        new_data = dict(config_entry.data)
-        new_data[CONF_CONNECTION_TYPE] = CONNECTION_TYPE_LOCAL
-        hass.config_entries.async_update_entry(config_entry, data=new_data, version=3, minor_version=0)
-        _LOGGER.info("Migration to version 3 successful")
-
-    elif config_entry.version > 3:
+    if config_entry.version > 3:
         # Future version - can't migrate forward
         _LOGGER.error(
             "Cannot migrate Evon config entry from version %s (current integration supports up to version 3)",

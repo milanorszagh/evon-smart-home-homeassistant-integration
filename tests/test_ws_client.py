@@ -1102,13 +1102,14 @@ class TestClimateWebSocketControl:
     def test_modesaved_values_by_season(self):
         """Document and verify ModeSaved values for each preset and season.
 
-        The API computes the correct ModeSaved value based on is_cooling parameter:
-        - set_climate_comfort_mode(id, is_cooling=False) -> ModeSaved=4 (heating)
-        - set_climate_comfort_mode(id, is_cooling=True) -> ModeSaved=7 (cooling)
-        - set_climate_energy_saving_mode(id, is_cooling=False) -> ModeSaved=3 (heating)
-        - set_climate_energy_saving_mode(id, is_cooling=True) -> ModeSaved=6 (cooling)
-        - set_climate_freeze_protection_mode(id, is_cooling=False) -> ModeSaved=2 (heating)
-        - set_climate_freeze_protection_mode(id, is_cooling=True) -> ModeSaved=5 (cooling)
+        The Evon system handles season mode internally. The API methods
+        (set_climate_comfort_mode, set_climate_energy_saving_mode,
+        set_climate_freeze_protection_mode) use a single WriteDayMode /
+        WriteNightMode / WriteFreezeMode call regardless of season.
+
+        ModeSaved values observed from the Evon controller:
+        - Heating: away=2, eco=3, comfort=4
+        - Cooling: away=5, eco=6, comfort=7
         """
         # Document that ModeSaved values differ by season
         heating_presets = {"away": 2, "eco": 3, "comfort": 4}

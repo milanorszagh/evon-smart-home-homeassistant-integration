@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -10,10 +9,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EvonApi, EvonApiError
-from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT, SEASON_MODE_COOLING, SEASON_MODE_HEATING
+from .base_entity import EvonEntity
+from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
 # Season mode options
@@ -50,11 +49,10 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEntity):
+class EvonHomeStateSelect(EvonEntity, SelectEntity):
     """Representation of Evon Home State selector."""
 
     _attr_icon = "mdi:home-account"
-    _attr_has_entity_name = True
     _attr_translation_key = "home_state"
 
     def __init__(
@@ -64,25 +62,23 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         api: EvonApi,
     ) -> None:
         """Initialize the home state select."""
-        super().__init__(coordinator)
-        self._api = api
-        self._entry = entry
+        super().__init__(
+            coordinator,
+            instance_id=f"home_state_{entry.entry_id}",
+            name="Evon Home State",
+            room_name="",
+            entry=entry,
+            api=api,
+        )
         self._attr_unique_id = f"evon_home_state_{entry.entry_id}"
         # Use Evon IDs as options - HA translation system handles display names
         self._update_options()
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
-        # Timestamp when optimistic state was set (for timeout-based clearance)
-        self._optimistic_state_set_at: float | None = None
 
-    def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired."""
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
-        ):
-            self._optimistic_option = None
-            self._optimistic_state_set_at = None
+    def _reset_optimistic_state(self) -> None:
+        """Clear optimistic option."""
+        self._optimistic_option = None
 
     def _update_options(self) -> None:
         """Update options from coordinator data."""
@@ -123,15 +119,17 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         active_id = self.coordinator.get_active_home_state()
-        return {"evon_id": active_id}
+        attrs["evon_id"] = active_id
+        return attrs
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option (option is the Evon ID)."""
         if option in self._attr_options:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             try:
@@ -158,14 +156,13 @@ class EvonHomeStateSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEn
         self.async_write_ha_state()
 
 
-class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectEntity):
+class EvonSeasonModeSelect(EvonEntity, SelectEntity):
     """Representation of Evon Season Mode selector (global heating/cooling).
 
     This controls whether the entire house is in heating (winter) or cooling (summer) mode.
     This is separate from per-room presets (comfort/eco/away).
     """
 
-    _attr_has_entity_name = True
     _attr_translation_key = "season_mode"
     _attr_icon = "mdi:sun-snowflake-variant"
 
@@ -176,24 +173,22 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
         api: EvonApi,
     ) -> None:
         """Initialize the season mode select."""
-        super().__init__(coordinator)
-        self._api = api
-        self._entry = entry
+        super().__init__(
+            coordinator,
+            instance_id=f"season_mode_{entry.entry_id}",
+            name="Evon Season Mode",
+            room_name="",
+            entry=entry,
+            api=api,
+        )
         self._attr_unique_id = f"evon_season_mode_{entry.entry_id}"
         self._attr_options = SEASON_MODE_OPTIONS
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
-        # Timestamp when optimistic state was set (for timeout-based clearance)
-        self._optimistic_state_set_at: float | None = None
 
-    def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired."""
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
-        ):
-            self._optimistic_option = None
-            self._optimistic_state_set_at = None
+    def _reset_optimistic_state(self) -> None:
+        """Clear optimistic option."""
+        self._optimistic_option = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -222,18 +217,18 @@ class EvonSeasonModeSelect(CoordinatorEntity[EvonDataUpdateCoordinator], SelectE
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
+        attrs = super().extra_state_attributes
         is_cooling = self.coordinator.get_season_mode()
-        return {
-            "is_cooling": is_cooling,
-            "description": "Summer mode (cooling)" if is_cooling else "Winter mode (heating)",
-        }
+        attrs["is_cooling"] = is_cooling
+        attrs["description"] = "Summer mode (cooling)" if is_cooling else "Winter mode (heating)"
+        return attrs
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if option in SEASON_MODE_OPTIONS:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
-            self._optimistic_state_set_at = time.monotonic()
+            self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             is_cooling = option == SEASON_MODE_COOLING
