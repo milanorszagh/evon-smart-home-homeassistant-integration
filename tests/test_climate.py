@@ -248,38 +248,44 @@ async def test_climate_set_hvac_mode_heat(hass, mock_config_entry_v2, mock_evon_
 
 @pytest.mark.asyncio
 async def test_climate_temperature_clamping(hass, mock_config_entry_v2, mock_evon_api_class):
-    """Test that setting temperature above max_temp gets clamped to max."""
+    """Test that setting temperature above max_temp is rejected by HA validation."""
+    from homeassistant.exceptions import ServiceValidationError
+
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
     await hass.async_block_till_done()
 
-    # max_temp is 25 in mock data; setting 30 should clamp to 25.0
-    await hass.services.async_call(
-        "climate",
-        "set_temperature",
-        {"entity_id": "climate.living_room_climate", "temperature": 30},
-        blocking=True,
-    )
+    # max_temp is 25 in mock data; HA validates and rejects out-of-range temperatures
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": "climate.living_room_climate", "temperature": 30},
+            blocking=True,
+        )
 
-    mock_evon_api_class.set_climate_temperature.assert_called_once_with("climate_1", 25.0)
+    mock_evon_api_class.set_climate_temperature.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_climate_temperature_clamping_below_min(hass, mock_config_entry_v2, mock_evon_api_class):
-    """Test that setting temperature below min_temp gets clamped to min."""
+    """Test that setting temperature below min_temp is rejected by HA validation."""
+    from homeassistant.exceptions import ServiceValidationError
+
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
     await hass.async_block_till_done()
 
-    # min_temp is 15 in mock data; setting 10 should clamp to 15.0
-    await hass.services.async_call(
-        "climate",
-        "set_temperature",
-        {"entity_id": "climate.living_room_climate", "temperature": 10},
-        blocking=True,
-    )
+    # min_temp is 15 in mock data; HA validates and rejects out-of-range temperatures
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": "climate.living_room_climate", "temperature": 10},
+            blocking=True,
+        )
 
-    mock_evon_api_class.set_climate_temperature.assert_called_once_with("climate_1", 15.0)
+    mock_evon_api_class.set_climate_temperature.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -448,8 +454,11 @@ async def test_climate_unrecognized_preset_mode(hass, mock_config_entry_v2, mock
     state = hass.states.get("climate.living_room_climate")
     assert state.attributes.get("preset_mode") == "comfort"
 
-    # Try setting an invalid preset mode - should not change state
-    with pytest.raises(ValueError):
+    # Try setting an invalid preset mode - HA validates preset modes at the
+    # service layer before reaching integration code, raising ServiceValidationError
+    from homeassistant.exceptions import ServiceValidationError
+
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             "climate",
             "set_preset_mode",
@@ -457,6 +466,6 @@ async def test_climate_unrecognized_preset_mode(hass, mock_config_entry_v2, mock
             blocking=True,
         )
 
-    # State should still be "comfort" (optimistic state reverted)
+    # State should still be "comfort" (HA rejected the call before it reached our code)
     state = hass.states.get("climate.living_room_climate")
     assert state.attributes.get("preset_mode") == "comfort"
