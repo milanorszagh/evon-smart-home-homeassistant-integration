@@ -2208,3 +2208,270 @@ class TestEnergyStatsFailureEscalation:
         from custom_components.evon.const import ENERGY_STATS_FAILURE_LOG_THRESHOLD
 
         assert ENERGY_STATS_FAILURE_LOG_THRESHOLD == 3
+
+
+class TestPeriodicStaleCleanup:
+    """Tests for the periodic stale request cleanup task."""
+
+    def test_cleanup_task_attribute_exists(self):
+        """Test that _cleanup_task attribute is initialized to None."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        assert client._cleanup_task is None
+
+    @pytest.mark.asyncio
+    async def test_periodic_cleanup_calls_cleanup(self):
+        """Test that _periodic_stale_cleanup calls _cleanup_stale_requests."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        client._running = True
+
+        cleanup_count = 0
+        original_cleanup = client._cleanup_stale_requests
+
+        def mock_cleanup():
+            nonlocal cleanup_count
+            cleanup_count += 1
+            original_cleanup()
+            # Stop after first cleanup to avoid infinite loop
+            client._running = False
+
+        client._cleanup_stale_requests = mock_cleanup
+
+        # Patch the sleep interval to be very short
+        import custom_components.evon.ws_client as ws_module
+        original_interval = ws_module._STALE_CLEANUP_INTERVAL
+        ws_module._STALE_CLEANUP_INTERVAL = 0.01
+        try:
+            await client._periodic_stale_cleanup()
+        finally:
+            ws_module._STALE_CLEANUP_INTERVAL = original_interval
+
+        assert cleanup_count == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_cancels_cleanup_task(self):
+        """Test that stop() cancels the cleanup task."""
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Create a mock cleanup task
+        async def long_running():
+            await asyncio.sleep(100)
+
+        client._cleanup_task = asyncio.create_task(long_running())
+        client._running = True
+
+        await client.stop()
+
+        assert client._cleanup_task is None
+
+    @pytest.mark.asyncio
+    async def test_disconnect_cancels_cleanup_task(self):
+        """Test that disconnect() cancels the cleanup task."""
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Create a mock cleanup task
+        async def long_running():
+            await asyncio.sleep(100)
+
+        client._cleanup_task = asyncio.create_task(long_running())
+
+        await client.disconnect()
+
+        assert client._cleanup_task is None
+
+    def test_stale_cleanup_interval_constant(self):
+        """Test _STALE_CLEANUP_INTERVAL is set to 15 seconds."""
+        from custom_components.evon.ws_client import _STALE_CLEANUP_INTERVAL
+
+        assert _STALE_CLEANUP_INTERVAL == 15.0
+
+
+class TestSequenceIdValidation:
+    """Tests for sequenceId type validation in _handle_message."""
+
+    def test_string_sequence_id_ignored(self):
+        """Test that string sequenceId is rejected."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+        # Set up a pending request with int key
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[1] = future
+
+        # Send callback with string sequenceId (should be ignored)
+        message = json.dumps(["Callback", {"sequenceId": "1", "args": ["result"]}])
+        client._handle_message(message)
+
+        # Future should NOT be resolved since "1" != 1
+        assert not future.done()
+        assert 1 in client._pending_requests
+
+    def test_none_sequence_id_ignored(self):
+        """Test that None sequenceId is rejected."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[1] = future
+
+        message = json.dumps(["Callback", {"args": ["result"]}])
+        client._handle_message(message)
+
+        assert not future.done()
+
+    def test_float_sequence_id_ignored(self):
+        """Test that float sequenceId is rejected."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[1] = future
+
+        message = json.dumps(["Callback", {"sequenceId": 1.5, "args": ["result"]}])
+        client._handle_message(message)
+
+        assert not future.done()
+
+    def test_valid_int_sequence_id_accepted(self):
+        """Test that valid int sequenceId is still accepted."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+        future = asyncio.get_event_loop().create_future()
+        client._pending_requests[42] = future
+
+        message = json.dumps(["Callback", {"sequenceId": 42, "args": ["result_value"]}])
+        client._handle_message(message)
+
+        assert future.done()
+        assert future.result() == "result_value"
+
+
+class TestFireAndForgetErrorHandling:
+    """Tests for fire-and-forget send error wrapping."""
+
+    @pytest.mark.asyncio
+    async def test_send_fire_and_forget_wraps_send_error(self):
+        """Test that send_str errors are wrapped in EvonWsNotConnectedError."""
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Set up as connected
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+        mock_ws.send_str = AsyncMock(side_effect=ConnectionResetError("Connection lost"))
+        client._ws = mock_ws
+        client._connected = True
+
+        with pytest.raises(EvonWsNotConnectedError, match="Failed to send fire-and-forget"):
+            await client._send_fire_and_forget("TestMethod", [])
+
+    @pytest.mark.asyncio
+    async def test_send_fire_and_forget_success(self):
+        """Test that fire-and-forget succeeds normally."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+        mock_ws.send_str = AsyncMock()
+        client._ws = mock_ws
+        client._connected = True
+
+        # Should not raise
+        await client._send_fire_and_forget("TestMethod", ["arg1"])
+
+        mock_ws.send_str.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_fire_and_forget_not_connected(self):
+        """Test that fire-and-forget raises when not connected."""
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        with pytest.raises(EvonWsNotConnectedError):
+            await client._send_fire_and_forget("TestMethod", [])
+
+
+class TestWsLoginTimeout:
+    """Tests for WebSocket login timeout."""
+
+    def test_login_has_timeout_parameter(self):
+        """Test that _login passes a timeout to session.post."""
+        import inspect
+
+        source = inspect.getsource(EvonWsClient._login)
+        # Should include timeout parameter in session.post call
+        assert "timeout=" in source
+        assert "DEFAULT_LOGIN_TIMEOUT" in source
+
+    def test_default_login_timeout_imported(self):
+        """Test that DEFAULT_LOGIN_TIMEOUT is imported in ws_client."""
+        from custom_components.evon.const import DEFAULT_LOGIN_TIMEOUT
+
+        assert isinstance(DEFAULT_LOGIN_TIMEOUT, (int, float))
+        assert DEFAULT_LOGIN_TIMEOUT > 0
+
+
+class TestResubscribeCopy:
+    """Tests for subscription list copy in _resubscribe."""
+
+    def test_resubscribe_passes_copy_of_subscriptions(self):
+        """Test that _resubscribe passes a copy of subscriptions."""
+        import inspect
+
+        source = inspect.getsource(EvonWsClient._resubscribe)
+        # Should use list() to copy
+        assert "list(self._subscriptions)" in source

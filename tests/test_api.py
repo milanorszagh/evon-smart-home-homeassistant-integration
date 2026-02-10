@@ -1653,3 +1653,84 @@ class TestDebugLogging:
         assert DEFAULT_DEBUG_API is False
         assert DEFAULT_DEBUG_WEBSOCKET is False
         assert DEFAULT_DEBUG_COORDINATOR is False
+
+
+class TestParameterBoundsValidation:
+    """Tests for API method parameter bounds validation."""
+
+    @pytest.fixture
+    def mock_api(self):
+        """Create an API with mocked request method."""
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        api._token = "test_token"
+        api._request = AsyncMock(return_value={"data": {}})
+        return api
+
+    @pytest.mark.asyncio
+    async def test_set_light_brightness_clamps_above_100(self, mock_api):
+        """Test brightness values above 100 are clamped to 100."""
+        await mock_api.set_light_brightness("light_1", 150)
+        mock_api._request.assert_called_once()
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [100]
+
+    @pytest.mark.asyncio
+    async def test_set_light_brightness_clamps_below_0(self, mock_api):
+        """Test brightness values below 0 are clamped to 0."""
+        await mock_api.set_light_brightness("light_1", -10)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [0]
+
+    @pytest.mark.asyncio
+    async def test_set_light_brightness_normal_value(self, mock_api):
+        """Test normal brightness values pass through unchanged."""
+        await mock_api.set_light_brightness("light_1", 75)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [75]
+
+    @pytest.mark.asyncio
+    async def test_set_blind_position_clamps_above_100(self, mock_api):
+        """Test blind position above 100 is clamped to 100."""
+        await mock_api.set_blind_position("blind_1", 120)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [100]
+
+    @pytest.mark.asyncio
+    async def test_set_blind_position_clamps_below_0(self, mock_api):
+        """Test blind position below 0 is clamped to 0."""
+        await mock_api.set_blind_position("blind_1", -5)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [0]
+
+    @pytest.mark.asyncio
+    async def test_set_blind_tilt_clamps_above_100(self, mock_api):
+        """Test blind tilt above 100 is clamped to 100."""
+        await mock_api.set_blind_tilt("blind_1", 200)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [100]
+
+    @pytest.mark.asyncio
+    async def test_set_blind_tilt_clamps_below_0(self, mock_api):
+        """Test blind tilt below 0 is clamped to 0."""
+        await mock_api.set_blind_tilt("blind_1", -1)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [0]
+
+    @pytest.mark.asyncio
+    async def test_set_climate_temperature_rounds(self, mock_api):
+        """Test climate temperature is rounded to 1 decimal place."""
+        await mock_api.set_climate_temperature("climate_1", 22.567)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [22.6]
+
+    @pytest.mark.asyncio
+    async def test_set_climate_temperature_float_conversion(self, mock_api):
+        """Test climate temperature converts int to float."""
+        await mock_api.set_climate_temperature("climate_1", 22)
+        call_args = mock_api._request.call_args
+        assert call_args[0][2] == [22.0]
+        assert isinstance(call_args[0][2][0], float)

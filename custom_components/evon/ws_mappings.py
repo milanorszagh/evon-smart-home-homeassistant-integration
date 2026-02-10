@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
+import logging
 from typing import Any
 
 from .const import (
@@ -36,6 +36,8 @@ from .const import (
     EVON_CLASS_SWITCH,
     EVON_CLASS_VALVE,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 # Map Evon class names to entity types (coordinator data keys)
 CLASS_TO_TYPE: dict[str, str] = {
@@ -332,7 +334,7 @@ def ws_to_coordinator_data(
                 )
 
                 min_temp = _min_defined(evon_min, comfort, eco, protection)
-                max_temp = _max_defined(evon_max, protection)
+                max_temp = _max_defined(evon_max, comfort, eco, protection)
             else:
                 if "MinSetValueHeat" in ws_properties:
                     result["min_set_value_heat"] = ws_properties.get("MinSetValueHeat")
@@ -407,8 +409,16 @@ def ws_to_coordinator_data(
 
         # Compute total power if we have all phases
         if p1 is not None and p2 is not None and p3 is not None:
-            with contextlib.suppress(TypeError, ValueError):
+            try:
                 result["power"] = float(p1) + float(p2) + float(p3)
+            except (TypeError, ValueError) as err:
+                _LOGGER.warning(
+                    "Failed to compute smart meter power from phases P1=%r, P2=%r, P3=%r: %s",
+                    p1,
+                    p2,
+                    p3,
+                    err,
+                )
 
     return result
 

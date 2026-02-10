@@ -604,6 +604,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 instance_id,
                 entity_type,
                 err,
+                exc_info=True,
             )
             # Schedule HTTP refresh to recover from the conversion failure
             self.hass.async_create_task(self.async_request_refresh())
@@ -630,6 +631,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return
             data_snapshot = current_data
 
+        # Final consistency check: if data was replaced again between retarget and now, drop update
+        final_data = self.data
+        if final_data is not data_snapshot:
+            _LOGGER.debug("Data replaced again during WS processing for %s, dropping update", instance_id)
+            self.hass.async_create_task(self.async_request_refresh())
+            return
+
         # Update the entity data in place
         # Note: ws_to_coordinator_data already validates which keys to return,
         # so we apply all keys including ones not in the initial HTTP poll
@@ -645,8 +653,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     value,
                 )
 
-                # Fire doorbell event when doorbell_triggered transitions to True
-                if entity_type == ENTITY_TYPE_INTERCOMS and key == "doorbell_triggered" and value is True:
+                # Fire doorbell event only on False→True transition (not every WS update)
+                if (
+                    entity_type == ENTITY_TYPE_INTERCOMS
+                    and key == "doorbell_triggered"
+                    and value is True
+                    and old_value is not True
+                ):
                     self.hass.bus.async_fire(
                         f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
                     )

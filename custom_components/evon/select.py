@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -14,6 +15,8 @@ from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 # Season mode options
 SEASON_MODE_OPTIONS = [SEASON_MODE_HEATING, SEASON_MODE_COOLING]
@@ -140,6 +143,8 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self.async_write_ha_state()
                 raise
             await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -240,6 +245,8 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
                 self.async_write_ha_state()
                 raise
             await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:

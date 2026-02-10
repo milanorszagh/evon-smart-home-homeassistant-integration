@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -30,6 +31,8 @@ from .const import (
     EVON_PRESET_HEATING,
 )
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 # Preset modes list
 PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ENERGY_SAVING, CLIMATE_MODE_FREEZE_PROTECTION]
@@ -308,6 +311,12 @@ class EvonClimate(EvonEntity, ClimateEntity):
                 await self._api.set_climate_energy_saving_mode(self._instance_id)
             elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
                 await self._api.set_climate_freeze_protection_mode(self._instance_id)
+            else:
+                _LOGGER.warning("Unrecognized preset mode %r for %s", preset_mode, self._instance_id)
+                self._optimistic_preset = None
+                self._optimistic_state_set_at = None
+                self.async_write_ha_state()
+                return
         except EvonApiError:
             self._optimistic_preset = None
             self._optimistic_state_set_at = None

@@ -290,7 +290,8 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
         data = self.coordinator.get_entity_data(ENTITY_TYPE_INTERCOMS, self._instance_id)
         if data:
             # is_on = connected (inverse of connection_lost)
-            return not data.get("connection_lost", False)
+            # Use `is not True` to safely handle None/missing values as "connected"
+            return data.get("connection_lost") is not True
         return None
 
 

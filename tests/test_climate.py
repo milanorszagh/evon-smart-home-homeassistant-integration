@@ -435,3 +435,28 @@ async def test_climate_optimistic_preset(hass, mock_config_entry_v2, mock_evon_a
     # State should reflect the optimistic preset update
     state = hass.states.get("climate.living_room_climate")
     assert state.attributes.get("preset_mode") == "eco"
+
+
+@pytest.mark.asyncio
+async def test_climate_unrecognized_preset_mode(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that unrecognized preset mode is handled gracefully."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Initial preset is "comfort"
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "comfort"
+
+    # Try setting an invalid preset mode - should not change state
+    with pytest.raises(ValueError):
+        await hass.services.async_call(
+            "climate",
+            "set_preset_mode",
+            {"entity_id": "climate.living_room_climate", "preset_mode": "invalid_mode"},
+            blocking=True,
+        )
+
+    # State should still be "comfort" (optimistic state reverted)
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "comfort"

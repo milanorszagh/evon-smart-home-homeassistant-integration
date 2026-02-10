@@ -41,3 +41,31 @@ async def test_valve_binary_sensor_closed(hass, mock_config_entry_v2, mock_evon_
     state = hass.states.get("binary_sensor.living_room_valve")
     assert state is not None
     assert state.state == "off"  # Valve is closed
+
+
+@pytest.mark.asyncio
+async def test_intercom_connection_sensor_none_safety(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test intercom connection sensor handles None connection_lost safely.
+
+    When connection_lost is None (missing from data), the sensor should
+    report 'on' (connected), not crash or return incorrect state.
+    """
+    from custom_components.evon.const import DOMAIN
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+
+    # Find intercom entity and set connection_lost to None
+    intercoms = coordinator.data.get("intercoms", [])
+    if intercoms:
+        intercoms[0]["connection_lost"] = None
+        coordinator.async_set_updated_data(coordinator.data)
+        await hass.async_block_till_done()
+
+        state = hass.states.get("binary_sensor.main_intercom_connection")
+        # None should be treated as "connected" (is_on=True → "on")
+        if state is not None:
+            assert state.state == "on"

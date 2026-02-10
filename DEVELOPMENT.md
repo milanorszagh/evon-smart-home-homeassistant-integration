@@ -568,7 +568,7 @@ All requests require: `Cookie: token=<token>`
 |--------|--------|------------|-------------|
 | `SwitchOn` | `AmznTurnOn` | - | Turn light on |
 | `SwitchOff` | `AmznTurnOff` | - | Turn light off |
-| `BrightnessSetScaled` | `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness |
+| `BrightnessSetScaled` | `AmznSetBrightness` | `[brightness]` (0-100, clamped) | Set brightness |
 
 The codebase uses WS-native names (left column) as canonical names. The HTTP translation is handled automatically by `get_http_method_name()` / `CANONICAL_TO_HTTP_METHOD`.
 
@@ -829,9 +829,10 @@ These can be monitored in real-time using `RegisterValuesChanged`. See `ws-secur
 **Integration Features (v1.14.0):**
 - **Security Door Sensors**: Binary sensors for door open/closed state and call in progress
 - **Intercom Sensors**: Binary sensors for door state and connection status
-- **Doorbell Events**: Home Assistant event `evon_doorbell` fired when doorbell is pressed *(untested)*
+- **Doorbell Events**: Home Assistant event `evon_doorbell` fired on doorbell press (False→True transition only) *(untested)*
   - Event data: `device_id`, `name`
   - Use in automations to trigger notifications, announcements, or camera snapshots
+  - Deduplication: only fires on state transition (not on repeated True values from WebSocket)
 
 ---
 
@@ -1045,8 +1046,9 @@ Test files:
 - `test_device_trigger.py` - Device trigger tests
 - `test_processors.py` - Data processor tests
 - `test_services.py` - Service handler tests
+- `test_statistics.py` - Energy statistics import tests
 
-Current coverage: 498 tests
+Current coverage: 581 tests
 
 ---
 

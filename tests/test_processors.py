@@ -506,6 +506,77 @@ class TestClimateProcessor:
         assert climate["protection_temp"] == 29
         assert climate["is_cooling"] is True
 
+    def test_process_climates_cooling_max_temp_includes_all_presets(self):
+        """Test cooling mode max_temp includes comfort and eco temps.
+
+        If a preset temp (comfort/eco) exceeds MaxSetValueCool, the slider
+        should still allow reaching it.
+        """
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [
+            {
+                "ID": "climate_1",
+                "ClassName": "SmartCOM.Clima.ClimateControl",
+                "Name": "Climate",
+                "Group": "",
+            },
+        ]
+        instance_details = {
+            "climate_1": {
+                "ActualTemperature": 26.0,
+                "SetTemperature": 24.0,
+                "SetValueComfortCooling": 32,  # Exceeds MaxSetValueCool!
+                "SetValueEnergySavingCooling": 28,
+                "SetValueHeatProtection": 29,
+                "MinSetValueCool": 18,
+                "MaxSetValueCool": 30,
+                "CoolingMode": True,
+                "DisableCooling": False,
+                "IsOn": True,
+            },
+        }
+
+        result = process_climates(instance_details, instances, lambda x: "", season_mode=True)
+
+        climate = result[0]
+        # max_temp should be 32 (comfort_temp), not 30 (MaxSetValueCool)
+        assert climate["max_temp"] == 32
+        # min_temp should include all presets too
+        assert climate["min_temp"] == 18
+
+    def test_process_climates_cooling_eco_exceeds_max(self):
+        """Test cooling mode max_temp picks up eco temp when it's highest."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [
+            {
+                "ID": "climate_1",
+                "ClassName": "SmartCOM.Clima.ClimateControl",
+                "Name": "Climate",
+                "Group": "",
+            },
+        ]
+        instance_details = {
+            "climate_1": {
+                "ActualTemperature": 26.0,
+                "SetTemperature": 24.0,
+                "SetValueComfortCooling": 25,
+                "SetValueEnergySavingCooling": 35,  # Exceeds everything
+                "SetValueHeatProtection": 29,
+                "MinSetValueCool": 18,
+                "MaxSetValueCool": 30,
+                "CoolingMode": True,
+                "DisableCooling": False,
+                "IsOn": True,
+            },
+        }
+
+        result = process_climates(instance_details, instances, lambda x: "", season_mode=True)
+
+        climate = result[0]
+        assert climate["max_temp"] == 35
+
 
 class TestSwitchProcessor:
     """Tests for switch data processor."""

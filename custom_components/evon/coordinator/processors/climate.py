@@ -51,7 +51,7 @@ def process_climates(
             evon_max = details.get("MaxSetValueCool", 30)
             # Include protection temp in range (heat protection can be above normal max)
             min_temp = min(evon_min, comfort_temp, eco_temp, protection_temp)
-            max_temp = max(evon_max, protection_temp)
+            max_temp = max(evon_max, comfort_temp, eco_temp, protection_temp)
         else:  # Heating (winter)
             comfort_temp = details.get("SetValueComfortHeating", 22)
             eco_temp = details.get("SetValueEnergySavingHeating", 20)

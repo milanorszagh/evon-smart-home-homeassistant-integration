@@ -13,7 +13,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import EvonApi
+from .api import INSTANCE_ID_PATTERN, EvonApi
 from .const import (
     CONF_CONNECTION_TYPE,
     CONF_DEBUG_API,
@@ -354,6 +354,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         for entity in list(coordinator.data[entity_type]):
                             entity_id = entity.get("id")
                             if not entity_id:
+                                continue
+                            if not INSTANCE_ID_PATTERN.match(entity_id):
+                                _LOGGER.warning("Invalid instance ID in bulk call: %r", entity_id)
                                 continue
                             if filter_fn and not filter_fn(entity):
                                 continue

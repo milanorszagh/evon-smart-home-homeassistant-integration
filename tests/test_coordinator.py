@@ -773,3 +773,128 @@ class TestCoordinatorRoomSync:
 
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         assert coordinator.data.get("rooms") == {}
+
+
+@requires_ha_test_framework
+class TestDoorbellEventTransition:
+    """Tests for doorbell event transition detection."""
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+            },
+            entry_id="test_doorbell_entry",
+        )
+
+    @pytest.mark.asyncio
+    async def test_doorbell_fires_on_false_to_true(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test doorbell event fires when transitioning from False to True."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Track fired events
+        events = []
+        hass.bus.async_listen("evon_doorbell", lambda event: events.append(event))
+
+        # Simulate WS update: doorbell False → True
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": True},
+        )
+        await hass.async_block_till_done()
+
+        assert len(events) == 1
+        assert events[0].data["device_id"] == "intercom_1"
+
+    @pytest.mark.asyncio
+    async def test_doorbell_does_not_fire_on_true_to_true(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test doorbell event does NOT fire when value stays True (no transition)."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # First set doorbell to True
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": True},
+        )
+        await hass.async_block_till_done()
+
+        # Track events from this point
+        events = []
+        hass.bus.async_listen("evon_doorbell", lambda event: events.append(event))
+
+        # Send another True — should NOT fire again (True → True, no transition)
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": True},
+        )
+        await hass.async_block_till_done()
+
+        assert len(events) == 0
+
+    @pytest.mark.asyncio
+    async def test_doorbell_fires_again_after_reset(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test doorbell fires again after resetting to False then True."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        events = []
+        hass.bus.async_listen("evon_doorbell", lambda event: events.append(event))
+
+        # False → True: should fire
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": True},
+        )
+        await hass.async_block_till_done()
+        assert len(events) == 1
+
+        # True → False: reset
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": False},
+        )
+        await hass.async_block_till_done()
+
+        # False → True again: should fire again
+        coordinator._handle_ws_values_changed(
+            "intercom_1",
+            {"DoorBellTriggered": True},
+        )
+        await hass.async_block_till_done()
+        assert len(events) == 2

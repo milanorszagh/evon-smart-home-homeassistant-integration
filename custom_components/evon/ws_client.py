@@ -15,6 +15,7 @@ import aiohttp
 
 from .api import EvonWsError, EvonWsNotConnectedError, EvonWsTimeoutError, encode_password
 from .const import (
+    DEFAULT_LOGIN_TIMEOUT,
     DEFAULT_WS_RECONNECT_DELAY,
     WS_DEFAULT_REQUEST_TIMEOUT,
     WS_HEARTBEAT_INTERVAL,
@@ -28,6 +29,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Interval for periodic stale request cleanup (seconds)
+_STALE_CLEANUP_INTERVAL = 15.0
 
 # WebSocket message types
 WS_MSG_CONNECTED = "Connected"
@@ -107,6 +111,7 @@ class EvonWsClient:
         self._reconnect_delay = DEFAULT_WS_RECONNECT_DELAY
         self._message_task: asyncio.Task | None = None
         self._resubscribe_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task | None = None
         self._pending_requests: dict[int, asyncio.Future] = {}
         self._pending_request_times: dict[int, float] = {}
         self._subscriptions: list[dict[str, Any]] = []
@@ -218,10 +223,12 @@ class EvonWsClient:
                 login_url = f"{self._host}/login"
 
             session = self._get_valid_session()
+            login_timeout = aiohttp.ClientTimeout(total=DEFAULT_LOGIN_TIMEOUT)
             async with session.post(
                 login_url,
                 headers=headers,
                 allow_redirects=False,
+                timeout=login_timeout,
             ) as response:
                 _LOGGER.debug(
                     "WebSocket login response: status=%s",
@@ -275,6 +282,13 @@ class EvonWsClient:
                 await self._message_task
             self._message_task = None
 
+        # Cancel the periodic cleanup task
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._cleanup_task
+            self._cleanup_task = None
+
         # Close the WebSocket
         await self.disconnect()
 
@@ -293,6 +307,13 @@ class EvonWsClient:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._resubscribe_task
             self._resubscribe_task = None
+
+        # Cancel periodic cleanup task
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._cleanup_task
+            self._cleanup_task = None
 
         # Reject pending requests before closing connection
         # to ensure proper error handling
@@ -319,7 +340,7 @@ class EvonWsClient:
                 try:
                     self._on_connection_state(False)
                 except Exception as err:
-                    _LOGGER.warning("Error in connection state callback: %s", err)
+                    _LOGGER.warning("Error in connection state callback: %s", err, exc_info=True)
 
     async def _run_loop(self) -> None:
         """Main loop for handling messages and reconnection."""
@@ -333,6 +354,9 @@ class EvonWsClient:
                         _LOGGER.debug("WS connect OK, waiting for Connected message")
                         await self._wait_for_connected()
                         _LOGGER.debug("WS _wait_for_connected done, _connected=%s", self._connected)
+                        # Start periodic stale request cleanup
+                        if not self._cleanup_task or self._cleanup_task.done():
+                            self._cleanup_task = asyncio.create_task(self._periodic_stale_cleanup())
                         # Resubscribe after connection is established and message loop can process responses
                         if self._connected and self._subscriptions:
                             _LOGGER.debug("WS scheduling resubscription for %d instances", len(self._subscriptions))
@@ -477,6 +501,9 @@ class EvonWsClient:
                     return
                 payload = msg[1]
                 sequence_id = payload.get("sequenceId")
+                if not isinstance(sequence_id, int):
+                    _LOGGER.warning("Invalid sequenceId type: %s", type(sequence_id).__name__)
+                    return
                 _LOGGER.debug("Callback received: seq=%s, pending=%s", sequence_id, list(self._pending_requests.keys()))
                 if sequence_id in self._pending_requests:
                     future = self._pending_requests.pop(sequence_id)
@@ -501,7 +528,7 @@ class EvonWsClient:
         except json.JSONDecodeError as err:
             _LOGGER.error("Failed to parse WebSocket message: %s", err)
         except Exception as err:  # pylint: disable=broad-except
-            _LOGGER.error("Error handling WebSocket message: %s", err)
+            _LOGGER.error("Error handling WebSocket message: %s", err, exc_info=True)
 
     def _handle_values_changed(self, args: list[Any]) -> None:
         """Handle a ValuesChanged event.
@@ -545,7 +572,14 @@ class EvonWsClient:
                     "Error in values changed callback for %s: %s",
                     instance_id,
                     err,
+                    exc_info=True,
                 )
+
+    async def _periodic_stale_cleanup(self) -> None:
+        """Periodically clean up stale pending requests."""
+        while self._running:
+            await asyncio.sleep(_STALE_CLEANUP_INTERVAL)
+            self._cleanup_stale_requests()
 
     def _cleanup_stale_requests(self) -> None:
         """Remove pending requests older than 2x the default timeout.
@@ -674,7 +708,10 @@ class EvonWsClient:
         _LOGGER.debug("Sending WS fire-and-forget: method=%s, seq=%s", method_name, sequence_id)
         if not self._ws or self._ws.closed:
             raise EvonWsNotConnectedError("WebSocket closed before send")
-        await self._ws.send_str(json.dumps(message))
+        try:
+            await self._ws.send_str(json.dumps(message))
+        except Exception as err:
+            raise EvonWsNotConnectedError(f"Failed to send fire-and-forget: {err}") from err
         _LOGGER.debug("WS fire-and-forget sent successfully")
 
     async def subscribe_instances(
@@ -724,7 +761,7 @@ class EvonWsClient:
         """Re-subscribe to all stored subscriptions after reconnection."""
         if self._subscriptions:
             _LOGGER.debug("Re-subscribing to %d instances", len(self._subscriptions))
-            await self._do_subscribe(self._subscriptions)
+            await self._do_subscribe(list(self._subscriptions))
 
     async def unsubscribe_instances(self, instance_ids: list[str]) -> None:
         """Unsubscribe from property changes for instances.

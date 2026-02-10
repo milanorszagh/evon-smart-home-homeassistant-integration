@@ -657,6 +657,7 @@ class EvonApi:
 
     async def set_light_brightness(self, instance_id: str, brightness: int) -> None:
         """Set light brightness (0-100)."""
+        brightness = max(0, min(100, int(brightness)))
         await self.call_method(instance_id, "BrightnessSetScaled", [brightness])
 
     async def set_light_color_temp(self, instance_id: str, kelvin: int) -> None:
@@ -690,10 +691,12 @@ class EvonApi:
 
     async def set_blind_position(self, instance_id: str, position: int) -> None:
         """Set blind position (0=open, 100=closed)."""
+        position = max(0, min(100, int(position)))
         await self.call_method(instance_id, "SetPosition", [position])
 
     async def set_blind_tilt(self, instance_id: str, angle: int) -> None:
         """Set blind tilt angle (0-100)."""
+        angle = max(0, min(100, int(angle)))
         await self.call_method(instance_id, "SetAngle", [angle])
 
     # Climate methods
@@ -726,6 +729,7 @@ class EvonApi:
 
     async def set_climate_temperature(self, instance_id: str, temperature: float) -> None:
         """Set climate target temperature."""
+        temperature = round(float(temperature), 1)
         await self.call_method(instance_id, "WriteCurrentSetTemperature", [temperature])
 
     # Group climate methods (all thermostats at once)
