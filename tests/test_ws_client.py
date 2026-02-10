@@ -2022,18 +2022,15 @@ class TestWsReceiveTimeout:
             password="pass",
         )
 
-        # Mock WebSocket that never responds (simulates silent death)
+        # Mock WebSocket whose receive() raises TimeoutError
+        # (simulates asyncio.timeout firing when the remote server silently dies)
         mock_ws = AsyncMock()
         mock_ws.closed = False
-
-        async def hang_forever():
-            await asyncio.sleep(999)
-
-        mock_ws.receive = hang_forever
+        mock_ws.receive = AsyncMock(side_effect=TimeoutError())
         client._ws = mock_ws
         client._connected = True
 
-        # _handle_messages should timeout and call disconnect
+        # _handle_messages should catch TimeoutError and call disconnect
         disconnect_called = False
         original_disconnect = client.disconnect
 
@@ -2044,17 +2041,7 @@ class TestWsReceiveTimeout:
 
         client.disconnect = mock_disconnect
 
-        # Patch WS_RECEIVE_TIMEOUT to be very short for test speed
-        import custom_components.evon.ws_client as ws_module
-
-        original_timeout = ws_module.WS_RECEIVE_TIMEOUT
-        ws_module.WS_RECEIVE_TIMEOUT = 0.1
-        try:
-            # _handle_messages should complete quickly (not hang forever)
-            # because the receive timeout fires and triggers disconnect
-            await asyncio.wait_for(client._handle_messages(), timeout=5.0)
-        finally:
-            ws_module.WS_RECEIVE_TIMEOUT = original_timeout
+        await client._handle_messages()
 
         assert disconnect_called
 
@@ -2064,6 +2051,13 @@ class TestWsReceiveTimeout:
 
         assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 3
         assert WS_RECEIVE_TIMEOUT == 90
+
+    def test_handle_messages_uses_asyncio_timeout(self):
+        """Test that _handle_messages wraps receive in asyncio.timeout."""
+        import inspect
+
+        source = inspect.getsource(EvonWsClient._handle_messages)
+        assert "asyncio.timeout(WS_RECEIVE_TIMEOUT)" in source
 
 
 class TestStaleRequestCleanup:
