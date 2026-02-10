@@ -196,8 +196,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "options": options_data,
         },
         "coordinator": {
-            "last_update_success": coordinator.last_update_success,
-            "update_interval": str(coordinator.update_interval),
+            "last_update_success": getattr(coordinator, "last_update_success", None),
+            "update_interval": str(getattr(coordinator, "update_interval", "unknown")),
         },
         "device_counts": device_counts,
         "devices": device_summaries,

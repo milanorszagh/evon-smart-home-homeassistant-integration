@@ -232,9 +232,9 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
 
             # Use optimistic time if set (for immediate UI feedback when turning on)
             if self._optimistic_time_remaining_mins is not None:
-                time_remaining = self._optimistic_time_remaining_mins
+                time_remaining = max(0.0, self._optimistic_time_remaining_mins)
                 mins = int(time_remaining)
-                secs = int((time_remaining - mins) * 60)
+                secs = min(59, int((time_remaining - mins) * 60))
                 attrs["time_remaining"] = f"{mins}:{secs:02d}"
                 attrs["time_remaining_mins"] = round(time_remaining, 1)
             else:
@@ -242,7 +242,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
                 if time_remaining > 0:
                     # Convert to minutes:seconds format
                     mins = int(time_remaining)
-                    secs = int((time_remaining - mins) * 60)
+                    secs = min(59, int((time_remaining - mins) * 60))
                     attrs["time_remaining"] = f"{mins}:{secs:02d}"
                     attrs["time_remaining_mins"] = round(time_remaining, 1)
                 else:

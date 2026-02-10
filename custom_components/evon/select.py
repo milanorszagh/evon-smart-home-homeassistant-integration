@@ -87,7 +87,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
         # Use Evon IDs directly as options - translations handle display
-        options = [state["id"] for state in home_states]
+        options = [state.get("id") for state in home_states if state.get("id")]
         # Sort by preferred order, unknown states go to the end
         self._attr_options = sorted(
             options, key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)

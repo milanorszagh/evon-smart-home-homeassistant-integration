@@ -107,9 +107,25 @@ if not importlib.util.find_spec("homeassistant"):
     mock_recorder_statistics = MagicMock()
     mock_recorder_statistics.statistics_during_period = MagicMock(return_value={})
     mock_recorder.statistics = mock_recorder_statistics
+
+    # Recorder models for StatisticData/StatisticMetaData (used by statistics.py)
+    mock_recorder_models = MagicMock()
+    # StatisticData should behave like a dict-like dataclass
+    mock_recorder_models.StatisticData = lambda **kwargs: kwargs
+    mock_recorder_models.StatisticMetaData = lambda **kwargs: kwargs
+    mock_recorder.models = mock_recorder_models
+
+    # Recorder models.statistics for StatisticMeanType
+    mock_recorder_models_statistics = MagicMock()
+    mock_recorder_models_statistics.StatisticMeanType = MagicMock()
+    mock_recorder_models_statistics.StatisticMeanType.NONE = 0
+    mock_recorder_models.statistics = mock_recorder_models_statistics
+
     mock_ha.components.recorder = mock_recorder
     sys.modules["homeassistant.components.recorder"] = mock_ha.components.recorder
     sys.modules["homeassistant.components.recorder.statistics"] = mock_recorder_statistics
+    sys.modules["homeassistant.components.recorder.models"] = mock_recorder_models
+    sys.modules["homeassistant.components.recorder.models.statistics"] = mock_recorder_models_statistics
 
     sys.modules["homeassistant.exceptions"] = mock_ha.exceptions
     sys.modules["homeassistant.util"] = mock_ha.util

@@ -43,8 +43,9 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
             instance_id = identifier[1]
             # Check if this is an intercom by looking at the coordinator data
             for entry_id in device.config_entries:
-                if entry_id in hass.data.get(DOMAIN, {}):
-                    coordinator = hass.data[DOMAIN][entry_id].get("coordinator")
+                entry_data = hass.data.get(DOMAIN, {}).get(entry_id, {})
+                if entry_data:
+                    coordinator = entry_data.get("coordinator")
                     if coordinator and coordinator.data:
                         intercoms = coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])
                         for intercom in intercoms:

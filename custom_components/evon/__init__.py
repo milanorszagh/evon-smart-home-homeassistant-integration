@@ -392,6 +392,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             """Handle the start recording service call."""
             entity_id = call.data.get("entity_id")
             duration = call.data.get("duration")
+            if duration is not None:
+                try:
+                    duration = int(duration)
+                    if duration <= 0:
+                        raise ValueError("duration must be positive")
+                except (TypeError, ValueError):
+                    _LOGGER.error("Invalid recording duration: %r", duration)
+                    return
             if not entity_id:
                 _LOGGER.error("entity_id is required for start_recording")
                 return

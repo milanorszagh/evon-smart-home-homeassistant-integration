@@ -52,9 +52,13 @@ class TestBaseEntityLogic:
             else:
                 del sys.modules[mod_name]
 
-        # Clear any cached imports
+        # Clear only the modules this test imported (not all evon modules,
+        # which would break other tests that hold references to them)
         for mod_name in list(sys.modules.keys()):
-            if mod_name.startswith("custom_components.evon"):
+            if mod_name in (
+                "custom_components.evon.base_entity",
+                "custom_components.evon.const",
+            ):
                 del sys.modules[mod_name]
 
     def test_available_when_data_exists(self, setup_mocks):

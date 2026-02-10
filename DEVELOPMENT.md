@@ -1050,7 +1050,7 @@ Test files:
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
 - `test_ws_control.py` - WebSocket control mappings tests
 
-Current coverage: 577 tests
+Current coverage: 596 tests (unit/mock) + 224 integration tests (require HA test framework)
 
 ---
 

@@ -261,8 +261,8 @@ class EvonCameraRecorder:
         mp4_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Determine frame dimensions from first frame
-        first_image = Image.open(io.BytesIO(self._frames[0][0]))
-        width, height = first_image.size
+        with Image.open(io.BytesIO(self._frames[0][0])) as first_image:
+            width, height = first_image.size
 
         # Calculate actual FPS from frame timestamps
         if len(self._frames) >= 2:
@@ -288,14 +288,22 @@ class EvonCameraRecorder:
             stream.pix_fmt = "yuv420p"
 
             for jpeg_bytes, ts in self._frames:
-                img = Image.open(io.BytesIO(jpeg_bytes)).convert("RGB")
+                try:
+                    img = Image.open(io.BytesIO(jpeg_bytes))
+                except Exception:
+                    _LOGGER.debug("Skipping corrupt JPEG frame at %s", ts)
+                    continue
+                try:
+                    img = img.convert("RGB")
 
-                # Burn timestamp overlay
-                _draw_timestamp(img, ts, font)
+                    # Burn timestamp overlay
+                    _draw_timestamp(img, ts, font)
 
-                frame = av.VideoFrame.from_image(img)
-                for packet in stream.encode(frame):
-                    container.mux(packet)
+                    frame = av.VideoFrame.from_image(img)
+                    for packet in stream.encode(frame):
+                        container.mux(packet)
+                finally:
+                    img.close()
 
             # Flush encoder
             for packet in stream.encode():

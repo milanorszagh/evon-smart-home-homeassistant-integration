@@ -257,6 +257,9 @@ class TestMP4Encoding:
         mock_img.width = 640
         mock_img.height = 480
         mock_img.convert = MagicMock(return_value=mock_img)
+        # Configure as context manager so `with Image.open(...) as img:` returns mock_img
+        mock_img.__enter__ = MagicMock(return_value=mock_img)
+        mock_img.__exit__ = MagicMock(return_value=False)
 
         # Inject mock av into sys.modules so the local `import av` picks it up
         had_av = "av" in sys.modules
