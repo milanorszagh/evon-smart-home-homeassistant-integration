@@ -250,7 +250,7 @@ class EvonCamera(EvonEntity, Camera):
     async def async_added_to_hass(self) -> None:
         """Register camera in shared registry for cross-platform lookup."""
         await super().async_added_to_hass()
-        self.hass.data[DOMAIN][self._entry.entry_id]["cameras"][self._instance_id] = self
+        self.hass.data[DOMAIN][self._entry.entry_id].setdefault("cameras", {})[self._instance_id] = self
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up recorder and unregister from shared registry."""

@@ -1044,11 +1044,13 @@ Test files:
 - `test_base_entity.py` - Base entity and optimistic state tests
 - `test_constants.py` - Constants validation tests
 - `test_device_trigger.py` - Device trigger tests
-- `test_processors.py` - Data processor tests
+- `test_processors.py` - Data processor tests (including edge cases for all processor functions)
 - `test_services.py` - Service handler tests
 - `test_statistics.py` - Energy statistics import tests
+- `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
+- `test_ws_control.py` - WebSocket control mappings tests
 
-Current coverage: 581 tests
+Current coverage: 577 tests
 
 ---
 

@@ -1734,3 +1734,148 @@ class TestParameterBoundsValidation:
         call_args = mock_api._request.call_args
         assert call_args[0][2] == [22.0]
         assert isinstance(call_args[0][2][0], float)
+
+
+class TestTryWsControl:
+    """Tests for _try_ws_control() WebSocket routing logic."""
+
+    @pytest.fixture
+    def ws_api(self):
+        """Create an EvonApi with a mock WS client."""
+        api = EvonApi.__new__(EvonApi)
+        api._ws_client = MagicMock()
+        api._ws_client.is_connected = True
+        api._ws_client.call_method = AsyncMock(return_value=True)
+        api._ws_client.set_value = AsyncMock(return_value=True)
+        api._instance_classes = {}
+        api._blind_cache = {}
+        return api
+
+    @pytest.mark.asyncio
+    async def test_no_class_returns_false(self, ws_api):
+        """Falls back to HTTP when instance class is unknown."""
+        result = await ws_api._try_ws_control("unknown.instance", "SwitchOn", None)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_light_switch_on_call_method(self, ws_api):
+        """Light SwitchOn routes to CallMethod."""
+        ws_api._instance_classes["SC1.Light1"] = "SmartCOM.Light.LightDim"
+        result = await ws_api._try_ws_control("SC1.Light1", "SwitchOn", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("SC1.Light1", "SwitchOn", None, False)
+
+    @pytest.mark.asyncio
+    async def test_light_brightness_call_method(self, ws_api):
+        """Light BrightnessSetScaled routes with transformed params."""
+        ws_api._instance_classes["SC1.Light1"] = "SmartCOM.Light.LightDim"
+        result = await ws_api._try_ws_control("SC1.Light1", "BrightnessSetScaled", [75])
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("SC1.Light1", "BrightnessSetScaled", [75, 0], False)
+
+    @pytest.mark.asyncio
+    async def test_light_color_temp_set_value(self, ws_api):
+        """Light SetColorTemp routes to SetValue on ColorTemp property."""
+        ws_api._instance_classes["SC1.Light1"] = "SmartCOM.Light.DynamicRGBWLight"
+        result = await ws_api._try_ws_control("SC1.Light1", "SetColorTemp", [3500])
+        assert result is True
+        ws_api._ws_client.set_value.assert_called_once_with("SC1.Light1", "ColorTemp", 3500)
+
+    @pytest.mark.asyncio
+    async def test_blind_open_call_method(self, ws_api):
+        """Blind Open routes to CallMethod."""
+        ws_api._instance_classes["SC1.Blind1"] = "SmartCOM.Blind.Blind"
+        result = await ws_api._try_ws_control("SC1.Blind1", "Open", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("SC1.Blind1", "Open", None, False)
+
+    @pytest.mark.asyncio
+    async def test_blind_set_position_uses_cached_angle(self, ws_api):
+        """SetPosition uses MoveToPosition with [cached_angle, new_position]."""
+        ws_api._instance_classes["SC1.Blind1"] = "SmartCOM.Blind.Blind"
+        ws_api._blind_cache = {"SC1.Blind1": {"angle": 45, "position": 50}}
+        ws_api.get_blind_angle = MagicMock(return_value=45)
+        result = await ws_api._try_ws_control("SC1.Blind1", "SetPosition", [80])
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("SC1.Blind1", "MoveToPosition", [45, 80], False)
+
+    @pytest.mark.asyncio
+    async def test_blind_set_position_no_cached_angle_returns_false(self, ws_api):
+        """SetPosition without cached angle falls back to HTTP."""
+        ws_api._instance_classes["SC1.Blind1"] = "SmartCOM.Blind.Blind"
+        ws_api.get_blind_angle = MagicMock(return_value=None)
+        result = await ws_api._try_ws_control("SC1.Blind1", "SetPosition", [80])
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_blind_set_angle_uses_cached_position(self, ws_api):
+        """SetAngle uses MoveToPosition with [new_angle, cached_position]."""
+        ws_api._instance_classes["SC1.Blind1"] = "SmartCOM.Blind.Blind"
+        ws_api.get_blind_position = MagicMock(return_value=60)
+        result = await ws_api._try_ws_control("SC1.Blind1", "SetAngle", [30])
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("SC1.Blind1", "MoveToPosition", [30, 60], False)
+
+    @pytest.mark.asyncio
+    async def test_blind_set_angle_no_cached_position_returns_false(self, ws_api):
+        """SetAngle without cached position falls back to HTTP."""
+        ws_api._instance_classes["SC1.Blind1"] = "SmartCOM.Blind.Blind"
+        ws_api.get_blind_position = MagicMock(return_value=None)
+        result = await ws_api._try_ws_control("SC1.Blind1", "SetAngle", [30])
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_climate_fire_and_forget(self, ws_api):
+        """Climate commands use fire_and_forget=True."""
+        ws_api._instance_classes["Heating.Zone1"] = "SmartCOM.Clima.ClimateControl"
+        result = await ws_api._try_ws_control("Heating.Zone1", "WriteDayMode", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("Heating.Zone1", "WriteDayMode", [], True)
+
+    @pytest.mark.asyncio
+    async def test_climate_set_temperature(self, ws_api):
+        """Climate WriteCurrentSetTemperature passes temp in list."""
+        ws_api._instance_classes["Heating.Zone1"] = "Heating.ClimateControlUniversal"
+        result = await ws_api._try_ws_control("Heating.Zone1", "WriteCurrentSetTemperature", [22.5])
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with(
+            "Heating.Zone1", "WriteCurrentSetTemperature", [22.5], True
+        )
+
+    @pytest.mark.asyncio
+    async def test_switch_no_mapping_returns_false(self, ws_api):
+        """Switch commands always return False (empty mappings = HTTP fallback)."""
+        ws_api._instance_classes["SC1.Switch1"] = "SmartCOM.Switch"
+        result = await ws_api._try_ws_control("SC1.Switch1", "AmznTurnOn", None)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_unknown_method_returns_false(self, ws_api):
+        """Unknown method for known class returns False."""
+        ws_api._instance_classes["SC1.Light1"] = "SmartCOM.Light.LightDim"
+        result = await ws_api._try_ws_control("SC1.Light1", "NonExistentMethod", None)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_scene_execute(self, ws_api):
+        """Scene Execute routes to CallMethod."""
+        ws_api._instance_classes["System.Scene1"] = "System.SceneApp"
+        result = await ws_api._try_ws_control("System.Scene1", "Execute", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("System.Scene1", "Execute", None, False)
+
+    @pytest.mark.asyncio
+    async def test_bathroom_radiator_switch_one_time(self, ws_api):
+        """Bathroom radiator SwitchOneTime routes to CallMethod."""
+        ws_api._instance_classes["Heating.Rad1"] = "Heating.BathroomRadiator"
+        result = await ws_api._try_ws_control("Heating.Rad1", "SwitchOneTime", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("Heating.Rad1", "SwitchOneTime", None, False)
+
+    @pytest.mark.asyncio
+    async def test_home_state_activate(self, ws_api):
+        """Home state Activate routes to CallMethod."""
+        ws_api._instance_classes["System.State1"] = "System.HomeState"
+        result = await ws_api._try_ws_control("System.State1", "Activate", None)
+        assert result is True
+        ws_api._ws_client.call_method.assert_called_once_with("System.State1", "Activate", None, False)

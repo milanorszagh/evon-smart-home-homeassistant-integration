@@ -249,34 +249,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_refresh(call: ServiceCall) -> None:
             """Handle the refresh service call."""
             _LOGGER.info("Refresh service called - forcing data update")
-            # Take a snapshot of entries to iterate over
-            entries = list(hass.data.get(DOMAIN, {}).values())
-            for entry_data in entries:
-                if "coordinator" in entry_data:
-                    await entry_data["coordinator"].async_refresh()
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).values())
+                for entry_data in entries:
+                    if "coordinator" in entry_data:
+                        await entry_data["coordinator"].async_refresh()
 
         async def handle_reconnect_websocket(call: ServiceCall) -> None:
             """Handle the reconnect websocket service call."""
             _LOGGER.info("Reconnect WebSocket service called")
-            # Take a snapshot of entries to iterate over
-            entries = list(hass.data.get(DOMAIN, {}).items())
-            for entry_id, entry_data in entries:
-                if "coordinator" not in entry_data:
-                    continue
-                coordinator = entry_data["coordinator"]
-                # Get the config entry to access connection details
-                config_entry = hass.config_entries.async_get_entry(entry_id)
-                if not config_entry:
-                    _LOGGER.debug("Config entry %s not found, skipping WebSocket reconnect", entry_id)
-                    continue
-                if not coordinator.use_websocket:
-                    _LOGGER.debug("WebSocket disabled for %s, skipping reconnect", entry_id)
-                    continue
-                try:
-                    await coordinator.async_shutdown_websocket()
-                    await _async_setup_websocket(hass, coordinator, config_entry)
-                except Exception as err:
-                    _LOGGER.error("Failed to reconnect WebSocket for %s: %s", entry_id, err)
+            async with _get_service_lock(hass):
+                entries = list(hass.data.get(DOMAIN, {}).items())
+                for entry_id, entry_data in entries:
+                    if "coordinator" not in entry_data:
+                        continue
+                    coordinator = entry_data["coordinator"]
+                    config_entry = hass.config_entries.async_get_entry(entry_id)
+                    if not config_entry:
+                        _LOGGER.debug("Config entry %s not found, skipping WebSocket reconnect", entry_id)
+                        continue
+                    if not coordinator.use_websocket:
+                        _LOGGER.debug("WebSocket disabled for %s, skipping reconnect", entry_id)
+                        continue
+                    try:
+                        await coordinator.async_shutdown_websocket()
+                        await _async_setup_websocket(hass, coordinator, config_entry)
+                    except Exception as err:
+                        _LOGGER.error("Failed to reconnect WebSocket for %s: %s", entry_id, err)
 
         async def handle_set_home_state(call: ServiceCall) -> None:
             """Handle the set home state service call."""

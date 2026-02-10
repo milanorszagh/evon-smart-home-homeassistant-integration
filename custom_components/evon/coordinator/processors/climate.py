@@ -49,18 +49,22 @@ def process_climates(
             protection_temp = details.get("SetValueHeatProtection", 29)
             evon_min = details.get("MinSetValueCool", 18)
             evon_max = details.get("MaxSetValueCool", 30)
-            # Include protection temp in range (heat protection can be above normal max)
-            min_temp = min(evon_min, comfort_temp, eco_temp, protection_temp)
-            max_temp = max(evon_max, comfort_temp, eco_temp, protection_temp)
+            # Filter None values before min/max to prevent TypeError
+            min_vals = [v for v in (evon_min, comfort_temp, eco_temp, protection_temp) if v is not None]
+            max_vals = [v for v in (evon_max, comfort_temp, eco_temp, protection_temp) if v is not None]
+            min_temp = min(min_vals) if min_vals else 18
+            max_temp = max(max_vals) if max_vals else 30
         else:  # Heating (winter)
             comfort_temp = details.get("SetValueComfortHeating", 22)
             eco_temp = details.get("SetValueEnergySavingHeating", 20)
             protection_temp = details.get("SetValueFreezeProtection", 15)
             evon_min = details.get("MinSetValueHeat", 15)
             evon_max = details.get("MaxSetValueHeat", 25)
-            # Include protection temp in range (freeze protection can be below normal min)
-            min_temp = min(evon_min, protection_temp)
-            max_temp = max(evon_max, comfort_temp, eco_temp)
+            # Filter None values before min/max to prevent TypeError
+            min_vals = [v for v in (evon_min, protection_temp) if v is not None]
+            max_vals = [v for v in (evon_max, comfort_temp, eco_temp) if v is not None]
+            min_temp = min(min_vals) if min_vals else 15
+            max_temp = max(max_vals) if max_vals else 25
 
         climates.append(
             {

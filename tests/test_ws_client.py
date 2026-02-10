@@ -2246,6 +2246,7 @@ class TestPeriodicStaleCleanup:
 
         # Patch the sleep interval to be very short
         import custom_components.evon.ws_client as ws_module
+
         original_interval = ws_module._STALE_CLEANUP_INTERVAL
         ws_module._STALE_CLEANUP_INTERVAL = 0.01
         try:

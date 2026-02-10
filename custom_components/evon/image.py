@@ -116,7 +116,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
         snapshot = self._get_snapshot()
         if snapshot:
             ts = snapshot.get("timestamp")
-            if ts:
+            if ts and isinstance(ts, (int, float)):
                 attrs["timestamp"] = ts
                 attrs["datetime"] = dt_util.utc_from_timestamp(ts / 1000).isoformat()
             attrs["path"] = snapshot.get("path", "")
@@ -128,7 +128,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
         snapshot = self._get_snapshot()
         if snapshot:
             ts = snapshot.get("timestamp")
-            if ts:
+            if ts and isinstance(ts, (int, float)):
                 return dt_util.utc_from_timestamp(ts / 1000)
         return None
 
@@ -178,4 +178,5 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
             self._cached_path = path
             return self._cached_image
 
-        return self._cached_image
+        # Fetch failed — don't return stale cache from a different snapshot path
+        return None

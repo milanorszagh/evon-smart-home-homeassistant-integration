@@ -1192,8 +1192,8 @@ class TestCameraWillRemoveFromHass:
         with open("custom_components/evon/camera.py") as f:
             source = f.read()
 
-        # Verify registration in shared registry
-        assert '["cameras"][self._instance_id] = self' in source
+        # Verify registration in shared registry (uses setdefault for safety)
+        assert '.setdefault("cameras", {})[self._instance_id] = self' in source
 
 
 class TestMigrationChain:
@@ -1380,3 +1380,317 @@ class TestSelectEntitiesInheritance:
             source = f.read()
 
         assert source.count("super().extra_state_attributes") == 2
+
+
+# --- Processor edge case tests ---
+
+
+class TestProcessorEdgeCases:
+    """Test processor functions with edge cases: None values, missing properties, empty instances."""
+
+    @staticmethod
+    def _get_room_name(group_id: str) -> str:
+        return f"Room_{group_id}" if group_id else "Unknown"
+
+    # --- Light processor ---
+
+    def test_light_skips_unnamed_instance(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [{"ID": "L1", "ClassName": "SmartCOM.Light.LightDim", "Name": ""}]
+        result = process_lights({"L1": {"IsOn": True}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_light_skips_missing_details(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [{"ID": "L1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Light 1"}]
+        result = process_lights({}, instances, self._get_room_name)
+        assert result == []
+
+    def test_light_skips_wrong_class(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [{"ID": "L1", "ClassName": "SomeOther.Class", "Name": "Light 1"}]
+        result = process_lights({"L1": {"IsOn": True}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_light_defaults_when_details_empty(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [{"ID": "L1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Light 1", "Group": "g1"}]
+        result = process_lights({"L1": {}}, instances, self._get_room_name)
+        assert len(result) == 1
+        assert result[0]["is_on"] is False
+        assert result[0]["brightness"] == 0
+        assert result[0]["supports_color_temp"] is False
+
+    def test_light_rgbw_includes_color_temp(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [{"ID": "L1", "ClassName": "SmartCOM.Light.DynamicRGBWLight", "Name": "RGBW Light", "Group": "g1"}]
+        details = {
+            "IsOn": True,
+            "ScaledBrightness": 80,
+            "ColorTemp": 4000,
+            "MinColorTemperature": 2700,
+            "MaxColorTemperature": 6500,
+        }
+        result = process_lights({"L1": details}, instances, self._get_room_name)
+        assert len(result) == 1
+        assert result[0]["supports_color_temp"] is True
+        assert result[0]["color_temp"] == 4000
+        assert result[0]["min_color_temp"] == 2700
+        assert result[0]["max_color_temp"] == 6500
+
+    def test_light_empty_instances(self):
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        result = process_lights({}, [], self._get_room_name)
+        assert result == []
+
+    # --- Switch processor ---
+
+    def test_switch_skips_unnamed_instance(self):
+        from custom_components.evon.coordinator.processors.switches import process_switches
+
+        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": ""}]
+        result = process_switches({"S1": {"IsOn": False}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_switch_skips_wrong_class(self):
+        from custom_components.evon.coordinator.processors.switches import process_switches
+
+        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Dimmer"}]
+        result = process_switches({"S1": {"IsOn": True}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_switch_skips_missing_details(self):
+        from custom_components.evon.coordinator.processors.switches import process_switches
+
+        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch 1"}]
+        result = process_switches({}, instances, self._get_room_name)
+        assert result == []
+
+    def test_switch_defaults_when_details_empty(self):
+        from custom_components.evon.coordinator.processors.switches import process_switches
+
+        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch 1", "Group": "g1"}]
+        result = process_switches({"S1": {}}, instances, self._get_room_name)
+        assert len(result) == 1
+        assert result[0]["is_on"] is False
+
+    # --- Blind processor ---
+
+    def test_blind_skips_unnamed_instance(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        instances = [{"ID": "B1", "ClassName": "SmartCOM.Blind.Blind", "Name": ""}]
+        result = process_blinds({"B1": {"Position": 50}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_blind_skips_wrong_class(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        instances = [{"ID": "B1", "ClassName": "SomeOther.Class", "Name": "Blind 1"}]
+        result = process_blinds({"B1": {"Position": 50}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_blind_skips_missing_details(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        instances = [{"ID": "B1", "ClassName": "SmartCOM.Blind.Blind", "Name": "Blind 1"}]
+        result = process_blinds({}, instances, self._get_room_name)
+        assert result == []
+
+    def test_blind_defaults_when_details_empty(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        instances = [{"ID": "B1", "ClassName": "SmartCOM.Blind.Blind", "Name": "Blind 1", "Group": "g1"}]
+        result = process_blinds({"B1": {}}, instances, self._get_room_name)
+        assert len(result) == 1
+        assert result[0]["position"] == 0
+        assert result[0]["angle"] == 0
+        assert result[0]["is_moving"] is False
+        assert result[0]["is_group"] is False
+
+    def test_blind_group_flag(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        instances = [{"ID": "B1", "ClassName": "SmartCOM.Blind.BlindGroup", "Name": "Blind Group", "Group": "g1"}]
+        result = process_blinds({"B1": {}}, instances, self._get_room_name)
+        assert result[0]["is_group"] is True
+
+    def test_blind_base_classes(self):
+        from custom_components.evon.coordinator.processors.blinds import process_blinds
+
+        for cls in ["Base.bBlind", "Base.ehBlind"]:
+            instances = [{"ID": "B1", "ClassName": cls, "Name": "Blind", "Group": "g1"}]
+            result = process_blinds({"B1": {"Position": 75}}, instances, self._get_room_name)
+            assert len(result) == 1
+
+    # --- Bathroom radiator processor ---
+
+    def test_radiator_skips_unnamed(self):
+        from custom_components.evon.coordinator.processors.bathroom_radiators import process_bathroom_radiators
+
+        instances = [{"ID": "R1", "ClassName": "Heating.BathroomRadiator", "Name": ""}]
+        result = process_bathroom_radiators({"R1": {}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_radiator_skips_wrong_class(self):
+        from custom_components.evon.coordinator.processors.bathroom_radiators import process_bathroom_radiators
+
+        instances = [{"ID": "R1", "ClassName": "WrongClass", "Name": "Radiator"}]
+        result = process_bathroom_radiators({"R1": {}}, instances, self._get_room_name)
+        assert result == []
+
+    def test_radiator_skips_missing_details(self):
+        from custom_components.evon.coordinator.processors.bathroom_radiators import process_bathroom_radiators
+
+        instances = [{"ID": "R1", "ClassName": "Heating.BathroomRadiator", "Name": "Radiator"}]
+        result = process_bathroom_radiators({}, instances, self._get_room_name)
+        assert result == []
+
+    def test_radiator_defaults_when_details_empty(self):
+        from custom_components.evon.coordinator.processors.bathroom_radiators import process_bathroom_radiators
+
+        instances = [{"ID": "R1", "ClassName": "Heating.BathroomRadiator", "Name": "Radiator", "Group": "g1"}]
+        result = process_bathroom_radiators({"R1": {}}, instances, self._get_room_name)
+        assert len(result) == 1
+        assert result[0]["is_on"] is False
+        assert result[0]["time_remaining"] == -1
+        assert result[0]["duration_mins"] == 30
+        assert result[0]["permanently_on"] is False
+        assert result[0]["permanently_off"] is False
+        assert result[0]["deactivated"] is False
+
+    # --- Climate processor ---
+
+    def test_climate_skips_unnamed(self):
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": ""}]
+        result = process_climates({"C1": {}}, instances, self._get_room_name, False)
+        assert result == []
+
+    def test_climate_skips_wrong_class(self):
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "WrongClass", "Name": "Climate"}]
+        result = process_climates({"C1": {}}, instances, self._get_room_name, False)
+        assert result == []
+
+    def test_climate_skips_missing_details(self):
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate"}]
+        result = process_climates({}, instances, self._get_room_name, False)
+        assert result == []
+
+    def test_climate_heating_defaults(self):
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        result = process_climates({"C1": {}}, instances, self._get_room_name, False)
+        assert len(result) == 1
+        assert result[0]["comfort_temp"] == 22
+        assert result[0]["energy_saving_temp"] == 20
+        assert result[0]["protection_temp"] == 15
+
+    def test_climate_cooling_defaults(self):
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        result = process_climates({"C1": {}}, instances, self._get_room_name, True)
+        assert len(result) == 1
+        assert result[0]["comfort_temp"] == 25
+        assert result[0]["energy_saving_temp"] == 24
+        assert result[0]["protection_temp"] == 29
+
+    def test_climate_all_none_values_use_fallback_range(self):
+        """When all temp values are None, fallback defaults are used."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        details = {
+            "SetValueComfortHeating": None,
+            "SetValueEnergySavingHeating": None,
+            "SetValueFreezeProtection": None,
+            "MinSetValueHeat": None,
+            "MaxSetValueHeat": None,
+        }
+        result = process_climates({"C1": details}, instances, self._get_room_name, False)
+        assert len(result) == 1
+        assert result[0]["min_temp"] == 15  # Fallback
+        assert result[0]["max_temp"] == 25  # Fallback
+
+    def test_climate_cooling_all_none_values_use_fallback_range(self):
+        """When all cooling temp values are None, fallback defaults are used."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        details = {
+            "SetValueComfortCooling": None,
+            "SetValueEnergySavingCooling": None,
+            "SetValueHeatProtection": None,
+            "MinSetValueCool": None,
+            "MaxSetValueCool": None,
+        }
+        result = process_climates({"C1": details}, instances, self._get_room_name, True)
+        assert len(result) == 1
+        assert result[0]["min_temp"] == 18  # Fallback
+        assert result[0]["max_temp"] == 30  # Fallback
+
+    def test_climate_universal_class(self):
+        """ClimateControlUniversal instances are also processed."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "Heating.ClimateControlUniversal", "Name": "Bathroom", "Group": "g1"}]
+        result = process_climates({"C1": {}}, instances, self._get_room_name, False)
+        assert len(result) == 1
+
+    def test_climate_mode_saved_fallback_to_main_state(self):
+        """mode_saved uses ModeSaved first, then MainState as fallback."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        details = {"MainState": 3}
+        result = process_climates({"C1": details}, instances, self._get_room_name, False)
+        assert result[0]["mode_saved"] == 3
+
+    def test_climate_mode_saved_prefers_mode_saved(self):
+        """mode_saved prefers ModeSaved over MainState."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        details = {"ModeSaved": 7, "MainState": 3}
+        result = process_climates({"C1": details}, instances, self._get_room_name, False)
+        assert result[0]["mode_saved"] == 7
+
+    def test_climate_heating_min_max_includes_protection(self):
+        """Heating mode min_temp considers protection_temp."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [{"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate", "Group": "g1"}]
+        details = {
+            "MinSetValueHeat": 16,
+            "MaxSetValueHeat": 25,
+            "SetValueComfortHeating": 22,
+            "SetValueEnergySavingHeating": 20,
+            "SetValueFreezeProtection": 10,  # Lower than MinSetValueHeat
+        }
+        result = process_climates({"C1": details}, instances, self._get_room_name, False)
+        assert result[0]["min_temp"] == 10  # protection_temp pulls min down
+
+    def test_climate_multiple_instances(self):
+        """Multiple climate instances are all processed."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [
+            {"ID": "C1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Zone 1", "Group": "g1"},
+            {"ID": "C2", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Zone 2", "Group": "g2"},
+            {"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": "Not a climate"},
+        ]
+        result = process_climates({"C1": {}, "C2": {}, "S1": {}}, instances, self._get_room_name, False)
+        assert len(result) == 2

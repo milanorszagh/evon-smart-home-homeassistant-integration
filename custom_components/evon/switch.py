@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -408,21 +409,19 @@ class EvonCameraRecordingSwitch(EvonEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Start recording."""
         camera = self._get_camera_entity()
-        if camera:
-            max_dur = self._entry.options.get(CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION)
-            await camera.async_start_recording(duration=max_dur)
-            self.async_write_ha_state()
-        else:
-            _LOGGER.warning("Camera entity not found for recording switch %s", self.entity_id)
+        if not camera:
+            raise HomeAssistantError(f"Camera entity not found for recording switch {self.entity_id}")
+        max_dur = self._entry.options.get(CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION)
+        await camera.async_start_recording(duration=max_dur)
+        self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop recording."""
         camera = self._get_camera_entity()
-        if camera:
-            await camera.async_stop_recording()
-            self.async_write_ha_state()
-        else:
-            _LOGGER.warning("Camera entity not found for recording switch %s", self.entity_id)
+        if not camera:
+            raise HomeAssistantError(f"Camera entity not found for recording switch {self.entity_id}")
+        await camera.async_stop_recording()
+        self.async_write_ha_state()
 
     def _get_camera_entity(self):
         """Find the linked EvonCamera entity from the shared camera registry."""

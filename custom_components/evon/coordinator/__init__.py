@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import timedelta
 import logging
 from typing import TYPE_CHECKING, Any
@@ -306,9 +307,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 type(is_cool).__name__,
                 is_cool,
             )
-            if is_cool in (0, "0", "false", "False", "no", "No"):
+            str_val = str(is_cool).lower()
+            if str_val in ("0", "false", "no"):
                 return False
-            if is_cool in (1, "1", "true", "True", "yes", "Yes"):
+            if str_val in ("1", "true", "yes"):
                 return True
             _LOGGER.warning("Could not interpret season mode value, defaulting to heating mode")
             return False
@@ -820,6 +822,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     for v in relevant_days:
                         if isinstance(v, (int, float)):
                             month_sum += float(v)
+                        elif isinstance(v, str):
+                            with contextlib.suppress(ValueError):
+                                month_sum += float(v)
 
                 # Add today's consumption
                 if energy_today is not None:
