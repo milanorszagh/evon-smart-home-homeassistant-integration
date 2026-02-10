@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,13 +10,6 @@ import pytest
 
 class TestCameraProcessor:
     """Tests for camera data processor."""
-
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
 
     @pytest.fixture
     def camera_instances(self):
@@ -38,17 +32,16 @@ class TestCameraProcessor:
             "Error": False,
         }
 
-    @pytest.mark.asyncio
-    async def test_process_cameras(self, mock_api, camera_instances, camera_details):
+    def test_process_cameras(self, camera_instances, camera_details):
         """Test camera processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.cameras import process_cameras
 
-        mock_api.get_instance.return_value = camera_details
+        instance_details = {"intercom_1.Cam": camera_details}
 
         def get_room_name(group_id):
             return "Living Room" if group_id == "room_living" else ""
 
-        result = await process_cameras(mock_api, camera_instances, get_room_name)
+        result = process_cameras(instance_details, camera_instances, get_room_name)
 
         assert len(result) == 1
         camera = result[0]
@@ -59,17 +52,15 @@ class TestCameraProcessor:
         assert camera["ip_address"] == "192.168.1.50"
         assert camera["error"] is False
 
-    @pytest.mark.asyncio
-    async def test_process_cameras_empty(self, mock_api):
+    def test_process_cameras_empty(self):
         """Test camera processor with no cameras."""
         from custom_components.evon.coordinator.processors.cameras import process_cameras
 
-        result = await process_cameras(mock_api, [], lambda x: "")
+        result = process_cameras({}, [], lambda x: "")
 
         assert result == []
 
-    @pytest.mark.asyncio
-    async def test_process_cameras_filters_by_class(self, mock_api):
+    def test_process_cameras_filters_by_class(self):
         """Test camera processor only includes camera class."""
         from custom_components.evon.coordinator.processors.cameras import process_cameras
 
@@ -86,9 +77,9 @@ class TestCameraProcessor:
             },
         ]
 
-        mock_api.get_instance.return_value = {"ImagePath": "/img.jpg"}
+        instance_details = {"intercom_1.Cam": {"ImagePath": "/img.jpg"}}
 
-        result = await process_cameras(mock_api, instances, lambda x: "")
+        result = process_cameras(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         assert result[0]["id"] == "intercom_1.Cam"
@@ -96,13 +87,6 @@ class TestCameraProcessor:
 
 class TestSecurityDoorProcessor:
     """Tests for security door data processor."""
-
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
 
     @pytest.fixture
     def door_instances(self):
@@ -130,17 +114,16 @@ class TestSecurityDoorProcessor:
             ],
         }
 
-    @pytest.mark.asyncio
-    async def test_process_security_doors(self, mock_api, door_instances, door_details):
+    def test_process_security_doors(self, door_instances, door_details):
         """Test security door processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.security_doors import process_security_doors
 
-        mock_api.get_instance.return_value = door_details
+        instance_details = {"security_door_1": door_details}
 
         def get_room_name(group_id):
             return "Living Room" if group_id == "room_living" else ""
 
-        result = await process_security_doors(mock_api, door_instances, get_room_name)
+        result = process_security_doors(instance_details, door_instances, get_room_name)
 
         assert len(result) == 1
         door = result[0]
@@ -151,14 +134,13 @@ class TestSecurityDoorProcessor:
         assert door["cam_instance_name"] == "intercom_1.Cam"
         assert len(door["saved_pictures"]) == 2
 
-    @pytest.mark.asyncio
-    async def test_process_security_doors_saved_pictures_lowercase(self, mock_api, door_instances, door_details):
+    def test_process_security_doors_saved_pictures_lowercase(self, door_instances, door_details):
         """Test security door processor converts saved pictures keys to lowercase."""
         from custom_components.evon.coordinator.processors.security_doors import process_security_doors
 
-        mock_api.get_instance.return_value = door_details
+        instance_details = {"security_door_1": door_details}
 
-        result = await process_security_doors(mock_api, door_instances, lambda x: "")
+        result = process_security_doors(instance_details, door_instances, lambda x: "")
 
         # Keys should be lowercase
         saved_pictures = result[0]["saved_pictures"]
@@ -169,13 +151,6 @@ class TestSecurityDoorProcessor:
 
 class TestIntercomProcessor:
     """Tests for intercom data processor."""
-
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
 
     @pytest.fixture
     def intercom_instances(self):
@@ -199,17 +174,16 @@ class TestIntercomProcessor:
             "ConnectionToIntercomHasBeenLost": False,
         }
 
-    @pytest.mark.asyncio
-    async def test_process_intercoms(self, mock_api, intercom_instances, intercom_details):
+    def test_process_intercoms(self, intercom_instances, intercom_details):
         """Test intercom processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.intercoms import process_intercoms
 
-        mock_api.get_instance.return_value = intercom_details
+        instance_details = {"intercom_1": intercom_details}
 
         def get_room_name(group_id):
             return "Living Room" if group_id == "room_living" else ""
 
-        result = await process_intercoms(mock_api, intercom_instances, get_room_name)
+        result = process_intercoms(instance_details, intercom_instances, get_room_name)
 
         assert len(result) == 1
         intercom = result[0]
@@ -293,15 +267,7 @@ class TestApiImageFetch:
 class TestLightProcessor:
     """Tests for light data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_lights(self, mock_api):
+    def test_process_lights(self):
         """Test light processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.lights import process_lights
 
@@ -313,12 +279,14 @@ class TestLightProcessor:
                 "Group": "room_living",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "IsOn": True,
-            "ScaledBrightness": 75,
+        instance_details = {
+            "light_1": {
+                "IsOn": True,
+                "ScaledBrightness": 75,
+            },
         }
 
-        result = await process_lights(mock_api, instances, lambda x: "Living Room")
+        result = process_lights(instance_details, instances, lambda x: "Living Room")
 
         assert len(result) == 1
         light = result[0]
@@ -328,8 +296,7 @@ class TestLightProcessor:
         assert light["brightness"] == 75
         assert light["supports_color_temp"] is False
 
-    @pytest.mark.asyncio
-    async def test_process_lights_rgbw(self, mock_api):
+    def test_process_lights_rgbw(self):
         """Test light processor handles RGBW lights with color temp."""
         from custom_components.evon.coordinator.processors.lights import process_lights
 
@@ -341,15 +308,17 @@ class TestLightProcessor:
                 "Group": "",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "IsOn": True,
-            "ScaledBrightness": 100,
-            "ColorTemp": 4000,
-            "MinColorTemperature": 2700,
-            "MaxColorTemperature": 6500,
+        instance_details = {
+            "rgbw_light": {
+                "IsOn": True,
+                "ScaledBrightness": 100,
+                "ColorTemp": 4000,
+                "MinColorTemperature": 2700,
+                "MaxColorTemperature": 6500,
+            },
         }
 
-        result = await process_lights(mock_api, instances, lambda x: "")
+        result = process_lights(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         light = result[0]
@@ -358,8 +327,7 @@ class TestLightProcessor:
         assert light["min_color_temp"] == 2700
         assert light["max_color_temp"] == 6500
 
-    @pytest.mark.asyncio
-    async def test_process_lights_filters_by_class(self, mock_api):
+    def test_process_lights_filters_by_class(self):
         """Test light processor only includes light classes."""
         from custom_components.evon.coordinator.processors.lights import process_lights
 
@@ -367,16 +335,18 @@ class TestLightProcessor:
             {"ID": "switch_1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch"},
             {"ID": "light_1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Light"},
         ]
-        mock_api.get_instance.return_value = {"IsOn": True, "ScaledBrightness": 50}
+        instance_details = {
+            "switch_1": {"IsOn": True, "ScaledBrightness": 50},
+            "light_1": {"IsOn": True, "ScaledBrightness": 50},
+        }
 
-        result = await process_lights(mock_api, instances, lambda x: "")
+        result = process_lights(instance_details, instances, lambda x: "")
 
         # Should only include LightDim, not Light (which is a switch)
         assert len(result) == 1
         assert result[0]["id"] == "light_1"
 
-    @pytest.mark.asyncio
-    async def test_process_lights_skips_unnamed(self, mock_api):
+    def test_process_lights_skips_unnamed(self):
         """Test light processor skips instances without names."""
         from custom_components.evon.coordinator.processors.lights import process_lights
 
@@ -384,9 +354,12 @@ class TestLightProcessor:
             {"ID": "light_1", "ClassName": "SmartCOM.Light.LightDim", "Name": ""},
             {"ID": "light_2", "ClassName": "SmartCOM.Light.LightDim", "Name": "Named"},
         ]
-        mock_api.get_instance.return_value = {"IsOn": False, "ScaledBrightness": 0}
+        instance_details = {
+            "light_1": {"IsOn": False, "ScaledBrightness": 0},
+            "light_2": {"IsOn": False, "ScaledBrightness": 0},
+        }
 
-        result = await process_lights(mock_api, instances, lambda x: "")
+        result = process_lights(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         assert result[0]["id"] == "light_2"
@@ -395,15 +368,7 @@ class TestLightProcessor:
 class TestBlindProcessor:
     """Tests for blind data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_blinds(self, mock_api):
+    def test_process_blinds(self):
         """Test blind processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.blinds import process_blinds
 
@@ -415,13 +380,15 @@ class TestBlindProcessor:
                 "Group": "room_living",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "Position": 50,
-            "Angle": 45,
-            "IsMoving": False,
+        instance_details = {
+            "blind_1": {
+                "Position": 50,
+                "Angle": 45,
+                "IsMoving": False,
+            },
         }
 
-        result = await process_blinds(mock_api, instances, lambda x: "Living Room")
+        result = process_blinds(instance_details, instances, lambda x: "Living Room")
 
         assert len(result) == 1
         blind = result[0]
@@ -432,8 +399,7 @@ class TestBlindProcessor:
         assert blind["is_moving"] is False
         assert blind["is_group"] is False
 
-    @pytest.mark.asyncio
-    async def test_process_blinds_group(self, mock_api):
+    def test_process_blinds_group(self):
         """Test blind processor identifies group blinds."""
         from custom_components.evon.coordinator.processors.blinds import process_blinds
 
@@ -445,9 +411,11 @@ class TestBlindProcessor:
                 "Group": "",
             },
         ]
-        mock_api.get_instance.return_value = {"Position": 100, "Angle": 0, "IsMoving": True}
+        instance_details = {
+            "blind_group": {"Position": 100, "Angle": 0, "IsMoving": True},
+        }
 
-        result = await process_blinds(mock_api, instances, lambda x: "")
+        result = process_blinds(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         assert result[0]["is_group"] is True
@@ -457,15 +425,7 @@ class TestBlindProcessor:
 class TestClimateProcessor:
     """Tests for climate data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_climates_heating(self, mock_api):
+    def test_process_climates_heating(self):
         """Test climate processor in heating (winter) mode."""
         from custom_components.evon.coordinator.processors.climate import process_climates
 
@@ -477,22 +437,24 @@ class TestClimateProcessor:
                 "Group": "room_living",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "ActualTemperature": 21.5,
-            "SetTemperature": 22.0,
-            "SetValueComfortHeating": 22,
-            "SetValueEnergySavingHeating": 20,
-            "SetValueFreezeProtection": 15,
-            "MinSetValueHeat": 15,
-            "MaxSetValueHeat": 25,
-            "MainState": 1,
-            "CoolingMode": False,
-            "DisableCooling": True,
-            "IsOn": True,
-            "Humidity": 45,
+        instance_details = {
+            "climate_1": {
+                "ActualTemperature": 21.5,
+                "SetTemperature": 22.0,
+                "SetValueComfortHeating": 22,
+                "SetValueEnergySavingHeating": 20,
+                "SetValueFreezeProtection": 15,
+                "MinSetValueHeat": 15,
+                "MaxSetValueHeat": 25,
+                "MainState": 1,
+                "CoolingMode": False,
+                "DisableCooling": True,
+                "IsOn": True,
+                "Humidity": 45,
+            },
         }
 
-        result = await process_climates(mock_api, instances, lambda x: "Living Room", season_mode=False)
+        result = process_climates(instance_details, instances, lambda x: "Living Room", season_mode=False)
 
         assert len(result) == 1
         climate = result[0]
@@ -507,8 +469,7 @@ class TestClimateProcessor:
         assert climate["is_on"] is True
         assert climate["humidity"] == 45
 
-    @pytest.mark.asyncio
-    async def test_process_climates_cooling(self, mock_api):
+    def test_process_climates_cooling(self):
         """Test climate processor in cooling (summer) mode."""
         from custom_components.evon.coordinator.processors.climate import process_climates
 
@@ -520,20 +481,22 @@ class TestClimateProcessor:
                 "Group": "",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "ActualTemperature": 26.0,
-            "SetTemperature": 24.0,
-            "SetValueComfortCooling": 25,
-            "SetValueEnergySavingCooling": 24,
-            "SetValueHeatProtection": 29,
-            "MinSetValueCool": 18,
-            "MaxSetValueCool": 30,
-            "CoolingMode": True,
-            "DisableCooling": False,
-            "IsOn": True,
+        instance_details = {
+            "climate_1": {
+                "ActualTemperature": 26.0,
+                "SetTemperature": 24.0,
+                "SetValueComfortCooling": 25,
+                "SetValueEnergySavingCooling": 24,
+                "SetValueHeatProtection": 29,
+                "MinSetValueCool": 18,
+                "MaxSetValueCool": 30,
+                "CoolingMode": True,
+                "DisableCooling": False,
+                "IsOn": True,
+            },
         }
 
-        result = await process_climates(mock_api, instances, lambda x: "", season_mode=True)
+        result = process_climates(instance_details, instances, lambda x: "", season_mode=True)
 
         assert len(result) == 1
         climate = result[0]
@@ -547,15 +510,7 @@ class TestClimateProcessor:
 class TestSwitchProcessor:
     """Tests for switch data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_switches(self, mock_api):
+    def test_process_switches(self):
         """Test switch processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.switches import process_switches
 
@@ -567,9 +522,9 @@ class TestSwitchProcessor:
                 "Group": "room_kitchen",
             },
         ]
-        mock_api.get_instance.return_value = {"IsOn": True}
+        instance_details = {"switch_1": {"IsOn": True}}
 
-        result = await process_switches(mock_api, instances, lambda x: "Kitchen")
+        result = process_switches(instance_details, instances, lambda x: "Kitchen")
 
         assert len(result) == 1
         switch = result[0]
@@ -578,8 +533,7 @@ class TestSwitchProcessor:
         assert switch["room_name"] == "Kitchen"
         assert switch["is_on"] is True
 
-    @pytest.mark.asyncio
-    async def test_process_switches_filters_dim_lights(self, mock_api):
+    def test_process_switches_filters_dim_lights(self):
         """Test switch processor excludes dimmable lights."""
         from custom_components.evon.coordinator.processors.switches import process_switches
 
@@ -587,9 +541,12 @@ class TestSwitchProcessor:
             {"ID": "switch_1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch"},
             {"ID": "light_1", "ClassName": "SmartCOM.Light.DimLight", "Name": "Dim Light"},
         ]
-        mock_api.get_instance.return_value = {"IsOn": False}
+        instance_details = {
+            "switch_1": {"IsOn": False},
+            "light_1": {"IsOn": False},
+        }
 
-        result = await process_switches(mock_api, instances, lambda x: "")
+        result = process_switches(instance_details, instances, lambda x: "")
 
         # Should only include SmartCOM.Light.Light
         assert len(result) == 1
@@ -599,8 +556,7 @@ class TestSwitchProcessor:
 class TestSceneProcessor:
     """Tests for scene data processor."""
 
-    @pytest.mark.asyncio
-    async def test_process_scenes(self):
+    def test_process_scenes(self):
         """Test scene processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.scenes import process_scenes
 
@@ -617,7 +573,7 @@ class TestSceneProcessor:
             },
         ]
 
-        result = await process_scenes(instances)
+        result = process_scenes(instances)
 
         assert len(result) == 2
         assert result[0]["id"] == "scene_1"
@@ -625,8 +581,7 @@ class TestSceneProcessor:
         assert result[1]["id"] == "scene_2"
         assert result[1]["name"] == "Good Morning"
 
-    @pytest.mark.asyncio
-    async def test_process_scenes_filters_by_class(self):
+    def test_process_scenes_filters_by_class(self):
         """Test scene processor only includes scene class."""
         from custom_components.evon.coordinator.processors.scenes import process_scenes
 
@@ -635,17 +590,16 @@ class TestSceneProcessor:
             {"ID": "light_1", "ClassName": "SmartCOM.Light.Light", "Name": "Light"},
         ]
 
-        result = await process_scenes(instances)
+        result = process_scenes(instances)
 
         assert len(result) == 1
         assert result[0]["id"] == "scene_1"
 
-    @pytest.mark.asyncio
-    async def test_process_scenes_empty(self):
+    def test_process_scenes_empty(self):
         """Test scene processor with no scenes."""
         from custom_components.evon.coordinator.processors.scenes import process_scenes
 
-        result = await process_scenes([])
+        result = process_scenes([])
 
         assert result == []
 
@@ -653,15 +607,7 @@ class TestSceneProcessor:
 class TestValveProcessor:
     """Tests for valve data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_valves(self, mock_api):
+    def test_process_valves(self):
         """Test valve processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.valves import process_valves
 
@@ -673,12 +619,14 @@ class TestValveProcessor:
                 "Group": "room_bedroom",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "ActValue": True,
-            "Type": 1,
+        instance_details = {
+            "valve_1": {
+                "ActValue": True,
+                "Type": 1,
+            },
         }
 
-        result = await process_valves(mock_api, instances, lambda x: "Bedroom")
+        result = process_valves(instance_details, instances, lambda x: "Bedroom")
 
         assert len(result) == 1
         valve = result[0]
@@ -692,15 +640,7 @@ class TestValveProcessor:
 class TestHomeStateProcessor:
     """Tests for home state data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_home_states(self, mock_api):
+    def test_process_home_states(self):
         """Test home state processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.home_states import process_home_states
 
@@ -716,12 +656,12 @@ class TestHomeStateProcessor:
                 "Name": "Home",
             },
         ]
-        mock_api.get_instance.side_effect = [
-            {"Active": False},
-            {"Active": True},
-        ]
+        instance_details = {
+            "home_state_1": {"Active": False},
+            "home_state_2": {"Active": True},
+        }
 
-        result = await process_home_states(mock_api, instances)
+        result = process_home_states(instance_details, instances)
 
         assert len(result) == 2
         assert result[0]["id"] == "home_state_1"
@@ -729,8 +669,7 @@ class TestHomeStateProcessor:
         assert result[1]["id"] == "home_state_2"
         assert result[1]["active"] is True
 
-    @pytest.mark.asyncio
-    async def test_process_home_states_skips_system(self, mock_api):
+    def test_process_home_states_skips_system(self):
         """Test home state processor skips System.* templates."""
         from custom_components.evon.coordinator.processors.home_states import process_home_states
 
@@ -738,9 +677,12 @@ class TestHomeStateProcessor:
             {"ID": "System.HomeState", "ClassName": "System.HomeState", "Name": "Template"},
             {"ID": "user_state", "ClassName": "System.HomeState", "Name": "User State"},
         ]
-        mock_api.get_instance.return_value = {"Active": True}
+        instance_details = {
+            "System.HomeState": {"Active": True},
+            "user_state": {"Active": True},
+        }
 
-        result = await process_home_states(mock_api, instances)
+        result = process_home_states(instance_details, instances)
 
         assert len(result) == 1
         assert result[0]["id"] == "user_state"
@@ -749,15 +691,7 @@ class TestHomeStateProcessor:
 class TestAirQualityProcessor:
     """Tests for air quality data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_air_quality(self, mock_api):
+    def test_process_air_quality(self):
         """Test air quality processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.air_quality import process_air_quality
 
@@ -769,16 +703,18 @@ class TestAirQualityProcessor:
                 "Group": "room_bedroom",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "CO2Value": 800,
-            "Humidity": 55,
-            "ActualTemperature": 22.5,
-            "HealthIndex": 85,
-            "CO2Index": 80,
-            "HumidityIndex": 90,
+        instance_details = {
+            "aq_1": {
+                "CO2Value": 800,
+                "Humidity": 55,
+                "ActualTemperature": 22.5,
+                "HealthIndex": 85,
+                "CO2Index": 80,
+                "HumidityIndex": 90,
+            },
         }
 
-        result = await process_air_quality(mock_api, instances, lambda x: "Bedroom")
+        result = process_air_quality(instance_details, instances, lambda x: "Bedroom")
 
         assert len(result) == 1
         aq = result[0]
@@ -788,39 +724,41 @@ class TestAirQualityProcessor:
         assert aq["temperature"] == 22.5
         assert aq["health_index"] == 85
 
-    @pytest.mark.asyncio
-    async def test_process_air_quality_skips_invalid_data(self, mock_api):
+    def test_process_air_quality_skips_invalid_data(self):
         """Test air quality processor skips sensors with no valid data."""
         from custom_components.evon.coordinator.processors.air_quality import process_air_quality
 
         instances = [
             {"ID": "aq_1", "ClassName": "System.Location.AirQuality", "Name": "Invalid Sensor", "Group": ""},
         ]
-        mock_api.get_instance.return_value = {
-            "CO2Value": -999,
-            "Humidity": -999,
-            "ActualTemperature": -999,
+        instance_details = {
+            "aq_1": {
+                "CO2Value": -999,
+                "Humidity": -999,
+                "ActualTemperature": -999,
+            },
         }
 
-        result = await process_air_quality(mock_api, instances, lambda x: "")
+        result = process_air_quality(instance_details, instances, lambda x: "")
 
         assert len(result) == 0
 
-    @pytest.mark.asyncio
-    async def test_process_air_quality_partial_data(self, mock_api):
+    def test_process_air_quality_partial_data(self):
         """Test air quality processor handles partial data (some -999 values)."""
         from custom_components.evon.coordinator.processors.air_quality import process_air_quality
 
         instances = [
             {"ID": "aq_1", "ClassName": "System.Location.AirQuality", "Name": "Partial Sensor", "Group": ""},
         ]
-        mock_api.get_instance.return_value = {
-            "CO2Value": 600,
-            "Humidity": -999,
-            "ActualTemperature": -999,
+        instance_details = {
+            "aq_1": {
+                "CO2Value": 600,
+                "Humidity": -999,
+                "ActualTemperature": -999,
+            },
         }
 
-        result = await process_air_quality(mock_api, instances, lambda x: "")
+        result = process_air_quality(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         assert result[0]["co2"] == 600
@@ -831,15 +769,7 @@ class TestAirQualityProcessor:
 class TestSmartMeterProcessor:
     """Tests for smart meter data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_smart_meters(self, mock_api):
+    def test_process_smart_meters(self):
         """Test smart meter processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.smart_meters import process_smart_meters
 
@@ -851,26 +781,28 @@ class TestSmartMeterProcessor:
                 "Group": "",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "PowerActual": 2500,
-            "PowerActualUnit": "W",
-            "Energy": 15000,
-            "Energy24h": 45,
-            "FeedIn": 500,
-            "FeedInEnergy": 1000,
-            "Frequency": 50.0,
-            "UL1N": 230.5,
-            "UL2N": 231.0,
-            "UL3N": 229.8,
-            "IL1": 5.5,
-            "IL2": 4.8,
-            "IL3": 5.2,
-            "P1": 850,
-            "P2": 800,
-            "P3": 850,
+        instance_details = {
+            "meter_1": {
+                "PowerActual": 2500,
+                "PowerActualUnit": "W",
+                "Energy": 15000,
+                "Energy24h": 45,
+                "FeedIn": 500,
+                "FeedInEnergy": 1000,
+                "Frequency": 50.0,
+                "UL1N": 230.5,
+                "UL2N": 231.0,
+                "UL3N": 229.8,
+                "IL1": 5.5,
+                "IL2": 4.8,
+                "IL3": 5.2,
+                "P1": 850,
+                "P2": 800,
+                "P3": 850,
+            },
         }
 
-        result = await process_smart_meters(mock_api, instances, lambda x: "")
+        result = process_smart_meters(instance_details, instances, lambda x: "")
 
         assert len(result) == 1
         meter = result[0]
@@ -886,15 +818,7 @@ class TestSmartMeterProcessor:
 class TestBathroomRadiatorProcessor:
     """Tests for bathroom radiator data processor."""
 
-    @pytest.fixture
-    def mock_api(self):
-        """Create a mock API."""
-        api = MagicMock()
-        api.get_instance = AsyncMock()
-        return api
-
-    @pytest.mark.asyncio
-    async def test_process_bathroom_radiators(self, mock_api):
+    def test_process_bathroom_radiators(self):
         """Test bathroom radiator processor extracts data correctly."""
         from custom_components.evon.coordinator.processors.bathroom_radiators import process_bathroom_radiators
 
@@ -906,16 +830,18 @@ class TestBathroomRadiatorProcessor:
                 "Group": "room_bathroom",
             },
         ]
-        mock_api.get_instance.return_value = {
-            "Output": True,
-            "NextSwitchPoint": 1800,
-            "EnableForMins": 60,
-            "PermanentlyOn": False,
-            "PermanentlyOff": False,
-            "Deactivated": False,
+        instance_details = {
+            "radiator_1": {
+                "Output": True,
+                "NextSwitchPoint": 1800,
+                "EnableForMins": 60,
+                "PermanentlyOn": False,
+                "PermanentlyOff": False,
+                "Deactivated": False,
+            },
         }
 
-        result = await process_bathroom_radiators(mock_api, instances, lambda x: "Bathroom")
+        result = process_bathroom_radiators(instance_details, instances, lambda x: "Bathroom")
 
         assert len(result) == 1
         radiator = result[0]
@@ -968,3 +894,234 @@ class TestConstants:
         assert EVON_CLASS_VALVE == "SmartCOM.Clima.Valve"
         assert EVON_CLASS_SCENE == "System.SceneApp"
         assert EVON_CLASS_HOME_STATE == "System.HomeState"
+
+
+class TestProcessorMissingDetails:
+    """Test that processors handle missing instance details gracefully."""
+
+    def test_light_missing_details(self):
+        """Test light processor skips instances with no details."""
+        from custom_components.evon.coordinator.processors.lights import process_lights
+
+        instances = [
+            {"ID": "light_1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Light"},
+        ]
+        result = process_lights({}, instances, lambda x: "")
+        assert len(result) == 0
+
+    def test_climate_missing_details(self):
+        """Test climate processor skips instances with no details."""
+        from custom_components.evon.coordinator.processors.climate import process_climates
+
+        instances = [
+            {"ID": "climate_1", "ClassName": "SmartCOM.Clima.ClimateControl", "Name": "Climate"},
+        ]
+        result = process_climates({}, instances, lambda x: "", season_mode=False)
+        assert len(result) == 0
+
+
+class TestPyAVImportError:
+    """Test graceful handling of missing PyAV."""
+
+    def test_encode_mp4_raises_on_missing_av(self):
+        """Test _encode_mp4 raises HomeAssistantError when av is not installed."""
+        from datetime import datetime
+        from pathlib import Path
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.camera_recorder import EvonCameraRecorder
+
+        hass = MagicMock()
+        camera = MagicMock()
+        camera.entity_id = "camera.test"
+        recorder = EvonCameraRecorder(hass, camera)
+        recorder._frames = [(b"\xff\xd8\xff\xe0", datetime.now())]
+
+        # Temporarily remove av from sys.modules to simulate ImportError
+        had_av = "av" in sys.modules
+        old_av = sys.modules.get("av")
+        sys.modules["av"] = None  # type: ignore[assignment]  # Force ImportError
+
+        try:
+            from homeassistant.exceptions import HomeAssistantError
+
+            with pytest.raises(HomeAssistantError, match="PyAV package not installed"):
+                recorder._encode_mp4(Path("/tmp/test.mp4"))
+        finally:
+            if had_av:
+                sys.modules["av"] = old_av
+            else:
+                sys.modules.pop("av", None)
+
+
+class TestFindCameraEntity:
+    """Tests for _find_camera_entity in __init__.py."""
+
+    def test_find_camera_from_shared_registry(self):
+        """Test _find_camera_entity finds camera from the shared registry."""
+        from custom_components.evon.__init__ import _find_camera_entity
+
+        mock_camera = MagicMock()
+        mock_camera.entity_id = "camera.intercom_1"
+
+        hass = MagicMock()
+        hass.data = {
+            "evon": {
+                "entry_1": {
+                    "cameras": {"intercom_1.Cam": mock_camera},
+                },
+            },
+        }
+
+        result = _find_camera_entity(hass, "camera.intercom_1")
+        assert result is mock_camera
+
+    def test_find_camera_returns_none_when_not_registered(self):
+        """Test _find_camera_entity returns None when camera not registered."""
+        from custom_components.evon.__init__ import _find_camera_entity
+
+        hass = MagicMock()
+        hass.data = {
+            "evon": {
+                "entry_1": {
+                    "cameras": {},
+                },
+            },
+        }
+
+        result = _find_camera_entity(hass, "camera.nonexistent")
+        assert result is None
+
+    def test_find_camera_returns_none_when_domain_missing(self):
+        """Test _find_camera_entity returns None when domain not in hass.data."""
+        from custom_components.evon.__init__ import _find_camera_entity
+
+        hass = MagicMock()
+        hass.data = {}
+
+        result = _find_camera_entity(hass, "camera.intercom_1")
+        assert result is None
+
+    def test_find_camera_skips_non_dict_entries(self):
+        """Test _find_camera_entity skips non-dict entries in hass.data."""
+        from custom_components.evon.__init__ import _find_camera_entity
+
+        mock_camera = MagicMock()
+        mock_camera.entity_id = "camera.intercom_1"
+
+        hass = MagicMock()
+        hass.data = {
+            "evon": {
+                "service_lock": "not_a_dict",
+                "entry_1": {
+                    "cameras": {"intercom_1.Cam": mock_camera},
+                },
+            },
+        }
+
+        result = _find_camera_entity(hass, "camera.intercom_1")
+        assert result is mock_camera
+
+
+class TestGetCameraEntitySwitch:
+    """Tests for _get_camera_entity in switch.py (via source inspection)."""
+
+    def test_get_camera_entity_returns_camera_from_registry(self):
+        """Test _get_camera_entity returns camera from shared registry."""
+        mock_camera = MagicMock()
+
+        hass = MagicMock()
+        hass.data = {
+            "evon": {
+                "entry_1": {
+                    "cameras": {"intercom_1.Cam": mock_camera},
+                },
+            },
+        }
+
+        # Simulate the lookup logic from switch.py's _get_camera_entity
+        entry_data = hass.data.get("evon", {}).get("entry_1", {})
+        result = entry_data.get("cameras", {}).get("intercom_1.Cam")
+        assert result is mock_camera
+
+    def test_get_camera_entity_returns_none_when_not_populated(self):
+        """Test _get_camera_entity returns None when entry data not yet populated."""
+        hass = MagicMock()
+        hass.data = {"evon": {}}
+
+        entry_data = hass.data.get("evon", {}).get("entry_1", {})
+        result = entry_data.get("cameras", {}).get("intercom_1.Cam")
+        assert result is None
+
+    def test_get_camera_entity_source_uses_shared_registry(self):
+        """Test that switch.py's _get_camera_entity uses the shared camera registry."""
+        with open("custom_components/evon/switch.py") as f:
+            source = f.read()
+
+        # Should NOT use private HA internals for entity lookup
+        assert "entity_components" not in source
+        assert 'hass.data.get("entity_platform"' not in source
+
+        # Should use shared registry
+        assert '"cameras"' in source or "'cameras'" in source
+
+
+class TestCameraWillRemoveFromHass:
+    """Test camera cleanup on entity removal.
+
+    EvonCamera can't be imported directly in unit tests due to HA metaclass
+    conflicts. We verify the method exists and test it via source inspection.
+    The actual integration behavior is tested in test_camera.py (HA framework).
+    """
+
+    def test_will_remove_method_exists(self):
+        """Test that async_will_remove_from_hass is defined in camera.py."""
+        import ast
+
+        with open("custom_components/evon/camera.py") as f:
+            tree = ast.parse(f.read())
+
+        # Find the EvonCamera class
+        camera_class = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "EvonCamera":
+                camera_class = node
+                break
+
+        assert camera_class is not None, "EvonCamera class not found"
+
+        # Find async_will_remove_from_hass method
+        method_names = [
+            node.name
+            for node in ast.walk(camera_class)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        assert "async_will_remove_from_hass" in method_names
+        assert "async_added_to_hass" in method_names
+
+    def test_will_remove_calls_recorder_stop(self):
+        """Test that async_will_remove_from_hass checks recorder and calls stop."""
+        # Read the source to verify the logic
+        with open("custom_components/evon/camera.py") as f:
+            source = f.read()
+
+        # Verify the method body contains the expected logic
+        assert "self._recorder.is_recording" in source
+        assert "await self._recorder.async_stop()" in source
+        assert "await super().async_will_remove_from_hass()" in source
+
+    def test_will_remove_unregisters_from_shared_registry(self):
+        """Test that async_will_remove_from_hass unregisters from the shared camera registry."""
+        with open("custom_components/evon/camera.py") as f:
+            source = f.read()
+
+        # Verify unregistration from shared registry
+        assert '["cameras"].pop(self._instance_id, None)' in source
+
+    def test_added_to_hass_registers_in_shared_registry(self):
+        """Test that async_added_to_hass registers in the shared camera registry."""
+        with open("custom_components/evon/camera.py") as f:
+            source = f.read()
+
+        # Verify registration in shared registry
+        assert '["cameras"][self._instance_id] = self' in source

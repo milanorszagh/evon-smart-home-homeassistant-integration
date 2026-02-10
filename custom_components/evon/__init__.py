@@ -158,26 +158,13 @@ PLATFORMS: list[Platform] = [
 
 
 def _find_camera_entity(hass: HomeAssistant, entity_id: str):
-    """Find an EvonCamera entity object by entity_id.
-
-    Returns the EvonCamera instance or None.
-    """
-    from .camera import EvonCamera
-
-    entity_comp = hass.data.get("entity_components", {}).get("camera")
-    if entity_comp:
-        for entity in entity_comp.entities:
-            if entity.entity_id == entity_id and isinstance(entity, EvonCamera):
-                return entity
-    # Fallback: search via entity platform
-    for platform_data in hass.data.get("entity_platform", {}).get(DOMAIN, []):
-        if hasattr(platform_data, "entities"):
-            for entity in platform_data.entities.values():
-                if entity.entity_id == entity_id:
-                    from .camera import EvonCamera as CameraClass
-
-                    if isinstance(entity, CameraClass):
-                        return entity
+    """Find an EvonCamera entity by entity_id from the shared camera registry."""
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(entry_data, dict):
+            continue
+        for camera in entry_data.get("cameras", {}).values():
+            if camera.entity_id == entity_id:
+                return camera
     return None
 
 
@@ -236,6 +223,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "coordinator": coordinator,
+        "cameras": {},  # instance_id -> EvonCamera, populated by camera platform
     }
 
     # Apply debug logging settings

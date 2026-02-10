@@ -425,12 +425,6 @@ class EvonCameraRecordingSwitch(EvonEntity, SwitchEntity):
             _LOGGER.warning("Camera entity not found for recording switch %s", self.entity_id)
 
     def _get_camera_entity(self):
-        """Find the linked EvonCamera entity."""
-        from .camera import EvonCamera
-
-        entity_comp = self.hass.data.get("entity_components", {}).get("camera")
-        if entity_comp:
-            for entity in entity_comp.entities:
-                if isinstance(entity, EvonCamera) and entity._instance_id == self._instance_id:
-                    return entity
-        return None
+        """Find the linked EvonCamera entity from the shared camera registry."""
+        entry_data = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {})
+        return entry_data.get("cameras", {}).get(self._instance_id)

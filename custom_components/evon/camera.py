@@ -247,6 +247,19 @@ class EvonCamera(EvonEntity, Camera):
         await self._recorder.async_start(max_duration=max_dur, output_format=output_fmt)
         self.async_write_ha_state()
 
+    async def async_added_to_hass(self) -> None:
+        """Register camera in shared registry for cross-platform lookup."""
+        await super().async_added_to_hass()
+        self.hass.data[DOMAIN][self._entry.entry_id]["cameras"][self._instance_id] = self
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Clean up recorder and unregister from shared registry."""
+        self.hass.data[DOMAIN][self._entry.entry_id]["cameras"].pop(self._instance_id, None)
+        if self._recorder.is_recording:
+            _LOGGER.debug("Stopping active recording for %s on entity removal", self.entity_id)
+            await self._recorder.async_stop()
+        await super().async_will_remove_from_hass()
+
     async def async_stop_recording(self) -> str | None:
         """Stop recording and return path to the MP4 file."""
         path = await self._recorder.async_stop()
