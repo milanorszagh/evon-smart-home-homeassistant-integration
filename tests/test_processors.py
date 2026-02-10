@@ -1092,9 +1092,7 @@ class TestCameraWillRemoveFromHass:
 
         # Find async_will_remove_from_hass method
         method_names = [
-            node.name
-            for node in ast.walk(camera_class)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            node.name for node in ast.walk(camera_class) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         ]
         assert "async_will_remove_from_hass" in method_names
         assert "async_added_to_hass" in method_names

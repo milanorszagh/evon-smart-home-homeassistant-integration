@@ -148,9 +148,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.warning("Failed to fetch instance %s: %s", iid, err)
                     return iid, None
 
-            results = await asyncio.gather(
-                *[_safe_get_instance(iid) for iid in instance_ids_to_fetch]
-            )
+            results = await asyncio.gather(*[_safe_get_instance(iid) for iid in instance_ids_to_fetch])
             instance_details: dict[str, dict[str, Any]] = {
                 iid: details for iid, details in results if details is not None
             }

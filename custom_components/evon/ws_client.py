@@ -560,9 +560,7 @@ class EvonWsClient:
         now = time.monotonic()
         stale_threshold = 2 * WS_DEFAULT_REQUEST_TIMEOUT
         stale_ids = [
-            seq_id
-            for seq_id, created_at in self._pending_request_times.items()
-            if now - created_at > stale_threshold
+            seq_id for seq_id, created_at in self._pending_request_times.items() if now - created_at > stale_threshold
         ]
 
         for seq_id in stale_ids:

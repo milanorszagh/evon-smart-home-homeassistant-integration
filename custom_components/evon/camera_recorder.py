@@ -253,13 +253,9 @@ class EvonCameraRecorder:
             import av
             from PIL import Image
         except ImportError as err:
-            _LOGGER.error(
-                "Camera recording requires PyAV and Pillow packages. "
-                "Install with: pip install PyAV Pillow"
-            )
+            _LOGGER.error("Camera recording requires PyAV and Pillow packages. Install with: pip install PyAV Pillow")
             raise HomeAssistantError(
-                "Recording failed: PyAV package not installed. "
-                "Try reinstalling the Evon integration."
+                "Recording failed: PyAV package not installed. Try reinstalling the Evon integration."
             ) from err
 
         mp4_path.parent.mkdir(parents=True, exist_ok=True)

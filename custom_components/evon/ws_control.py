@@ -118,7 +118,9 @@ class WsControlMapping:
 LIGHT_MAPPINGS: dict[str, WsControlMapping] = {
     "SwitchOn": WsControlMapping(None, "SwitchOn", None),
     "SwitchOff": WsControlMapping(None, "SwitchOff", None),
-    "BrightnessSetScaled": WsControlMapping(None, "BrightnessSetScaled", lambda params: [params[0] if params else 0, 0]),
+    "BrightnessSetScaled": WsControlMapping(
+        None, "BrightnessSetScaled", lambda params: [params[0] if params else 0, 0]
+    ),
     "SetColorTemp": WsControlMapping("ColorTemp", None, lambda params: params[0] if params else 4000),
 }
 
