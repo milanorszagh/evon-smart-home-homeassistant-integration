@@ -727,8 +727,8 @@ class EvonWsClient:
         if not subscriptions:
             return
 
-        # Store subscriptions for reconnection
-        self._subscriptions = subscriptions
+        # Store a copy of subscriptions for reconnection (avoid shared reference)
+        self._subscriptions = list(subscriptions)
 
         if not self.is_connected:
             _LOGGER.debug("Not connected, subscriptions will be applied on connect")

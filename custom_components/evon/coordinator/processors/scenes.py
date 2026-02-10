@@ -26,6 +26,8 @@ def process_scenes(
             continue
 
         instance_id = instance.get("ID", "")
+        if not instance_id:
+            continue
         # Scenes don't need detailed state - just id and name
         scenes.append(
             {

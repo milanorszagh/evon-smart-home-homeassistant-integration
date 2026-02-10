@@ -115,9 +115,18 @@ def normalize_host(host: str) -> str:
     if hostname and not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$|^\d{1,3}(\.\d{1,3}){3}$", hostname):
         raise InvalidHostError("Invalid hostname format")
 
+    # Validate IPv4 octets are in range 0-255
+    if hostname and re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname):
+        octets = hostname.split(".")
+        if any(int(o) > 255 for o in octets):
+            raise InvalidHostError("Invalid IPv4 address: octet out of range")
+
     # Validate port if specified (must be 1-65535)
-    if parsed.port is not None and (parsed.port < 1 or parsed.port > 65535):
-        raise InvalidHostError(f"Invalid port number: {parsed.port}")
+    try:
+        if parsed.port is not None and (parsed.port < 1 or parsed.port > 65535):
+            raise InvalidHostError(f"Invalid port number: {parsed.port}")
+    except ValueError as err:
+        raise InvalidHostError("Invalid port number") from err
 
     # Reconstruct URL without trailing slash
     normalized = f"{parsed.scheme}://{parsed.netloc}"

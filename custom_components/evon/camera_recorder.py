@@ -260,11 +260,17 @@ class EvonCameraRecorder:
 
         mp4_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Determine frame dimensions from first frame
-        with Image.open(io.BytesIO(self._frames[0][0])) as first_image:
-            width, height = first_image.size
+        # Determine frame dimensions from first valid frame
+        width, height = 0, 0
+        for frame_bytes, _ in self._frames:
+            try:
+                with Image.open(io.BytesIO(frame_bytes)) as first_image:
+                    width, height = first_image.size
+                break
+            except Exception:
+                continue
         if width <= 0 or height <= 0:
-            raise HomeAssistantError(f"Invalid frame dimensions: {width}x{height}")
+            raise HomeAssistantError("No valid frames found for recording")
 
         # Calculate actual FPS from frame timestamps
         if len(self._frames) >= 2:
