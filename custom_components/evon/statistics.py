@@ -45,8 +45,12 @@ import logging
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
-from homeassistant.components.recorder.models.statistics import StatisticMeanType
 from homeassistant.components.recorder.statistics import async_add_external_statistics
+
+try:
+    from homeassistant.components.recorder.models.statistics import StatisticMeanType
+except ImportError:
+    StatisticMeanType = None  # Older HA versions without StatisticMeanType
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -177,16 +181,18 @@ async def _import_meter_statistics(
         return
 
     # Create metadata
-    metadata = StatisticMetaData(
-        has_mean=False,
-        has_sum=True,
-        mean_type=StatisticMeanType.NONE,
-        name=name,
-        source="evon",
-        statistic_id=statistic_id,
-        unit_class=None,
-        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-    )
+    metadata_kwargs: dict = {
+        "has_mean": False,
+        "has_sum": True,
+        "name": name,
+        "source": "evon",
+        "statistic_id": statistic_id,
+        "unit_class": None,
+        "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+    }
+    if StatisticMeanType is not None:
+        metadata_kwargs["mean_type"] = StatisticMeanType.NONE
+    metadata = StatisticMetaData(**metadata_kwargs)
 
     # EnergyDataMonth is a rolling window of PREVIOUS days (NOT including today)
     # Last element = yesterday's consumption
@@ -282,16 +288,18 @@ async def _import_monthly_statistics(
         return
 
     # Create metadata
-    metadata = StatisticMetaData(
-        has_mean=False,
-        has_sum=True,
-        mean_type=StatisticMeanType.NONE,
-        name=name,
-        source="evon",
-        statistic_id=statistic_id,
-        unit_class=None,
-        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-    )
+    metadata_kwargs: dict = {
+        "has_mean": False,
+        "has_sum": True,
+        "name": name,
+        "source": "evon",
+        "statistic_id": statistic_id,
+        "unit_class": None,
+        "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+    }
+    if StatisticMeanType is not None:
+        metadata_kwargs["mean_type"] = StatisticMeanType.NONE
+    metadata = StatisticMetaData(**metadata_kwargs)
 
     # EnergyDataYear is a rolling window of PREVIOUS months (NOT including current month)
     # Last element = previous month's consumption
