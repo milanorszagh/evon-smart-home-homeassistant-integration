@@ -7,7 +7,7 @@ from typing import Any
 from ...const import EVON_CLASS_SCENE
 
 
-async def process_scenes(
+def process_scenes(
     instances: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Process scene instances.

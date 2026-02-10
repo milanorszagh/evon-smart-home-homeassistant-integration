@@ -3,25 +3,21 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ...api import EvonApi
-
-from ...api import EvonApiError
 from ...const import EVON_CLASS_HOME_STATE
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def process_home_states(
-    api: EvonApi,
+def process_home_states(
+    instance_details: dict[str, dict[str, Any]],
     instances: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """Process home state instances.
 
     Args:
-        api: The Evon API client
+        instance_details: Pre-fetched instance details keyed by instance ID
         instances: List of all device instances
 
     Returns:
@@ -38,15 +34,16 @@ async def process_home_states(
         if not instance.get("Name"):
             continue
 
-        try:
-            details = await api.get_instance(instance_id)
-            home_states.append(
-                {
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "active": details.get("Active", False),
-                }
-            )
-        except EvonApiError:
-            _LOGGER.warning("Failed to get details for home state %s", instance_id)
+        details = instance_details.get(instance_id)
+        if details is None:
+            _LOGGER.warning("No details available for home state %s", instance_id)
+            continue
+
+        home_states.append(
+            {
+                "id": instance_id,
+                "name": instance.get("Name"),
+                "active": details.get("Active", False),
+            }
+        )
     return home_states

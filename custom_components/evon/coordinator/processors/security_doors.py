@@ -4,26 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ...api import EvonApi
-
-from ...api import EvonApiError
 from ...const import EVON_CLASS_SECURITY_DOOR
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def process_security_doors(
-    api: EvonApi,
+def process_security_doors(
+    instance_details: dict[str, dict[str, Any]],
     instances: list[dict[str, Any]],
     get_room_name: Callable[[str], str],
 ) -> list[dict[str, Any]]:
     """Process security door instances.
 
     Args:
-        api: The Evon API client
+        instance_details: Pre-fetched instance details keyed by instance ID
         instances: List of all device instances
         get_room_name: Function to get room name from group ID
 
@@ -38,31 +34,32 @@ async def process_security_doors(
             continue
 
         instance_id = instance.get("ID", "")
-        try:
-            details = await api.get_instance(instance_id)
-            # Parse saved pictures - convert timestamps to ISO format
-            saved_pictures_raw = details.get("SavedPictures", [])
-            saved_pictures = []
-            if isinstance(saved_pictures_raw, list):
-                for pic in saved_pictures_raw:
-                    if isinstance(pic, dict):
-                        saved_pictures.append(
-                            {
-                                "timestamp": pic.get("datetime"),
-                                "path": pic.get("imageUrlClient", ""),
-                            }
-                        )
-            security_doors.append(
-                {
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": get_room_name(instance.get("Group", "")),
-                    "is_open": details.get("IsOpen", False) or details.get("DoorIsOpen", False),
-                    "call_in_progress": details.get("CallInProgress", False),
-                    "cam_instance_name": details.get("CamInstanceName", ""),
-                    "saved_pictures": saved_pictures,
-                }
-            )
-        except EvonApiError:
-            _LOGGER.warning("Failed to get details for security door %s", instance_id)
+        details = instance_details.get(instance_id)
+        if details is None:
+            _LOGGER.warning("No details available for security door %s", instance_id)
+            continue
+
+        # Parse saved pictures - convert timestamps to ISO format
+        saved_pictures_raw = details.get("SavedPictures", [])
+        saved_pictures = []
+        if isinstance(saved_pictures_raw, list):
+            for pic in saved_pictures_raw:
+                if isinstance(pic, dict):
+                    saved_pictures.append(
+                        {
+                            "timestamp": pic.get("datetime"),
+                            "path": pic.get("imageUrlClient", ""),
+                        }
+                    )
+        security_doors.append(
+            {
+                "id": instance_id,
+                "name": instance.get("Name"),
+                "room_name": get_room_name(instance.get("Group", "")),
+                "is_open": details.get("IsOpen", False) or details.get("DoorIsOpen", False),
+                "call_in_progress": details.get("CallInProgress", False),
+                "cam_instance_name": details.get("CamInstanceName", ""),
+                "saved_pictures": saved_pictures,
+            }
+        )
     return security_doors

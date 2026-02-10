@@ -4,26 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from ...api import EvonApi
-
-from ...api import EvonApiError
 from ...const import EVON_CLASS_VALVE
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def process_valves(
-    api: EvonApi,
+def process_valves(
+    instance_details: dict[str, dict[str, Any]],
     instances: list[dict[str, Any]],
     get_room_name: Callable[[str], str],
 ) -> list[dict[str, Any]]:
     """Process valve instances.
 
     Args:
-        api: The Evon API client
+        instance_details: Pre-fetched instance details keyed by instance ID
         instances: List of all device instances
         get_room_name: Function to get room name from group ID
 
@@ -38,17 +34,18 @@ async def process_valves(
             continue
 
         instance_id = instance.get("ID", "")
-        try:
-            details = await api.get_instance(instance_id)
-            valves.append(
-                {
-                    "id": instance_id,
-                    "name": instance.get("Name"),
-                    "room_name": get_room_name(instance.get("Group", "")),
-                    "is_open": details.get("ActValue", False),
-                    "valve_type": details.get("Type", 0),
-                }
-            )
-        except EvonApiError:
-            _LOGGER.warning("Failed to get details for valve %s", instance_id)
+        details = instance_details.get(instance_id)
+        if details is None:
+            _LOGGER.warning("No details available for valve %s", instance_id)
+            continue
+
+        valves.append(
+            {
+                "id": instance_id,
+                "name": instance.get("Name"),
+                "room_name": get_room_name(instance.get("Group", "")),
+                "is_open": details.get("ActValue", False),
+                "valve_type": details.get("Type", 0),
+            }
+        )
     return valves

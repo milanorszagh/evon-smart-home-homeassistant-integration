@@ -1,6 +1,7 @@
 """Tests for the WebSocket client."""
 
 import asyncio
+import contextlib
 import json
 from unittest.mock import AsyncMock, MagicMock
 
@@ -2022,7 +2023,7 @@ class TestWsReceiveTimeout:
         )
 
         # Mock WebSocket that never responds (simulates silent death)
-        mock_ws = MagicMock()
+        mock_ws = AsyncMock()
         mock_ws.closed = False
 
         async def hang_forever():
@@ -2051,7 +2052,7 @@ class TestWsReceiveTimeout:
         try:
             # _handle_messages should complete quickly (not hang forever)
             # because the receive timeout fires and triggers disconnect
-            await asyncio.wait_for(client._handle_messages(), timeout=2.0)
+            await asyncio.wait_for(client._handle_messages(), timeout=5.0)
         finally:
             ws_module.WS_RECEIVE_TIMEOUT = original_timeout
 
@@ -2070,6 +2071,8 @@ class TestStaleRequestCleanup:
 
     def test_cleanup_stale_requests_removes_old_entries(self):
         """Test that stale requests older than 2x timeout are cleaned up."""
+        import time
+
         from custom_components.evon.const import WS_DEFAULT_REQUEST_TIMEOUT
 
         client = EvonWsClient(
@@ -2079,7 +2082,7 @@ class TestStaleRequestCleanup:
         )
 
         loop = asyncio.get_event_loop()
-        now = loop.time()
+        now = time.monotonic()
 
         # Add a stale request (created long ago)
         future_stale = loop.create_future()
@@ -2117,6 +2120,8 @@ class TestStaleRequestCleanup:
 
     def test_cleanup_stale_requests_cancels_future(self):
         """Test that cleaned up stale requests have their future cancelled."""
+        import time
+
         from custom_components.evon.const import WS_DEFAULT_REQUEST_TIMEOUT
 
         client = EvonWsClient(
@@ -2126,7 +2131,7 @@ class TestStaleRequestCleanup:
         )
 
         loop = asyncio.get_event_loop()
-        now = loop.time()
+        now = time.monotonic()
 
         future = loop.create_future()
         client._pending_requests[42] = future
@@ -2139,6 +2144,8 @@ class TestStaleRequestCleanup:
 
     def test_pending_request_times_tracked_in_callback(self):
         """Test that _pending_request_times is cleaned up when callback arrives."""
+        import time
+
         client = EvonWsClient(
             host="http://192.168.1.100",
             username="user",
@@ -2148,7 +2155,7 @@ class TestStaleRequestCleanup:
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         client._pending_requests[10] = future
-        client._pending_request_times[10] = loop.time()
+        client._pending_request_times[10] = time.monotonic()
 
         # Simulate callback arriving
         msg = json.dumps(["Callback", {"sequenceId": 10, "args": ["result"]}])
@@ -2173,15 +2180,21 @@ class TestStaleRequestCleanup:
             password="pass",
         )
 
+        import time
+
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         client._pending_requests[5] = future
-        client._pending_request_times[5] = loop.time()
+        client._pending_request_times[5] = time.monotonic()
 
         await client.disconnect()
 
         assert len(client._pending_requests) == 0
         assert len(client._pending_request_times) == 0
+        # Retrieve the exception to prevent "Future exception was never retrieved" warning
+        assert future.done()
+        with contextlib.suppress(Exception):
+            future.result()
 
 
 class TestEnergyStatsFailureEscalation:

@@ -1506,8 +1506,6 @@ class TestLoginErrorHandling:
     @pytest.mark.asyncio
     async def test_login_timeout(self):
         """Test timeout during login propagates."""
-        import asyncio
-
         api = EvonApi(
             host="http://192.168.1.100",
             username="user",

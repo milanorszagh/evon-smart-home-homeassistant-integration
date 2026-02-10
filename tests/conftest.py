@@ -68,8 +68,8 @@ if not importlib.util.find_spec("homeassistant"):
     from datetime import datetime, timezone
 
     mock_dt = MagicMock()
-    mock_dt.now = lambda: datetime.now(tz=timezone.utc)
-    mock_dt.utc_from_timestamp = lambda ts: datetime.fromtimestamp(ts, tz=timezone.utc)
+    mock_dt.now = lambda: datetime.now(tz=timezone.utc)  # noqa: UP017
+    mock_dt.utc_from_timestamp = lambda ts: datetime.fromtimestamp(ts, tz=timezone.utc)  # noqa: UP017
     mock_ha.util.dt = mock_dt
     mock_ha.components.repairs = MagicMock()
     mock_ha.loader = MagicMock()

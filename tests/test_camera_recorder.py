@@ -406,8 +406,6 @@ class TestRecordingsCache:
 
     def test_cache_avoids_repeated_scan(self, recorder, mock_hass, tmp_path):
         """Test that second call within TTL returns cached results without re-scanning."""
-        import time
-
         recordings_dir = tmp_path / "media" / "evon_recordings"
         recordings_dir.mkdir(parents=True)
         mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))

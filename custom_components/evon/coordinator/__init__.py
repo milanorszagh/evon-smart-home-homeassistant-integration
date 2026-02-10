@@ -36,6 +36,7 @@ from ..const import (
     ENTITY_TYPE_SMART_METERS,
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
+    EVON_CLASS_SCENE,
     REPAIR_CONNECTION_FAILED,
     WS_POLL_INTERVAL,
 )
@@ -125,40 +126,53 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._sync_areas:
                 await self._fetch_rooms()
 
-            # Fetch season mode (global heating/cooling)
-            season_mode = await self._fetch_season_mode()
+            # Prefetch all instance details in parallel (eliminates N+1 API calls)
+            # Scenes don't need detail fetch; everything else does
+            instance_ids_to_fetch = []
+            for inst in instances:
+                class_name = inst.get("ClassName", "")
+                inst_id = inst.get("ID", "")
+                if not inst_id:
+                    continue
+                if class_name != EVON_CLASS_SCENE:
+                    instance_ids_to_fetch.append(inst_id)
 
-            # Process all device types in parallel using asyncio.gather
-            # This significantly reduces refresh time with many devices
-            (
-                lights,
-                blinds,
-                climates,
-                switches,
-                smart_meters,
-                air_quality,
-                valves,
-                home_states,
-                bathroom_radiators,
-                scenes,
-                security_doors,
-                intercoms,
-                cameras,
-            ) = await asyncio.gather(
-                process_lights(self.api, instances, self._get_room_name),
-                process_blinds(self.api, instances, self._get_room_name),
-                process_climates(self.api, instances, self._get_room_name, season_mode),
-                process_switches(self.api, instances, self._get_room_name),
-                process_smart_meters(self.api, instances, self._get_room_name),
-                process_air_quality(self.api, instances, self._get_room_name),
-                process_valves(self.api, instances, self._get_room_name),
-                process_home_states(self.api, instances),
-                process_bathroom_radiators(self.api, instances, self._get_room_name),
-                process_scenes(instances),
-                process_security_doors(self.api, instances, self._get_room_name),
-                process_intercoms(self.api, instances, self._get_room_name),
-                process_cameras(self.api, instances, self._get_room_name),
+            # Also fetch Base.ehThermostat for season mode
+            if "Base.ehThermostat" not in instance_ids_to_fetch:
+                instance_ids_to_fetch.append("Base.ehThermostat")
+
+            async def _safe_get_instance(iid: str) -> tuple[str, dict[str, Any] | None]:
+                try:
+                    return iid, await self.api.get_instance(iid)
+                except EvonApiError as err:
+                    _LOGGER.warning("Failed to fetch instance %s: %s", iid, err)
+                    return iid, None
+
+            results = await asyncio.gather(
+                *[_safe_get_instance(iid) for iid in instance_ids_to_fetch]
             )
+            instance_details: dict[str, dict[str, Any]] = {
+                iid: details for iid, details in results if details is not None
+            }
+
+            # Extract season mode from prefetched data
+            thermostat_details = instance_details.get("Base.ehThermostat", {})
+            season_mode = self._extract_season_mode(thermostat_details)
+
+            # Process all device types (synchronous - just dict lookups now)
+            lights = process_lights(instance_details, instances, self._get_room_name)
+            blinds = process_blinds(instance_details, instances, self._get_room_name)
+            climates = process_climates(instance_details, instances, self._get_room_name, season_mode)
+            switches = process_switches(instance_details, instances, self._get_room_name)
+            smart_meters = process_smart_meters(instance_details, instances, self._get_room_name)
+            air_quality = process_air_quality(instance_details, instances, self._get_room_name)
+            valves = process_valves(instance_details, instances, self._get_room_name)
+            home_states = process_home_states(instance_details, instances)
+            bathroom_radiators = process_bathroom_radiators(instance_details, instances, self._get_room_name)
+            scenes = process_scenes(instances)
+            security_doors = process_security_doors(instance_details, instances, self._get_room_name)
+            intercoms = process_intercoms(instance_details, instances, self._get_room_name)
+            cameras = process_cameras(instance_details, instances, self._get_room_name)
 
             _LOGGER.debug(
                 "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d",
@@ -269,17 +283,39 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning("Failed to fetch rooms, area sync disabled for this update")
             self._rooms_cache = {}
 
-    async def _fetch_season_mode(self) -> bool:
-        """Fetch the global season mode (heating/cooling).
+    def _extract_season_mode(self, thermostat_details: dict[str, Any]) -> bool:
+        """Extract the global season mode from prefetched thermostat data.
+
+        Args:
+            thermostat_details: Prefetched Base.ehThermostat instance details.
 
         Returns:
             True if cooling (summer), False if heating (winter)
         """
-        try:
-            return await self.api.get_season_mode()
-        except EvonApiError:
-            _LOGGER.warning("Failed to fetch season mode, defaulting to heating")
+        if not thermostat_details:
+            _LOGGER.warning("No thermostat data available, defaulting to heating mode")
             return False
+
+        is_cool = thermostat_details.get("IsCool")
+
+        if is_cool is None:
+            _LOGGER.warning("Season mode response missing 'IsCool' field, defaulting to heating mode")
+            return False
+
+        if not isinstance(is_cool, bool):
+            _LOGGER.warning(
+                "Season mode 'IsCool' has unexpected type %s (value: %s), attempting to interpret as boolean",
+                type(is_cool).__name__,
+                is_cool,
+            )
+            if is_cool in (0, "0", "false", "False", "no", "No"):
+                return False
+            if is_cool in (1, "1", "true", "True", "yes", "Yes"):
+                return True
+            _LOGGER.warning("Could not interpret season mode value, defaulting to heating mode")
+            return False
+
+        return is_cool
 
     def _get_room_name(self, group: str) -> str:
         """Get room name for a group ID."""
