@@ -818,8 +818,13 @@ class EvonApi:
     async def turn_off_bathroom_radiator(self, instance_id: str) -> None:
         """Turn off a bathroom radiator.
 
-        Uses Switch (toggle) - caller must check state first to avoid toggling ON.
-        Note: SwitchOff method exists but doesn't work (acknowledged but no effect).
+        Uses Switch (toggle) because SwitchOff is acknowledged by the controller
+        but has no effect on bathroom radiators.
+
+        Caller responsibility: the caller MUST verify the radiator is currently on
+        before calling this method. If called when already off, the toggle will
+        turn it ON instead. See EvonBathroomRadiatorSwitch.async_turn_off() for
+        the state-check and double-tap guard logic.
         """
         await self.call_method(instance_id, "Switch")
 

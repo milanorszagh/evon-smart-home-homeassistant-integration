@@ -20,6 +20,7 @@ from .const import (
     WS_LOG_MESSAGE_TRUNCATE,
     WS_MAX_PENDING_REQUESTS,
     WS_PROTOCOL,
+    WS_RECEIVE_TIMEOUT,
     WS_RECONNECT_JITTER,
     WS_RECONNECT_MAX_DELAY,
     WS_SUBSCRIBE_REQUEST_TIMEOUT,
@@ -106,6 +107,7 @@ class EvonWsClient:
         self._message_task: asyncio.Task | None = None
         self._resubscribe_task: asyncio.Task | None = None
         self._pending_requests: dict[int, asyncio.Future] = {}
+        self._pending_request_times: dict[int, float] = {}
         self._subscriptions: list[dict[str, Any]] = []
 
     @property
@@ -295,6 +297,7 @@ class EvonWsClient:
         # to ensure proper error handling
         pending = list(self._pending_requests.items())
         self._pending_requests.clear()
+        self._pending_request_times.clear()
         for seq_id, future in pending:
             if not future.done():
                 future.set_exception(EvonWsNotConnectedError("WebSocket disconnected"))
@@ -428,7 +431,8 @@ class EvonWsClient:
             return
 
         try:
-            msg = await self._ws.receive()
+            async with asyncio.timeout(WS_RECEIVE_TIMEOUT):
+                msg = await self._ws.receive()
             _LOGGER.debug("WS msg received: type=%s, len=%s", msg.type, len(msg.data) if msg.data else 0)
 
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -439,6 +443,9 @@ class EvonWsClient:
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 _LOGGER.error("WebSocket error: %s", self._ws.exception())
                 await self.disconnect()
+
+            # Belt-and-suspenders: clean up any stale pending requests
+            self._cleanup_stale_requests()
 
         except asyncio.CancelledError:
             raise
@@ -472,6 +479,7 @@ class EvonWsClient:
                 _LOGGER.debug("Callback received: seq=%s, pending=%s", sequence_id, list(self._pending_requests.keys()))
                 if sequence_id in self._pending_requests:
                     future = self._pending_requests.pop(sequence_id)
+                    self._pending_request_times.pop(sequence_id, None)
                     if not future.done():
                         args = payload.get("args", [])
                         future.set_result(args[0] if args else None)
@@ -538,6 +546,35 @@ class EvonWsClient:
                     err,
                 )
 
+    def _cleanup_stale_requests(self) -> None:
+        """Remove pending requests older than 2x the default timeout.
+
+        Belt-and-suspenders safety net: if asyncio.timeout() somehow doesn't
+        fire for a pending request, this prevents stale futures from
+        accumulating in _pending_requests.
+        """
+        if not self._pending_request_times:
+            return
+
+        now = asyncio.get_event_loop().time()
+        stale_threshold = 2 * WS_DEFAULT_REQUEST_TIMEOUT
+        stale_ids = [
+            seq_id
+            for seq_id, created_at in self._pending_request_times.items()
+            if now - created_at > stale_threshold
+        ]
+
+        for seq_id in stale_ids:
+            future = self._pending_requests.pop(seq_id, None)
+            self._pending_request_times.pop(seq_id, None)
+            if future and not future.done():
+                future.cancel()
+            _LOGGER.warning(
+                "Cleaned up stale pending request: seq=%s (age > %.0fs)",
+                seq_id,
+                stale_threshold,
+            )
+
     async def _send_request(
         self,
         method_name: str,
@@ -580,6 +617,7 @@ class EvonWsClient:
 
         future: asyncio.Future = asyncio.get_running_loop().create_future()
         self._pending_requests[sequence_id] = future
+        self._pending_request_times[sequence_id] = asyncio.get_event_loop().time()
 
         try:
             _LOGGER.debug("Sending WS request: method=%s, seq=%s", method_name, sequence_id)
@@ -591,12 +629,15 @@ class EvonWsClient:
                 return await future
         except TimeoutError:
             self._pending_requests.pop(sequence_id, None)
+            self._pending_request_times.pop(sequence_id, None)
             raise EvonWsTimeoutError(f"Request timeout: {method_name}") from None
         except asyncio.CancelledError:
             self._pending_requests.pop(sequence_id, None)
+            self._pending_request_times.pop(sequence_id, None)
             raise
         except Exception:
             self._pending_requests.pop(sequence_id, None)
+            self._pending_request_times.pop(sequence_id, None)
             raise
 
     async def _send_fire_and_forget(

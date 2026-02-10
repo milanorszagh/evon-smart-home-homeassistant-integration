@@ -1997,3 +1997,206 @@ class TestWsPendingRequestsLimit:
 
         with pytest.raises(EvonWsNotConnectedError):
             await client._send_request("TestMethod", [])
+
+
+class TestWsReceiveTimeout:
+    """Tests for WebSocket receive timeout (silent connection death detection)."""
+
+    @pytest.mark.asyncio
+    async def test_handle_messages_uses_receive_timeout(self):
+        """Test that _handle_messages wraps receive in asyncio.timeout.
+
+        If the remote server silently dies, receive() would block indefinitely.
+        The timeout ensures disconnect is called so _run_loop can reconnect.
+
+        Requires Python 3.11+ for asyncio.timeout (used in production code).
+        """
+        if not hasattr(asyncio, "timeout"):
+            pytest.skip("Requires Python 3.11+ for asyncio.timeout")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Mock WebSocket that never responds (simulates silent death)
+        mock_ws = MagicMock()
+        mock_ws.closed = False
+
+        async def hang_forever():
+            await asyncio.sleep(999)
+
+        mock_ws.receive = hang_forever
+        client._ws = mock_ws
+        client._connected = True
+
+        # _handle_messages should timeout and call disconnect
+        disconnect_called = False
+        original_disconnect = client.disconnect
+
+        async def mock_disconnect():
+            nonlocal disconnect_called
+            disconnect_called = True
+            await original_disconnect()
+
+        client.disconnect = mock_disconnect
+
+        # Patch WS_RECEIVE_TIMEOUT to be very short for test speed
+        import custom_components.evon.ws_client as ws_module
+
+        original_timeout = ws_module.WS_RECEIVE_TIMEOUT
+        ws_module.WS_RECEIVE_TIMEOUT = 0.1
+        try:
+            # _handle_messages should complete quickly (not hang forever)
+            # because the receive timeout fires and triggers disconnect
+            await asyncio.wait_for(client._handle_messages(), timeout=2.0)
+        finally:
+            ws_module.WS_RECEIVE_TIMEOUT = original_timeout
+
+        assert disconnect_called
+
+    def test_ws_receive_timeout_constant(self):
+        """Test WS_RECEIVE_TIMEOUT is 3x heartbeat interval."""
+        from custom_components.evon.const import WS_HEARTBEAT_INTERVAL, WS_RECEIVE_TIMEOUT
+
+        assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 3
+        assert WS_RECEIVE_TIMEOUT == 90
+
+
+class TestStaleRequestCleanup:
+    """Tests for periodic stale WebSocket request cleanup."""
+
+    def test_cleanup_stale_requests_removes_old_entries(self):
+        """Test that stale requests older than 2x timeout are cleaned up."""
+        from custom_components.evon.const import WS_DEFAULT_REQUEST_TIMEOUT
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        loop = asyncio.get_event_loop()
+        now = loop.time()
+
+        # Add a stale request (created long ago)
+        future_stale = loop.create_future()
+        client._pending_requests[1] = future_stale
+        client._pending_request_times[1] = now - (3 * WS_DEFAULT_REQUEST_TIMEOUT)
+
+        # Add a fresh request (created just now)
+        future_fresh = loop.create_future()
+        client._pending_requests[2] = future_fresh
+        client._pending_request_times[2] = now
+
+        client._cleanup_stale_requests()
+
+        # Stale request should be removed
+        assert 1 not in client._pending_requests
+        assert 1 not in client._pending_request_times
+        assert future_stale.done()
+
+        # Fresh request should remain
+        assert 2 in client._pending_requests
+        assert 2 in client._pending_request_times
+        assert not future_fresh.done()
+
+    def test_cleanup_stale_requests_no_op_when_empty(self):
+        """Test cleanup does nothing with no pending requests."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        # Should not raise
+        client._cleanup_stale_requests()
+        assert len(client._pending_requests) == 0
+
+    def test_cleanup_stale_requests_cancels_future(self):
+        """Test that cleaned up stale requests have their future cancelled."""
+        from custom_components.evon.const import WS_DEFAULT_REQUEST_TIMEOUT
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        loop = asyncio.get_event_loop()
+        now = loop.time()
+
+        future = loop.create_future()
+        client._pending_requests[42] = future
+        client._pending_request_times[42] = now - (3 * WS_DEFAULT_REQUEST_TIMEOUT)
+
+        client._cleanup_stale_requests()
+
+        assert future.done()
+        assert future.cancelled()
+
+    def test_pending_request_times_tracked_in_callback(self):
+        """Test that _pending_request_times is cleaned up when callback arrives."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        client._pending_requests[10] = future
+        client._pending_request_times[10] = loop.time()
+
+        # Simulate callback arriving
+        msg = json.dumps(["Callback", {"sequenceId": 10, "args": ["result"]}])
+        client._handle_message(msg)
+
+        assert 10 not in client._pending_requests
+        assert 10 not in client._pending_request_times
+
+    @pytest.mark.asyncio
+    async def test_pending_request_times_cleared_on_disconnect(self):
+        """Test that _pending_request_times is cleared on disconnect."""
+        from custom_components.evon.api import EvonWsNotConnectedError
+
+        # disconnect() calls set_exception(EvonWsNotConnectedError(...))
+        # which requires a real exception class (not a MagicMock)
+        if not isinstance(EvonWsNotConnectedError, type):
+            pytest.skip("Requires real homeassistant package")
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+
+        loop = asyncio.get_event_loop()
+        future = loop.create_future()
+        client._pending_requests[5] = future
+        client._pending_request_times[5] = loop.time()
+
+        await client.disconnect()
+
+        assert len(client._pending_requests) == 0
+        assert len(client._pending_request_times) == 0
+
+
+class TestEnergyStatsFailureEscalation:
+    """Tests for energy statistics consecutive failure escalation."""
+
+    def test_energy_stats_failure_counter_in_source(self):
+        """Test that the failure counter is initialized in coordinator __init__."""
+        from pathlib import Path
+
+        src = Path(__file__).parent.parent / "custom_components" / "evon" / "coordinator" / "__init__.py"
+        content = src.read_text()
+        assert "_energy_stats_consecutive_failures = 0" in content
+        assert "ENERGY_STATS_FAILURE_LOG_THRESHOLD" in content
+
+    def test_energy_stats_failure_threshold_constant(self):
+        """Test ENERGY_STATS_FAILURE_LOG_THRESHOLD is set correctly."""
+        from custom_components.evon.const import ENERGY_STATS_FAILURE_LOG_THRESHOLD
+
+        assert ENERGY_STATS_FAILURE_LOG_THRESHOLD == 3

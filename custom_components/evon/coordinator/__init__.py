@@ -11,6 +11,7 @@ import aiohttp
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -21,6 +22,7 @@ from ..const import (
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    ENERGY_STATS_FAILURE_LOG_THRESHOLD,
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
@@ -85,6 +87,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._repair_created = False
         self._last_successful_data: dict[str, Any] | None = None
         self._base_scan_interval = scan_interval
+
+        # Energy statistics failure tracking
+        self._energy_stats_consecutive_failures = 0
 
         # WebSocket support
         self._use_websocket = use_websocket
@@ -709,8 +714,38 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("Calculated energy_today for %s: %s kWh", meter_name, energy_today)
                 else:
                     _LOGGER.debug("No statistics found for %s in result", entity_id)
+                # Success — reset failure counter
+                self._energy_stats_consecutive_failures = 0
+            except (HomeAssistantError, ValueError, TypeError, KeyError) as err:
+                self._energy_stats_consecutive_failures += 1
+                if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
+                    _LOGGER.error(
+                        "Energy statistics for %s failed %d times consecutively: %s. "
+                        "Check that the recorder component is running and the entity exists.",
+                        entity_id,
+                        self._energy_stats_consecutive_failures,
+                        err,
+                    )
+                else:
+                    _LOGGER.warning("Could not get energy statistics for %s: %s", entity_id, err)
             except Exception as err:
-                _LOGGER.warning("Could not get energy statistics for %s: %s", entity_id, err)
+                self._energy_stats_consecutive_failures += 1
+                if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
+                    _LOGGER.error(
+                        "Energy statistics for %s failed %d times consecutively: %s. "
+                        "Check that the recorder component is running and the entity exists.",
+                        entity_id,
+                        self._energy_stats_consecutive_failures,
+                        err,
+                        exc_info=True,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Could not get energy statistics for %s: %s",
+                        entity_id,
+                        err,
+                        exc_info=True,
+                    )
 
             # Store energy_today in the meter data
             meter["energy_today_calculated"] = energy_today

@@ -278,30 +278,55 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the radiator.
 
-        Uses Switch (toggle) only if currently on to prevent toggling ON.
-        Skips if an optimistic off is already pending to prevent double-toggle.
+        Uses Switch (toggle) because SwitchOff doesn't work on Evon bathroom
+        radiators (acknowledged by the controller but has no effect). Only
+        toggles if the radiator is currently on to prevent accidentally
+        turning it ON.
+
+        Race window: if the radiator turns off between our state check and
+        the toggle command, the toggle will turn it back on. The double-tap
+        guard and optimistic state mitigate this for rapid user interactions.
         """
         # Guard against double-tap: if we already sent a turn-off, don't toggle again
         if self._optimistic_is_on is False:
+            _LOGGER.debug(
+                "Radiator %s: skipping turn_off, optimistic off already pending",
+                self._instance_id,
+            )
             return
 
         data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
-        if data and data.get("is_on", False):
-            self._optimistic_is_on = False
-            # Clear optimistic time when turning off
-            self._optimistic_time_remaining_mins = None
-            self._set_optimistic_timestamp()
-            self.async_write_ha_state()
+        current_is_on = data.get("is_on", False) if data else False
 
-            try:
-                await self._api.turn_off_bathroom_radiator(self._instance_id)
-            except EvonApiError:
-                self._optimistic_is_on = None
-                self._optimistic_time_remaining_mins = None
-                self._optimistic_state_set_at = None
-                self.async_write_ha_state()
-                raise
-            await self.coordinator.async_request_refresh()
+        if not current_is_on:
+            _LOGGER.debug(
+                "Radiator %s: skipping turn_off, already off (is_on=%s)",
+                self._instance_id,
+                current_is_on,
+            )
+            return
+
+        _LOGGER.debug(
+            "Radiator %s: turning off via toggle (is_on=%s, using Switch because SwitchOff is broken)",
+            self._instance_id,
+            current_is_on,
+        )
+
+        self._optimistic_is_on = False
+        # Clear optimistic time when turning off
+        self._optimistic_time_remaining_mins = None
+        self._set_optimistic_timestamp()
+        self.async_write_ha_state()
+
+        try:
+            await self._api.turn_off_bathroom_radiator(self._instance_id)
+        except EvonApiError:
+            self._optimistic_is_on = None
+            self._optimistic_time_remaining_mins = None
+            self._optimistic_state_set_at = None
+            self.async_write_ha_state()
+            raise
+        await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
