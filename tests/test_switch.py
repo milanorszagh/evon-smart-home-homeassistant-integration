@@ -147,3 +147,194 @@ async def test_bathroom_radiator_turn_off_skips_when_already_off(hass, mock_conf
 
     # Should not call API since radiator is already off
     mock_evon_api_class.turn_off_bathroom_radiator.assert_not_called()
+
+
+# =============================================================================
+# Regular Switch (SmartCOM.Light.Light relay) Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_setup(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that a regular switch entity is created for SmartCOM.Light.Light instances."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("switch.kitchen_relay")
+    assert state is not None
+    # IsOn=False in mock data → state should be "off"
+    assert state.state == "off"
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_turn_on(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test turning on a regular switch."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.kitchen_relay"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.turn_on_switch.assert_called_once_with("light_2")
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_turn_off(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test turning off a regular switch."""
+    # Modify mock data so switch starts as on
+    mock_instance_details = MOCK_INSTANCE_DETAILS.copy()
+    mock_instance_details["light_2"] = {"IsOn": True, "ScaledBrightness": 0}
+    mock_evon_api_class.get_instance = AsyncMock(
+        side_effect=lambda instance_id: mock_instance_details.get(instance_id, {})
+    )
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.kitchen_relay"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.turn_off_switch.assert_called_once_with("light_2")
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_optimistic_state(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that after turning on, state optimistically shows 'on' immediately."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Initially off
+    state = hass.states.get("switch.kitchen_relay")
+    assert state.state == "off"
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.kitchen_relay"},
+        blocking=True,
+    )
+
+    # After turn_on, optimistic state should show "on" immediately
+    state = hass.states.get("switch.kitchen_relay")
+    assert state.state == "on"
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_attributes(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test regular switch attributes include evon_id."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("switch.kitchen_relay")
+    assert state is not None
+    assert state.attributes.get("evon_id") == "light_2"
+
+
+@pytest.mark.asyncio
+async def test_regular_switch_api_error_resets_state(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that when turn_on_switch raises EvonApiError, optimistic state is cleared."""
+    from custom_components.evon.api import EvonApiError
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Make turn_on_switch raise an error
+    mock_evon_api_class.turn_on_switch = AsyncMock(side_effect=EvonApiError("API error"))
+
+    with pytest.raises(EvonApiError):
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.kitchen_relay"},
+            blocking=True,
+        )
+
+    # After error, state should revert to original "off" (optimistic cleared)
+    state = hass.states.get("switch.kitchen_relay")
+    assert state.state == "off"
+
+
+# =============================================================================
+# Additional Bathroom Radiator Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_bathroom_radiator_optimistic_on_shows_time(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that after turning on a radiator, extra_state_attributes show optimistic time_remaining_mins."""
+    # Start with radiator off
+    mock_instance_details = MOCK_INSTANCE_DETAILS.copy()
+    mock_instance_details["bathroom_radiator_1"] = {
+        "Output": False,
+        "NextSwitchPoint": 0,
+        "EnableForMins": 30,
+    }
+    mock_evon_api_class.get_instance = AsyncMock(
+        side_effect=lambda instance_id: mock_instance_details.get(instance_id, {})
+    )
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.bathroom_radiator"},
+        blocking=True,
+    )
+
+    state = hass.states.get("switch.bathroom_radiator")
+    assert state is not None
+    # Optimistic time_remaining_mins should equal duration_mins (30)
+    assert state.attributes.get("time_remaining_mins") == 30
+
+
+@pytest.mark.asyncio
+async def test_bathroom_radiator_api_error_resets_state(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that when turn_on_bathroom_radiator raises EvonApiError, optimistic state is cleared."""
+    from custom_components.evon.api import EvonApiError
+
+    # Start with radiator off
+    mock_instance_details = MOCK_INSTANCE_DETAILS.copy()
+    mock_instance_details["bathroom_radiator_1"] = {
+        "Output": False,
+        "NextSwitchPoint": 0,
+        "EnableForMins": 30,
+    }
+    mock_evon_api_class.get_instance = AsyncMock(
+        side_effect=lambda instance_id: mock_instance_details.get(instance_id, {})
+    )
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Make turn_on_bathroom_radiator raise an error
+    mock_evon_api_class.turn_on_bathroom_radiator = AsyncMock(side_effect=EvonApiError("API error"))
+
+    with pytest.raises(EvonApiError):
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.bathroom_radiator"},
+            blocking=True,
+        )
+
+    # After error, state should revert to original "off" (optimistic cleared)
+    state = hass.states.get("switch.bathroom_radiator")
+    assert state.state == "off"

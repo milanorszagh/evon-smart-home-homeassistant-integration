@@ -210,3 +210,228 @@ async def test_climate_cooling_mode_preset(hass, mock_config_entry_v2, mock_evon
     # Reset mock data for other tests
     MOCK_INSTANCE_DETAILS["climate_1"]["ModeSaved"] = 4
     MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
+
+
+@pytest.mark.asyncio
+async def test_climate_set_hvac_mode_off(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test setting HVAC mode to off calls freeze protection mode."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": "climate.living_room_climate", "hvac_mode": "off"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.set_climate_freeze_protection_mode.assert_called_once_with("climate_1")
+
+
+@pytest.mark.asyncio
+async def test_climate_set_hvac_mode_heat(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test setting HVAC mode to heat calls comfort mode."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "climate",
+        "set_hvac_mode",
+        {"entity_id": "climate.living_room_climate", "hvac_mode": "heat"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.set_climate_comfort_mode.assert_called_once_with("climate_1")
+
+
+@pytest.mark.asyncio
+async def test_climate_temperature_clamping(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that setting temperature above max_temp gets clamped to max."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # max_temp is 25 in mock data; setting 30 should clamp to 25.0
+    await hass.services.async_call(
+        "climate",
+        "set_temperature",
+        {"entity_id": "climate.living_room_climate", "temperature": 30},
+        blocking=True,
+    )
+
+    mock_evon_api_class.set_climate_temperature.assert_called_once_with("climate_1", 25.0)
+
+
+@pytest.mark.asyncio
+async def test_climate_temperature_clamping_below_min(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that setting temperature below min_temp gets clamped to min."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # min_temp is 15 in mock data; setting 10 should clamp to 15.0
+    await hass.services.async_call(
+        "climate",
+        "set_temperature",
+        {"entity_id": "climate.living_room_climate", "temperature": 10},
+        blocking=True,
+    )
+
+    mock_evon_api_class.set_climate_temperature.assert_called_once_with("climate_1", 15.0)
+
+
+@pytest.mark.asyncio
+async def test_climate_hvac_modes_heating(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that hvac_modes returns [heat, off] when cooling is not enabled."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("climate.living_room_climate")
+    assert state is not None
+    # Default mock data has DisableCooling not set (defaults to True), so cooling_enabled=False
+    hvac_modes = state.attributes.get("hvac_modes")
+    assert "heat" in hvac_modes
+    assert "off" in hvac_modes
+    assert "cool" not in hvac_modes
+
+
+@pytest.mark.asyncio
+async def test_climate_hvac_modes_cooling_enabled(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that hvac_modes returns [heat, cool, off] when cooling is enabled."""
+    from tests.conftest import MOCK_INSTANCE_DETAILS
+
+    # DisableCooling=False → cooling_enabled=True; CoolingMode=True → is_cooling=True
+    MOCK_INSTANCE_DETAILS["climate_1"]["DisableCooling"] = False
+    MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = True
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("climate.living_room_climate")
+    assert state is not None
+    hvac_modes = state.attributes.get("hvac_modes")
+    assert "heat" in hvac_modes
+    assert "cool" in hvac_modes
+    assert "off" in hvac_modes
+
+    # Reset mock data for other tests
+    MOCK_INSTANCE_DETAILS["climate_1"].pop("DisableCooling", None)
+    MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
+
+
+@pytest.mark.asyncio
+async def test_climate_humidity(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that current_humidity returns the humidity value from mock data."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("climate.living_room_climate")
+    assert state is not None
+    # Humidity is 45.0 in mock data, returned as int
+    assert state.attributes.get("current_humidity") == 45
+
+
+@pytest.mark.asyncio
+async def test_climate_hvac_mode_off_when_not_on(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that hvac_mode is 'off' when IsOn is False."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # sensor_temp_1 (Bedroom Climate) has IsOn=False in mock data
+    state = hass.states.get("climate.bedroom_climate")
+    assert state is not None
+    assert state.state == "off"
+
+
+@pytest.mark.asyncio
+async def test_climate_api_error_resets_optimistic_preset(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that EvonApiError during set_preset_mode resets optimistic preset."""
+    from custom_components.evon.api import EvonApiError
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Initial preset should be "comfort" (ModeSaved=4 in heating mode)
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "comfort"
+
+    # Make the API call raise EvonApiError
+    mock_evon_api_class.set_climate_comfort_mode.side_effect = EvonApiError("API error")
+
+    with pytest.raises(EvonApiError):
+        await hass.services.async_call(
+            "climate",
+            "set_preset_mode",
+            {"entity_id": "climate.living_room_climate", "preset_mode": "comfort"},
+            blocking=True,
+        )
+
+    # After error, optimistic preset should be cleared, reverting to coordinator data
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "comfort"
+
+    # Reset side effect
+    mock_evon_api_class.set_climate_comfort_mode.side_effect = None
+
+
+@pytest.mark.asyncio
+async def test_climate_api_error_resets_optimistic_temperature(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that EvonApiError during set_temperature resets optimistic temperature."""
+    from custom_components.evon.api import EvonApiError
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Initial temperature
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("temperature") == 22.0
+
+    # Make the API call raise EvonApiError
+    mock_evon_api_class.set_climate_temperature.side_effect = EvonApiError("API error")
+
+    with pytest.raises(EvonApiError):
+        await hass.services.async_call(
+            "climate",
+            "set_temperature",
+            {"entity_id": "climate.living_room_climate", "temperature": 24.0},
+            blocking=True,
+        )
+
+    # After error, optimistic temp should be cleared, reverting to coordinator data (22.0)
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("temperature") == 22.0
+
+    # Reset side effect
+    mock_evon_api_class.set_climate_temperature.side_effect = None
+
+
+@pytest.mark.asyncio
+async def test_climate_optimistic_preset(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that set_preset_mode immediately shows the new preset optimistically."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Initial preset is "comfort" (ModeSaved=4 in heating mode)
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "comfort"
+
+    # Set preset to "eco" - should be reflected immediately (optimistic update)
+    await hass.services.async_call(
+        "climate",
+        "set_preset_mode",
+        {"entity_id": "climate.living_room_climate", "preset_mode": "eco"},
+        blocking=True,
+    )
+
+    # State should reflect the optimistic preset update
+    state = hass.states.get("climate.living_room_climate")
+    assert state.attributes.get("preset_mode") == "eco"

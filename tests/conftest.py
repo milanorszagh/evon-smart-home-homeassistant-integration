@@ -243,12 +243,20 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.turn_on_light = AsyncMock()
         mock_api.turn_off_light = AsyncMock()
         mock_api.set_light_brightness = AsyncMock()
+        mock_api.set_light_color_temp = AsyncMock()
+        # Switch methods
+        mock_api.turn_on_switch = AsyncMock()
+        mock_api.turn_off_switch = AsyncMock()
         # Blind methods
         mock_api.open_blind = AsyncMock()
         mock_api.close_blind = AsyncMock()
         mock_api.stop_blind = AsyncMock()
         mock_api.set_blind_position = AsyncMock()
         mock_api.set_blind_tilt = AsyncMock()
+        # Blind group methods
+        mock_api.open_all_blinds = AsyncMock()
+        mock_api.close_all_blinds = AsyncMock()
+        mock_api.stop_all_blinds = AsyncMock()
         # Climate methods
         mock_api.set_climate_comfort_mode = AsyncMock()
         mock_api.set_climate_energy_saving_mode = AsyncMock()
@@ -270,6 +278,8 @@ if HAS_HA_TEST_FRAMEWORK:
         )
         # Bathroom radiator methods
         mock_api.toggle_bathroom_radiator = AsyncMock()
+        mock_api.turn_on_bathroom_radiator = AsyncMock()
+        mock_api.turn_off_bathroom_radiator = AsyncMock()
         # Scene methods
         mock_api.execute_scene = AsyncMock()
         # Global control methods
