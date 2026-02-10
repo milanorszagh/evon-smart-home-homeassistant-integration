@@ -252,6 +252,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
+                    if not isinstance(entry_data, dict):
+                        continue
                     if "coordinator" in entry_data:
                         await entry_data["coordinator"].async_refresh()
 
@@ -261,7 +263,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
                     config_entry = hass.config_entries.async_get_entry(entry_id)
@@ -288,6 +290,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
+                    if not isinstance(entry_data, dict):
+                        continue
                     if "api" in entry_data:
                         try:
                             await entry_data["api"].activate_home_state(evon_state)
@@ -307,6 +311,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
+                    if not isinstance(entry_data, dict):
+                        continue
                     if "api" in entry_data:
                         try:
                             await entry_data["api"].set_season_mode(is_cooling)
@@ -324,7 +330,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
@@ -345,7 +351,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if "coordinator" not in entry_data or "api" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data:
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]

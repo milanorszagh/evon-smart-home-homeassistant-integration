@@ -11,6 +11,32 @@ from ...const import EVON_CLASS_SECURITY_DOOR
 _LOGGER = logging.getLogger(__name__)
 
 
+def _transform_saved_pictures(saved_pictures_raw: Any) -> list[dict[str, str]]:
+    """Transform raw SavedPictures data to normalized format.
+
+    Args:
+        saved_pictures_raw: Raw SavedPictures list from Evon API/WebSocket.
+
+    Returns:
+        List of dicts with 'timestamp' and 'path' keys.
+    """
+    pictures: list[dict[str, str]] = []
+    if not isinstance(saved_pictures_raw, list):
+        return pictures
+    for pic in saved_pictures_raw:
+        if isinstance(pic, dict):
+            timestamp = pic.get("datetime")
+            if timestamp is None:
+                continue
+            pictures.append(
+                {
+                    "timestamp": timestamp,
+                    "path": pic.get("imageUrlClient", ""),
+                }
+            )
+    return pictures
+
+
 def process_security_doors(
     instance_details: dict[str, dict[str, Any]],
     instances: list[dict[str, Any]],
@@ -41,16 +67,7 @@ def process_security_doors(
 
         # Parse saved pictures - convert timestamps to ISO format
         saved_pictures_raw = details.get("SavedPictures", [])
-        saved_pictures = []
-        if isinstance(saved_pictures_raw, list):
-            for pic in saved_pictures_raw:
-                if isinstance(pic, dict):
-                    saved_pictures.append(
-                        {
-                            "timestamp": pic.get("datetime"),
-                            "path": pic.get("imageUrlClient", ""),
-                        }
-                    )
+        saved_pictures = _transform_saved_pictures(saved_pictures_raw)
         security_doors.append(
             {
                 "id": instance_id,

@@ -663,8 +663,8 @@ MOCK_INSTANCE_DETAILS = {
         "CallInProgress": False,
         "CamInstanceName": "intercom_1.Cam",
         "SavedPictures": [
-            {"Path": "/images/snapshot_1.jpg", "Timestamp": 1706900000000},
-            {"Path": "/images/snapshot_2.jpg", "Timestamp": 1706899000000},
+            {"imageUrlClient": "/images/snapshot_1.jpg", "datetime": 1706900000000},
+            {"imageUrlClient": "/images/snapshot_2.jpg", "datetime": 1706899000000},
         ],
     },
     "intercom_1": {
@@ -674,8 +674,8 @@ MOCK_INSTANCE_DETAILS = {
         "ConnectionToIntercomHasBeenLost": False,
         "CamInstanceName": "intercom_1.Cam",
         "SavedPictures": [
-            {"Path": "/images/snapshot_1.jpg", "Timestamp": 1706900000000},
-            {"Path": "/images/snapshot_2.jpg", "Timestamp": 1706899000000},
+            {"imageUrlClient": "/images/snapshot_1.jpg", "datetime": 1706900000000},
+            {"imageUrlClient": "/images/snapshot_2.jpg", "datetime": 1706899000000},
         ],
     },
     "intercom_1.Cam": {

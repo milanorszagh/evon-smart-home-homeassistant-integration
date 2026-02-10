@@ -10,6 +10,9 @@ from ...const import EVON_CLASS_AIR_QUALITY
 
 _LOGGER = logging.getLogger(__name__)
 
+# Evon uses -999 to indicate "no data available" for sensor readings
+EVON_NO_DATA_VALUE = -999
+
 
 def process_air_quality(
     instance_details: dict[str, dict[str, Any]],
@@ -39,20 +42,20 @@ def process_air_quality(
             _LOGGER.warning("No details available for air quality %s", instance_id)
             continue
 
-        # Only add if sensor has actual data (not -999)
-        co2 = details.get("CO2Value", -999)
-        humidity = details.get("Humidity", -999)
-        temperature = details.get("ActualTemperature", -999)
-        has_data = co2 != -999 or humidity != -999 or temperature != -999
+        # Only add if sensor has actual data (not EVON_NO_DATA_VALUE)
+        co2 = details.get("CO2Value", EVON_NO_DATA_VALUE)
+        humidity = details.get("Humidity", EVON_NO_DATA_VALUE)
+        temperature = details.get("ActualTemperature", EVON_NO_DATA_VALUE)
+        has_data = co2 != EVON_NO_DATA_VALUE or humidity != EVON_NO_DATA_VALUE or temperature != EVON_NO_DATA_VALUE
         if has_data:
             air_quality_sensors.append(
                 {
                     "id": instance_id,
                     "name": instance.get("Name"),
                     "room_name": get_room_name(instance.get("Group", "")),
-                    "co2": co2 if co2 != -999 else None,
-                    "humidity": humidity if humidity != -999 else None,
-                    "temperature": temperature if temperature != -999 else None,
+                    "co2": co2 if co2 != EVON_NO_DATA_VALUE else None,
+                    "humidity": humidity if humidity != EVON_NO_DATA_VALUE else None,
+                    "temperature": temperature if temperature != EVON_NO_DATA_VALUE else None,
                     "health_index": details.get("HealthIndex", 0),
                     "co2_index": details.get("CO2Index", 0),
                     "humidity_index": details.get("HumidityIndex", 0),

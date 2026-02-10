@@ -435,6 +435,10 @@ async def _wait_for_connected(self):
     await self._resubscribe()  # Will timeout! No message loop running yet
 ```
 
+**Stale Request Cleanup:** A periodic cleanup task runs every 15 seconds to cancel stale pending requests, independent of the message loop. This prevents request accumulation if the server goes silent before the receive timeout triggers disconnect.
+
+**Fire-and-Forget Error Handling:** The `_send_fire_and_forget()` method wraps `send_str()` in try/except and raises `EvonWsNotConnectedError` on failure, preventing unhandled exceptions from propagating to entity state update methods.
+
 **Subscription Timeout:** For systems with many devices (50+), the `RegisterValuesChanged` request can take longer to process. Use a 30-second timeout instead of the default 10 seconds.
 
 **Brightness Property:** Always subscribe to `ScaledBrightness` (0-100 percentage) instead of `Brightness` (raw internal value). Using the wrong property causes brightness mismatches between Home Assistant and the Evon UI.
@@ -1040,17 +1044,17 @@ Test files:
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
 - `test_camera.py`, `test_image.py` - Camera and image platform tests
-- `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration)
+- `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration, PIL context manager)
 - `test_base_entity.py` - Base entity and optimistic state tests
 - `test_constants.py` - Constants validation tests
-- `test_device_trigger.py` - Device trigger tests
-- `test_processors.py` - Data processor tests (including edge cases for all processor functions)
+- `test_device_trigger.py` - Device trigger tests (including safe dict access)
+- `test_processors.py` - Data processor tests (all processors, cooling mode temp ranges, edge cases)
 - `test_services.py` - Service handler tests
-- `test_statistics.py` - Energy statistics import tests
+- `test_statistics.py` - Energy statistics import tests (daily, monthly, rate limiting, StatisticMeanType compat)
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
-- `test_ws_control.py` - WebSocket control mappings tests
+- `test_ws_control.py` - WebSocket control mappings tests (method translation, HTTP fallback)
 
-Current coverage: 596 tests (unit/mock) + 224 integration tests (require HA test framework)
+Current coverage: 820 tests total — 596 unit/mock tests + 224 integration tests (require HA test framework)
 
 ---
 

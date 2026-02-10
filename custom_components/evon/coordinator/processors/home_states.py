@@ -27,9 +27,9 @@ def process_home_states(
     for instance in instances:
         if instance.get("ClassName") != EVON_CLASS_HOME_STATE:
             continue
-        # Skip template instances (ID starting with "System.")
+        # Skip empty IDs and template instances (ID starting with "System.")
         instance_id = instance.get("ID", "")
-        if instance_id.startswith("System."):
+        if not instance_id or instance_id.startswith("System."):
             continue
         if not instance.get("Name"):
             continue

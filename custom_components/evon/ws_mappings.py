@@ -378,18 +378,9 @@ def ws_to_coordinator_data(
 
     # Special handling for security doors: transform SavedPictures array
     if entity_type == ENTITY_TYPE_SECURITY_DOORS and "SavedPictures" in ws_properties:
-        saved_pictures_raw = ws_properties["SavedPictures"]
-        if isinstance(saved_pictures_raw, list):
-            saved_pictures = []
-            for pic in saved_pictures_raw:
-                if isinstance(pic, dict):
-                    saved_pictures.append(
-                        {
-                            "timestamp": pic.get("datetime"),
-                            "path": pic.get("imageUrlClient", ""),
-                        }
-                    )
-            result["saved_pictures"] = saved_pictures
+        from .coordinator.processors.security_doors import _transform_saved_pictures
+
+        result["saved_pictures"] = _transform_saved_pictures(ws_properties["SavedPictures"])
 
     # Special handling for smart meters: compute total power from P1+P2+P3
     if entity_type == ENTITY_TYPE_SMART_METERS:

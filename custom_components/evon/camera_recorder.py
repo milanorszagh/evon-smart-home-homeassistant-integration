@@ -263,6 +263,8 @@ class EvonCameraRecorder:
         # Determine frame dimensions from first frame
         with Image.open(io.BytesIO(self._frames[0][0])) as first_image:
             width, height = first_image.size
+        if width <= 0 or height <= 0:
+            raise HomeAssistantError(f"Invalid frame dimensions: {width}x{height}")
 
         # Calculate actual FPS from frame timestamps
         if len(self._frames) >= 2:
@@ -337,17 +339,20 @@ class EvonCameraRecorder:
         camera_name = self._camera.name or "camera"
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in camera_name)
 
-        mp4_files = sorted(
-            (f for f in media_dir.glob(f"{safe_name}_*.mp4") if f.is_file()),
-            key=lambda f: f.stat().st_mtime,
-            reverse=True,
-        )
+        # Collect files with stat info, skipping any deleted between glob and stat
+        file_stats: list[tuple[Path, float, int]] = []
+        for f in media_dir.glob(f"{safe_name}_*.mp4"):
+            try:
+                stat = f.stat()
+            except FileNotFoundError:
+                continue
+            if stat.st_size > 0:
+                file_stats.append((f, stat.st_mtime, stat.st_size))
+        file_stats.sort(key=lambda x: x[1], reverse=True)
 
         results: list[dict[str, str]] = []
-        for f in mp4_files:
-            stat = f.stat()
-            mtime = dt_util.utc_from_timestamp(stat.st_mtime)
-            size_bytes = stat.st_size
+        for f, mtime_ts, size_bytes in file_stats:
+            mtime = dt_util.utc_from_timestamp(mtime_ts)
             size_str = f"{size_bytes / 1_048_576:.1f} MB" if size_bytes >= 1_048_576 else f"{size_bytes / 1024:.0f} KB"
 
             results.append(

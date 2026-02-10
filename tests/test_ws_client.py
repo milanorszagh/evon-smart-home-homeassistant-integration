@@ -1342,14 +1342,13 @@ class TestWsMappingsEdgeCases:
         assert coord["saved_pictures"] == []
 
     def test_ws_to_coordinator_data_security_doors_non_list_pictures(self):
-        """Test security door with non-list SavedPictures passes through unchanged."""
+        """Test security door with non-list SavedPictures normalizes to empty list."""
         ws_props = {"SavedPictures": "not a list"}
         coord = ws_to_coordinator_data("security_doors", ws_props)
 
-        # Non-list values pass through via property mapping (saved_pictures key)
-        # Only list values get transformed
+        # Non-list values are normalized to an empty list by _transform_saved_pictures
         assert "saved_pictures" in coord
-        assert coord["saved_pictures"] == "not a list"
+        assert coord["saved_pictures"] == []
 
     def test_ws_to_coordinator_data_smart_meter_power_none_phases(self):
         """Test smart meter power computation with None phase values."""
