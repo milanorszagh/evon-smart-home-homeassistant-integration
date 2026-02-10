@@ -1,6 +1,10 @@
 """WebSocket control mappings for Evon Smart Home.
 
-Maps HTTP API method calls to WebSocket operations (SetValue or CallMethod).
+Maps canonical method names to WebSocket operations (SetValue or CallMethod).
+
+Canonical names are WS-native (e.g., SwitchOn, BrightnessSetScaled, SetPosition).
+The HTTP fallback translates these back to HTTP names (e.g., AmznTurnOn, AmznSetBrightness,
+AmznSetPercentage) via get_http_method_name() before building the URL.
 
 WebSocket Control Format:
     CallMethod: {"methodName":"CallWithReturn","request":{"args":["instanceId.method",params],"methodName":"CallMethod","sequenceId":N}}
@@ -112,9 +116,9 @@ class WsControlMapping:
 # - SetValue ColorTemp for color temperature (Kelvin) on RGBW lights
 # Note: Switch([true/false]) exists but behaves inconsistently - use SwitchOn/SwitchOff instead.
 LIGHT_MAPPINGS: dict[str, WsControlMapping] = {
-    "AmznTurnOn": WsControlMapping(None, "SwitchOn", None),
-    "AmznTurnOff": WsControlMapping(None, "SwitchOff", None),
-    "AmznSetBrightness": WsControlMapping(None, "BrightnessSetScaled", lambda params: [params[0] if params else 0, 0]),
+    "SwitchOn": WsControlMapping(None, "SwitchOn", None),
+    "SwitchOff": WsControlMapping(None, "SwitchOff", None),
+    "BrightnessSetScaled": WsControlMapping(None, "BrightnessSetScaled", lambda params: [params[0] if params else 0, 0]),
     "SetColorTemp": WsControlMapping("ColorTemp", None, lambda params: params[0] if params else 4000),
 }
 
@@ -123,13 +127,13 @@ LIGHT_MAPPINGS: dict[str, WsControlMapping] = {
 # - Open/Close/Stop work via CallMethod with empty params
 # - MoveToPosition works with [angle, position] params
 # - SetValue on Position does NOT work (updates value but hardware doesn't move)
-# Note: AmznSetPercentage and SetAngle are handled specially in api._try_ws_control()
+# Note: SetPosition and SetAngle are handled specially in api._try_ws_control()
 # using MoveToPosition with cached angle/position values.
 BLIND_MAPPINGS: dict[str, WsControlMapping] = {
     "Open": WsControlMapping(None, "Open", None),
     "Close": WsControlMapping(None, "Close", None),
     "Stop": WsControlMapping(None, "Stop", None),
-    # AmznSetPercentage/SetAngle handled specially in api._try_ws_control()
+    # SetPosition/SetAngle handled specially in api._try_ws_control()
 }
 
 # Climate control mappings (SmartCOM.Clima.ClimateControl, ClimateControlUniversal)
@@ -209,6 +213,33 @@ CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
 }
 
 
+# Reverse mapping: WS-native canonical names → HTTP API method names.
+# Only the 4 names that differ between WS and HTTP are listed here.
+# Everything else (Open, Close, Stop, SetAngle, WriteDayMode, etc.) is the same in both.
+WS_TO_HTTP_METHOD: dict[str, str] = {
+    "SwitchOn": "AmznTurnOn",
+    "SwitchOff": "AmznTurnOff",
+    "BrightnessSetScaled": "AmznSetBrightness",
+    "SetPosition": "AmznSetPercentage",
+}
+
+
+def get_http_method_name(method: str) -> str:
+    """Translate a canonical (WS-native) method name to its HTTP API equivalent.
+
+    Most method names are the same for both WS and HTTP. Only 4 differ:
+    SwitchOn→AmznTurnOn, SwitchOff→AmznTurnOff,
+    BrightnessSetScaled→AmznSetBrightness, SetPosition→AmznSetPercentage.
+
+    Args:
+        method: The canonical method name (e.g., "SwitchOn").
+
+    Returns:
+        The HTTP method name (e.g., "AmznTurnOn"), or the original if no translation needed.
+    """
+    return WS_TO_HTTP_METHOD.get(method, method)
+
+
 def get_ws_control_mapping(
     class_name: str,
     method: str,
@@ -217,7 +248,7 @@ def get_ws_control_mapping(
 
     Args:
         class_name: The Evon class name (e.g., "SmartCOM.Light.LightDim").
-        method: The HTTP method name (e.g., "AmznTurnOn").
+        method: The canonical method name (e.g., "SwitchOn").
 
     Returns:
         The WsControlMapping if found, None otherwise.

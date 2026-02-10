@@ -626,7 +626,7 @@ class TestWsControlMappings:
     def test_light_mappings_turn_on_uses_ws(self):
         """Test light turn on uses WebSocket CallMethod SwitchOn."""
         # Use SwitchOn for explicit on - Switch([bool]) is inconsistent on some devices
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznTurnOn")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "SwitchOn")
         assert mapping is not None
         assert mapping.method_name == "SwitchOn"
         assert mapping.get_value(None) is None  # No params needed
@@ -634,14 +634,14 @@ class TestWsControlMappings:
     def test_light_mappings_turn_off_uses_ws(self):
         """Test light turn off uses WebSocket CallMethod SwitchOff."""
         # Use SwitchOff for explicit off - Switch([bool]) is inconsistent on some devices
-        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "AmznTurnOff")
+        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "SwitchOff")
         assert mapping is not None
         assert mapping.method_name == "SwitchOff"
         assert mapping.get_value(None) is None  # No params needed
 
     def test_light_mappings_brightness(self):
         """Test light brightness mapping uses WebSocket CallMethod BrightnessSetScaled."""
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznSetBrightness")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "BrightnessSetScaled")
         assert mapping is not None
         assert mapping.method_name == "BrightnessSetScaled"
         assert mapping.get_value([75]) == [75, 0]  # [brightness, transition_time]
@@ -666,9 +666,9 @@ class TestWsControlMappings:
     def test_blind_position_uses_http(self):
         """Test blind position control uses HTTP fallback.
 
-        AmznSetPercentage uses HTTP because MoveToPosition needs both angle+position.
+        SetPosition uses HTTP because MoveToPosition needs both angle+position.
         """
-        assert get_ws_control_mapping("SmartCOM.Blind.Blind", "AmznSetPercentage") is None
+        assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetPosition") is None
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetAngle") is None
 
     def test_climate_mappings_preset_methods(self):
@@ -772,14 +772,14 @@ class TestWsControlMappings:
 
     def test_base_blight_mappings_on_uses_ws(self):
         """Test Base.bLight on/off uses WebSocket CallMethod SwitchOn."""
-        mapping = get_ws_control_mapping("Base.bLight", "AmznTurnOn")
+        mapping = get_ws_control_mapping("Base.bLight", "SwitchOn")
         assert mapping is not None
         assert mapping.method_name == "SwitchOn"
         assert mapping.get_value(None) is None  # No params needed
 
     def test_base_blight_mappings_brightness(self):
         """Test Base.bLight brightness uses WebSocket CallMethod BrightnessSetScaled."""
-        mapping = get_ws_control_mapping("Base.bLight", "AmznSetBrightness")
+        mapping = get_ws_control_mapping("Base.bLight", "BrightnessSetScaled")
         assert mapping is not None
         assert mapping.method_name == "BrightnessSetScaled"
 
@@ -789,7 +789,7 @@ class TestWsControlMappings:
         assert mapping is not None
         assert mapping.method_name == "Open"
         # Position still uses HTTP
-        assert get_ws_control_mapping("Base.bBlind", "AmznSetPercentage") is None
+        assert get_ws_control_mapping("Base.bBlind", "SetPosition") is None
 
     def test_base_ehblind_open_close_uses_ws(self):
         """Test Base.ehBlind Open/Close/Stop use WebSocket."""
@@ -797,7 +797,7 @@ class TestWsControlMappings:
         assert mapping is not None
         assert mapping.method_name == "Close"
         # Position still uses HTTP
-        assert get_ws_control_mapping("Base.ehBlind", "AmznSetPercentage") is None
+        assert get_ws_control_mapping("Base.ehBlind", "SetPosition") is None
 
     def test_base_bswitch_mappings_uses_http(self):
         """Test Base.bSwitch on/off uses HTTP fallback."""
@@ -842,13 +842,13 @@ class TestWebSocketControlFindings:
         TRAP: Switch([true/false]) exists but behaves inconsistently on some
         devices - it may toggle instead of setting the desired state.
         """
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznTurnOn")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "SwitchOn")
         assert mapping is not None
         assert mapping.method_name == "SwitchOn"
         assert mapping.property_name is None  # Uses CallMethod, not SetValue
         assert mapping.get_value(None) is None  # No params needed
 
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznTurnOff")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "SwitchOff")
         assert mapping.method_name == "SwitchOff"
         assert mapping.get_value(None) is None  # No params needed
 
@@ -860,7 +860,7 @@ class TestWebSocketControlFindings:
 
         Parameters: [brightness (0-100), transition_time_ms (0 for instant)]
         """
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznSetBrightness")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "BrightnessSetScaled")
         assert mapping is not None
         assert mapping.method_name == "BrightnessSetScaled"
         assert mapping.property_name is None  # Uses CallMethod, not SetValue
@@ -895,9 +895,9 @@ class TestWebSocketControlFindings:
         - Position changes use MoveToPosition([cached_angle, new_position])
         - Tilt changes use MoveToPosition([new_angle, cached_position])
         """
-        # AmznSetPercentage and SetAngle have no direct mapping - they are
+        # SetPosition and SetAngle have no direct mapping - they are
         # handled specially in api._try_ws_control() using MoveToPosition
-        assert get_ws_control_mapping("SmartCOM.Blind.Blind", "AmznSetPercentage") is None
+        assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetPosition") is None
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetAngle") is None
 
     def test_switch_must_use_http(self):
@@ -939,7 +939,7 @@ class TestWebSocketControlFindings:
         Must use CallMethod MoveToPosition([angle, position]) instead.
         """
         # No SetValue mapping for blind position - this is intentional
-        mapping = get_ws_control_mapping("SmartCOM.Blind.Blind", "AmznSetPercentage")
+        mapping = get_ws_control_mapping("SmartCOM.Blind.Blind", "SetPosition")
         assert mapping is None or mapping.property_name is None
 
     def test_light_amzn_methods_via_callmethod_do_not_work(self):
@@ -955,8 +955,8 @@ class TestWebSocketControlFindings:
         {"args":["SC1_M01.Light3.SwitchOn", []], "methodName":"CallMethod"}
         {"args":["SC1_M01.Light3.SwitchOff", []], "methodName":"CallMethod"}
         """
-        # Our mapping uses SwitchOn/SwitchOff, not AmznTurnOn or Switch
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "AmznTurnOn")
+        # Canonical names are now SwitchOn/SwitchOff directly
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightDim", "SwitchOn")
         assert mapping.method_name == "SwitchOn"
         assert mapping.method_name != "AmznTurnOn"
         assert mapping.method_name != "Switch"
@@ -975,10 +975,10 @@ class TestWebSocketControlFindings:
 
         SOLUTION: Always use SwitchOn/SwitchOff for explicit on/off control.
         """
-        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "AmznTurnOn")
+        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "SwitchOn")
         assert mapping.method_name == "SwitchOn"  # Not "Switch"
 
-        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "AmznTurnOff")
+        mapping = get_ws_control_mapping("SmartCOM.Light.Light", "SwitchOff")
         assert mapping.method_name == "SwitchOff"  # Not "Switch"
 
 
@@ -1229,7 +1229,7 @@ class TestNewFeatures:
 
     def test_light_group_control_mappings(self):
         """Test light group has same control mappings as lights."""
-        mapping = get_ws_control_mapping("SmartCOM.Light.LightGroup", "AmznTurnOn")
+        mapping = get_ws_control_mapping("SmartCOM.Light.LightGroup", "SwitchOn")
         assert mapping is not None
         assert mapping.method_name == "SwitchOn"
 

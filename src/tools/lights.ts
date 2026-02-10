@@ -37,19 +37,19 @@ export function registerLightTools(server: McpServer): void {
 
       switch (action) {
         case "on":
-          method = "AmznTurnOn";
+          method = "SwitchOn";
           break;
         case "off":
-          method = "AmznTurnOff";
+          method = "SwitchOff";
           break;
         case "toggle": {
           const state = await apiRequest<LightState>(`/instances/${id}`);
-          method = state.data.IsOn ? "AmznTurnOff" : "AmznTurnOn";
+          method = state.data.IsOn ? "SwitchOff" : "SwitchOn";
           break;
         }
         case "brightness":
           if (brightness == null) throw new Error("brightness parameter is required for brightness action");
-          method = "AmznSetBrightness";
+          method = "BrightnessSetScaled";
           params = [brightness];
           break;
         default:
@@ -72,7 +72,7 @@ export function registerLightTools(server: McpServer): void {
     async ({ action }) => {
       const instances = await getInstances();
       const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
-      const method = action === "off" ? "AmznTurnOff" : "AmznTurnOn";
+      const method = action === "off" ? "SwitchOff" : "SwitchOn";
       const results = await controlAllDevices(lights, method);
 
       return {

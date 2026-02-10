@@ -37,7 +37,7 @@ export function registerBlindTools(server: McpServer): void {
 
       const methodMap: Record<string, { method: string; params: unknown[] }> = {
         ...BLIND_METHODS,
-        position: { method: "AmznSetPercentage", params: [position ?? 0] },
+        position: { method: "SetPosition", params: [position ?? 0] },
         angle: { method: "SetAngle", params: [angle ?? 0] },
       };
 
@@ -67,7 +67,7 @@ export function registerBlindTools(server: McpServer): void {
 
       const methodMap: Record<string, { method: string; params: unknown[] }> = {
         ...BLIND_METHODS,
-        position: { method: "AmznSetPercentage", params: [position ?? 0] },
+        position: { method: "SetPosition", params: [position ?? 0] },
         angle: { method: "SetAngle", params: [angle ?? 0] },
       };
 

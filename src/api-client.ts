@@ -3,7 +3,7 @@
  */
 
 import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD } from "./config.js";
-import { API_TIMEOUT_MS, TOKEN_VALIDITY_DAYS } from "./constants.js";
+import { API_TIMEOUT_MS, CANONICAL_TO_HTTP_METHOD, TOKEN_VALIDITY_DAYS } from "./constants.js";
 import type { ApiResponse } from "./types.js";
 
 let currentToken: string | null = null;
@@ -134,8 +134,10 @@ export async function callMethod(
   methodName: string,
   params: unknown[] = []
 ): Promise<ApiResponse<unknown>> {
+  // Translate canonical WS-native name to HTTP API name
+  const httpMethod = CANONICAL_TO_HTTP_METHOD[methodName] ?? methodName;
   try {
-    return await apiRequest(`/instances/${instanceId}/${methodName}`, "POST", params);
+    return await apiRequest(`/instances/${instanceId}/${httpMethod}`, "POST", params);
   } catch (error) {
     if (error instanceof Error) {
       throw new Error(`${methodName} on ${instanceId}: ${error.message}`);

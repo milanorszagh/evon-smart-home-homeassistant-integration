@@ -507,11 +507,14 @@ class EvonApi:
                 return {}
             _LOGGER.debug("WS control failed/unavailable, falling back to HTTP")
 
-        # Fall back to HTTP
-        _LOGGER.debug("HTTP control: POST /instances/%s/%s %s", instance_id, method, params or [])
+        # Fall back to HTTP - translate canonical WS-native name to HTTP name
+        from .ws_control import get_http_method_name
+
+        http_method = get_http_method_name(method)
+        _LOGGER.debug("HTTP control: POST /instances/%s/%s %s", instance_id, http_method, params or [])
         result = await self._request(
             "POST",
-            f"/instances/{instance_id}/{method}",
+            f"/instances/{instance_id}/{http_method}",
             params or [],
         )
 
@@ -551,7 +554,7 @@ class EvonApi:
 
         # Special handling for blind position/tilt - use MoveToPosition with cached values
         if self._is_blind_class(class_name):
-            if method == "AmznSetPercentage" and params:
+            if method == "SetPosition" and params:
                 # Set position: MoveToPosition([cached_angle, new_position])
                 cached_angle = self.get_blind_angle(instance_id)
                 if cached_angle is None:
@@ -646,15 +649,15 @@ class EvonApi:
     # Light methods
     async def turn_on_light(self, instance_id: str) -> None:
         """Turn on a light."""
-        await self.call_method(instance_id, "AmznTurnOn")
+        await self.call_method(instance_id, "SwitchOn")
 
     async def turn_off_light(self, instance_id: str) -> None:
         """Turn off a light."""
-        await self.call_method(instance_id, "AmznTurnOff")
+        await self.call_method(instance_id, "SwitchOff")
 
     async def set_light_brightness(self, instance_id: str, brightness: int) -> None:
         """Set light brightness (0-100)."""
-        await self.call_method(instance_id, "AmznSetBrightness", [brightness])
+        await self.call_method(instance_id, "BrightnessSetScaled", [brightness])
 
     async def set_light_color_temp(self, instance_id: str, kelvin: int) -> None:
         """Set light color temperature (in Kelvin)."""
@@ -687,7 +690,7 @@ class EvonApi:
 
     async def set_blind_position(self, instance_id: str, position: int) -> None:
         """Set blind position (0=open, 100=closed)."""
-        await self.call_method(instance_id, "AmznSetPercentage", [position])
+        await self.call_method(instance_id, "SetPosition", [position])
 
     async def set_blind_tilt(self, instance_id: str, angle: int) -> None:
         """Set blind tilt angle (0-100)."""

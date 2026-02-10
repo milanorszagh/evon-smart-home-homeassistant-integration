@@ -104,7 +104,7 @@ The Engine ID is found in your Evon system settings. It identifies your installa
 
 **DO NOT use `BrightnessSetInternal`** - this sets an internal value but does not change the physical light brightness.
 
-**USE `AmznSetBrightness`** - this is the correct method that controls the actual physical brightness.
+**USE `BrightnessSetScaled`** (canonical name) - this is the correct method that controls the actual physical brightness. The HTTP fallback translates this to `AmznSetBrightness` automatically.
 
 Similarly, when **reading** brightness:
 - `Brightness` property = internal value (incorrect)
@@ -119,9 +119,8 @@ Similarly, when **reading** brightness:
 - **DO NOT use `MoveUp` or `MoveDown`** - these methods DO NOT EXIST and will return 404
 
 **Position control:**
-- **USE `AmznSetPercentage`** - sets blind position (0-100)
+- **USE `SetPosition`** (canonical name) - sets blind position (0-100). The HTTP fallback translates this to `AmznSetPercentage` automatically.
 - **USE `SetAngle`** - sets tilt angle (0-100)
-- **DO NOT use `SetPosition`** - may not work correctly
 
 Position convention in Evon:
 - `0` = fully open (blind up)
@@ -283,12 +282,18 @@ await callMethod("HomeStateNight", "Activate");
 - Tested SC1_M07.Switch1Up (Taster Jal. WZ 1 Öffnen) - 0 events
 - Tested SC1_M04.Input3 (Taster Licht Esstisch) - 0 events
 
-### Method Naming Pattern
+### Method Naming Convention
 
-Evon uses "Amzn" prefix for methods that were designed for Alexa integration. These work via HTTP API:
-- `AmznTurnOn` / `AmznTurnOff` - lights and switches
-- `AmznSetBrightness` - light brightness
-- `AmznSetPercentage` - blind position
+The codebase uses **WS-native method names as canonical names** everywhere. The HTTP API uses "Amzn"-prefixed equivalents, but the translation is handled automatically by `get_http_method_name()` (Python) and `CANONICAL_TO_HTTP_METHOD` (TypeScript).
+
+| Canonical (WS-native) | HTTP API Equivalent | Used For |
+|---|---|---|
+| `SwitchOn` | `AmznTurnOn` | Lights |
+| `SwitchOff` | `AmznTurnOff` | Lights |
+| `BrightnessSetScaled` | `AmznSetBrightness` | Light brightness |
+| `SetPosition` | `AmznSetPercentage` | Blind position |
+
+Switches are HTTP-only and still use `AmznTurnOn`/`AmznTurnOff` directly (no WS equivalent).
 
 ## WebSocket Control - CRITICAL FINDINGS (January 2025)
 
@@ -379,6 +384,8 @@ When a non-dimmable light (e.g., Evon relay controlling power for a combined lig
 This is handled automatically in `light.py` - non-dimmable lights that are already on will not receive WebSocket commands when brightness changes on the group.
 
 ### Implementation Details
+
+The codebase uses WS-native names as canonical method names everywhere. When the HTTP fallback is needed, `ws_control.get_http_method_name()` (Python) or `CANONICAL_TO_HTTP_METHOD` (TypeScript) translates them to HTTP names automatically.
 
 See `custom_components/evon/ws_control.py` for the mapping configuration and `api.py` for the `_try_ws_control()` method that handles WebSocket-first control with HTTP fallback.
 

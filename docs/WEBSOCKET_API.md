@@ -1183,7 +1183,7 @@ Fetch saved pictures via: `http://{evon-host}{imageUrlClient}` with token cookie
 
 **Home Assistant Integration Files:**
 - `custom_components/evon/ws_client.py` - WebSocket client implementation
-- `custom_components/evon/ws_control.py` - WebSocket control mappings (device → WS method)
+- `custom_components/evon/ws_control.py` - WebSocket control mappings (canonical WS-native names → WS call format, plus `get_http_method_name()` for HTTP fallback translation)
 - `custom_components/evon/ws_mappings.py` - Property subscriptions and data mapping
 - `custom_components/evon/api.py` - HTTP API client with WebSocket fallback
 - `custom_components/evon/climate.py` - Climate entity with optimistic state

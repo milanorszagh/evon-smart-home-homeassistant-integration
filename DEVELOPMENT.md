@@ -15,7 +15,7 @@ custom_components/evon/
 ├── __init__.py          # Entry point, platform setup, stale entity cleanup
 ├── api.py               # Evon HTTP/WebSocket API client with WS-first control
 ├── ws_client.py         # WebSocket client for real-time updates and control
-├── ws_control.py        # WebSocket control mappings (methods that work via WS)
+├── ws_control.py        # WebSocket control mappings (canonical WS-native names → WS calls, HTTP translation)
 ├── ws_mappings.py       # Property mappings for WebSocket data
 ├── base_entity.py       # Base entity class with common functionality
 ├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
@@ -562,22 +562,24 @@ All requests require: `Cookie: token=<token>`
 | `Security.Intercom.2N.Intercom2NCam` | 2N Camera | Yes (image request) |
 | `System.Location.Room` | Room/area | No |
 
-### Light Methods (HTTP API)
+### Light Methods
 
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `AmznTurnOn` | - | Turn light on |
-| `AmznTurnOff` | - | Turn light off |
-| `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness |
+| Canonical Method | HTTP API Name | Parameters | Description |
+|--------|--------|------------|-------------|
+| `SwitchOn` | `AmznTurnOn` | - | Turn light on |
+| `SwitchOff` | `AmznTurnOff` | - | Turn light off |
+| `BrightnessSetScaled` | `AmznSetBrightness` | `[brightness]` (0-100) | Set brightness |
+
+The codebase uses WS-native names (left column) as canonical names. The HTTP translation is handled automatically by `get_http_method_name()` / `CANONICAL_TO_HTTP_METHOD`.
 
 **Important**: Read `ScaledBrightness` property for actual brightness, not `Brightness`.
 
 ### WebSocket Control Methods
 
-The integration supports WebSocket-based control for faster response times. When WebSocket is connected, control commands use these methods:
+The integration supports WebSocket-based control for faster response times. WS-native method names are the canonical names used throughout the codebase. When the HTTP fallback is needed, `get_http_method_name()` (Python) or `CANONICAL_TO_HTTP_METHOD` (TypeScript) translates them automatically.
 
 **Lights (via WebSocket):**
-| WS Method | Parameters | HTTP Equivalent | Notes |
+| Canonical Method | Parameters | HTTP Fallback Name | Notes |
 |-----------|------------|-----------------|-------|
 | `SwitchOn` | `[]` | `AmznTurnOn` | Explicit on - PREFERRED |
 | `SwitchOff` | `[]` | `AmznTurnOff` | Explicit off - PREFERRED |
@@ -589,7 +591,7 @@ The integration supports WebSocket-based control for faster response times. When
 **RGBW Color Temperature:** DynamicRGBWLight devices support color temperature via the `ColorTemp` property (in Kelvin). The `MinColorTemperature` and `MaxColorTemperature` properties define the supported range. Home Assistant converts between Kelvin and mireds internally. *Note: This feature is untested - please report issues if you have RGBW Evon modules.*
 
 **Blinds (via WebSocket):**
-| WS Method | Parameters | HTTP Equivalent | Notes |
+| Canonical Method | Parameters | HTTP Fallback Name | Notes |
 |-----------|------------|-----------------|-------|
 | `Open` | `[]` | `Open` | Move up |
 | `Close` | `[]` | `Close` | Move down |
@@ -627,15 +629,15 @@ The integration supports WebSocket-based control for faster response times. When
 
 **Fallback:** When WebSocket control fails or is unavailable, the integration automatically falls back to HTTP API.
 
-### Blind Methods (HTTP API)
+### Blind Methods
 
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `Open` | - | Move blind up |
-| `Close` | - | Move blind down |
-| `Stop` | - | Stop movement |
-| `AmznSetPercentage` | `[position]` (0-100) | Set position |
-| `SetAngle` | `[angle]` (0-100) | Set tilt angle |
+| Canonical Method | HTTP API Name | Parameters | Description |
+|--------|--------|------------|-------------|
+| `Open` | `Open` | - | Move blind up |
+| `Close` | `Close` | - | Move blind down |
+| `Stop` | `Stop` | - | Stop movement |
+| `SetPosition` | `AmznSetPercentage` | `[position]` (0-100) | Set position |
+| `SetAngle` | `SetAngle` | `[angle]` (0-100) | Set tilt angle |
 
 **Critical**: `MoveUp` and `MoveDown` do NOT exist - use `Open` and `Close`.
 

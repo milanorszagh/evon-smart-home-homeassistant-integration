@@ -64,6 +64,17 @@ export const HOME_STATE_IDS = {
   work: "HomeStateWork",
 } as const;
 
+/**
+ * Canonical (WS-native) method names → HTTP API method names.
+ * Only the 4 names that differ between WS and HTTP are listed.
+ */
+export const CANONICAL_TO_HTTP_METHOD: Record<string, string> = {
+  SwitchOn: "AmznTurnOn",
+  SwitchOff: "AmznTurnOff",
+  BrightnessSetScaled: "AmznSetBrightness",
+  SetPosition: "AmznSetPercentage",
+} as const;
+
 export const API_TIMEOUT_MS = 10000;
 // MCP server uses a longer TTL (27 days) since it starts fresh each session.
 // The HA integration uses 1 hour (see api.py TOKEN_TTL_SECONDS) because it
