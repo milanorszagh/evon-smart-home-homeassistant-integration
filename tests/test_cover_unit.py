@@ -62,9 +62,7 @@ def setup_cover_mocks():
     class MockCoverEntity:
         pass
 
-    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = (
-        MockCoordinatorEntity
-    )
+    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
     sys.modules["homeassistant.components.cover"].CoverEntity = MockCoverEntity

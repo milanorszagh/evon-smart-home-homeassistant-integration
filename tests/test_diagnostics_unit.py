@@ -57,15 +57,11 @@ def setup_diagnostics_mocks():
         def async_write_ha_state(self):
             pass
 
-    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = (
-        MockCoordinatorEntity
-    )
+    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
     # async_redact_data is a regular function; make it pass-through
-    sys.modules["homeassistant.components.diagnostics"].async_redact_data = (
-        lambda data, keys: data
-    )
+    sys.modules["homeassistant.components.diagnostics"].async_redact_data = lambda data, keys: data
 
     yield
 
@@ -93,12 +89,8 @@ def setup_diagnostics_mocks():
 def _make_coordinator_data():
     """Return sample coordinator.data with all entity types."""
     return {
-        "lights": [
-            {"id": "l1", "name": "Light 1", "is_on": True, "brightness": 100}
-        ],
-        "blinds": [
-            {"id": "b1", "name": "Blind 1", "position": 50, "angle": 30}
-        ],
+        "lights": [{"id": "l1", "name": "Light 1", "is_on": True, "brightness": 100}],
+        "blinds": [{"id": "b1", "name": "Blind 1", "position": 50, "angle": 30}],
         "climates": [
             {
                 "id": "c1",
@@ -108,20 +100,12 @@ def _make_coordinator_data():
             }
         ],
         "switches": [{"id": "s1", "name": "Switch 1", "is_on": False}],
-        "smart_meters": [
-            {"id": "m1", "name": "Meter 1", "power": 1500, "energy": 42.5}
-        ],
-        "air_quality": [
-            {"id": "aq1", "name": "AQ 1", "co2": 800, "humidity": 55}
-        ],
+        "smart_meters": [{"id": "m1", "name": "Meter 1", "power": 1500, "energy": 42.5}],
+        "air_quality": [{"id": "aq1", "name": "AQ 1", "co2": 800, "humidity": 55}],
         "valves": [{"id": "v1", "name": "Valve 1", "is_open": True}],
         "scenes": [{"id": "sc1", "name": "Scene 1"}],
-        "bathroom_radiators": [
-            {"id": "br1", "name": "Radiator 1", "is_on": True}
-        ],
-        "security_doors": [
-            {"id": "sd1", "name": "Door 1", "is_locked": True}
-        ],
+        "bathroom_radiators": [{"id": "br1", "name": "Radiator 1", "is_on": True}],
+        "security_doors": [{"id": "sd1", "name": "Door 1", "is_locked": True}],
         "intercoms": [{"id": "ic1", "name": "Intercom 1"}],
         "cameras": [{"id": "cam1", "name": "Camera 1", "error": None}],
         "rooms": {"living_room": {}, "bedroom": {}},

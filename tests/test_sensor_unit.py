@@ -72,15 +72,11 @@ def setup_sensor_mocks():
         entity_category: Any = None
         translation_key: str | None = None
 
-    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = (
-        MockCoordinatorEntity
-    )
+    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
     sys.modules["homeassistant.components.sensor"].SensorEntity = MockSensorEntity
-    sys.modules["homeassistant.components.sensor"].SensorEntityDescription = (
-        MockSensorEntityDescription
-    )
+    sys.modules["homeassistant.components.sensor"].SensorEntityDescription = MockSensorEntityDescription
 
     # Patch dataclass to accept kw_only on Python < 3.10
     _original_dataclass = dataclasses.dataclass
@@ -138,14 +134,10 @@ def _make_smart_meter_sensor(entity_data=None, description=None, instance_id="me
         description = MagicMock()
         description.key = "power"
         description.value_fn = lambda data: data.get("power")
-    return EvonSmartMeterSensor(
-        coordinator, instance_id, "Test Meter", "", entry, description
-    )
+    return EvonSmartMeterSensor(coordinator, instance_id, "Test Meter", "", entry, description)
 
 
-def _make_air_quality_sensor(
-    entity_data=None, description=None, instance_id="aq_1"
-):
+def _make_air_quality_sensor(entity_data=None, description=None, instance_id="aq_1"):
     from custom_components.evon.sensor import EvonAirQualitySensor
 
     coordinator = MagicMock()
@@ -156,9 +148,7 @@ def _make_air_quality_sensor(
         description = MagicMock()
         description.key = "co2"
         description.value_fn = lambda data: data.get("co2")
-    return EvonAirQualitySensor(
-        coordinator, instance_id, "Test AQ", "", entry, description
-    )
+    return EvonAirQualitySensor(coordinator, instance_id, "Test AQ", "", entry, description)
 
 
 def _make_energy_today_sensor(entity_data=None, instance_id="meter_1"):
@@ -168,9 +158,7 @@ def _make_energy_today_sensor(entity_data=None, instance_id="meter_1"):
     coordinator.get_entity_data.return_value = entity_data
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    return EvonEnergyTodaySensor(
-        coordinator, instance_id, "Test Meter", "", entry
-    )
+    return EvonEnergyTodaySensor(coordinator, instance_id, "Test Meter", "", entry)
 
 
 def _make_energy_month_sensor(entity_data=None, instance_id="meter_1"):
@@ -180,9 +168,7 @@ def _make_energy_month_sensor(entity_data=None, instance_id="meter_1"):
     coordinator.get_entity_data.return_value = entity_data
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    return EvonEnergyThisMonthSensor(
-        coordinator, instance_id, "Test Meter", "", entry
-    )
+    return EvonEnergyThisMonthSensor(coordinator, instance_id, "Test Meter", "", entry)
 
 
 # ---------------------------------------------------------------------------
@@ -270,9 +256,7 @@ class TestTemperatureSensor:
         assert sensor.native_value is None
 
     def test_extra_attrs_target_temperature(self):
-        sensor = _make_temp_sensor(
-            {"current_temperature": 21.5, "target_temperature": 22.0}
-        )
+        sensor = _make_temp_sensor({"current_temperature": 21.5, "target_temperature": 22.0})
         attrs = sensor.extra_state_attributes
         assert attrs["target_temperature"] == 22.0
 

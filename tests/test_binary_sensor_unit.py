@@ -59,14 +59,10 @@ def setup_binary_sensor_mocks():
     class MockBinarySensorEntity:
         pass
 
-    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = (
-        MockCoordinatorEntity
-    )
+    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
-    sys.modules["homeassistant.components.binary_sensor"].BinarySensorEntity = (
-        MockBinarySensorEntity
-    )
+    sys.modules["homeassistant.components.binary_sensor"].BinarySensorEntity = MockBinarySensorEntity
 
     yield
 
@@ -128,9 +124,7 @@ def _make_intercom_door(entity_data=None, instance_id="intercom_1"):
     coordinator.get_entity_data.return_value = entity_data
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    return EvonIntercomDoorSensor(
-        coordinator, instance_id, "Test Intercom", "", entry
-    )
+    return EvonIntercomDoorSensor(coordinator, instance_id, "Test Intercom", "", entry)
 
 
 def _make_intercom_connection(entity_data=None, instance_id="intercom_1"):
@@ -140,9 +134,7 @@ def _make_intercom_connection(entity_data=None, instance_id="intercom_1"):
     coordinator.get_entity_data.return_value = entity_data
     entry = MagicMock()
     entry.entry_id = "test_entry"
-    return EvonIntercomConnectionSensor(
-        coordinator, instance_id, "Test Intercom", "", entry
-    )
+    return EvonIntercomConnectionSensor(coordinator, instance_id, "Test Intercom", "", entry)
 
 
 def _make_ws_status(ws_connected=True, last_update_success=True, use_websocket=True):
@@ -231,9 +223,7 @@ class TestSecurityDoorCallSensor:
         assert sensor.is_on is None
 
     def test_unique_id(self):
-        sensor = _make_security_door_call(
-            {"call_in_progress": False}, instance_id="d5"
-        )
+        sensor = _make_security_door_call({"call_in_progress": False}, instance_id="d5")
         assert sensor._attr_unique_id == "evon_security_door_d5_call"
 
 

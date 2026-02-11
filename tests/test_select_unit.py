@@ -59,9 +59,7 @@ def setup_select_mocks():
     class MockSelectEntity:
         pass
 
-    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = (
-        MockCoordinatorEntity
-    )
+    sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
     sys.modules["homeassistant.components.select"].SelectEntity = MockSelectEntity
@@ -159,23 +157,17 @@ class TestHomeStateSelectOptions:
 class TestHomeStateSelectCurrentOption:
     def test_returns_active_state(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
-        select = _make_home_state_select(
-            home_states=states, active_state="HomeStateAtHome"
-        )
+        select = _make_home_state_select(home_states=states, active_state="HomeStateAtHome")
         assert select.current_option == "HomeStateAtHome"
 
     def test_returns_none_when_not_in_options(self):
         states = [{"id": "HomeStateAtHome"}]
-        select = _make_home_state_select(
-            home_states=states, active_state="HomeStateUnknown"
-        )
+        select = _make_home_state_select(home_states=states, active_state="HomeStateUnknown")
         assert select.current_option is None
 
     def test_optimistic_override(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
-        select = _make_home_state_select(
-            home_states=states, active_state="HomeStateAtHome"
-        )
+        select = _make_home_state_select(home_states=states, active_state="HomeStateAtHome")
         select._optimistic_option = "HomeStateNight"
         assert select.current_option == "HomeStateNight"
 
@@ -188,9 +180,7 @@ class TestHomeStateSelectCurrentOption:
 class TestHomeStateSelectHandleUpdate:
     def test_clears_optimistic_when_matches(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
-        select = _make_home_state_select(
-            home_states=states, active_state="HomeStateAtHome"
-        )
+        select = _make_home_state_select(home_states=states, active_state="HomeStateAtHome")
         select._optimistic_option = "HomeStateAtHome"
         select._optimistic_state_set_at = 1.0
         select._handle_coordinator_update()
@@ -199,9 +189,7 @@ class TestHomeStateSelectHandleUpdate:
 
     def test_keeps_optimistic_when_differs(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
-        select = _make_home_state_select(
-            home_states=states, active_state="HomeStateAtHome"
-        )
+        select = _make_home_state_select(home_states=states, active_state="HomeStateAtHome")
         select._optimistic_option = "HomeStateNight"
         select._optimistic_state_set_at = 1.0
         select._handle_coordinator_update()
