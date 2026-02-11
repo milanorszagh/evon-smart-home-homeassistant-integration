@@ -322,28 +322,45 @@ client.registerValuesChanged([
 
 | Method | Description |
 |--------|-------------|
-| `connect()` | Connect to WebSocket server |
-| `disconnect()` | Close connection |
+| `connect()` | Connect to WebSocket server (auto-deduplicates concurrent calls) |
+| `disconnect()` | Close connection and clean up resources |
+| `isConnected()` | Check if WebSocket is connected and in OPEN state |
+| `getUserData()` | Get user data from the Connected message (ID, Name, Authorization) |
 | `getInstances(className)` | List all instances of a device class |
 | `registerValuesChanged(subs, callback)` | Subscribe to property changes |
-| `setValue(path, value)` | Set a device property |
+| `unregisterValuesChanged(instanceIds)` | Unsubscribe from property changes |
+| `getPropertyValues(subscriptions)` | Get property values for multiple devices in a single call |
+| `setValue(instanceId, property, value)` | Set a device property |
 | `setLightOn(id, on)` | Turn light on/off |
 | `setLightBrightness(id, brightness)` | Set light brightness (0-100) |
 | `setBlindPosition(id, position)` | Set blind position (0-100) |
+| `setBlindAngle(id, angle)` | Set blind tilt angle (0-100) |
 | `setClimateTemperature(id, temp)` | Set target temperature |
+| `setClimateMode(id, mode)` | Set climate mode (0=off, 1=comfort, 2=eco, 3=away) |
 | `setHomeStateActive(id, active)` | Activate home state |
-| `setBathroomRadiatorOn(id, on)` | Control bathroom radiator |
+| `setBathroomRadiatorOn(id, on)` | Control bathroom radiator on/off |
+| `setBathroomRadiatorTimer(id, minutes)` | Set bathroom radiator timer duration |
 
 ### Convenience Functions
 
 | Function | Description |
 |----------|-------------|
+| `getWsClient()` | Get or create singleton WebSocket client instance |
 | `wsGetLights()` | Get all lights with state |
 | `wsGetBlinds()` | Get all blinds with state |
 | `wsGetClimateZones()` | Get all climate zones |
 | `wsGetHomeStates()` | Get all home states |
-| `wsControlLight(id, opts)` | Control light with options |
-| `wsControlBlind(id, opts)` | Control blind with options |
+| `wsGetBathroomRadiators()` | Get all bathroom radiators with state |
+| `wsGetLightState(id)` | Get light state (isOn, brightness, name) |
+| `wsGetBlindState(id)` | Get blind state (position, angle, name) |
+| `wsGetClimateState(id)` | Get climate state (temperatures, mode) |
+| `wsGetHomeStateStatus(id)` | Get home state status (name, active) |
+| `wsGetBathroomRadiatorState(id)` | Get radiator state (isOn, timer, flags) |
+| `wsControlLight(id, opts)` | Control light (on/off, brightness) |
+| `wsControlBlind(id, opts)` | Control blind (position, angle) |
+| `wsControlClimate(id, opts)` | Control climate (temperature, mode) |
+| `wsControlBathroomRadiator(id, opts)` | Control radiator (on/off, timer) |
+| `wsActivateHomeState(id)` | Activate a home state |
 
 See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for detailed protocol documentation.
 
@@ -860,6 +877,14 @@ npm run lint:fix
 ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
 ```
 
+### CI Pipelines
+
+| Workflow | File | Trigger | What it does |
+|----------|------|---------|-------------|
+| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.12/3.13), HACS validation, Codecov upload |
+| **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
+| **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
+
 ---
 
 ## Development Guidelines
@@ -1056,6 +1081,8 @@ Test files:
 
 Current coverage: 820 tests total — 596 unit/mock tests + 224 integration tests (require HA test framework)
 
+Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
+
 ---
 
 ## Deploy Workflow
@@ -1081,6 +1108,17 @@ Current coverage: 820 tests total — 596 unit/mock tests + 224 integration test
 - Home Assistant: 2024.1.0+
 - Python: 3.12+
 - Node.js (MCP): 18+
+
+---
+
+## Dependency Management
+
+Dependencies are kept up to date via [Renovate](https://docs.renovatebot.com/). Configuration is in `renovate.json`:
+
+- **Schedule**: Weekly on Mondays (Europe/Vienna timezone)
+- **Grouping**: npm deps, npm devDeps, pip deps, and GitHub Actions are grouped into separate PRs
+- **Automerge**: Patch-level updates automerge when CI passes
+- **Labels**: All dependency PRs get the `dependencies` label
 
 ---
 

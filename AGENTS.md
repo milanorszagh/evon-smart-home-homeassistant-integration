@@ -922,8 +922,14 @@ The CI workflow (`.github/workflows/ci.yml`) runs:
 3. `mypy` - Python type checking
 4. `npm run lint` - TypeScript linting
 5. `npm run build` - TypeScript compilation
-6. `pytest` - Python tests (matrix: Python 3.12, 3.13)
-7. HACS validation - Custom component structure check
+6. `npm run test:mcp` - MCP server tests
+7. `npm audit` - npm security audit
+8. `pytest` - Python tests (matrix: Python 3.12, 3.13) with Codecov upload
+9. HACS validation - Custom component structure check
+
+Additional workflows:
+- **CodeQL** (`.github/workflows/codeql.yml`) - Security scanning for Python and JavaScript/TypeScript on push, PRs, and weekly schedule. Results in the repo's Security tab.
+- **Renovate** (`renovate.json`) - Automated dependency updates. Runs weekly (Monday, Europe/Vienna). Groups updates by ecosystem (npm deps, npm devDeps, pip, GitHub Actions). Patch updates automerge when CI passes.
 
 **Before committing, always run:**
 ```bash
@@ -983,7 +989,9 @@ Before creating a release, ensure the following are up to date:
    npm run build
    ```
 
-**Common mistake**: `package.json` version was not updated from v1.4.1 to v1.11.0 across multiple releases. Always check all three version files match!
+**Common mistake**: `package.json` version was not updated from v1.4.1 to v1.11.0 across multiple releases. Always check all four version files match!
+
+**Dependency updates**: Renovate is configured to open weekly dependency update PRs (see `renovate.json`). Patch updates automerge when CI passes. Review and merge minor/major update PRs manually.
 
 ## Version History
 
