@@ -113,39 +113,39 @@ class TestClimateConstants:
     def test_climate_preset_modes(self):
         """Test climate preset mode constants."""
         from custom_components.evon.const import (
+            CLIMATE_MODE_AWAY,
             CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ENERGY_SAVING,
-            CLIMATE_MODE_FREEZE_PROTECTION,
+            CLIMATE_MODE_ECO,
         )
 
         assert CLIMATE_MODE_COMFORT == "comfort"
-        assert CLIMATE_MODE_ENERGY_SAVING == "eco"
-        assert CLIMATE_MODE_FREEZE_PROTECTION == "away"
+        assert CLIMATE_MODE_ECO == "eco"
+        assert CLIMATE_MODE_AWAY == "away"
 
     def test_evon_preset_heating_mapping(self):
         """Test Evon preset heating mode mapping."""
         from custom_components.evon.const import (
+            CLIMATE_MODE_AWAY,
             CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ENERGY_SAVING,
-            CLIMATE_MODE_FREEZE_PROTECTION,
+            CLIMATE_MODE_ECO,
             EVON_PRESET_HEATING,
         )
 
-        assert EVON_PRESET_HEATING[2] == CLIMATE_MODE_FREEZE_PROTECTION  # away
-        assert EVON_PRESET_HEATING[3] == CLIMATE_MODE_ENERGY_SAVING  # eco
+        assert EVON_PRESET_HEATING[2] == CLIMATE_MODE_AWAY  # away
+        assert EVON_PRESET_HEATING[3] == CLIMATE_MODE_ECO  # eco
         assert EVON_PRESET_HEATING[4] == CLIMATE_MODE_COMFORT  # comfort
 
     def test_evon_preset_cooling_mapping(self):
         """Test Evon preset cooling mode mapping."""
         from custom_components.evon.const import (
+            CLIMATE_MODE_AWAY,
             CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ENERGY_SAVING,
-            CLIMATE_MODE_FREEZE_PROTECTION,
+            CLIMATE_MODE_ECO,
             EVON_PRESET_COOLING,
         )
 
-        assert EVON_PRESET_COOLING[5] == CLIMATE_MODE_FREEZE_PROTECTION  # heat protection
-        assert EVON_PRESET_COOLING[6] == CLIMATE_MODE_ENERGY_SAVING  # eco
+        assert EVON_PRESET_COOLING[5] == CLIMATE_MODE_AWAY  # heat protection
+        assert EVON_PRESET_COOLING[6] == CLIMATE_MODE_ECO  # eco
         assert EVON_PRESET_COOLING[7] == CLIMATE_MODE_COMFORT  # comfort
 
     def test_heating_and_cooling_presets_are_disjoint(self):
@@ -213,13 +213,13 @@ class TestDeviceClassConstants:
             EVON_CLASS_AIR_QUALITY,
             EVON_CLASS_BATHROOM_RADIATOR,
             EVON_CLASS_HOME_STATE,
+            EVON_CLASS_PHYSICAL_BUTTON,
             EVON_CLASS_SCENE,
             EVON_CLASS_SMART_METER,
-            EVON_CLASS_SWITCH,
             EVON_CLASS_VALVE,
         )
 
-        assert EVON_CLASS_SWITCH == "SmartCOM.Switch"
+        assert EVON_CLASS_PHYSICAL_BUTTON == "SmartCOM.Switch"
         assert EVON_CLASS_SMART_METER == "Energy.SmartMeter"
         assert EVON_CLASS_AIR_QUALITY == "System.Location.AirQuality"
         assert EVON_CLASS_VALVE == "SmartCOM.Clima.Valve"

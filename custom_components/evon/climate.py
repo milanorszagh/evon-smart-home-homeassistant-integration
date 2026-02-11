@@ -20,9 +20,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
+    CLIMATE_MODE_AWAY,
     CLIMATE_MODE_COMFORT,
-    CLIMATE_MODE_ENERGY_SAVING,
-    CLIMATE_MODE_FREEZE_PROTECTION,
+    CLIMATE_MODE_ECO,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DOMAIN,
@@ -35,7 +35,7 @@ from .coordinator import EvonDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 # Preset modes list
-PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ENERGY_SAVING, CLIMATE_MODE_FREEZE_PROTECTION]
+PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ECO, CLIMATE_MODE_AWAY]
 
 
 async def async_setup_entry(
@@ -307,9 +307,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
         try:
             if preset_mode == CLIMATE_MODE_COMFORT:
                 await self._api.set_climate_comfort_mode(self._instance_id)
-            elif preset_mode == CLIMATE_MODE_ENERGY_SAVING:
+            elif preset_mode == CLIMATE_MODE_ECO:
                 await self._api.set_climate_energy_saving_mode(self._instance_id)
-            elif preset_mode == CLIMATE_MODE_FREEZE_PROTECTION:
+            elif preset_mode == CLIMATE_MODE_AWAY:
                 await self._api.set_climate_freeze_protection_mode(self._instance_id)
             else:
                 _LOGGER.warning("Unrecognized preset mode %r for %s", preset_mode, self._instance_id)

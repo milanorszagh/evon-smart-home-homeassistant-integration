@@ -13,8 +13,8 @@ from custom_components.evon.const import (
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
+    EVON_CLASS_PHYSICAL_BUTTON,
     EVON_CLASS_SCENE,
-    EVON_CLASS_SWITCH,
 )
 from custom_components.evon.ws_control import (
     BATHROOM_RADIATOR_MAPPINGS,
@@ -208,7 +208,7 @@ class TestClassControlMappings:
             assert CLASS_CONTROL_MAPPINGS[cls] is CLIMATE_MAPPINGS
 
     def test_switch_classes(self):
-        for cls in [EVON_CLASS_SWITCH, "Base.bSwitch"]:
+        for cls in [EVON_CLASS_PHYSICAL_BUTTON, "Base.bSwitch"]:
             assert CLASS_CONTROL_MAPPINGS[cls] is SWITCH_MAPPINGS
 
     def test_home_state_class(self):
@@ -277,5 +277,5 @@ class TestGetWsControlMapping:
 
     def test_switch_class_returns_none_for_all(self):
         """Switch mappings are empty, so all methods return None."""
-        mapping = get_ws_control_mapping(EVON_CLASS_SWITCH, "AmznTurnOn")
+        mapping = get_ws_control_mapping(EVON_CLASS_PHYSICAL_BUTTON, "AmznTurnOn")
         assert mapping is None
