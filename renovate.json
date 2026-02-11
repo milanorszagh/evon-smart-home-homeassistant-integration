@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "schedule": ["before 8am on monday"],
+  "timezone": "Europe/Vienna",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group all npm production dependency updates",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies"],
+      "groupName": "npm dependencies"
+    },
+    {
+      "description": "Group all npm dev dependency updates",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "npm dev dependencies"
+    },
+    {
+      "description": "Group all pip dependency updates",
+      "matchManagers": ["pip_requirements"],
+      "groupName": "pip dependencies"
+    },
+    {
+      "description": "Group all GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Automerge patch updates that pass CI",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    }
+  ]
+}
