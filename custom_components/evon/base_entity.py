@@ -15,10 +15,56 @@ from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT
 from .coordinator import EvonDataUpdateCoordinator
 
 
+class entity_data:
+    """Descriptor that reads a field from coordinator entity data.
+
+    Eliminates boilerplate ``@property`` methods that fetch a single key
+    from the coordinator. Requires the owning class to define
+    ``_entity_type`` and inherit from ``EvonEntity``.
+
+    Usage::
+
+        class EvonValveSensor(EvonEntity, BinarySensorEntity):
+            _entity_type = ENTITY_TYPE_VALVES
+            is_on = entity_data("is_open", default=False)
+    """
+
+    __slots__ = ("key", "default", "transform")
+
+    def __init__(
+        self,
+        key: str,
+        *,
+        default: Any = None,
+        transform: Any = None,
+    ) -> None:
+        self.key = key
+        self.default = default
+        self.transform = transform
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Any:
+        if obj is None:
+            return self
+        data = obj._get_data()
+        if data is None:
+            return None
+        value = data.get(self.key, self.default)
+        if self.transform is not None and value is not None:
+            return self.transform(value)
+        return value
+
+
 class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
     """Base class for Evon entities."""
 
     _attr_has_entity_name = True
+    _entity_type: str | None = None
+
+    def _get_data(self) -> dict[str, Any] | None:
+        """Get this entity's data from the coordinator."""
+        if self._entity_type is None:
+            return None
+        return self.coordinator.get_entity_data(self._entity_type, self._instance_id)
 
     def __init__(
         self,

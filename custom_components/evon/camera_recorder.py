@@ -214,16 +214,15 @@ class EvonCameraRecorder:
             mp4_filename = f"{safe_name}_{timestamp_str}.mp4"
             mp4_path = media_dir / mp4_filename
 
-            # Validate paths stay within media directory (prevent path traversal)
-            resolved_media = media_dir.resolve()
-            if not mp4_path.resolve().is_relative_to(resolved_media):
-                raise HomeAssistantError("Recording path escapes media directory")
-
-            # Save JPEG frames if requested
+            # Validate paths in executor (resolve() does filesystem I/O)
+            frames_dir = None
             if self._output_format == RECORDING_OUTPUT_MP4_AND_FRAMES:
                 frames_dir = media_dir / f"{safe_name}_{timestamp_str}"
-                if not frames_dir.resolve().is_relative_to(resolved_media):
-                    raise HomeAssistantError("Frames path escapes media directory")
+
+            await self._hass.async_add_executor_job(self._validate_paths, media_dir, mp4_path, frames_dir)
+
+            # Save JPEG frames if requested
+            if frames_dir is not None:
                 await self._hass.async_add_executor_job(self._save_jpeg_frames, frames_dir)
 
             # Encode MP4 in executor (CPU-intensive)
@@ -240,6 +239,15 @@ class EvonCameraRecorder:
             self._frames = []
             self._state = RecordingState.IDLE
             self._recordings_cache = None
+
+    @staticmethod
+    def _validate_paths(media_dir: Path, mp4_path: Path, frames_dir: Path | None) -> None:
+        """Validate output paths stay within media directory (runs in executor)."""
+        resolved_media = media_dir.resolve()
+        if not mp4_path.resolve().is_relative_to(resolved_media):
+            raise HomeAssistantError("Recording path escapes media directory")
+        if frames_dir is not None and not frames_dir.resolve().is_relative_to(resolved_media):
+            raise HomeAssistantError("Frames path escapes media directory")
 
     def _save_jpeg_frames(self, frames_dir: Path) -> None:
         """Save individual JPEG frames to disk (runs in executor)."""
@@ -327,11 +335,10 @@ class EvonCameraRecorder:
             container.close()
 
     def get_recent_recordings(self, limit: int = 5) -> list[dict[str, str]]:
-        """Return recent recordings for this camera.
+        """Return cached recent recordings for this camera.
 
-        Scans the recordings directory for MP4 files matching this camera's
-        safe name prefix, sorted by modification time (newest first).
-        Results are cached for ``_RECORDINGS_CACHE_TTL`` seconds.
+        Returns only cached data to avoid blocking the event loop.
+        Call ``async_refresh_recordings_cache()`` to update the cache.
 
         Args:
             limit: Maximum number of recordings to return.
@@ -339,14 +346,23 @@ class EvonCameraRecorder:
         Returns:
             List of dicts with filename, timestamp, size, and url.
         """
+        if self._recordings_cache is None:
+            return []
+        return self._recordings_cache[:limit]
+
+    async def async_refresh_recordings_cache(self) -> None:
+        """Refresh the recordings cache in executor (non-blocking)."""
         now = time.monotonic()
         if self._recordings_cache is not None and now - self._recordings_cache_time < _RECORDINGS_CACHE_TTL:
-            return self._recordings_cache[:limit]
+            return
+        results = await self._hass.async_add_executor_job(self._scan_recordings)
+        self._recordings_cache = results
+        self._recordings_cache_time = time.monotonic()
 
+    def _scan_recordings(self) -> list[dict[str, str]]:
+        """Scan filesystem for recordings (runs in executor)."""
         media_dir = Path(self._hass.config.path("media")) / RECORDING_MEDIA_DIR
         if not media_dir.is_dir():
-            self._recordings_cache = []
-            self._recordings_cache_time = now
             return []
 
         camera_name = self._camera.name or "camera"
@@ -377,9 +393,7 @@ class EvonCameraRecorder:
                 }
             )
 
-        self._recordings_cache = results
-        self._recordings_cache_time = now
-        return results[:limit]
+        return results
 
     def get_extra_attributes(self) -> dict[str, Any]:
         """Return recording-related extra state attributes."""

@@ -44,7 +44,7 @@ class TestCoordinatorGetters:
             entry_id="test_coordinator_entry",
         )
 
-    async def test_get_light_data(
+    async def test_get_entity_data_lights(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -58,14 +58,14 @@ class TestCoordinatorGetters:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
         # Test existing light
-        light_data = coordinator.get_light_data("light_1")
+        light_data = coordinator.get_entity_data("lights", "light_1")
         assert light_data is not None
         assert light_data["id"] == "light_1"
 
         # Test non-existing light
-        assert coordinator.get_light_data("nonexistent") is None
+        assert coordinator.get_entity_data("lights", "nonexistent") is None
 
-    async def test_get_blind_data(
+    async def test_get_entity_data_blinds(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -78,13 +78,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        blind_data = coordinator.get_blind_data("blind_1")
+        blind_data = coordinator.get_entity_data("blinds", "blind_1")
         assert blind_data is not None
         assert blind_data["id"] == "blind_1"
 
-        assert coordinator.get_blind_data("nonexistent") is None
+        assert coordinator.get_entity_data("blinds", "nonexistent") is None
 
-    async def test_get_climate_data(
+    async def test_get_entity_data_climates(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -97,13 +97,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        climate_data = coordinator.get_climate_data("climate_1")
+        climate_data = coordinator.get_entity_data("climates", "climate_1")
         assert climate_data is not None
         assert climate_data["id"] == "climate_1"
 
-        assert coordinator.get_climate_data("nonexistent") is None
+        assert coordinator.get_entity_data("climates", "nonexistent") is None
 
-    async def test_get_switch_data(
+    async def test_get_entity_data_switches(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -117,13 +117,13 @@ class TestCoordinatorGetters:
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
         # light_2 is a SmartCOM.Light.Light (relay/switch)
-        switch_data = coordinator.get_switch_data("light_2")
+        switch_data = coordinator.get_entity_data("switches", "light_2")
         assert switch_data is not None
         assert switch_data["id"] == "light_2"
 
-        assert coordinator.get_switch_data("nonexistent") is None
+        assert coordinator.get_entity_data("switches", "nonexistent") is None
 
-    async def test_get_smart_meter_data(
+    async def test_get_entity_data_smart_meters(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -136,13 +136,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        meter_data = coordinator.get_smart_meter_data("smart_meter_1")
+        meter_data = coordinator.get_entity_data("smart_meters", "smart_meter_1")
         assert meter_data is not None
         assert meter_data["id"] == "smart_meter_1"
 
-        assert coordinator.get_smart_meter_data("nonexistent") is None
+        assert coordinator.get_entity_data("smart_meters", "nonexistent") is None
 
-    async def test_get_air_quality_data(
+    async def test_get_entity_data_air_quality(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -155,13 +155,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        aq_data = coordinator.get_air_quality_data("air_quality_1")
+        aq_data = coordinator.get_entity_data("air_quality", "air_quality_1")
         assert aq_data is not None
         assert aq_data["id"] == "air_quality_1"
 
-        assert coordinator.get_air_quality_data("nonexistent") is None
+        assert coordinator.get_entity_data("air_quality", "nonexistent") is None
 
-    async def test_get_valve_data(
+    async def test_get_entity_data_valves(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -174,13 +174,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        valve_data = coordinator.get_valve_data("valve_1")
+        valve_data = coordinator.get_entity_data("valves", "valve_1")
         assert valve_data is not None
         assert valve_data["id"] == "valve_1"
 
-        assert coordinator.get_valve_data("nonexistent") is None
+        assert coordinator.get_entity_data("valves", "nonexistent") is None
 
-    async def test_get_home_state_data(
+    async def test_get_entity_data_home_states(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -193,13 +193,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        state_data = coordinator.get_home_state_data("HomeStateAtHome")
+        state_data = coordinator.get_entity_data("home_states", "HomeStateAtHome")
         assert state_data is not None
         assert state_data["id"] == "HomeStateAtHome"
 
-        assert coordinator.get_home_state_data("nonexistent") is None
+        assert coordinator.get_entity_data("home_states", "nonexistent") is None
 
-    async def test_get_bathroom_radiator_data(
+    async def test_get_entity_data_bathroom_radiators(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -212,13 +212,13 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        radiator_data = coordinator.get_bathroom_radiator_data("bathroom_radiator_1")
+        radiator_data = coordinator.get_entity_data("bathroom_radiators", "bathroom_radiator_1")
         assert radiator_data is not None
         assert radiator_data["id"] == "bathroom_radiator_1"
 
-        assert coordinator.get_bathroom_radiator_data("nonexistent") is None
+        assert coordinator.get_entity_data("bathroom_radiators", "nonexistent") is None
 
-    async def test_get_scene_data(
+    async def test_get_entity_data_scenes(
         self,
         hass: HomeAssistant,
         mock_evon_api_class,
@@ -231,11 +231,11 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        scene_data = coordinator.get_scene_data("SceneApp1234")
+        scene_data = coordinator.get_entity_data("scenes", "SceneApp1234")
         assert scene_data is not None
         assert scene_data["id"] == "SceneApp1234"
 
-        assert coordinator.get_scene_data("nonexistent") is None
+        assert coordinator.get_entity_data("scenes", "nonexistent") is None
 
     async def test_get_active_home_state(
         self,

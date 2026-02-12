@@ -89,6 +89,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
     """Representation of an Evon controllable switch (relay)."""
 
     _attr_icon = "mdi:electric-switch"
+    _entity_type = ENTITY_TYPE_SWITCHES
 
     def __init__(
         self,
@@ -125,7 +126,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SWITCHES, self._instance_id)
+        data = self._get_data()
         if data:
             return data.get("is_on", False)
         return False
@@ -164,7 +165,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
         if self._optimistic_is_on is not None:
-            data = self.coordinator.get_entity_data(ENTITY_TYPE_SWITCHES, self._instance_id)
+            data = self._get_data()
             if data:
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:
@@ -177,6 +178,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     """Representation of an Evon bathroom radiator (electric heater)."""
 
     _attr_icon = "mdi:radiator"
+    _entity_type = ENTITY_TYPE_BATHROOM_RADIATORS
 
     def __init__(
         self,
@@ -216,7 +218,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
+        data = self._get_data()
         if data:
             return data.get("is_on", False)
         return False
@@ -225,7 +227,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
+        data = self._get_data()
         if data:
             duration_mins = data.get("duration_mins", 30)
             attrs["duration_mins"] = duration_mins
@@ -258,7 +260,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
 
         Uses SwitchOneTime for explicit turn on (no state check needed).
         """
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
+        data = self._get_data()
         self._optimistic_is_on = True
         # Set optimistic time to full duration for immediate progress bar display
         if data:
@@ -296,7 +298,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             )
             return
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
+        data = self._get_data()
         current_is_on = data.get("is_on", False) if data else False
 
         if not current_is_on:
@@ -343,7 +345,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             ):
                 return
 
-            data = self.coordinator.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, self._instance_id)
+            data = self._get_data()
             if data:
                 actual_is_on = data.get("is_on", False)
                 actual_time_remaining = data.get("time_remaining", -1)
@@ -366,6 +368,7 @@ class EvonCameraRecordingSwitch(EvonEntity, SwitchEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "camera_recording"
+    _entity_type = ENTITY_TYPE_CAMERAS
 
     def __init__(
         self,

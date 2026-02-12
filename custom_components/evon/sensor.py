@@ -29,7 +29,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entity import EvonEntity
+from .base_entity import EvonEntity, entity_data
 from .const import (
     DOMAIN,
     ENTITY_TYPE_AIR_QUALITY,
@@ -280,6 +280,9 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_suggested_display_precision = 1
     _attr_translation_key = "temperature"
+    _entity_type = ENTITY_TYPE_CLIMATES
+
+    native_value = entity_data("current_temperature")
 
     def __init__(
         self,
@@ -299,18 +302,10 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
         return self._build_device_info("Climate Control")
 
     @property
-    def native_value(self) -> float | None:
-        """Return the current temperature."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
-        if data:
-            return data.get("current_temperature")
-        return None
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_CLIMATES, self._instance_id)
+        data = self._get_data()
         if data:
             attrs["target_temperature"] = data.get("target_temperature")
         return attrs
@@ -320,6 +315,7 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
     """Representation of an Evon smart meter sensor."""
 
     _attr_icon = "mdi:meter-electric"
+    _entity_type = ENTITY_TYPE_SMART_METERS
     entity_description: EvonSensorEntityDescription
 
     def __init__(
@@ -344,7 +340,7 @@ class EvonSmartMeterSensor(EvonEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return the sensor value."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
+        data = self._get_data()
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -354,6 +350,7 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     """Representation of an Evon air quality sensor."""
 
     _attr_icon = "mdi:air-filter"
+    _entity_type = ENTITY_TYPE_AIR_QUALITY
     entity_description: EvonSensorEntityDescription
 
     def __init__(
@@ -378,7 +375,7 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     @property
     def native_value(self) -> float | int | None:
         """Return the sensor value."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_AIR_QUALITY, self._instance_id)
+        data = self._get_data()
         if data and self.entity_description.value_fn:
             return self.entity_description.value_fn(data)
         return None
@@ -387,7 +384,7 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_AIR_QUALITY, self._instance_id)
+        data = self._get_data()
         if data:
             if self.entity_description.key == "co2":
                 attrs["health_index"] = data.get("health_index")
@@ -405,6 +402,9 @@ class EvonEnergyTodaySensor(EvonEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:calendar-today"
     _attr_translation_key = "energy_today"
+    _entity_type = ENTITY_TYPE_SMART_METERS
+
+    native_value = entity_data("energy_today_calculated")
 
     def __init__(
         self,
@@ -423,16 +423,6 @@ class EvonEnergyTodaySensor(EvonEntity, SensorEntity):
         """Return device info for this sensor."""
         return self._build_device_info("Smart Meter")
 
-    @property
-    def native_value(self) -> float | None:
-        """Return today's energy consumption (calculated in coordinator)."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
-        if data:
-            value = data.get("energy_today_calculated")
-            if value is not None:
-                return value
-        return None
-
 
 class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
     """Sensor that shows this month's energy consumption."""
@@ -442,6 +432,9 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_icon = "mdi:calendar-month"
     _attr_translation_key = "energy_this_month"
+    _entity_type = ENTITY_TYPE_SMART_METERS
+
+    native_value = entity_data("energy_this_month_calculated")
 
     def __init__(
         self,
@@ -459,13 +452,3 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
         return self._build_device_info("Smart Meter")
-
-    @property
-    def native_value(self) -> float | None:
-        """Return this month's energy consumption (calculated in coordinator)."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SMART_METERS, self._instance_id)
-        if data:
-            value = data.get("energy_this_month_calculated")
-            if value is not None:
-                return value
-        return None

@@ -62,6 +62,7 @@ class EvonLight(EvonEntity, LightEntity):
     """Representation of an Evon light."""
 
     _attr_icon = "mdi:lightbulb"
+    _entity_type = ENTITY_TYPE_LIGHTS
 
     def __init__(
         self,
@@ -82,7 +83,7 @@ class EvonLight(EvonEntity, LightEntity):
         self._is_dimmable = instance_id not in non_dimmable_lights
 
         # Check if this light supports color temperature from coordinator data
-        data = coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, instance_id)
+        data = self._get_data()
         self._supports_color_temp = data.get("supports_color_temp", False) if data else False
 
         if self._supports_color_temp:
@@ -129,7 +130,7 @@ class EvonLight(EvonEntity, LightEntity):
         if self._optimistic_is_on is not None:
             return self._optimistic_is_on
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data:
             return data.get("is_on", False)
         return False
@@ -148,7 +149,7 @@ class EvonLight(EvonEntity, LightEntity):
         if self._optimistic_brightness is not None:
             return self._optimistic_brightness
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data:
             # Evon uses 0-100, Home Assistant uses 0-255
             evon_brightness = data.get("brightness", 0)
@@ -168,7 +169,7 @@ class EvonLight(EvonEntity, LightEntity):
         if self._optimistic_color_temp_kelvin is not None:
             return self._optimistic_color_temp_kelvin
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data and data.get("color_temp") is not None:
             kelvin = data["color_temp"]
             if kelvin > 0:
@@ -181,7 +182,7 @@ class EvonLight(EvonEntity, LightEntity):
         if not self._supports_color_temp:
             return None
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data and data.get("min_color_temp") is not None:
             return data["min_color_temp"]
         return None
@@ -192,7 +193,7 @@ class EvonLight(EvonEntity, LightEntity):
         if not self._supports_color_temp:
             return None
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data and data.get("max_color_temp") is not None:
             return data["max_color_temp"]
         return None
@@ -201,7 +202,7 @@ class EvonLight(EvonEntity, LightEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data:
             attrs["brightness_pct"] = data.get("brightness", 0)
         return attrs
@@ -209,7 +210,7 @@ class EvonLight(EvonEntity, LightEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
         # Check actual state from coordinator (before setting optimistic state)
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         actual_is_on = data.get("is_on", False) if data else False
 
         # Set optimistic values immediately to prevent UI flicker
@@ -297,7 +298,7 @@ class EvonLight(EvonEntity, LightEntity):
             return
 
         # Only clear optimistic state when coordinator data matches expected value
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+        data = self._get_data()
         if data:
             all_cleared = True
 

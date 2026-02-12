@@ -103,6 +103,7 @@ class EvonCover(EvonEntity, CoverEntity):
     """Representation of an Evon blind/cover."""
 
     _attr_icon = "mdi:blinds"
+    _entity_type = ENTITY_TYPE_BLINDS
     _attr_device_class = CoverDeviceClass.BLIND
     _attr_supported_features = (
         CoverEntityFeature.OPEN
@@ -134,7 +135,7 @@ class EvonCover(EvonEntity, CoverEntity):
         self._optimistic_direction: str | None = None  # "opening" or "closing"
 
         # Check if this is a blind group (requires different API calls)
-        data = coordinator.get_entity_data(ENTITY_TYPE_BLINDS, instance_id)
+        data = self._get_data()
         self._is_group = data.get("is_group", False) if data else False
 
         # Initialize API caches for WebSocket control
@@ -164,7 +165,7 @@ class EvonCover(EvonEntity, CoverEntity):
         if self._optimistic_position is not None:
             return self._optimistic_position
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         if data:
             # Evon: 0=open, 100=closed
             # Home Assistant: 0=closed, 100=open
@@ -181,7 +182,7 @@ class EvonCover(EvonEntity, CoverEntity):
         if self._optimistic_tilt is not None:
             return self._optimistic_tilt
 
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         if data:
             # Evon: 0=open (horizontal), 100=closed (blocking)
             # Home Assistant: 0=closed, 100=open
@@ -226,7 +227,7 @@ class EvonCover(EvonEntity, CoverEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         if data:
             # Evon native values (for debugging)
             attrs["evon_position"] = data.get("position", 0)  # 0=open, 100=closed
@@ -235,7 +236,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
         is_moving = coordinator_is_moving or self._optimistic_is_moving is True
@@ -289,7 +290,7 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
         is_moving = coordinator_is_moving or self._optimistic_is_moving is True
@@ -462,7 +463,7 @@ class EvonCover(EvonEntity, CoverEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_BLINDS, self._instance_id)
+        data = self._get_data()
         if data:
             # Update API caches for WebSocket control
             # Position is Evon native (0=open, 100=closed)

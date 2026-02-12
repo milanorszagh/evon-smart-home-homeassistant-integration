@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entity import EvonEntity
+from .base_entity import EvonEntity, entity_data
 from .const import (
     DOMAIN,
     ENTITY_TYPE_INTERCOMS,
@@ -113,6 +113,9 @@ class EvonValveSensor(EvonEntity, BinarySensorEntity):
     _attr_icon = "mdi:valve"
     _attr_device_class = BinarySensorDeviceClass.OPENING
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _entity_type = ENTITY_TYPE_VALVES
+
+    is_on = entity_data("is_open", default=False)
 
     def __init__(
         self,
@@ -133,18 +136,10 @@ class EvonValveSensor(EvonEntity, BinarySensorEntity):
         return self._build_device_info("Climate Valve")
 
     @property
-    def is_on(self) -> bool | None:
-        """Return true if the valve is open."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_VALVES, self._instance_id)
-        if data:
-            return data.get("is_open", False)
-        return None
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_VALVES, self._instance_id)
+        data = self._get_data()
         if data:
             attrs["valve_type"] = data.get("valve_type")
         return attrs
@@ -155,6 +150,9 @@ class EvonSecurityDoorSensor(EvonEntity, BinarySensorEntity):
 
     _attr_icon = "mdi:door"
     _attr_device_class = BinarySensorDeviceClass.DOOR
+    _entity_type = ENTITY_TYPE_SECURITY_DOORS
+
+    is_on = entity_data("is_open", default=False)
 
     def __init__(
         self,
@@ -174,14 +172,6 @@ class EvonSecurityDoorSensor(EvonEntity, BinarySensorEntity):
         """Return device info for this sensor."""
         return self._build_device_info("Security Door")
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the door is open."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SECURITY_DOORS, self._instance_id)
-        if data:
-            return data.get("is_open", False)
-        return None
-
 
 class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
     """Representation of an Evon security door call in progress sensor."""
@@ -189,6 +179,9 @@ class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
     _attr_icon = "mdi:phone-ring"
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
     _attr_translation_key = "call_in_progress"
+    _entity_type = ENTITY_TYPE_SECURITY_DOORS
+
+    is_on = entity_data("call_in_progress", default=False)
 
     def __init__(
         self,
@@ -207,20 +200,15 @@ class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
         """Return device info for this sensor."""
         return self._build_device_info("Security Door")
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if a call is in progress."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_SECURITY_DOORS, self._instance_id)
-        if data:
-            return data.get("call_in_progress", False)
-        return None
-
 
 class EvonIntercomDoorSensor(EvonEntity, BinarySensorEntity):
     """Representation of an Evon intercom door sensor."""
 
     _attr_icon = "mdi:doorbell-video"
     _attr_device_class = BinarySensorDeviceClass.DOOR
+    _entity_type = ENTITY_TYPE_INTERCOMS
+
+    is_on = entity_data("is_door_open", default=False)
 
     def __init__(
         self,
@@ -241,18 +229,10 @@ class EvonIntercomDoorSensor(EvonEntity, BinarySensorEntity):
         return self._build_device_info("Intercom")
 
     @property
-    def is_on(self) -> bool | None:
-        """Return true if the door is open."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_INTERCOMS, self._instance_id)
-        if data:
-            return data.get("is_door_open", False)
-        return None
-
-    @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_INTERCOMS, self._instance_id)
+        data = self._get_data()
         if data:
             attrs["doorbell_triggered"] = data.get("doorbell_triggered", False)
             attrs["door_open_triggered"] = data.get("door_open_triggered", False)
@@ -266,6 +246,7 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "connection"
+    _entity_type = ENTITY_TYPE_INTERCOMS
 
     def __init__(
         self,
@@ -287,7 +268,7 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         """Return true if the intercom is connected (not lost)."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_INTERCOMS, self._instance_id)
+        data = self._get_data()
         if data:
             # is_on = connected (inverse of connection_lost)
             # Use `is not True` to safely handle None/missing values as "connected"

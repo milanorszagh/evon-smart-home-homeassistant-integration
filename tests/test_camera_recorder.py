@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -315,12 +316,12 @@ class TestRecentRecordings:
         recordings_dir.mkdir(parents=True)
         mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert result == []
 
     def test_returns_matching_recordings(self, recorder, mock_hass, mock_camera, tmp_path):
         """Test returns MP4 files matching camera name prefix."""
-        import time
 
         recordings_dir = tmp_path / "media" / "evon_recordings"
         recordings_dir.mkdir(parents=True)
@@ -334,6 +335,7 @@ class TestRecentRecordings:
             files.append(f)
             time.sleep(0.05)  # Ensure different mtime
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert len(result) == 3
         # Newest first (last created file)
@@ -343,8 +345,6 @@ class TestRecentRecordings:
 
     def test_respects_limit(self, recorder, mock_hass, tmp_path):
         """Test limit parameter caps the number of results."""
-        import time
-
         recordings_dir = tmp_path / "media" / "evon_recordings"
         recordings_dir.mkdir(parents=True)
         mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
@@ -354,6 +354,7 @@ class TestRecentRecordings:
             f.write_bytes(b"\x00" * 1024)
             time.sleep(0.05)
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings(limit=3)
         assert len(result) == 3
 
@@ -368,6 +369,7 @@ class TestRecentRecordings:
         # Non-matching file
         (recordings_dir / "Other_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 2048)
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert len(result) == 1
         assert result[0]["filename"] == "Test_Camera_20240101_120000.mp4"
@@ -381,6 +383,7 @@ class TestRecentRecordings:
         f = recordings_dir / "Test_Camera_20240115_190100.mp4"
         f.write_bytes(b"\x00" * (180 * 1024))  # 180 KB
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert len(result) == 1
         rec = result[0]
@@ -399,6 +402,7 @@ class TestRecentRecordings:
         f = recordings_dir / "Test_Camera_20240115_190100.mp4"
         f.write_bytes(b"\x00" * (2 * 1024 * 1024))  # 2 MB
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert len(result) == 1
         assert "MB" in result[0]["size"]
@@ -415,6 +419,8 @@ class TestRecordingsCache:
 
         (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
 
+        recorder._recordings_cache = recorder._scan_recordings()
+        recorder._recordings_cache_time = time.monotonic()
         result1 = recorder.get_recent_recordings()
         assert len(result1) == 1
 
@@ -434,18 +440,19 @@ class TestRecordingsCache:
 
         (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
 
+        recorder._recordings_cache = recorder._scan_recordings()
+        recorder._recordings_cache_time = time.monotonic()
         result1 = recorder.get_recent_recordings()
         assert len(result1) == 1
 
         # Simulate TTL expiry by backdating the cache time
         recorder._recordings_cache_time -= _RECORDINGS_CACHE_TTL + 1
 
-        # Add another file — should now appear
-        import time as _time
-
-        _time.sleep(0.05)  # Ensure different mtime
+        # Add another file — should now appear after re-scan
+        time.sleep(0.05)  # Ensure different mtime
         (recordings_dir / "Test_Camera_20240102_120000.mp4").write_bytes(b"\x00" * 1024)
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result2 = recorder.get_recent_recordings()
         assert len(result2) == 2
 
@@ -456,20 +463,19 @@ class TestRecordingsCache:
         mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
 
         (recordings_dir / "Test_Camera_20240101_120000.mp4").write_bytes(b"\x00" * 1024)
-        recorder.get_recent_recordings()
+        recorder._recordings_cache = recorder._scan_recordings()
         assert recorder._recordings_cache is not None
 
         # Simulate finalize by setting cache to None (same as _finalize_recording does)
         recorder._recordings_cache = None
 
         (recordings_dir / "Test_Camera_20240102_120000.mp4").write_bytes(b"\x00" * 1024)
+        recorder._recordings_cache = recorder._scan_recordings()
         result = recorder.get_recent_recordings()
         assert len(result) == 2
 
     def test_cache_stores_all_returns_sliced(self, recorder, mock_hass, tmp_path):
         """Test that cache stores all results and slices on return."""
-        import time
-
         recordings_dir = tmp_path / "media" / "evon_recordings"
         recordings_dir.mkdir(parents=True)
         mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
@@ -479,6 +485,7 @@ class TestRecordingsCache:
             f.write_bytes(b"\x00" * 1024)
             time.sleep(0.05)
 
+        recorder._recordings_cache = recorder._scan_recordings()
         result3 = recorder.get_recent_recordings(limit=3)
         assert len(result3) == 3
 

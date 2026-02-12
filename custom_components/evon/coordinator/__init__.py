@@ -342,43 +342,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return entity
         return None
 
-    # Legacy getter methods for backwards compatibility
-    def get_light_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific light."""
-        return self.get_entity_data(ENTITY_TYPE_LIGHTS, instance_id)
-
-    def get_blind_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific blind."""
-        return self.get_entity_data(ENTITY_TYPE_BLINDS, instance_id)
-
-    def get_climate_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific climate."""
-        return self.get_entity_data(ENTITY_TYPE_CLIMATES, instance_id)
-
-    def get_switch_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific switch."""
-        return self.get_entity_data(ENTITY_TYPE_SWITCHES, instance_id)
-
-    def get_smart_meter_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific smart meter."""
-        return self.get_entity_data(ENTITY_TYPE_SMART_METERS, instance_id)
-
-    def get_air_quality_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific air quality sensor."""
-        return self.get_entity_data(ENTITY_TYPE_AIR_QUALITY, instance_id)
-
-    def get_valve_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific valve."""
-        return self.get_entity_data(ENTITY_TYPE_VALVES, instance_id)
-
-    def get_home_state_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific home state."""
-        return self.get_entity_data(ENTITY_TYPE_HOME_STATES, instance_id)
-
-    def get_bathroom_radiator_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific bathroom radiator."""
-        return self.get_entity_data(ENTITY_TYPE_BATHROOM_RADIATORS, instance_id)
-
     def get_active_home_state(self) -> str | None:
         """Get the currently active home state ID."""
         if not self.data:
@@ -409,10 +372,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.data:
             return self.data.get("season_mode", False)
         return False
-
-    def get_scene_data(self, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific scene."""
-        return self.get_entity_data(ENTITY_TYPE_SCENES, instance_id)
 
     def get_scenes(self) -> list[dict[str, Any]]:
         """Get all scenes."""

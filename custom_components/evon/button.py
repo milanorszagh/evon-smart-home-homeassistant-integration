@@ -67,6 +67,7 @@ class EvonSceneButton(EvonEntity, ButtonEntity):
     """Representation of an Evon scene as a button."""
 
     _attr_icon = "mdi:play-circle"
+    _entity_type = ENTITY_TYPE_SCENES
 
     def __init__(
         self,
@@ -102,6 +103,7 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
     """Button to identify a light by flashing it."""
 
     _attr_icon = "mdi:lightbulb-alert"
+    _entity_type = ENTITY_TYPE_LIGHTS
     _attr_device_class = ButtonDeviceClass.IDENTIFY
     _attr_entity_category = EntityCategory.CONFIG
     _attr_translation_key = "identify"
@@ -129,7 +131,7 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
         _LOGGER.debug("Identifying light %s (%s)", self._device_name, self._instance_id)
         try:
             # Get current state for restoration
-            data = self.coordinator.get_entity_data(ENTITY_TYPE_LIGHTS, self._instance_id)
+            data = self._get_data()
             was_on = data.get("is_on", False) if data else False
             original_brightness = max(0, min(100, data.get("brightness", 100))) if data else 100
 

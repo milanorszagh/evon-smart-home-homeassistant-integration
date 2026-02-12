@@ -59,6 +59,7 @@ class EvonCamera(EvonEntity, Camera):
     """Representation of an Evon camera (2N Intercom)."""
 
     _attr_supported_features = CameraEntityFeature.ON_OFF
+    _entity_type = ENTITY_TYPE_CAMERAS
 
     def __init__(
         self,
@@ -83,12 +84,14 @@ class EvonCamera(EvonEntity, Camera):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+        data = self._get_data()
         if data:
             new_path = data.get("image_path", "")
             if new_path and new_path != self._tracked_image_path:
                 self._tracked_image_path = new_path
                 self._image_event.set()
+        # Refresh recordings cache asynchronously (non-blocking)
+        self.hass.async_create_task(self._recorder.async_refresh_recordings_cache())
         super()._handle_coordinator_update()
 
     @property
@@ -104,7 +107,7 @@ class EvonCamera(EvonEntity, Camera):
     @property
     def is_on(self) -> bool:
         """Return true if the camera is on."""
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+        data = self._get_data()
         if data:
             return not data.get("error", False)
         return False
@@ -118,7 +121,7 @@ class EvonCamera(EvonEntity, Camera):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         attrs = super().extra_state_attributes
-        data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+        data = self._get_data()
         if data:
             attrs["ip_address"] = data.get("ip_address")
             attrs["error"] = data.get("error", False)
@@ -158,7 +161,7 @@ class EvonCamera(EvonEntity, Camera):
         """
         async with self._image_lock:
             try:
-                data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+                data = self._get_data()
                 if not data:
                     return self._last_image
 
@@ -175,7 +178,7 @@ class EvonCamera(EvonEntity, Camera):
                     except TimeoutError:
                         _LOGGER.debug("Timeout waiting for camera image update from WS")
                     # Re-read data after WS update
-                    data = self.coordinator.get_entity_data(ENTITY_TYPE_CAMERAS, self._instance_id)
+                    data = self._get_data()
 
                 # Fetch the image via HTTP
                 image_path = data.get("image_path", "") if data else ""
