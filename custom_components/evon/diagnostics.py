@@ -41,150 +41,78 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
     config_data = async_redact_data(dict(entry.data), TO_REDACT)
     options_data = async_redact_data(dict(entry.options), TO_REDACT)
 
+    # Entity types to include in diagnostics
+    entity_types = [
+        ENTITY_TYPE_LIGHTS,
+        ENTITY_TYPE_BLINDS,
+        ENTITY_TYPE_CLIMATES,
+        ENTITY_TYPE_SWITCHES,
+        ENTITY_TYPE_SMART_METERS,
+        ENTITY_TYPE_AIR_QUALITY,
+        ENTITY_TYPE_VALVES,
+        ENTITY_TYPE_SCENES,
+        ENTITY_TYPE_BATHROOM_RADIATORS,
+        ENTITY_TYPE_SECURITY_DOORS,
+        ENTITY_TYPE_INTERCOMS,
+        ENTITY_TYPE_CAMERAS,
+    ]
+
     # Get device counts from coordinator data
-    device_counts = {}
+    device_counts: dict[str, int] = {}
     if coordinator.data:
-        device_counts = {
-            ENTITY_TYPE_LIGHTS: len(coordinator.data.get(ENTITY_TYPE_LIGHTS, [])),
-            ENTITY_TYPE_BLINDS: len(coordinator.data.get(ENTITY_TYPE_BLINDS, [])),
-            ENTITY_TYPE_CLIMATES: len(coordinator.data.get(ENTITY_TYPE_CLIMATES, [])),
-            ENTITY_TYPE_SWITCHES: len(coordinator.data.get(ENTITY_TYPE_SWITCHES, [])),
-            ENTITY_TYPE_SMART_METERS: len(coordinator.data.get(ENTITY_TYPE_SMART_METERS, [])),
-            ENTITY_TYPE_AIR_QUALITY: len(coordinator.data.get(ENTITY_TYPE_AIR_QUALITY, [])),
-            ENTITY_TYPE_VALVES: len(coordinator.data.get(ENTITY_TYPE_VALVES, [])),
-            ENTITY_TYPE_SCENES: len(coordinator.data.get(ENTITY_TYPE_SCENES, [])),
-            ENTITY_TYPE_BATHROOM_RADIATORS: len(coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])),
-            ENTITY_TYPE_SECURITY_DOORS: len(coordinator.data.get(ENTITY_TYPE_SECURITY_DOORS, [])),
-            ENTITY_TYPE_INTERCOMS: len(coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])),
-            ENTITY_TYPE_CAMERAS: len(coordinator.data.get(ENTITY_TYPE_CAMERAS, [])),
-            "rooms": len(coordinator.data.get("rooms", {})),
-        }
+        device_counts = {et: len(coordinator.data.get(et, [])) for et in entity_types}
+        device_counts["rooms"] = len(coordinator.data.get("rooms", {}))
+
+    # Summary field definitions: entity_type -> list of (output_key, source_key_or_callable)
+    # Callables receive the entity dict and return the value
+    summary_fields: dict[str, list[tuple[str, str | Any]]] = {
+        ENTITY_TYPE_LIGHTS: [
+            ("id", "id"),
+            ("name", "name"),
+            ("is_on", "is_on"),
+            ("has_brightness", lambda e: "brightness" in e),
+        ],
+        ENTITY_TYPE_BLINDS: [
+            ("id", "id"),
+            ("name", "name"),
+            ("position", "position"),
+            ("has_tilt", lambda e: "angle" in e),
+        ],
+        ENTITY_TYPE_CLIMATES: [
+            ("id", "id"),
+            ("name", "name"),
+            ("current_temp", "current_temperature"),
+            ("target_temp", "target_temperature"),
+        ],
+        ENTITY_TYPE_SWITCHES: [("id", "id"), ("name", "name"), ("is_on", "is_on")],
+        ENTITY_TYPE_SMART_METERS: [
+            ("id", "id"),
+            ("name", "name"),
+            ("power", "power"),
+            ("energy", "energy"),
+        ],
+        ENTITY_TYPE_AIR_QUALITY: [
+            ("id", "id"),
+            ("name", "name"),
+            ("has_co2", lambda e: e.get("co2") is not None),
+            ("has_humidity", lambda e: e.get("humidity") is not None),
+        ],
+        ENTITY_TYPE_VALVES: [("id", "id"), ("name", "name"), ("is_open", "is_open")],
+        ENTITY_TYPE_SCENES: [("id", "id"), ("name", "name")],
+        ENTITY_TYPE_BATHROOM_RADIATORS: [("id", "id"), ("name", "name"), ("is_on", "is_on")],
+        ENTITY_TYPE_SECURITY_DOORS: [("id", "id"), ("name", "name"), ("is_locked", "is_locked")],
+        ENTITY_TYPE_INTERCOMS: [("id", "id"), ("name", "name")],
+        ENTITY_TYPE_CAMERAS: [("id", "id"), ("name", "name"), ("error", "error")],
+    }
 
     # Build device summaries (without sensitive data)
-    device_summaries = {}
+    device_summaries: dict[str, list[dict[str, Any]]] = {}
     if coordinator.data:
-        # Lights summary
-        device_summaries[ENTITY_TYPE_LIGHTS] = [
-            {
-                "id": light.get("id"),
-                "name": light.get("name"),
-                "is_on": light.get("is_on"),
-                "has_brightness": "brightness" in light,
-            }
-            for light in coordinator.data.get(ENTITY_TYPE_LIGHTS, [])
-        ]
-
-        # Blinds summary
-        device_summaries[ENTITY_TYPE_BLINDS] = [
-            {
-                "id": blind.get("id"),
-                "name": blind.get("name"),
-                "position": blind.get("position"),
-                "has_tilt": "angle" in blind,
-            }
-            for blind in coordinator.data.get(ENTITY_TYPE_BLINDS, [])
-        ]
-
-        # Climates summary
-        device_summaries[ENTITY_TYPE_CLIMATES] = [
-            {
-                "id": climate.get("id"),
-                "name": climate.get("name"),
-                "current_temp": climate.get("current_temperature"),
-                "target_temp": climate.get("target_temperature"),
-            }
-            for climate in coordinator.data.get(ENTITY_TYPE_CLIMATES, [])
-        ]
-
-        # Switches summary
-        device_summaries[ENTITY_TYPE_SWITCHES] = [
-            {
-                "id": switch.get("id"),
-                "name": switch.get("name"),
-                "is_on": switch.get("is_on"),
-            }
-            for switch in coordinator.data.get(ENTITY_TYPE_SWITCHES, [])
-        ]
-
-        # Smart meters summary
-        device_summaries[ENTITY_TYPE_SMART_METERS] = [
-            {
-                "id": meter.get("id"),
-                "name": meter.get("name"),
-                "power": meter.get("power"),
-                "energy": meter.get("energy"),
-            }
-            for meter in coordinator.data.get(ENTITY_TYPE_SMART_METERS, [])
-        ]
-
-        # Air quality summary
-        device_summaries[ENTITY_TYPE_AIR_QUALITY] = [
-            {
-                "id": aq.get("id"),
-                "name": aq.get("name"),
-                "has_co2": aq.get("co2") is not None,
-                "has_humidity": aq.get("humidity") is not None,
-            }
-            for aq in coordinator.data.get(ENTITY_TYPE_AIR_QUALITY, [])
-        ]
-
-        # Valves summary
-        device_summaries[ENTITY_TYPE_VALVES] = [
-            {
-                "id": valve.get("id"),
-                "name": valve.get("name"),
-                "is_open": valve.get("is_open"),
-            }
-            for valve in coordinator.data.get(ENTITY_TYPE_VALVES, [])
-        ]
-
-        # Scenes summary
-        device_summaries[ENTITY_TYPE_SCENES] = [
-            {
-                "id": scene.get("id"),
-                "name": scene.get("name"),
-            }
-            for scene in coordinator.data.get(ENTITY_TYPE_SCENES, [])
-        ]
-
-        # Bathroom radiators summary
-        device_summaries[ENTITY_TYPE_BATHROOM_RADIATORS] = [
-            {
-                "id": radiator.get("id"),
-                "name": radiator.get("name"),
-                "is_on": radiator.get("is_on"),
-            }
-            for radiator in coordinator.data.get(ENTITY_TYPE_BATHROOM_RADIATORS, [])
-        ]
-
-        # Security doors summary
-        device_summaries[ENTITY_TYPE_SECURITY_DOORS] = [
-            {
-                "id": door.get("id"),
-                "name": door.get("name"),
-                "is_locked": door.get("is_locked"),
-            }
-            for door in coordinator.data.get(ENTITY_TYPE_SECURITY_DOORS, [])
-        ]
-
-        # Intercoms summary
-        device_summaries[ENTITY_TYPE_INTERCOMS] = [
-            {
-                "id": intercom.get("id"),
-                "name": intercom.get("name"),
-            }
-            for intercom in coordinator.data.get(ENTITY_TYPE_INTERCOMS, [])
-        ]
-
-        # Cameras summary
-        device_summaries[ENTITY_TYPE_CAMERAS] = [
-            {
-                "id": camera.get("id"),
-                "name": camera.get("name"),
-                "error": camera.get("error"),
-            }
-            for camera in coordinator.data.get(ENTITY_TYPE_CAMERAS, [])
-        ]
+        for etype, fields in summary_fields.items():
+            device_summaries[etype] = [
+                {out_key: (src(entity) if callable(src) else entity.get(src)) for out_key, src in fields}
+                for entity in coordinator.data.get(etype, [])
+            ]
 
     return {
         "entry": {

@@ -490,6 +490,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._ws_client.stop()
             self._ws_client = None
             self._ws_connected = False
+            # Clear caches (rebuilt on next _async_update_data call)
+            self._instances_cache = []
+            self._rooms_cache = {}
+            self._last_successful_data = None
 
     def _handle_ws_connection_state(self, connected: bool) -> None:
         """Handle WebSocket connection state changes.

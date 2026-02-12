@@ -27,7 +27,13 @@ export function isPasswordEncoded(password: string): boolean {
 }
 
 // Environment configuration
-export const EVON_HOST = process.env.EVON_HOST || "http://192.168.1.4";
+export const EVON_HOST = process.env.EVON_HOST || "";
+if (!EVON_HOST) {
+  throw new Error(
+    "EVON_HOST environment variable is not set. " +
+      "Set it to your Evon system URL (e.g., http://192.168.1.x).",
+  );
+}
 export const EVON_USERNAME = process.env.EVON_USERNAME || "";
 
 const EVON_PASSWORD_RAW = process.env.EVON_PASSWORD || "";

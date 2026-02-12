@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import logging
 from pathlib import Path
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -156,7 +158,7 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-def _find_camera_entity(hass: HomeAssistant, entity_id: str):
+def _find_camera_entity(hass: HomeAssistant, entity_id: str) -> Any:
     """Find an EvonCamera entity by entity_id from the shared camera registry."""
     for entry_data in hass.data.get(DOMAIN, {}).values():
         if not isinstance(entry_data, dict):
@@ -344,7 +346,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             service_name: str,
             entity_type: str,
             api_method: str,
-            filter_fn=None,
+            filter_fn: Callable[[dict[str, Any]], bool] | None = None,
         ) -> None:
             """Execute a per-entity API method across all entries."""
             _LOGGER.info("%s service called", service_name)

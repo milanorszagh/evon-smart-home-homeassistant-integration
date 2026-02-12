@@ -130,6 +130,10 @@ COVER_STOP_DELAY = 0.3
 # to prevent stale UI when recovering from network issues
 OPTIMISTIC_STATE_TIMEOUT = 30.0
 
+# Login rate limiting
+LOGIN_MAX_BACKOFF = 300  # Maximum backoff delay in seconds (5 minutes)
+LOGIN_BACKOFF_BASE = 2  # Exponential backoff base (2^failures seconds)
+
 # Camera/Image fetch settings
 CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0  # seconds to wait for WS image_path update after ImageRequest
 IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server

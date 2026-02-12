@@ -214,9 +214,16 @@ class EvonCameraRecorder:
             mp4_filename = f"{safe_name}_{timestamp_str}.mp4"
             mp4_path = media_dir / mp4_filename
 
+            # Validate paths stay within media directory (prevent path traversal)
+            resolved_media = media_dir.resolve()
+            if not mp4_path.resolve().is_relative_to(resolved_media):
+                raise HomeAssistantError("Recording path escapes media directory")
+
             # Save JPEG frames if requested
             if self._output_format == RECORDING_OUTPUT_MP4_AND_FRAMES:
                 frames_dir = media_dir / f"{safe_name}_{timestamp_str}"
+                if not frames_dir.resolve().is_relative_to(resolved_media):
+                    raise HomeAssistantError("Frames path escapes media directory")
                 await self._hass.async_add_executor_job(self._save_jpeg_frames, frames_dir)
 
             # Encode MP4 in executor (CPU-intensive)

@@ -26,6 +26,8 @@ from .const import (
     ENGINE_ID_MIN_LENGTH,
     EVON_REMOTE_HOST,
     IMAGE_FETCH_TIMEOUT,
+    LOGIN_BACKOFF_BASE,
+    LOGIN_MAX_BACKOFF,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -205,6 +207,10 @@ class EvonApi:
         self._is_remote = engine_id is not None
         self._engine_id = engine_id
 
+        # Login rate limiting
+        self._login_failure_count: int = 0
+        self._login_backoff_until: float = 0.0
+
         # WebSocket control support
         self._ws_client: EvonWsClient | None = None
         self._instance_classes: dict[str, str] = {}  # ID → ClassName cache
@@ -239,6 +245,13 @@ class EvonApi:
         self._token_timestamp = 0.0
         self._username = ""
         self._password = ""
+        # Clear caches
+        self._instance_classes = {}
+        self._blind_angles = {}
+        self._blind_positions = {}
+        # Reset login rate limiting
+        self._login_failure_count = 0
+        self._login_backoff_until = 0.0
 
     def set_ws_client(self, ws_client: EvonWsClient | None) -> None:
         """Set the WebSocket client for control operations.
@@ -298,6 +311,12 @@ class EvonApi:
 
     async def login(self) -> str:
         """Login to Evon and get token."""
+        # Check login rate limiting backoff
+        now = time.monotonic()
+        if now < self._login_backoff_until:
+            wait = self._login_backoff_until - now
+            raise EvonAuthError(f"Login rate limited: too many failures, retry in {wait:.0f}s")
+
         session = await self._get_session()
 
         # Build headers - remote connections need additional headers
@@ -336,12 +355,15 @@ class EvonApi:
                     location_path = location.split("?")[0] if location else "unknown"
                     _LOGGER.debug("Login redirect detected to path: %s", location_path)
                     if "login" in location.lower():
+                        self._increment_login_backoff()
                         raise EvonAuthError("Login failed: Invalid credentials")
                     # Unexpected redirect - don't expose full URL in logs
                     _LOGGER.warning("Unexpected redirect during login")
+                    self._increment_login_backoff()
                     raise EvonAuthError("Login failed: Unexpected redirect")
 
                 if response.status != 200:
+                    self._increment_login_backoff()
                     raise EvonAuthError(f"Login failed: {response.status} {response.reason}")
 
                 token = response.headers.get("x-elocs-token")
@@ -350,10 +372,24 @@ class EvonApi:
 
                 self._token = token
                 self._token_timestamp = time.monotonic()
+                # Reset backoff on successful login
+                self._login_failure_count = 0
+                self._login_backoff_until = 0.0
                 return token
 
         except aiohttp.ClientError as err:
             raise EvonConnectionError(f"Connection error: {err}") from err
+
+    def _increment_login_backoff(self) -> None:
+        """Increment login failure count and set exponential backoff."""
+        self._login_failure_count += 1
+        backoff = min(LOGIN_BACKOFF_BASE**self._login_failure_count, LOGIN_MAX_BACKOFF)
+        self._login_backoff_until = time.monotonic() + backoff
+        _LOGGER.warning(
+            "Login failed (%d consecutive), backing off for %ds",
+            self._login_failure_count,
+            backoff,
+        )
 
     def _is_token_expired(self) -> bool:
         """Check if the current token has expired based on TTL."""
