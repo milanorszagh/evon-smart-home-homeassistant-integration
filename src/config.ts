@@ -26,14 +26,9 @@ export function isPasswordEncoded(password: string): boolean {
   return password.length === 88 && password.endsWith("==");
 }
 
-// Environment configuration
+// Environment configuration — read lazily so importing this module for
+// utility functions (e.g. in tests) doesn't throw when env vars are unset.
 export const EVON_HOST = process.env.EVON_HOST || "";
-if (!EVON_HOST) {
-  throw new Error(
-    "EVON_HOST environment variable is not set. " +
-      "Set it to your Evon system URL (e.g., http://192.168.1.x).",
-  );
-}
 export const EVON_USERNAME = process.env.EVON_USERNAME || "";
 
 const EVON_PASSWORD_RAW = process.env.EVON_PASSWORD || "";
@@ -44,3 +39,16 @@ export const EVON_PASSWORD =
   : forceRaw ? encodePassword(EVON_USERNAME, EVON_PASSWORD_RAW)
   : isPasswordEncoded(EVON_PASSWORD_RAW) ? EVON_PASSWORD_RAW
   : encodePassword(EVON_USERNAME, EVON_PASSWORD_RAW);
+
+/**
+ * Validate that required environment variables are set.
+ * Call this before making API requests rather than at import time.
+ */
+export function validateConfig(): void {
+  if (!EVON_HOST) {
+    throw new Error(
+      "EVON_HOST environment variable is not set. " +
+        "Set it to your Evon system URL (e.g., http://192.168.1.x).",
+    );
+  }
+}

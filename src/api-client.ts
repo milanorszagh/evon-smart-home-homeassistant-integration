@@ -2,7 +2,7 @@
  * API client for Evon Smart Home
  */
 
-import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD } from "./config.js";
+import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, validateConfig } from "./config.js";
 import { API_TIMEOUT_MS, CANONICAL_TO_HTTP_METHOD, TOKEN_VALIDITY_DAYS } from "./constants.js";
 import type { ApiResponse } from "./types.js";
 
@@ -29,6 +29,7 @@ export async function login(): Promise<string> {
 }
 
 async function performLogin(): Promise<string> {
+  validateConfig();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
