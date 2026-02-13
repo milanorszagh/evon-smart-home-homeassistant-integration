@@ -20,6 +20,9 @@ logs/
 test-api.mjs
 scripts/
 
+# Worktrees
+.worktrees/
+
 # Python
 .venv/
 __pycache__/
