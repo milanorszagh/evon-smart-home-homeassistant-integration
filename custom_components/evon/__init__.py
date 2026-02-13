@@ -50,8 +50,21 @@ from .const import (
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
     EVON_REMOTE_HOST,
+    HOME_STATE_MAP,
     REPAIR_CONFIG_MIGRATION,
     REPAIR_STALE_ENTITIES_CLEANED,
+    SERVICE_ALL_BLINDS_CLOSE,
+    SERVICE_ALL_BLINDS_OPEN,
+    SERVICE_ALL_CLIMATE_AWAY,
+    SERVICE_ALL_CLIMATE_COMFORT,
+    SERVICE_ALL_CLIMATE_ECO,
+    SERVICE_ALL_LIGHTS_OFF,
+    SERVICE_RECONNECT_WEBSOCKET,
+    SERVICE_REFRESH,
+    SERVICE_SET_HOME_STATE,
+    SERVICE_SET_SEASON_MODE,
+    SERVICE_START_RECORDING,
+    SERVICE_STOP_RECORDING,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -122,27 +135,6 @@ async def _async_setup_websocket(
             engine_id=config_entry.data[CONF_ENGINE_ID],
         )
 
-
-SERVICE_REFRESH = "refresh"
-SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
-SERVICE_SET_HOME_STATE = "set_home_state"
-SERVICE_SET_SEASON_MODE = "set_season_mode"
-SERVICE_ALL_LIGHTS_OFF = "all_lights_off"
-SERVICE_ALL_BLINDS_CLOSE = "all_blinds_close"
-SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
-SERVICE_ALL_CLIMATE_COMFORT = "all_climate_comfort"
-SERVICE_ALL_CLIMATE_ECO = "all_climate_eco"
-SERVICE_ALL_CLIMATE_AWAY = "all_climate_away"
-SERVICE_START_RECORDING = "start_recording"
-SERVICE_STOP_RECORDING = "stop_recording"
-
-# Home state mapping from service values to Evon instance IDs
-HOME_STATE_MAP = {
-    "at_home": "HomeStateAtHome",
-    "night": "HomeStateNight",
-    "work": "HomeStateWork",
-    "holiday": "HomeStateHoliday",
-}
 
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,

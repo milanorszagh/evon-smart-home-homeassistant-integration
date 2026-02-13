@@ -8,6 +8,7 @@ Frame rate is limited by hardware response time (~0.5-2 FPS).
 from __future__ import annotations
 
 import asyncio
+import collections
 import contextlib
 from datetime import datetime
 import enum
@@ -24,6 +25,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DEFAULT_MAX_RECORDING_DURATION,
     DOMAIN,
+    MAX_RECORDING_FRAMES,
     RECORDING_MEDIA_DIR,
     RECORDING_OUTPUT_MP4_AND_FRAMES,
 )
@@ -61,7 +63,9 @@ class EvonCameraRecorder:
         self._camera = camera
         self._state = RecordingState.IDLE
         self._task: asyncio.Task[None] | None = None
-        self._frames: list[tuple[bytes, datetime]] = []  # (jpeg_bytes, timestamp)
+        self._frames: collections.deque[tuple[bytes, datetime]] = collections.deque(
+            maxlen=MAX_RECORDING_FRAMES,
+        )
         self._recording_start: datetime | None = None
         self._last_recording_path: str | None = None
         self._max_duration: int = DEFAULT_MAX_RECORDING_DURATION
@@ -113,7 +117,7 @@ class EvonCameraRecorder:
             self._output_format = output_format
 
         self._state = RecordingState.RECORDING
-        self._frames = []
+        self._frames.clear()
         self._recording_start = dt_util.now()
 
         _LOGGER.info(
@@ -177,6 +181,7 @@ class EvonCameraRecorder:
 
         # Auto-stop when max duration reached
         if self._state == RecordingState.RECORDING:
+            frame_count = len(self._frames)
             await self._finalize_recording()
             # Fire event for automations
             self._hass.bus.async_fire(
@@ -184,7 +189,7 @@ class EvonCameraRecorder:
                 {
                     "entity_id": self._camera.entity_id,
                     "path": self._last_recording_path,
-                    "frames": len(self._frames),
+                    "frames": frame_count,
                 },
             )
 
@@ -236,7 +241,7 @@ class EvonCameraRecorder:
             _LOGGER.error("Failed to encode recording for %s", self._camera.entity_id, exc_info=True)
             return None
         finally:
-            self._frames = []
+            self._frames.clear()
             self._state = RecordingState.IDLE
             self._recordings_cache = None
 

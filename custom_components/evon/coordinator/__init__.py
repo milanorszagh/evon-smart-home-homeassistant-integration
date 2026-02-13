@@ -93,6 +93,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Energy statistics failure tracking
         self._energy_stats_consecutive_failures = 0
 
+        # Entity data index for O(1) lookup by (entity_type, instance_id)
+        self._data_index: dict[tuple[str, str], dict[str, Any]] = {}
+
         # WebSocket support
         self._use_websocket = use_websocket
         self._ws_client: EvonWsClient | None = None
@@ -205,6 +208,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
+
+            # Build O(1) lookup index
+            self._build_data_index(result)
 
             # Calculate energy_today and energy_this_month for smart meters
             await self._calculate_energy_today_and_month(smart_meters)
@@ -321,8 +327,18 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Get room name for a group ID."""
         return self._rooms_cache.get(group, "") if self._sync_areas else ""
 
+    def _build_data_index(self, data: dict[str, Any]) -> None:
+        """Build O(1) lookup index from entity data."""
+        index: dict[tuple[str, str], dict[str, Any]] = {}
+        for entity_type, entities in data.items():
+            if isinstance(entities, list):
+                for entity in entities:
+                    if entity and "id" in entity:
+                        index[(entity_type, entity["id"])] = entity
+        self._data_index = index
+
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
-        """Get data for a specific entity.
+        """Get data for a specific entity via O(1) index lookup.
 
         Args:
             entity_type: The type of entity (lights, blinds, climates, switches,
@@ -332,15 +348,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Returns:
             The entity data dictionary or None if not found
         """
-        if not self.data:
-            return None
-        entities = self.data.get(entity_type)
-        if not entities or not isinstance(entities, list):
-            return None
-        for entity in entities:
-            if entity and entity.get("id") == instance_id:
-                return entity
-        return None
+        return self._data_index.get((entity_type, instance_id))
 
     def get_active_home_state(self) -> str | None:
         """Get the currently active home state ID."""

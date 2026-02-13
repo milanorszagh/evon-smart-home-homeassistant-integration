@@ -167,12 +167,35 @@ WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejec
 # Evon lights fade in/out over ~2.5s, so 3s provides buffer for visual effect
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0
 
+# Service names
+SERVICE_REFRESH = "refresh"
+SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
+SERVICE_SET_HOME_STATE = "set_home_state"
+SERVICE_SET_SEASON_MODE = "set_season_mode"
+SERVICE_ALL_LIGHTS_OFF = "all_lights_off"
+SERVICE_ALL_BLINDS_CLOSE = "all_blinds_close"
+SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
+SERVICE_ALL_CLIMATE_COMFORT = "all_climate_comfort"
+SERVICE_ALL_CLIMATE_ECO = "all_climate_eco"
+SERVICE_ALL_CLIMATE_AWAY = "all_climate_away"
+SERVICE_START_RECORDING = "start_recording"
+SERVICE_STOP_RECORDING = "stop_recording"
+
+# Home state mapping from service values to Evon instance IDs
+HOME_STATE_MAP = {
+    "at_home": "HomeStateAtHome",
+    "night": "HomeStateNight",
+    "work": "HomeStateWork",
+    "holiday": "HomeStateHoliday",
+}
+
 # Camera recording settings
 CONF_MAX_RECORDING_DURATION = "max_recording_duration"
 CONF_RECORDING_OUTPUT_FORMAT = "recording_output_format"
 DEFAULT_MAX_RECORDING_DURATION = 300  # seconds (5 minutes)
 MIN_RECORDING_DURATION = 30  # seconds
 MAX_RECORDING_DURATION = 3600  # seconds (1 hour)
+MAX_RECORDING_FRAMES = 7200  # Cap frame buffer (1hr at 2fps)
 RECORDING_MEDIA_DIR = "evon_recordings"
 RECORDING_OUTPUT_MP4 = "mp4"
 RECORDING_OUTPUT_MP4_AND_FRAMES = "mp4_and_frames"

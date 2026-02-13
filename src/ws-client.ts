@@ -192,6 +192,18 @@ export class EvonWsClient {
         if (!this.connected) {
           this.connected = true;
           clearTimeout(timeout);
+
+          // Replace connection-phase error handler with runtime handler
+          const ws = this.ws;
+          if (ws) {
+            ws.removeAllListeners("error");
+            ws.on("error", (error) => {
+              console.error("WebSocket error:", error.message);
+              this.connected = false;
+              this.rejectAllPending(error);
+            });
+          }
+
           resolve();
         }
       });
@@ -203,11 +215,7 @@ export class EvonWsClient {
 
       this.ws.on("close", () => {
         this.connected = false;
-        this.pendingRequests.forEach(({ reject, timeout }) => {
-          clearTimeout(timeout);
-          reject(new Error("WebSocket closed"));
-        });
-        this.pendingRequests.clear();
+        this.rejectAllPending(new Error("WebSocket closed"));
       });
     });
   }
@@ -318,6 +326,13 @@ export class EvonWsClient {
             this.subscriptions.delete(id);
           }
         }
+        // Unsubscribe server-side for IDs that had no prior subscription
+        const idsToUnsub = [...originalCallbacks.entries()]
+          .filter(([, original]) => !original)
+          .map(([id]) => id);
+        if (idsToUnsub.length > 0) {
+          this.unregisterValuesChanged(idsToUnsub).catch(() => {});
+        }
       };
 
       const timeout = setTimeout(() => {
@@ -425,6 +440,14 @@ export class EvonWsClient {
   // --------------------------------------------------------------------------
   // Internal Methods
   // --------------------------------------------------------------------------
+
+  private rejectAllPending(error: Error): void {
+    this.pendingRequests.forEach(({ reject, timeout }) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    this.pendingRequests.clear();
+  }
 
   private async login(): Promise<string> {
     const controller = new AbortController();

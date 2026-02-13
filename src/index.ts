@@ -9,7 +9,7 @@
 import { createRequire } from "module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { EVON_USERNAME, EVON_PASSWORD } from "./config.js";
+import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD } from "./config.js";
 import { registerAllTools } from "./tools/index.js";
 import { registerAllResources } from "./resources/index.js";
 
@@ -26,8 +26,8 @@ registerAllTools(server);
 registerAllResources(server);
 
 async function main() {
-  if (!EVON_USERNAME || !EVON_PASSWORD) {
-    console.error("Error: EVON_USERNAME and EVON_PASSWORD environment variables must be set");
+  if (!EVON_HOST || !EVON_USERNAME || !EVON_PASSWORD) {
+    console.error("Error: EVON_HOST, EVON_USERNAME, and EVON_PASSWORD environment variables must be set");
     process.exit(1);
   }
 

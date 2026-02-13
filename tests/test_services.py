@@ -4,31 +4,24 @@ from __future__ import annotations
 
 import pytest
 
+from custom_components.evon.const import (
+    HOME_STATE_MAP,
+    SERVICE_ALL_BLINDS_CLOSE,
+    SERVICE_ALL_BLINDS_OPEN,
+    SERVICE_ALL_LIGHTS_OFF,
+    SERVICE_RECONNECT_WEBSOCKET,
+    SERVICE_REFRESH,
+    SERVICE_SET_HOME_STATE,
+    SERVICE_SET_SEASON_MODE,
+)
 from tests.conftest import requires_ha_test_framework
-
-# Define constants locally to avoid importing from __init__.py
-# which has Home Assistant dependencies
-SERVICE_REFRESH = "refresh"
-SERVICE_RECONNECT_WEBSOCKET = "reconnect_websocket"
-SERVICE_SET_HOME_STATE = "set_home_state"
-SERVICE_SET_SEASON_MODE = "set_season_mode"
-SERVICE_ALL_LIGHTS_OFF = "all_lights_off"
-SERVICE_ALL_BLINDS_CLOSE = "all_blinds_close"
-SERVICE_ALL_BLINDS_OPEN = "all_blinds_open"
-
-HOME_STATE_MAP = {
-    "at_home": "HomeStateAtHome",
-    "night": "HomeStateNight",
-    "work": "HomeStateWork",
-    "holiday": "HomeStateHoliday",
-}
 
 
 class TestServiceConstants:
-    """Test service constants."""
+    """Test service constants against production values."""
 
     def test_service_names(self):
-        """Test service name constants."""
+        """Test service name constants have expected values."""
         assert SERVICE_REFRESH == "refresh"
         assert SERVICE_RECONNECT_WEBSOCKET == "reconnect_websocket"
         assert SERVICE_SET_HOME_STATE == "set_home_state"
@@ -76,14 +69,16 @@ class TestServiceValidation:
     def test_valid_season_modes(self):
         """Test valid season mode values."""
         valid_modes = ["heating", "cooling"]
-        # These are validated in the service handler
         assert "heating" in valid_modes
         assert "cooling" in valid_modes
 
     def test_season_mode_to_bool(self):
-        """Test season mode string to bool conversion."""
-        assert ("cooling" == "cooling") is True
-        assert ("heating" == "cooling") is False
+        """Test season mode string to bool conversion logic."""
+        # This mirrors the conversion in __init__.py handle_set_season_mode
+        mode_cooling = "cooling"
+        mode_heating = "heating"
+        assert (mode_cooling == "cooling") is True
+        assert (mode_heating == "cooling") is False
 
 
 @requires_ha_test_framework
@@ -105,8 +100,8 @@ class TestServiceIntegration:
             blocking=True,
         )
 
-        # The service should have triggered a coordinator refresh
-        # (verified by no exceptions being raised)
+        # The service completed without error, which verifies the coordinator
+        # refresh pathway works (service calls coordinator.async_refresh)
 
     @pytest.mark.asyncio
     async def test_set_home_state_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -227,7 +222,7 @@ class TestServiceIntegration:
 
         # Service iterates through lights and turns off those that are on
         # (the mock data has light_1 with is_on=True)
-        assert mock_evon_api_class.turn_off_light.call_count >= 0  # May be 0 if no lights are on
+        mock_evon_api_class.turn_off_light.assert_called()
 
     @pytest.mark.asyncio
     async def test_all_blinds_close_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -285,7 +280,7 @@ class TestServiceIntegration:
             blocking=True,
         )
 
-        # Service should complete without error
+        # Service completed without error
 
     @pytest.mark.asyncio
     async def test_services_registered_after_setup(self, hass, mock_config_entry_v2, mock_evon_api_class):

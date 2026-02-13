@@ -109,6 +109,12 @@ export async function apiRequest<T>(
       } finally {
         clearTimeout(retryTimeoutId);
       }
+
+      // Detect re-auth failure after retry (prevents infinite retry loops)
+      if (response.status === 302 || response.status === 401) {
+        currentToken = null;
+        throw new Error(`Authentication failed after token refresh: ${endpoint}`);
+      }
     }
 
     if (!response.ok) {
