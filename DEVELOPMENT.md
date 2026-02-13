@@ -293,7 +293,7 @@ src/
 | **Batch queries** | Request multiple device properties in a single call |
 | **Automatic reconnection** | Handles connection drops gracefully |
 | **Connection deduplication** | Concurrent connect/login calls are coalesced into a single request |
-| **Parallel bulk control** | `controlAllDevices` sends commands in parallel via `Promise.all` |
+| **Parallel bulk control** | `controlAllDevices` helper sends commands in parallel via `Promise.all` |
 
 ### Usage
 
@@ -398,7 +398,7 @@ coordinator/       # Integrates WebSocket with data updates
 | bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `time_remaining` |
 | smart_meters | `P1`, `P2`, `P3`, `IL1-3`, `UL1N-3N`, `Frequency`, `Energy`, `Energy24h`, `EnergyDataDay/Month/Year`, `FeedInEnergy`, `FeedIn24h`, `FeedInDataMonth` | `power` (computed P1+P2+P3), per-phase values, energy totals |
 | air_quality | `Humidity`, `ActualTemperature`, `CO2Value` | `humidity`, `temperature`, `co2` |
-| valves | `ActValue` | `position` |
+| valves | `ActValue` | `is_open` |
 | security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress`, `SavedPictures`, `CamInstanceName` | `is_open`, `door_is_open`, `call_in_progress`, `saved_pictures` |
 | intercoms | `DoorBellTriggered`, `DoorOpenTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
 | cameras | `Image`, `ImageRequest`, `Error` | `image_path` |
@@ -628,10 +628,10 @@ The integration supports WebSocket-based control for faster response times. WS-n
 
 **WebSocket SetValue Format:**
 ```json
-{"methodName":"CallWithReturn","request":{"args":["instanceId","propertyName",value],"methodName":"SetValue","sequenceId":N}}
+{"methodName":"CallWithReturn","request":{"args":["instanceId.propertyName",value],"methodName":"SetValue","sequenceId":N}}
 ```
 
-**Note:** For CallMethod, the method is appended to the instance ID with a dot (e.g., `SC1_M01.Light3.SwitchOn`).
+**Note:** Both CallMethod and SetValue concatenate the instance ID and method/property with a dot (e.g., `SC1_M01.Light3.SwitchOn`, `SC1_M01.Light3.IsOn`).
 
 **Climate (via WebSocket):**
 | WS Method/Property | Parameters | HTTP Equivalent | Notes |
@@ -895,20 +895,43 @@ ruff check custom_components/evon/ && ruff format --check custom_components/evon
 2. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
 3. Export processor from `coordinator/processors/__init__.py`
 4. Call processor in `coordinator/__init__.py` `_async_update_data()`
-5. Add getter method in coordinator (e.g., `get_new_device_data()`)
-6. Create platform file or extend existing one
+5. Create platform file or extend existing one — set `_entity_type` class attribute on the entity class (data is accessed via `self._get_data()` which calls `coordinator.get_entity_data()`)
+6. Use `entity_data` descriptors for simple properties (see "Entity Data Descriptor" below)
 7. Register platform in `__init__.py` PLATFORMS list
 8. Add API methods to `api.py` if needed
 9. Add tests in `tests/test_new_device.py`
 
 ### Entity Best Practices
 
+- Set `_entity_type` class attribute to the entity type constant (e.g., `ENTITY_TYPE_LIGHTS`)
+- Use `self._get_data()` to access coordinator data (replaces direct `coordinator.get_entity_data()` calls)
+- Use `entity_data` descriptors for simple read-only properties (see below)
 - Use `EntityDescription` for configuration
 - Set appropriate `entity_category`
 - Implement `available` property
 - Use `HomeAssistantError` for service call errors
 - Include `evon_id` in extra state attributes
 - Implement optimistic updates for responsive UI
+
+### Entity Data Descriptor
+
+The `entity_data` descriptor in `base_entity.py` eliminates boilerplate `@property` methods that simply read a key from coordinator data. Use it for simple properties:
+
+```python
+from .base_entity import EvonEntity, entity_data
+from .const import ENTITY_TYPE_VALVES
+
+class EvonValveSensor(EvonEntity, BinarySensorEntity):
+    _entity_type = ENTITY_TYPE_VALVES
+
+    # Simple descriptor — replaces a 5-line @property method
+    is_on = entity_data("is_open", default=False)
+
+    # With transform
+    current_humidity = entity_data("humidity", transform=lambda v: int(v))
+```
+
+When `_get_data()` returns `None` (entity not found), the descriptor returns `None`. When data exists but the key is missing, it returns `default`. For properties with complex logic (optimistic state, computed values), use regular `@property` methods with `self._get_data()`.
 
 ### Optimistic Updates Pattern
 
@@ -919,23 +942,37 @@ self._optimistic_is_on: bool | None = None
 # In property
 @property
 def is_on(self) -> bool:
+    self._clear_optimistic_state_if_expired()
     if self._optimistic_is_on is not None:
         return self._optimistic_is_on
-    return self.coordinator.get_state(...)
+    data = self._get_data()
+    if data:
+        return data.get("is_on", False)
+    return False
 
 # In action
 async def async_turn_on(self, **kwargs):
     self._optimistic_is_on = True
+    self._set_optimistic_timestamp()
     self.async_write_ha_state()
-    await self._api.turn_on(...)
+    try:
+        await self._api.turn_on_switch(self._instance_id)
+    except EvonApiError:
+        self._optimistic_is_on = None
+        self._optimistic_state_set_at = None
+        self.async_write_ha_state()
+        raise
     await self.coordinator.async_request_refresh()
 
 # In coordinator update
 def _handle_coordinator_update(self):
     if self._optimistic_is_on is not None:
-        actual = self.coordinator.get_state(...)
-        if actual == self._optimistic_is_on:
-            self._optimistic_is_on = None
+        data = self._get_data()
+        if data:
+            actual_is_on = data.get("is_on", False)
+            if actual_is_on == self._optimistic_is_on:
+                self._optimistic_is_on = None
+                self._optimistic_state_set_at = None
     super()._handle_coordinator_update()
 ```
 
@@ -1078,8 +1115,13 @@ Test files:
 - `test_statistics.py` - Energy statistics import tests (daily, monthly, rate limiting, StatisticMeanType compat)
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
 - `test_ws_control.py` - WebSocket control mappings tests (method translation, HTTP fallback)
+- `test_diagnostics_unit.py` - Diagnostics unit tests (no HA dependency)
+- `test_cover_unit.py` - Cover entity unit tests (no HA dependency)
+- `test_binary_sensor_unit.py` - Binary sensor unit tests (no HA dependency)
+- `test_select_unit.py` - Select entity unit tests (no HA dependency)
+- `test_sensor_unit.py` - Sensor entity unit tests (no HA dependency)
 
-Current coverage: 820 tests total — 596 unit/mock tests + 224 integration tests (require HA test framework)
+Current coverage: 994 tests total — 770 unit/mock tests + 224 integration tests (require HA test framework)
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

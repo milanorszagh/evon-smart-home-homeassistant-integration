@@ -215,7 +215,7 @@ Call a method on an instance. **Note:** This has limited support for device cont
 {
   methodName: "CallWithReturn",
   request: {
-    args: ["SC1_M07.Blind1", "Open", []],
+    args: ["SC1_M07.Blind1.Open", []],
     methodName: "CallMethod",
     sequenceId: 6
   }
@@ -225,7 +225,7 @@ Call a method on an instance. **Note:** This has limited support for device cont
 {
   methodName: "CallWithReturn",
   request: {
-    args: ["Scene.MovieMode", "Execute", []],
+    args: ["Scene.MovieMode.Execute", []],
     methodName: "CallMethod",
     sequenceId: 7
   }
@@ -556,7 +556,7 @@ await ws.send(JSON.stringify({
 // await ws.send(JSON.stringify({
 //   methodName: "CallWithReturn",
 //   request: {
-//     args: ["ClimateControlUniversal1", "ModeSaved", 3],
+//     args: ["ClimateControlUniversal1.ModeSaved", 3],
 //     methodName: "SetValue",
 //     sequenceId: seq++
 //   }
@@ -609,7 +609,7 @@ await ws.send(JSON.stringify({
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
-    args: ["Base.ehThermostat", "IsCool", true],
+    args: ["Base.ehThermostat.IsCool", true],
     methodName: "SetValue",
     sequenceId: seq++
   }
@@ -619,7 +619,7 @@ await ws.send(JSON.stringify({
 await ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
-    args: ["Base.ehThermostat", "IsCool", false],
+    args: ["Base.ehThermostat.IsCool", false],
     methodName: "SetValue",
     sequenceId: seq++
   }
@@ -802,7 +802,7 @@ This is because switches in Evon systems are typically physical relays that requ
 |----------|------|-------------|
 | `ID` | string | Instance identifier |
 | `Name` | string | Display name |
-| `Position` | number | Position (0=closed/up, 100=open/down) |
+| `Position` | number | Position (0=open/up, 100=closed/down) |
 | `Angle` | number | Slat angle (0-100) |
 | `Lock` | boolean | Locked state |
 | `Error` | boolean | Error state |

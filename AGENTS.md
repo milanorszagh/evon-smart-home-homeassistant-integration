@@ -369,7 +369,7 @@ The integration caches angle and position separately so:
 
 ### TRAP #4: Switches Must Use HTTP
 
-Switches (`SmartCOM.Switch`, `Base.bSwitch`) do NOT respond to WebSocket control at all. The HTTP API must be used:
+Switch entities (`Base.bSwitch`) do NOT respond to WebSocket control. The HTTP API must be used (note: `SmartCOM.Switch` are physical wall buttons not exposed as HA entities):
 ```
 POST /api/instances/{switch_id}/AmznTurnOn
 ```
@@ -522,7 +522,7 @@ The Evon MCP server is configured in `.claude.json`:
 | `get_instance` | Get all properties of a specific device instance |
 | `get_property` | Get a specific property value |
 | `call_method` | Call any method on an instance to test behavior |
-| `list_climates` | List all climate devices with current state |
+| `list_climate` | List all climate devices with current state |
 | `list_lights` | List all lights with current state |
 
 ### Direct API Queries via Bash
@@ -763,7 +763,7 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 3. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
 4. Export processor from `coordinator/processors/__init__.py`
 5. Call processor in `coordinator/__init__.py` `_async_update_data()`
-6. Add getter method in coordinator (e.g., `get_new_device_data()`)
+6. Set `_entity_type` class attribute and use `_get_data()` in entity
 7. Create new platform file (e.g., `sensor.py`)
 8. Add platform to `PLATFORMS` list in `__init__.py`
 9. Add tests in `tests/test_new_device.py`
@@ -851,7 +851,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (820+ tests):
+Tests are in the `tests/` directory (994 tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -866,10 +866,17 @@ Tests are in the `tests/` directory (820+ tests):
 - `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration)
 - `test_image.py` - Image entity tests (including fetch errors, snapshot handling)
 
+**Unit tests (no HA dependency):**
+- `test_diagnostics_unit.py` - Diagnostics unit tests
+- `test_cover_unit.py` - Cover entity unit tests
+- `test_binary_sensor_unit.py` - Binary sensor unit tests
+- `test_select_unit.py` - Select entity unit tests
+- `test_sensor_unit.py` - Sensor entity unit tests
+
 **Core tests:**
 - `test_api.py` - API client tests (mocks homeassistant, works without HA installed)
 - `test_config_flow.py` / `test_config_flow_unit.py` - Config and options flow tests
-- `test_coordinator.py` - Data coordinator and getter method tests
+- `test_coordinator.py` - Data coordinator tests
 - `test_diagnostics.py` - Diagnostics export tests
 - `test_base_entity.py` - Base entity class tests
 - `test_constants.py` - Constants validation tests
@@ -889,14 +896,14 @@ Tests are in the `tests/` directory (820+ tests):
 Tests are split by dependency:
 | Test File | Requires HA | How It Works |
 |-----------|-------------|--------------|
-| `test_standalone.py` | No | Reads files directly, no imports from custom_components |
 | `test_api.py` | No | Mocks `homeassistant` module, uses `importlib` to load `api.py` directly |
-| `test_config_flow.py` | Yes | Uses `@requires_homeassistant` skip marker |
-| `test_coordinator.py` | Yes | Uses `@requires_homeassistant` skip marker |
+| `test_*_unit.py` | No | Unit tests that mock all HA dependencies |
+| `test_config_flow.py` | Yes | Uses `requires_ha_test_framework` skip marker |
+| `test_coordinator.py` | Yes | Uses `requires_ha_test_framework` skip marker |
 
 **Why this matters for agents:**
 - When importing from `custom_components.evon.*`, Python executes `__init__.py` which imports from `homeassistant`
-- To test without HA, either read files directly (like `test_standalone.py`) or mock the homeassistant module before importing (like `test_api.py`)
+- To test without HA, mock the homeassistant module before importing (like `test_api.py` and the `*_unit.py` tests)
 
 ### Running Tests
 
@@ -906,9 +913,6 @@ pip install -r requirements-test.txt
 
 # Run all tests (HA-dependent tests will be skipped if HA not installed)
 pytest
-
-# Run only standalone tests (always works)
-python3 tests/test_standalone.py
 
 # Run with verbose output
 pytest -v
@@ -997,7 +1001,7 @@ Before creating a release, ensure the following are up to date:
 
 **IMPORTANT**: Before updating version history, always check the existing entries to identify the current/latest version. Do not overwrite an already-released version with new features - create a new version number instead.
 
-- **v1.17.1**: **Code quality audit and hardening (3 rounds).** Three rounds of deep analysis across 4 parallel agents per round. Round 1 identified 35 issues, round 2 found 7, round 3 found 5 — total 24 fixes applied. **Bug fixes (8)**: Light brightness rounding (truncation turned brightness 2 to 0/off, now uses `round()`), climate cooling mode `max_temp` excluded preset temperatures from range calculation, diagnostics `KeyError` on partial teardown (now uses `.get()`), select `KeyError` on unknown option (now uses `.get()` with fallback), device trigger unsafe dict access (now uses `.get()`), config flow accepted IPv4 addresses with octets >255 (now validated), config flow `parsed.port` could raise `ValueError` on malformed URLs (now wrapped in try/except), camera recorder crashed on corrupt first JPEG frame (now loops to find first valid frame). **WebSocket hardening (6)**: Periodic stale request cleanup task (runs every 15s independent of message loop), `exc_info=True` on all exception logs for stack traces, subscription list copy in `_resubscribe()` to prevent mutation during await, fire-and-forget `send_str` wrapped in try/except (raises `EvonWsNotConnectedError`), `sequenceId` type validation (rejects non-int responses), `_do_subscribe()` stores defensive copy of subscription list (prevents shared reference mutation). **Coordinator hardening (2)**: `exc_info=True` on conversion error logs, second retarget guard after data snapshot identity check. **Input validation (2)**: Bulk service entity ID validation against `INSTANCE_ID_PATTERN`, select entities log warning for unrecognized options. **Camera hardening (3)**: PIL Image context manager for proper resource cleanup, JPEG decode crash handling with graceful fallback, `get_recent_recordings()` FileNotFoundError race fix (handles files deleted between glob and stat). **Data processing (4)**: Security doors `_transform_saved_pictures()` extracted to shared function with None timestamp filtering, WebSocket mappings deduplicated SavedPictures transformation using shared function, home states and scenes processors now skip instances with empty IDs, air quality `EVON_NO_DATA_VALUE = -999` constant extracted from magic numbers. **Service handler hardening**: All 6 service handlers (`handle_refresh`, `handle_reconnect_websocket`, `handle_set_home_state`, `handle_set_season_mode`, `_bulk_api_call`, `_bulk_entity_call`) now validate `entry_data` is a dict before accessing keys. **Other hardening (2)**: Recording duration validation (clamp to 30-3600s), switch negative time clamping and seconds overflow protection. **Statistics compatibility**: `StatisticMeanType` import made optional for older HA versions. **Tests**: 260+ new tests added (820 total, up from 560), covering button, camera, image, statistics, API, WebSocket client/control/mappings, binary sensor, instance ID extraction, and processors. Conftest mock data corrected (Evon API key names for SavedPictures). **CI fixes**: Climate tests updated for HA service-layer validation (`ServiceValidationError`), `test_base_entity.py` module cleanup narrowed to prevent cross-test pollution.
+- **v1.17.1**: **Code quality audit and hardening (3 rounds).** Three rounds of deep analysis across 4 parallel agents per round. Round 1 identified 35 issues, round 2 found 7, round 3 found 5 — total 24 fixes applied. **Bug fixes (8)**: Light brightness rounding (truncation turned brightness 2 to 0/off, now uses `round()`), climate cooling mode `max_temp` excluded preset temperatures from range calculation, diagnostics `KeyError` on partial teardown (now uses `.get()`), select `KeyError` on unknown option (now uses `.get()` with fallback), device trigger unsafe dict access (now uses `.get()`), config flow accepted IPv4 addresses with octets >255 (now validated), config flow `parsed.port` could raise `ValueError` on malformed URLs (now wrapped in try/except), camera recorder crashed on corrupt first JPEG frame (now loops to find first valid frame). **WebSocket hardening (6)**: Periodic stale request cleanup task (runs every 15s independent of message loop), `exc_info=True` on all exception logs for stack traces, subscription list copy in `_resubscribe()` to prevent mutation during await, fire-and-forget `send_str` wrapped in try/except (raises `EvonWsNotConnectedError`), `sequenceId` type validation (rejects non-int responses), `_do_subscribe()` stores defensive copy of subscription list (prevents shared reference mutation). **Coordinator hardening (2)**: `exc_info=True` on conversion error logs, second retarget guard after data snapshot identity check. **Input validation (2)**: Bulk service entity ID validation against `INSTANCE_ID_PATTERN`, select entities log warning for unrecognized options. **Camera hardening (3)**: PIL Image context manager for proper resource cleanup, JPEG decode crash handling with graceful fallback, `get_recent_recordings()` FileNotFoundError race fix (handles files deleted between glob and stat). **Data processing (4)**: Security doors `_transform_saved_pictures()` extracted to shared function with None timestamp filtering, WebSocket mappings deduplicated SavedPictures transformation using shared function, home states and scenes processors now skip instances with empty IDs, air quality `EVON_NO_DATA_VALUE = -999` constant extracted from magic numbers. **Service handler hardening**: All 6 service handlers (`handle_refresh`, `handle_reconnect_websocket`, `handle_set_home_state`, `handle_set_season_mode`, `_bulk_api_call`, `_bulk_entity_call`) now validate `entry_data` is a dict before accessing keys. **Other hardening (2)**: Recording duration validation (clamp to 30-3600s), switch negative time clamping and seconds overflow protection. **Statistics compatibility**: `StatisticMeanType` import made optional for older HA versions. **Tests**: 260+ new tests added (994 total, up from 560), covering button, camera, image, statistics, API, WebSocket client/control/mappings, binary sensor, instance ID extraction, and processors. Conftest mock data corrected (Evon API key names for SavedPictures). **CI fixes**: Climate tests updated for HA service-layer validation (`ServiceValidationError`), `test_base_entity.py` module cleanup narrowed to prevent cross-test pollution.
 - **v1.17.0**: Snapshot-based camera recording feature with custom Lovelace card. **Recording backend** (`camera_recorder.py`): `EvonCameraRecorder` rapidly polls snapshots and encodes to MP4 via PyAV with timestamp overlay. Services: `evon.start_recording` / `evon.stop_recording`. Recording switch entity for dashboard toggle. `get_recent_recordings()` returns recent MP4s with filename, timestamp, size, and URL. **Custom Lovelace card** (`www/evon-camera-recording-card.js`): Plain HTMLElement (no LitElement dependency) with record button + live stopwatch, recent recordings list with inline `<video>` playback via `auth/sign_path` signed URLs, and "All Recordings" link to media browser. Smart re-rendering: only re-renders when recording state or recordings list actually change, preventing video player flickering. **Frontend registration** (`__init__.py`): Static paths registered via `async_register_static_paths` + `StaticPathConfig` for both the JS card (`/evon/evon-camera-recording-card.js`) and recordings directory (`/evon/recordings/`). **Card config**: `type: custom:evon-camera-recording-card` with `entity` (camera entity) and optional `recording_switch` (auto-derived if omitted by replacing `camera.` prefix with `switch.` + `_recording` suffix). Camera `extra_state_attributes` now includes `recent_recordings` list. **Key gotchas**: HA's `media_source` integration must be enabled in `configuration.yaml` for media browser. Video URLs use `/evon/recordings/` custom static path (not `/media/local/` which returns 404). Lovelace resource must be registered in `/config/.storage/lovelace_resources`.
 - **v1.16.0**: Added **Energy Today** and **Energy This Month** calculated sensors. **Energy Today** queries HA's `statistics_during_period()` to get today's consumption from the Energy Total sensor. **Energy This Month** combines Evon's `EnergyDataMonth` array (previous days of this month) with today's consumption from HA statistics. Implementation: `_calculate_energy_today_and_month()` method in coordinator calculates values during each refresh cycle, storing them as `energy_today_calculated` and `energy_this_month_calculated` in meter data. Sensor classes `EvonEnergyTodaySensor` and `EvonEnergyThisMonthSensor` read these calculated values. **Note**: The `statistics_during_period` function is blocking and must be called via `async_add_executor_job()`. Also added `EnergyDataDay` WebSocket subscription for future use. Climate WebSocket updates now subscribe to setpoint limits and recompute preset temperatures to avoid stale clamping. Added group climate services (`all_climate_comfort`, `all_climate_eco`, `all_climate_away`). WebSocket error handling now logs stack traces and separates expected network errors from unexpected failures; MCP WebSocket calls now retry once after reconnect when the socket drops between connect and send. Coordinator WS updates now validate the entity list reference before indexing to avoid stale list access. Added MCP server unit tests (`tests-mcp/`) for API client, tool/resource registration, and CI coverage for them, plus documented logging guidelines and WS error handling policy in DEVELOPMENT.md.
 - **v1.15.0**: Camera support for 2N intercom cameras and doorbell snapshot image entities. **Camera**: Live feed via WebSocket using `SetValue ImageRequest=true` to trigger capture, then fetching JPEG from `/temp/` path. **Doorbell Snapshots**: Image entities (`image.py`) for up to 10 historical snapshots from `SavedPictures` property on Security Door. Each snapshot includes timestamp in attributes. **Class name fixes**: Security Door is `Security.Door` (not `SmartCOM.Security.SecurityDoor`), Intercom 2N is `Security.Intercom.2N.Intercom2N` (not `SmartCOM.Intercom.Intercom2N`). **Physical buttons (Taster)**: Verified they operate at hardware level and do NOT fire WebSocket events (tested SC1_M08.Switch1Up, SC1_M07.Switch1Up, SC1_M04.Input3 with 0 events received). **Security Door entities**: Door open/closed state (`IsOpen`/`DoorIsOpen`) and call in progress indicator (`CallInProgress`). **Intercom entities**: Doorbell events, door open events, connection status.

@@ -8,11 +8,11 @@ AmznSetPercentage) via get_http_method_name() before building the URL.
 
 WebSocket Control Format:
     CallMethod: {"methodName":"CallWithReturn","request":{"args":["instanceId.method",params],"methodName":"CallMethod","sequenceId":N}}
-    SetValue:   {"methodName":"CallWithReturn","request":{"args":["instanceId","property",value],"methodName":"SetValue","sequenceId":N}}
+    SetValue:   {"methodName":"CallWithReturn","request":{"args":["instanceId.property",value],"methodName":"SetValue","sequenceId":N}}
 
 Key Findings (from Evon webapp reverse engineering):
     - CallMethod format: args = ["instanceId.methodName", params] (method appended with dot)
-    - SetValue format: args = ["instanceId", "propertyName", value]
+    - SetValue format: args = ["instanceId.propertyName", value] (property appended with dot)
 
 Light Control:
     - SwitchOn/SwitchOff: Explicit on/off (no params) - PREFERRED over Switch([bool])
