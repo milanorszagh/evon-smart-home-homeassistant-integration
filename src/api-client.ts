@@ -4,6 +4,7 @@
 
 import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, validateConfig } from "./config.js";
 import { API_TIMEOUT_MS, CANONICAL_TO_HTTP_METHOD, TOKEN_VALIDITY_DAYS } from "./constants.js";
+import { performLogin } from "./auth.js";
 import type { ApiResponse } from "./types.js";
 
 let currentToken: string | null = null;
@@ -20,7 +21,7 @@ export async function login(): Promise<string> {
     return pendingLogin;
   }
 
-  pendingLogin = performLogin();
+  pendingLogin = doLogin();
   try {
     return await pendingLogin;
   } finally {
@@ -28,42 +29,13 @@ export async function login(): Promise<string> {
   }
 }
 
-async function performLogin(): Promise<string> {
+async function doLogin(): Promise<string> {
   validateConfig();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`${EVON_HOST}/login`, {
-      method: "POST",
-      headers: {
-        "x-elocs-username": EVON_USERNAME,
-        "x-elocs-password": EVON_PASSWORD,
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Login failed: ${response.status} ${response.statusText}`);
-    }
-
-    const token = response.headers.get("x-elocs-token");
-    if (!token) {
-      throw new Error("No token received from login");
-    }
-
-    currentToken = token;
-    tokenExpiry = Date.now() + TOKEN_VALIDITY_DAYS * 24 * 60 * 60 * 1000;
-
-    return token;
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Login timeout after ${API_TIMEOUT_MS}ms`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  // validateConfig() above ensures EVON_HOST is set
+  const token = await performLogin(EVON_HOST!, EVON_USERNAME, EVON_PASSWORD);
+  currentToken = token;
+  tokenExpiry = Date.now() + TOKEN_VALIDITY_DAYS * 24 * 60 * 60 * 1000;
+  return token;
 }
 
 export async function apiRequest<T>(
@@ -121,11 +93,26 @@ export async function apiRequest<T>(
       throw new Error(`API request failed: ${response.status}`);
     }
 
+    let json: unknown;
     try {
-      return await response.json();
+      json = await response.json();
     } catch {
       throw new Error(`Invalid JSON response from ${endpoint}`);
     }
+
+    // Basic runtime shape validation
+    if (json === null || typeof json !== "object") {
+      throw new Error(
+        `Unexpected response shape from ${endpoint}: expected an object or array, got ${typeof json}`
+      );
+    }
+    if (!Array.isArray(json) && !("data" in json) && !("statusCode" in json)) {
+      throw new Error(
+        `Unexpected response shape from ${endpoint}: missing expected properties (data, statusCode)`
+      );
+    }
+
+    return json as ApiResponse<T>;
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`API request timeout after ${API_TIMEOUT_MS}ms: ${endpoint}`);

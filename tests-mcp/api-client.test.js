@@ -63,7 +63,7 @@ test("apiRequest retries once after auth failure", async () => {
       return new Response("", { status: 401 });
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ statusCode: 200, statusText: "OK", data: { ok: true } }), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -72,7 +72,7 @@ test("apiRequest retries once after auth failure", async () => {
   try {
     const { apiRequest } = await importFresh(API_CLIENT_URL);
     const result = await apiRequest("/instances/TestDevice");
-    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(result, { statusCode: 200, statusText: "OK", data: { ok: true } });
     assert.equal(apiCalls, 2);
   } finally {
     global.fetch = originalFetch;

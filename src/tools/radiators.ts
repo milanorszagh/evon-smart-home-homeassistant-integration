@@ -30,6 +30,14 @@ export function registerRadiatorTools(server: McpServer): void {
     },
     async ({ radiator_id, action }) => {
       const id = sanitizeId(radiator_id);
+      // NOTE: Race condition (mirrors Python integration P-M1).
+      // There is a TOCTOU window between reading the current state and
+      // calling Switch(): another caller could toggle the radiator in
+      // between, causing the action to invert.  The Evon API only exposes
+      // a "Switch" (toggle) method, so we cannot atomically "set to on"
+      // or "set to off".  This is an inherent limitation of the hardware
+      // API and is accepted as-is.
+
       // Get current state
       const details = await apiRequest<BathroomRadiatorState>(`/instances/${id}`);
       const isCurrentlyOn = details.data.Output ?? false;
