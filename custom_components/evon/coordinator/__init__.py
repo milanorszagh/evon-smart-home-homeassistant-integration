@@ -515,7 +515,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         instance_id: str,
         properties: dict[str, Any],
     ) -> None:
-        """Handle WebSocket ValuesChanged events.
+        """Handle WebSocket ValuesChanged events with copy-on-write semantics.
+
+        Creates a shallow copy of the entity dict before applying changes, then
+        atomically replaces it in the entities list and _data_index. This prevents
+        concurrent HTTP polls from reading partially-updated data.
 
         Args:
             instance_id: The instance ID that changed.
@@ -528,44 +532,26 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         from ..ws_mappings import CLASS_TO_TYPE, ws_to_coordinator_data
 
-        # Find the entity in our data
-        # First, find what type of entity this is
+        # Use _data_index for O(1) entity lookup instead of linear search
         entity_type: str | None = None
-        entity_index: int | None = None
-        entities_ref: list[dict[str, Any]] | None = None
+        entity: dict[str, Any] | None = None
+        index_key: tuple[str, str] | None = None
 
-        # Search through all entity types to find this instance
-        for etype in CLASS_TO_TYPE.values():
-            entities = data_snapshot.get(etype)
-            if not entities or not isinstance(entities, list):
-                continue
-            for idx, entity in enumerate(entities):
-                if entity and entity.get("id") == instance_id:
-                    entity_type = etype
-                    entity_index = idx
-                    entities_ref = entities
-                    break
-            if entity_type:
+        for etype in set(CLASS_TO_TYPE.values()):
+            key = (etype, instance_id)
+            found = self._data_index.get(key)
+            if found is not None:
+                entity_type = etype
+                entity = found
+                index_key = key
                 break
 
-        if entity_type is None or entity_index is None or entities_ref is None:
+        if entity_type is None or entity is None or index_key is None:
             # Unknown instance, might be a type we don't track
             _LOGGER.debug(
                 "WebSocket update for unknown instance: %s",
                 instance_id,
             )
-            return
-
-        # Get existing entity data for derived value computation
-        # Double-check entity exists (defensive check for race conditions)
-        if data_snapshot.get(entity_type) is not entities_ref:
-            _LOGGER.debug("Entity list replaced during WebSocket update for %s", instance_id)
-            return
-        if entity_index >= len(entities_ref):
-            _LOGGER.debug("Entity list changed during WebSocket update for %s", instance_id)
-            return
-        entity = entities_ref[entity_index]
-        if not entity:
             return
 
         # Convert WebSocket properties to coordinator format
@@ -586,37 +572,30 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not coord_data:
             return
 
-        # Re-check data reference before mutating — if HTTP poll replaced self.data
-        # between our snapshot and now, apply updates to the NEW data instead of the old one
+        # Re-check data reference — if HTTP poll replaced self.data, re-find entity
         current_data = self.data
         if current_data is not data_snapshot:
             _LOGGER.debug("Data replaced during WebSocket processing for %s, retargeting to new data", instance_id)
-            # Re-find the entity in the new data
-            new_entities = current_data.get(entity_type) if current_data else None
-            if new_entities and isinstance(new_entities, list):
-                entity = None
-                for e in new_entities:
-                    if e and e.get("id") == instance_id:
-                        entity = e
-                        break
+            entity = self._data_index.get(index_key)
             if entity is None:
                 _LOGGER.debug("Entity %s not found in new data, dropping WS update", instance_id)
                 return
             data_snapshot = current_data
 
-        # Final consistency check: if data was replaced again between retarget and now, drop update
+        # Final consistency check: if data was replaced again, drop update
         final_data = self.data
         if final_data is not data_snapshot:
             _LOGGER.debug("Data replaced again during WS processing for %s, dropping update", instance_id)
             self.hass.async_create_task(self.async_request_refresh())
             return
 
-        # Update the entity data in place
-        # Note: ws_to_coordinator_data already validates which keys to return,
-        # so we apply all keys including ones not in the initial HTTP poll
+        # Copy-on-write: create a shallow copy of the entity before applying changes
+        updated_entity = dict(entity)
+
+        # Apply all coord_data to the copy
         for key, value in coord_data.items():
-            old_value = entity.get(key)
-            entity[key] = value
+            old_value = updated_entity.get(key)
+            updated_entity[key] = value
             if old_value != value:
                 _LOGGER.debug(
                     "WebSocket update: %s.%s: %s -> %s",
@@ -626,7 +605,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     value,
                 )
 
-                # Fire doorbell event only on False→True transition (not every WS update)
+                # Fire doorbell event only on False->True transition (not every WS update)
                 if (
                     entity_type == ENTITY_TYPE_INTERCOMS
                     and key == "doorbell_triggered"
@@ -634,13 +613,23 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and old_value is not True
                 ):
                     self.hass.bus.async_fire(
-                        f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": entity.get("name", "")}
+                        f"{DOMAIN}_doorbell", {"device_id": instance_id, "name": updated_entity.get("name", "")}
                     )
                     _LOGGER.info("Doorbell event fired for %s", instance_id)
 
+        # Atomically replace in the entities list AND _data_index
+        entities_list = data_snapshot.get(entity_type)
+        if entities_list and isinstance(entities_list, list):
+            for idx, e in enumerate(entities_list):
+                if e is entity:
+                    entities_list[idx] = updated_entity
+                    break
+
+        self._data_index[index_key] = updated_entity
+
         # Import energy statistics when smart meter data is received
         if entity_type == ENTITY_TYPE_SMART_METERS:
-            self._maybe_import_energy_statistics(instance_id, entity)
+            self._maybe_import_energy_statistics(instance_id, updated_entity)
 
         # Notify listeners
         self.async_set_updated_data(data_snapshot)
