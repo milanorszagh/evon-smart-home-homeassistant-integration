@@ -46,3 +46,25 @@ test("T-H3: resubscribeAll is a no-op when no subscriptions exist", async () => 
   await client["resubscribeAll"]();
   assert.equal(callCount, 0, "no call made when no subscriptions");
 });
+
+test("T-H4: disconnect during connect rejects connectPromise", async () => {
+  const { EvonWsClient } = await importFresh(WS_CLIENT_URL);
+  const client = new EvonWsClient("http://localhost:9999");
+  client["login"] = () => new Promise(resolve => setTimeout(() => resolve("token"), 50));
+  const connectPromise = client.connect();
+  client.disconnect();
+  await assert.rejects(connectPromise, /aborted/i);
+});
+
+test("T-H4: disconnectRequested flag resets on next connect", async () => {
+  const { EvonWsClient } = await importFresh(WS_CLIENT_URL);
+  const client = new EvonWsClient("http://localhost:9999");
+  client["disconnectRequested"] = true;
+  let flagDuringConnect;
+  client["performConnect"] = async () => {
+    flagDuringConnect = client["disconnectRequested"];
+    throw new Error("stop here");
+  };
+  try { await client.connect(); } catch { /* Expected */ }
+  assert.equal(flagDuringConnect, false, "flag reset at start of connect()");
+});

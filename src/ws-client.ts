@@ -126,6 +126,7 @@ export class EvonWsClient {
   private subscriptions = new Map<string, ValuesChangedCallback>();
   private connected = false;
   private userData: WsUserData | null = null;
+  private disconnectRequested = false;
 
   private host: string;
   private wsHost: string;
@@ -147,6 +148,7 @@ export class EvonWsClient {
   private connectPromise: Promise<void> | null = null;
 
   async connect(): Promise<void> {
+    this.disconnectRequested = false;
     if (this.connected && this.ws?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -171,6 +173,11 @@ export class EvonWsClient {
     // Reset connection-specific state
     this.resetConnectionState();
 
+    // If disconnect was requested during login, abort early
+    if (this.disconnectRequested) {
+      throw new Error("Connection aborted by disconnect()");
+    }
+
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(this.wsHost, "echo-protocol", {
         headers: {
@@ -189,6 +196,13 @@ export class EvonWsClient {
       });
 
       this.ws.on("message", (data) => {
+        // Abort if disconnect was called during connection setup
+        if (this.disconnectRequested) {
+          this.ws?.close();
+          reject(new Error("Connection aborted by disconnect()"));
+          return;
+        }
+
         this.handleMessage(data.toString());
 
         // Resolve on first Connected message
@@ -232,6 +246,7 @@ export class EvonWsClient {
    * Close the WebSocket connection.
    */
   disconnect(): void {
+    this.disconnectRequested = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
