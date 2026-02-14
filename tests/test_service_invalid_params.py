@@ -55,6 +55,7 @@ class TestInvalidTemperatureUnit:
     @pytest.mark.asyncio
     async def test_temperature_below_range_raises(self):
         """Test that temperature below 5 raises ValueError."""
+
         # Mirror the validation from conftest mock API
         async def validated_set(instance_id, temperature):
             if not 5 <= temperature <= 40:
@@ -66,6 +67,7 @@ class TestInvalidTemperatureUnit:
     @pytest.mark.asyncio
     async def test_temperature_above_range_raises(self):
         """Test that temperature above 40 raises ValueError."""
+
         async def validated_set(instance_id, temperature):
             if not 5 <= temperature <= 40:
                 raise ValueError(f"Temperature {temperature} out of valid range 5-40")
@@ -76,6 +78,7 @@ class TestInvalidTemperatureUnit:
     @pytest.mark.asyncio
     async def test_temperature_at_bounds_succeeds(self):
         """Test that temperatures at exact bounds succeed."""
+
         async def validated_set(instance_id, temperature):
             if not 5 <= temperature <= 40:
                 raise ValueError(f"Temperature {temperature} out of valid range 5-40")
@@ -87,6 +90,7 @@ class TestInvalidTemperatureUnit:
     @pytest.mark.asyncio
     async def test_negative_temperature_raises(self):
         """Test that negative temperature raises ValueError."""
+
         async def validated_set(instance_id, temperature):
             if not 5 <= temperature <= 40:
                 raise ValueError(f"Temperature {temperature} out of valid range 5-40")

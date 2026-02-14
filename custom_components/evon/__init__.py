@@ -257,7 +257,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or entry_data.get("unloading"):
+                    if (
+                        not isinstance(entry_data, dict)
+                        or "coordinator" not in entry_data
+                        or entry_data.get("unloading")
+                    ):
                         continue
                     coordinator = entry_data["coordinator"]
                     config_entry = hass.config_entries.async_get_entry(entry_id)
@@ -324,7 +328,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data or entry_data.get("unloading"):
+                    if (
+                        not isinstance(entry_data, dict)
+                        or "coordinator" not in entry_data
+                        or "api" not in entry_data
+                        or entry_data.get("unloading")
+                    ):
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
@@ -345,7 +354,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data or entry_data.get("unloading"):
+                    if (
+                        not isinstance(entry_data, dict)
+                        or "coordinator" not in entry_data
+                        or "api" not in entry_data
+                        or entry_data.get("unloading")
+                    ):
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]

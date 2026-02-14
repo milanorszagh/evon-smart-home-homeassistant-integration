@@ -40,12 +40,19 @@ if not importlib.util.find_spec("homeassistant"):
     # Climate component with real string constants matching HA
     mock_climate = MagicMock()
     mock_climate.HVACMode = SimpleNamespace(
-        HEAT="heat", COOL="cool", OFF="off", AUTO="auto",
-        HEAT_COOL="heat_cool", DRY="dry", FAN_ONLY="fan_only",
+        HEAT="heat",
+        COOL="cool",
+        OFF="off",
+        AUTO="auto",
+        HEAT_COOL="heat_cool",
+        DRY="dry",
+        FAN_ONLY="fan_only",
     )
     mock_climate.ClimateEntityFeature = SimpleNamespace(
-        TARGET_TEMPERATURE=1, PRESET_MODE=16,
-        TARGET_TEMPERATURE_RANGE=2, FAN_MODE=8,
+        TARGET_TEMPERATURE=1,
+        PRESET_MODE=16,
+        TARGET_TEMPERATURE_RANGE=2,
+        FAN_MODE=8,
     )
     mock_climate.ATTR_TEMPERATURE = "temperature"
     mock_ha.components.climate = mock_climate
@@ -53,12 +60,21 @@ if not importlib.util.find_spec("homeassistant"):
     # Light component with real string constants matching HA
     mock_light = MagicMock()
     mock_light.ColorMode = SimpleNamespace(
-        ONOFF="onoff", BRIGHTNESS="brightness", COLOR_TEMP="color_temp",
-        HS="hs", RGB="rgb", RGBW="rgbw", RGBWW="rgbww", XY="xy",
-        WHITE="white", UNKNOWN="unknown",
+        ONOFF="onoff",
+        BRIGHTNESS="brightness",
+        COLOR_TEMP="color_temp",
+        HS="hs",
+        RGB="rgb",
+        RGBW="rgbw",
+        RGBWW="rgbww",
+        XY="xy",
+        WHITE="white",
+        UNKNOWN="unknown",
     )
     mock_light.LightEntityFeature = SimpleNamespace(
-        EFFECT=4, FLASH=8, TRANSITION=32,
+        EFFECT=4,
+        FLASH=8,
+        TRANSITION=32,
     )
     mock_ha.components.light = mock_light
     mock_ha.components.cover = MagicMock()
@@ -292,7 +308,9 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.test_connection = AsyncMock(return_value=True)
         mock_api.login = AsyncMock(return_value="test_token")
         mock_api.get_instances = AsyncMock(return_value=MOCK_INSTANCES)
-        mock_api.get_instance = AsyncMock(side_effect=lambda instance_id: copy.deepcopy(MOCK_INSTANCE_DETAILS.get(instance_id, {})))
+        mock_api.get_instance = AsyncMock(
+            side_effect=lambda instance_id: copy.deepcopy(MOCK_INSTANCE_DETAILS.get(instance_id, {}))
+        )
         # Light methods
         mock_api.turn_on_light = AsyncMock()
         mock_api.turn_off_light = AsyncMock()
@@ -315,11 +333,10 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.set_climate_comfort_mode = AsyncMock()
         mock_api.set_climate_energy_saving_mode = AsyncMock()
         mock_api.set_climate_freeze_protection_mode = AsyncMock()
+
         async def _validated_set_climate_temperature(instance_id, temperature):
             if not 5 <= temperature <= 40:
-                raise ValueError(
-                    f"Temperature {temperature} out of valid range 5-40"
-                )
+                raise ValueError(f"Temperature {temperature} out of valid range 5-40")
 
         mock_api.set_climate_temperature = AsyncMock(side_effect=_validated_set_climate_temperature)
         # Home state methods

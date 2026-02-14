@@ -17,7 +17,9 @@ _UTC = timezone.utc  # noqa: UP017
 
 def _load_calculate_method():
     """Load _calculate_energy_today_and_month from source and compile it."""
-    source_path = str(Path(__file__).resolve().parent.parent / "custom_components" / "evon" / "coordinator" / "__init__.py")
+    source_path = str(
+        Path(__file__).resolve().parent.parent / "custom_components" / "evon" / "coordinator" / "__init__.py"
+    )
     with open(source_path) as f:
         source = f.read()
 
@@ -242,4 +244,6 @@ def _patch_dt_now(fixed_time):
         return fixed_time
 
     dt_util.now = mock_now
-    return contextlib.contextmanager(lambda: (setattr(dt_util, "now", mock_now), (yield), setattr(dt_util, "now", original)))()
+    return contextlib.contextmanager(
+        lambda: (setattr(dt_util, "now", mock_now), (yield), setattr(dt_util, "now", original))
+    )()
