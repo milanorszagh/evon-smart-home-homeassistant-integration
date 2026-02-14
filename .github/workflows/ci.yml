@@ -27,6 +27,13 @@ jobs:
       - name: Run ruff format check
         run: ruff format --check custom_components/evon/ tests/
 
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: pip-audit -r requirements-test.txt
+        continue-on-error: true  # advisory-only initially
+
       - name: Install mypy and dependencies
         run: |
           pip install -r requirements-test.txt
@@ -73,11 +80,16 @@ jobs:
           category: integration
 
   test:
-    name: Test (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
+        os: [ubuntu-latest]
+        include:
+          - os: macos-latest
+            python-version: "3.13"
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,6 +97,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -100,6 +113,6 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
-          fail_ci_if_error: false
+          fail_ci_if_error: true
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
