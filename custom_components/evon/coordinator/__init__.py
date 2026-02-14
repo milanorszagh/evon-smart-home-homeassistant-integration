@@ -689,7 +689,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Uses HA statistics to get today's consumption and combines with
         Evon's EnergyDataMonth for this month's total.
+
+        Makes a single batched statistics_during_period call for all meters
+        instead of one call per meter.
         """
+        if not smart_meters:
+            return
+
         now = dt_util.now()
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_day = now.day  # Day of month (1-31)
@@ -701,71 +707,70 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             start_of_day.isoformat(),
         )
 
+        # Build mapping of entity_id -> meter dict for all meters upfront
+        meter_entity_ids: dict[str, dict[str, Any]] = {}
         for meter in smart_meters:
             meter_name = meter.get("name", "")
-            # Build the entity_id for the Energy Total sensor
-            # Format: sensor.{name}_energy_total (lowercase, spaces to underscores)
             entity_id = f"sensor.{meter_name.lower().replace(' ', '_')}_energy_total"
+            meter_entity_ids[entity_id] = meter
 
-            _LOGGER.debug("Querying statistics for entity_id: %s", entity_id)
+        all_entity_ids = list(meter_entity_ids.keys())
+        _LOGGER.debug("Querying statistics for %d entity_ids: %s", len(all_entity_ids), all_entity_ids)
 
-            energy_today = None
-            try:
-                # Query HA statistics for today's energy consumption
-                stats = await self.hass.async_add_executor_job(
-                    statistics_during_period,
-                    self.hass,
-                    start_of_day,
-                    now,
-                    [entity_id],
-                    "hour",
-                    {"energy": UnitOfEnergy.KILO_WATT_HOUR},
-                    {"change"},
+        # Make ONE batched statistics_during_period call for all meters
+        stats: dict[str, Any] = {}
+        try:
+            stats = await self.hass.async_add_executor_job(
+                statistics_during_period,
+                self.hass,
+                start_of_day,
+                now,
+                all_entity_ids,
+                "hour",
+                {"energy": UnitOfEnergy.KILO_WATT_HOUR},
+                {"change"},
+            )
+            _LOGGER.debug("Statistics result keys: %s", list(stats.keys()) if stats else "None")
+            # Success — reset failure counter
+            self._energy_stats_consecutive_failures = 0
+        except (HomeAssistantError, ValueError, TypeError, KeyError) as err:
+            self._energy_stats_consecutive_failures += 1
+            if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
+                _LOGGER.error(
+                    "Energy statistics batch call failed %d times consecutively: %s. "
+                    "Check that the recorder component is running and the entities exist.",
+                    self._energy_stats_consecutive_failures,
+                    err,
                 )
+            else:
+                _LOGGER.warning("Could not get energy statistics: %s", err)
+        except Exception as err:
+            self._energy_stats_consecutive_failures += 1
+            if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
+                _LOGGER.error(
+                    "Energy statistics batch call failed %d times consecutively: %s. "
+                    "Check that the recorder component is running and the entities exist.",
+                    self._energy_stats_consecutive_failures,
+                    err,
+                    exc_info=True,
+                )
+            else:
+                _LOGGER.warning("Could not get energy statistics: %s", err, exc_info=True)
 
-                _LOGGER.debug("Statistics result keys: %s", list(stats.keys()) if stats else "None")
+        # Distribute results to each meter and compute monthly totals
+        for entity_id, meter in meter_entity_ids.items():
+            meter_name = meter.get("name", "")
+            energy_today = None
 
-                if entity_id in stats:
-                    # Sum all hourly changes for today
-                    hourly_changes = [s.get("change", 0) or 0 for s in stats[entity_id]]
-                    _LOGGER.debug("Hourly changes for %s: %s", entity_id, hourly_changes)
-                    energy_today = sum(hourly_changes)
-                    energy_today = round(energy_today, 2) if energy_today > 0 else 0.0
-                    _LOGGER.debug("Calculated energy_today for %s: %s kWh", meter_name, energy_today)
-                else:
-                    _LOGGER.debug("No statistics found for %s in result", entity_id)
-                # Success — reset failure counter
-                self._energy_stats_consecutive_failures = 0
-            except (HomeAssistantError, ValueError, TypeError, KeyError) as err:
-                self._energy_stats_consecutive_failures += 1
-                if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
-                    _LOGGER.error(
-                        "Energy statistics for %s failed %d times consecutively: %s. "
-                        "Check that the recorder component is running and the entity exists.",
-                        entity_id,
-                        self._energy_stats_consecutive_failures,
-                        err,
-                    )
-                else:
-                    _LOGGER.warning("Could not get energy statistics for %s: %s", entity_id, err)
-            except Exception as err:
-                self._energy_stats_consecutive_failures += 1
-                if self._energy_stats_consecutive_failures >= ENERGY_STATS_FAILURE_LOG_THRESHOLD:
-                    _LOGGER.error(
-                        "Energy statistics for %s failed %d times consecutively: %s. "
-                        "Check that the recorder component is running and the entity exists.",
-                        entity_id,
-                        self._energy_stats_consecutive_failures,
-                        err,
-                        exc_info=True,
-                    )
-                else:
-                    _LOGGER.warning(
-                        "Could not get energy statistics for %s: %s",
-                        entity_id,
-                        err,
-                        exc_info=True,
-                    )
+            if entity_id in stats:
+                # Sum all hourly changes for today
+                hourly_changes = [s.get("change", 0) or 0 for s in stats[entity_id]]
+                _LOGGER.debug("Hourly changes for %s: %s", entity_id, hourly_changes)
+                energy_today = sum(hourly_changes)
+                energy_today = round(energy_today, 2) if energy_today > 0 else 0.0
+                _LOGGER.debug("Calculated energy_today for %s: %s kWh", meter_name, energy_today)
+            else:
+                _LOGGER.debug("No statistics found for %s in result", entity_id)
 
             # Store energy_today in the meter data
             meter["energy_today_calculated"] = energy_today
