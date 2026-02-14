@@ -19,16 +19,17 @@ export function encodePassword(username: string, password: string): string {
 
 /**
  * Check if a password looks like it's already encoded.
- * Encoded passwords are Base64-encoded SHA512 hashes (88 chars, ends with ==).
+ * Encoded passwords are Base64-encoded SHA512 hashes: 64 bytes = 88 base64
+ * chars (valid base64 alphabet + padding "==").
  * Set EVON_PASSWORD_ENCODED=true to force treating the password as pre-encoded.
  */
 export function isPasswordEncoded(password: string): boolean {
-  return password.length === 88 && password.endsWith("==");
+  return /^[A-Za-z0-9+/]{86}==$/.test(password);
 }
 
 // Environment configuration — read lazily so importing this module for
 // utility functions (e.g. in tests) doesn't throw when env vars are unset.
-export const EVON_HOST = process.env.EVON_HOST || "";
+export const EVON_HOST = process.env.EVON_HOST;
 export const EVON_USERNAME = process.env.EVON_USERNAME || "";
 
 const EVON_PASSWORD_RAW = process.env.EVON_PASSWORD || "";

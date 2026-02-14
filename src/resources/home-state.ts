@@ -4,10 +4,11 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fetchHomeStatesWithInfo } from "../helpers.js";
+import { RESOURCE_URIS } from "../constants.js";
 
 export function registerHomeStateResources(server: McpServer): void {
   server.resource(
-    "evon://home_state",
+    RESOURCE_URIS.HOME_STATE,
     "Current home state (At Home, Holiday, Night, Work)",
     async () => {
       const statesWithInfo = await fetchHomeStatesWithInfo();
@@ -15,7 +16,7 @@ export function registerHomeStateResources(server: McpServer): void {
 
       return {
         contents: [{
-          uri: "evon://home_state",
+          uri: RESOURCE_URIS.HOME_STATE,
           mimeType: "application/json",
           text: JSON.stringify({
             current: activeState?.name || "unknown",

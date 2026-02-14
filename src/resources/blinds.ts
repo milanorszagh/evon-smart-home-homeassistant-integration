@@ -4,16 +4,17 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fetchBlindsWithState } from "../helpers.js";
+import { RESOURCE_URIS } from "../constants.js";
 
 export function registerBlindResources(server: McpServer): void {
   server.resource(
-    "evon://blinds",
+    RESOURCE_URIS.BLINDS,
     "All Evon blinds with current state",
     async () => {
       const blindsWithState = await fetchBlindsWithState();
       return {
         contents: [{
-          uri: "evon://blinds",
+          uri: RESOURCE_URIS.BLINDS,
           mimeType: "application/json",
           text: JSON.stringify(blindsWithState, null, 2),
         }],

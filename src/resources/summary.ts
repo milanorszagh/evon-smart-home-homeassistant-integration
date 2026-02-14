@@ -4,7 +4,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { apiRequest } from "../api-client.js";
-import { DEVICE_CLASSES } from "../constants.js";
+import { DEVICE_CLASSES, RESOURCE_URIS } from "../constants.js";
 import {
   getInstances,
   filterByClass,
@@ -15,7 +15,7 @@ import type { LightState, BlindState, ClimateState, HomeStateState, BathroomRadi
 
 export function registerSummaryResources(server: McpServer): void {
   server.resource(
-    "evon://summary",
+    RESOURCE_URIS.SUMMARY,
     "Summary of all Evon devices and their current state",
     async () => {
       const instances = await getInstances();
@@ -84,7 +84,7 @@ export function registerSummaryResources(server: McpServer): void {
 
       return {
         contents: [{
-          uri: "evon://summary",
+          uri: RESOURCE_URIS.SUMMARY,
           mimeType: "application/json",
           text: JSON.stringify(summary, null, 2),
         }],

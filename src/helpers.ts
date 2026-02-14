@@ -26,9 +26,21 @@ export function sanitizeId(id: string): string {
   return id;
 }
 
+// Short-lived cache for getInstances() to avoid redundant API calls
+// when multiple fetchXxxWithState helpers run in sequence.
+const INSTANCES_CACHE_TTL_MS = 5000;
+let instancesCache: EvonInstance[] | null = null;
+let instancesCacheTime = 0;
+
 export async function getInstances(): Promise<EvonInstance[]> {
+  const now = Date.now();
+  if (instancesCache && now - instancesCacheTime < INSTANCES_CACHE_TTL_MS) {
+    return instancesCache;
+  }
   const result = await apiRequest<EvonInstance[]>("/instances");
-  return result.data;
+  instancesCache = result.data;
+  instancesCacheTime = now;
+  return instancesCache;
 }
 
 export function filterByClass(instances: EvonInstance[], className: string): EvonInstance[] {
@@ -41,7 +53,8 @@ export function filterClimateDevices(instances: EvonInstance[]): EvonInstance[] 
   return instances.filter(
     (i) =>
       (i.ClassName === DEVICE_CLASSES.CLIMATE ||
-        i.ClassName.includes(DEVICE_CLASSES.CLIMATE_UNIVERSAL)) &&
+        i.ClassName === DEVICE_CLASSES.CLIMATE_UNIVERSAL ||
+        i.ClassName.endsWith(`.${DEVICE_CLASSES.CLIMATE_UNIVERSAL}`)) &&
       i.Name &&
       i.Name.length > 0
   );
@@ -85,7 +98,7 @@ export async function fetchLightsWithState(): Promise<LightWithState[]> {
   return Promise.all(
     lights.map(async (light) => {
       try {
-        const details = await apiRequest<LightState>(`/instances/${light.ID}`);
+        const details = await apiRequest<LightState>(`/instances/${sanitizeId(light.ID)}`);
         return {
           id: light.ID,
           name: details.data.Name || light.Name,
@@ -107,7 +120,7 @@ export async function fetchBlindsWithState(): Promise<BlindWithState[]> {
   return Promise.all(
     blinds.map(async (blind) => {
       try {
-        const details = await apiRequest<BlindState>(`/instances/${blind.ID}`);
+        const details = await apiRequest<BlindState>(`/instances/${sanitizeId(blind.ID)}`);
         return {
           id: blind.ID,
           name: details.data.Name || blind.Name,
@@ -130,7 +143,7 @@ export async function fetchClimateWithState(): Promise<ClimateWithState[]> {
   return Promise.all(
     climates.map(async (climate) => {
       try {
-        const details = await apiRequest<ClimateState>(`/instances/${climate.ID}`);
+        const details = await apiRequest<ClimateState>(`/instances/${sanitizeId(climate.ID)}`);
         return {
           id: climate.ID,
           name: details.data.Name || climate.Name,
@@ -152,7 +165,7 @@ export async function fetchHomeStatesWithInfo(): Promise<HomeStateWithInfo[]> {
   return Promise.all(
     homeStates.map(async (state) => {
       try {
-        const details = await apiRequest<HomeStateState>(`/instances/${state.ID}`);
+        const details = await apiRequest<HomeStateState>(`/instances/${sanitizeId(state.ID)}`);
         return {
           id: state.ID,
           name: state.Name,
@@ -173,14 +186,15 @@ export async function fetchRadiatorsWithState(): Promise<RadiatorWithState[]> {
   return Promise.all(
     radiators.map(async (radiator) => {
       try {
-        const details = await apiRequest<BathroomRadiatorState>(`/instances/${radiator.ID}`);
-        const timeRemaining = details.data.NextSwitchPoint ?? -1;
+        const details = await apiRequest<BathroomRadiatorState>(`/instances/${sanitizeId(radiator.ID)}`);
+        // NextSwitchPoint is in hours-and-fraction format (e.g. 1.5 = 1 hour 30 minutes)
+        const hoursRemaining = details.data.NextSwitchPoint ?? -1;
         return {
           id: radiator.ID,
           name: details.data.Name || radiator.Name,
           isOn: details.data.Output ?? false,
-          timeRemaining: timeRemaining > 0 ? `${Math.floor(timeRemaining)}:${Math.floor((timeRemaining % 1) * 60).toString().padStart(2, '0')}` : null,
-          timeRemainingMins: timeRemaining > 0 ? Math.round(timeRemaining * 10) / 10 : null,
+          timeRemaining: hoursRemaining > 0 ? `${Math.floor(hoursRemaining)}:${Math.floor((hoursRemaining % 1) * 60).toString().padStart(2, '0')}` : null,
+          timeRemainingMins: hoursRemaining > 0 ? Math.round(hoursRemaining * 10) / 10 : null,
           durationMins: details.data.EnableForMins ?? 30,
           permanentlyOn: details.data.PermanentlyOn ?? false,
           permanentlyOff: details.data.PermanentlyOff ?? false,

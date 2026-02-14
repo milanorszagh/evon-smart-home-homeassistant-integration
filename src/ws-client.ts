@@ -1,6 +1,10 @@
 /**
  * WebSocket client for Evon Smart Home
  *
+ * Using console.warn instead of console.warn throughout this module because
+ * MCP stdio transport uses stderr for protocol messages; console.warn writes
+ * to stderr and would corrupt the MCP protocol stream.
+ *
  * Provides real-time communication with the Evon system via WebSocket.
  * Can be used alongside or instead of the HTTP API for:
  * - Real-time property value subscriptions
@@ -20,6 +24,7 @@
 import { WebSocket } from "ws";
 import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, validateConfig } from "./config.js";
 import { API_TIMEOUT_MS, WS_DEVICE_CLASSES } from "./constants.js";
+import { performLogin } from "./auth.js";
 
 // Re-export for convenience
 export { WS_DEVICE_CLASSES };
@@ -133,7 +138,8 @@ export class EvonWsClient {
 
   constructor(host?: string) {
     if (!host) validateConfig();
-    this.host = host || EVON_HOST;
+    // validateConfig() above ensures EVON_HOST is set when no host arg
+    this.host = host || EVON_HOST!;
     this.wsHost = this.host.replace("http://", "ws://").replace("https://", "wss://");
   }
 
@@ -215,7 +221,7 @@ export class EvonWsClient {
           if (ws) {
             ws.removeAllListeners("error");
             ws.on("error", (error) => {
-              console.error("WebSocket error:", error.message);
+              console.warn("WebSocket error:", error.message);
               this.connected = false;
               this.rejectAllPending(error);
             });
@@ -225,7 +231,7 @@ export class EvonWsClient {
 
           // Restore server-side subscriptions after reconnect
           this.resubscribeAll().catch((err) => {
-            console.error("Resubscription after connect failed:", err);
+            console.warn("Resubscription after connect failed:", err);
           });
         }
       });
@@ -274,7 +280,7 @@ export class EvonWsClient {
     try {
       await this.call("RegisterValuesChanged", [true, subs, true, true]);
     } catch (error) {
-      console.error("Failed to resubscribe after reconnect:", error);
+      console.warn("Failed to resubscribe after reconnect:", error);
     }
   }
 
@@ -382,7 +388,11 @@ export class EvonWsClient {
 
       const timeout = setTimeout(() => {
         cleanup();
-        reject(new Error("getPropertyValues timeout"));
+        const missingIds = [...expectedIds].filter((id) => !(id in results));
+        console.warn(
+          `getPropertyValues timeout: partial result returned. Missing instance IDs: ${missingIds.join(", ")}`
+        );
+        resolve(results);
       }, API_TIMEOUT_MS);
 
       // Temporary callback to capture values
@@ -499,37 +509,7 @@ export class EvonWsClient {
   }
 
   private async login(): Promise<string> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(`${this.host}/login`, {
-        method: "POST",
-        headers: {
-          "x-elocs-username": EVON_USERNAME,
-          "x-elocs-password": EVON_PASSWORD,
-        },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Login failed: ${response.status} ${response.statusText}`);
-      }
-
-      const token = response.headers.get("x-elocs-token");
-      if (!token) {
-        throw new Error("No token received from login");
-      }
-
-      return token;
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === "AbortError") {
-        throw new Error(`WS login timeout after ${API_TIMEOUT_MS}ms`);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    return performLogin(this.host, EVON_USERNAME, EVON_PASSWORD);
   }
 
   private async call<T>(methodName: string, args: unknown[]): Promise<T | null> {
@@ -622,7 +602,7 @@ export class EvonWsClient {
         return;
       }
     } catch (error) {
-      console.error("Error parsing WebSocket message:", error);
+      console.warn("Error parsing WebSocket message:", error);
     }
   }
 
@@ -642,6 +622,9 @@ export class EvonWsClient {
 
       if (!grouped[instanceId]) {
         grouped[instanceId] = {};
+      }
+      if (entry.value?.Value === undefined) {
+        console.warn(`WS: ValuesChanged entry missing value for key ${key}`);
       }
       grouped[instanceId][property] = entry.value?.Value;
     }
@@ -746,12 +729,14 @@ export async function wsControlLight(
   const client = getWsClient();
   await client.connect();
 
+  const ops: Promise<void>[] = [];
   if (options.on !== undefined) {
-    await client.setLightOn(instanceId, options.on);
+    ops.push(client.setLightOn(instanceId, options.on));
   }
   if (options.brightness !== undefined) {
-    await client.setLightBrightness(instanceId, options.brightness);
+    ops.push(client.setLightBrightness(instanceId, options.brightness));
   }
+  await Promise.all(ops);
 }
 
 /**

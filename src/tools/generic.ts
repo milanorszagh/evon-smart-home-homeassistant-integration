@@ -7,6 +7,24 @@ import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
 import { getInstances, sanitizeId } from "../helpers.js";
 
+/** Allowed methods for the call_method tool to prevent arbitrary code execution. */
+const ALLOWED_METHODS = new Set([
+  "Switch",
+  "SwitchOn",
+  "SwitchOff",
+  "SetValue",
+  "GetValue",
+  "Toggle",
+  "Open",
+  "Close",
+  "Stop",
+  "SetPosition",
+  "SetColor",
+  "SetBrightness",
+  "SetTemperature",
+  "SetMode",
+]);
+
 export function registerGenericTools(server: McpServer): void {
   server.tool(
     "list_apps",
@@ -85,6 +103,12 @@ export function registerGenericTools(server: McpServer): void {
       params: z.array(z.unknown()).optional().describe("Parameters as an array"),
     },
     async ({ instance_id, method, params }) => {
+      if (!ALLOWED_METHODS.has(method)) {
+        const allowed = [...ALLOWED_METHODS].sort().join(", ");
+        throw new Error(
+          `Method "${method}" is not allowed. Allowed methods: ${allowed}`
+        );
+      }
       const result = await callMethod(sanitizeId(instance_id), sanitizeId(method), params);
       return {
         content: [{ type: "text", text: `Method ${method} called on ${instance_id}: ${result.statusText}` }],

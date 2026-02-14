@@ -75,6 +75,16 @@ export const CANONICAL_TO_HTTP_METHOD: Record<string, string> = {
   SetPosition: "AmznSetPercentage",
 } as const;
 
+// Resource URIs for MCP resource registration
+export const RESOURCE_URIS = {
+  LIGHTS: "evon://lights",
+  BLINDS: "evon://blinds",
+  CLIMATE: "evon://climate",
+  HOME_STATE: "evon://home_state",
+  BATHROOM_RADIATORS: "evon://bathroom_radiators",
+  SUMMARY: "evon://summary",
+} as const;
+
 export const API_TIMEOUT_MS = 10000;
 // MCP server uses a longer TTL (27 days) since it starts fresh each session.
 // The HA integration uses 1 hour (see api.py TOKEN_TTL_SECONDS) because it
