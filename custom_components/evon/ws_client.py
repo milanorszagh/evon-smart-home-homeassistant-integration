@@ -153,6 +153,9 @@ class EvonWsClient:
         if self.is_connected:
             return True
 
+        # Reset sequence ID on each connection to avoid stale counters
+        self._sequence_id = 1
+
         try:
             # Get authentication token via HTTP login
             self._token = await self._login()
@@ -292,8 +295,9 @@ class EvonWsClient:
         # Close the WebSocket
         await self.disconnect()
 
-        # Clear subscriptions since we're fully stopping
+        # Clear subscriptions and sensitive credentials since we're fully stopping
         self._subscriptions.clear()
+        self._password = None
         _LOGGER.debug("WebSocket client stopped and subscriptions cleared")
 
     async def disconnect(self) -> None:
@@ -553,6 +557,9 @@ class EvonWsClient:
         for key, entry in table.items():
             # Key format: "InstanceId.PropertyName"
             parts = key.split(".")
+            if len(parts) < 2:
+                _LOGGER.debug("Skipping malformed key (no dot separator): %s", key)
+                continue
             prop = parts.pop()
             instance_id = ".".join(parts)
 

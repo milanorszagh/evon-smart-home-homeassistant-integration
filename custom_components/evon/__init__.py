@@ -246,7 +246,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
-                    if not isinstance(entry_data, dict):
+                    if not isinstance(entry_data, dict) or entry_data.get("unloading"):
                         continue
                     if "coordinator" in entry_data:
                         await entry_data["coordinator"].async_refresh()
@@ -257,7 +257,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or entry_data.get("unloading"):
                         continue
                     coordinator = entry_data["coordinator"]
                     config_entry = hass.config_entries.async_get_entry(entry_id)
@@ -284,7 +284,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
-                    if not isinstance(entry_data, dict):
+                    if not isinstance(entry_data, dict) or entry_data.get("unloading"):
                         continue
                     if "api" in entry_data:
                         try:
@@ -305,7 +305,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).values())
                 for entry_data in entries:
-                    if not isinstance(entry_data, dict):
+                    if not isinstance(entry_data, dict) or entry_data.get("unloading"):
                         continue
                     if "api" in entry_data:
                         try:
@@ -324,7 +324,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data or entry_data.get("unloading"):
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
@@ -345,7 +345,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
                 for _entry_id, entry_data in entries:
-                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data:
+                    if not isinstance(entry_data, dict) or "coordinator" not in entry_data or "api" not in entry_data or entry_data.get("unloading"):
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
@@ -463,8 +463,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         hass.data[frontend_key] = True
 
-    # Clean up stale entities
-    await _async_cleanup_stale_entities(hass, entry, coordinator)
+    # Clean up stale entities only on initial setup with successful data
+    if coordinator.last_update_success and coordinator.data is not None:
+        await _async_cleanup_stale_entities(hass, entry, coordinator)
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -689,6 +690,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Shut down WebSocket client and API first
     if entry.entry_id in hass.data.get(DOMAIN, {}):
         entry_data = hass.data[DOMAIN][entry.entry_id]
+
+        # Mark entry as unloading so services won't access partially-unloaded data
+        entry_data["unloading"] = True
+
         coordinator: EvonDataUpdateCoordinator = entry_data.get("coordinator")
         if coordinator:
             await coordinator.async_shutdown_websocket()

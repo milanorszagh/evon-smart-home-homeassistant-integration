@@ -160,7 +160,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         is_cooling = data.get("is_cooling", False)
         return HVACAction.COOLING if is_cooling else HVACAction.HEATING
 
-    current_humidity = entity_data("humidity", transform=lambda v: int(v))
+    current_humidity = entity_data("humidity", transform=lambda v: int(v) if v is not None else None)
 
     @property
     def target_temperature(self) -> float | None:

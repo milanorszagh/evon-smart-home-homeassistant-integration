@@ -13,7 +13,7 @@ from homeassistant.components.recorder.statistics import statistics_during_perio
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -465,6 +465,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _handle_ws_connection_state(self, connected: bool) -> None:
         """Handle WebSocket connection state changes.
 
+        Direct mutation of ``self.update_interval`` here is safe because HA's
+        event loop is single-threaded and this callback runs on the same event
+        loop as ``_async_update_data``, so there is no concurrent-access risk.
+
         Args:
             connected: Whether the WebSocket is now connected.
         """
@@ -697,10 +701,19 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         # Build mapping of entity_id -> meter dict for all meters upfront
+        ent_reg = er.async_get(self.hass)
         meter_entity_ids: dict[str, dict[str, Any]] = {}
         for meter in smart_meters:
-            meter_name = meter.get("name", "")
-            entity_id = f"sensor.{meter_name.lower().replace(' ', '_')}_energy_total"
+            meter_id = meter.get("id", "")
+            unique_id = f"evon_meter_energy_{meter_id}"
+            entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
+            if entity_id is None:
+                _LOGGER.debug(
+                    "Energy entity not found in registry for meter %s (unique_id=%s), skipping",
+                    meter.get("name", ""),
+                    unique_id,
+                )
+                continue
             meter_entity_ids[entity_id] = meter
 
         all_entity_ids = list(meter_entity_ids.keys())
