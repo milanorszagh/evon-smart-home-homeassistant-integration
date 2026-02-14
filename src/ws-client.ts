@@ -168,6 +168,9 @@ export class EvonWsClient {
     // Get token via HTTP login
     this.token = await this.login();
 
+    // Reset connection-specific state
+    this.resetConnectionState();
+
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(this.wsHost, "echo-protocol", {
         headers: {
@@ -447,6 +450,10 @@ export class EvonWsClient {
       reject(error);
     });
     this.pendingRequests.clear();
+  }
+
+  private resetConnectionState(): void {
+    this.sequenceId = 1;
   }
 
   private async login(): Promise<string> {
