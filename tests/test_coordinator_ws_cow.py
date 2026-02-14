@@ -138,9 +138,7 @@ class TestCopyOnWriteWSUpdates:
         coordinator._handle_ws_values_changed("light_1", {"IsOn": True})
 
         new_entity = coordinator._data_index[("lights", "light_1")]
-        assert id(new_entity) != original_id, (
-            "_data_index should point to the new copy, not the original entity"
-        )
+        assert id(new_entity) != original_id, "_data_index should point to the new copy, not the original entity"
         assert new_entity["is_on"] is True
 
     def test_concurrent_reader_sees_consistent_data(self, coordinator_and_method):

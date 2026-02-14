@@ -524,7 +524,9 @@ async def test_config_flow_invalid_engine_id(hass):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("expected_lingering_tasks", [True])
 @pytest.mark.parametrize("expected_lingering_timers", [True])
-async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
+async def test_options_flow(
+    hass, mock_config_entry_v2, mock_evon_api_class, expected_lingering_tasks, expected_lingering_timers
+):
     """Test options flow."""
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
@@ -567,7 +569,9 @@ async def test_options_flow(hass, mock_config_entry_v2, mock_evon_api_class):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("expected_lingering_tasks", [True])
 @pytest.mark.parametrize("expected_lingering_timers", [True])
-async def test_options_flow_http_only(hass, mock_config_entry_v2, mock_evon_api_class):
+async def test_options_flow_http_only(
+    hass, mock_config_entry_v2, mock_evon_api_class, expected_lingering_tasks, expected_lingering_timers
+):
     """Test options flow with HTTP only mode enabled."""
     mock_config_entry_v2.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)

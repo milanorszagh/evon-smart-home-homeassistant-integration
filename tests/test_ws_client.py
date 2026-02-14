@@ -315,7 +315,7 @@ class TestWsClientValuesChanged:
 class TestWsClientMessageHandling:
     """Tests for WebSocket client message handling."""
 
-    def test_handle_message_callback(self):
+    async def test_handle_message_callback(self):
         """Test handling Callback message type."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -423,7 +423,7 @@ class TestWsClientProperties:
         )
         assert client.is_connected is False
 
-    def test_subscribe_instances_stores_subscriptions(self):
+    async def test_subscribe_instances_stores_subscriptions(self):
         """Test that subscriptions are stored for reconnection."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -436,9 +436,8 @@ class TestWsClientProperties:
             {"Instanceid": "Light1", "Properties": ["IsOn"]},
         ]
 
-        # Run synchronously since we're not connected
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(client.subscribe_instances(subscriptions))
+        # Not connected, so subscribe just stores them
+        await client.subscribe_instances(subscriptions)
 
         assert client._subscriptions == subscriptions
 
@@ -986,7 +985,7 @@ class TestWebSocketControlFindings:
 class TestApiBlindCaching:
     """Tests for blind angle/position caching used for WebSocket control."""
 
-    def test_update_and_get_blind_angle(self):
+    async def test_update_and_get_blind_angle(self):
         """Test blind angle caching."""
         from custom_components.evon.api import EvonApi
 
@@ -999,7 +998,7 @@ class TestApiBlindCaching:
         api.update_blind_angle("Blind1", 90)
         assert api.get_blind_angle("Blind1") == 90
 
-    def test_update_and_get_blind_position(self):
+    async def test_update_and_get_blind_position(self):
         """Test blind position caching."""
         from custom_components.evon.api import EvonApi
 
@@ -1012,7 +1011,7 @@ class TestApiBlindCaching:
         api.update_blind_position("Blind1", 100)
         assert api.get_blind_position("Blind1") == 100
 
-    def test_multiple_blinds_cached_independently(self):
+    async def test_multiple_blinds_cached_independently(self):
         """Test that multiple blinds have independent caches."""
         from custom_components.evon.api import EvonApi
 
@@ -1439,7 +1438,7 @@ class TestWsMessageHandlingEdgeCases:
         # Array with data but will fail on msg[0] being a dict
         client._handle_message('[{"data": "test"}]')
 
-    def test_handle_callback_unknown_sequence_id(self):
+    async def test_handle_callback_unknown_sequence_id(self):
         """Test callback with unknown sequence ID is ignored."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -1459,7 +1458,7 @@ class TestWsMessageHandlingEdgeCases:
         assert not future.done()
         assert 999 in client._pending_requests
 
-    def test_handle_callback_sets_result(self):
+    async def test_handle_callback_sets_result(self):
         """Test callback correctly sets future result."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -1477,7 +1476,7 @@ class TestWsMessageHandlingEdgeCases:
         assert future.result() == "success_result"
         assert 42 not in client._pending_requests
 
-    def test_handle_callback_empty_args(self):
+    async def test_handle_callback_empty_args(self):
         """Test callback with empty args returns None."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -1494,7 +1493,7 @@ class TestWsMessageHandlingEdgeCases:
         assert future.done()
         assert future.result() is None
 
-    def test_handle_callback_no_args_key(self):
+    async def test_handle_callback_no_args_key(self):
         """Test callback without args key returns None."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -1511,7 +1510,7 @@ class TestWsMessageHandlingEdgeCases:
         assert future.done()
         assert future.result() is None
 
-    def test_handle_callback_already_done_future(self):
+    async def test_handle_callback_already_done_future(self):
         """Test callback with already-done future doesn't crash."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -2062,7 +2061,7 @@ class TestWsReceiveTimeout:
 class TestStaleRequestCleanup:
     """Tests for periodic stale WebSocket request cleanup."""
 
-    def test_cleanup_stale_requests_removes_old_entries(self):
+    async def test_cleanup_stale_requests_removes_old_entries(self):
         """Test that stale requests older than 2x timeout are cleaned up."""
         import time
 
@@ -2111,7 +2110,7 @@ class TestStaleRequestCleanup:
         client._cleanup_stale_requests()
         assert len(client._pending_requests) == 0
 
-    def test_cleanup_stale_requests_cancels_future(self):
+    async def test_cleanup_stale_requests_cancels_future(self):
         """Test that cleaned up stale requests have their future cancelled."""
         import time
 
@@ -2135,7 +2134,7 @@ class TestStaleRequestCleanup:
         assert future.done()
         assert future.cancelled()
 
-    def test_pending_request_times_tracked_in_callback(self):
+    async def test_pending_request_times_tracked_in_callback(self):
         """Test that _pending_request_times is cleaned up when callback arrives."""
         import time
 
@@ -2310,7 +2309,7 @@ class TestPeriodicStaleCleanup:
 class TestSequenceIdValidation:
     """Tests for sequenceId type validation in _handle_message."""
 
-    def test_string_sequence_id_ignored(self):
+    async def test_string_sequence_id_ignored(self):
         """Test that string sequenceId is rejected."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -2331,7 +2330,7 @@ class TestSequenceIdValidation:
         assert not future.done()
         assert 1 in client._pending_requests
 
-    def test_none_sequence_id_ignored(self):
+    async def test_none_sequence_id_ignored(self):
         """Test that None sequenceId is rejected."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -2348,7 +2347,7 @@ class TestSequenceIdValidation:
 
         assert not future.done()
 
-    def test_float_sequence_id_ignored(self):
+    async def test_float_sequence_id_ignored(self):
         """Test that float sequenceId is rejected."""
         client = EvonWsClient(
             host="http://192.168.1.100",
@@ -2365,7 +2364,7 @@ class TestSequenceIdValidation:
 
         assert not future.done()
 
-    def test_valid_int_sequence_id_accepted(self):
+    async def test_valid_int_sequence_id_accepted(self):
         """Test that valid int sequenceId is still accepted."""
         client = EvonWsClient(
             host="http://192.168.1.100",

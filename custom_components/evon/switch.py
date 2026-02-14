@@ -339,16 +339,12 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         # where the radiator turned off between our state check and the toggle).
         if self._cancel_post_toggle_verify:
             self._cancel_post_toggle_verify()
-        self._cancel_post_toggle_verify = async_call_later(
-            self.hass, 3, self._async_post_toggle_verify
-        )
+        self._cancel_post_toggle_verify = async_call_later(self.hass, 3, self._async_post_toggle_verify)
 
     async def _async_post_toggle_verify(self, _now: Any) -> None:
         """Verify state converged after toggle by requesting a coordinator refresh."""
         self._cancel_post_toggle_verify = None
-        _LOGGER.debug(
-            "Radiator %s: post-toggle verification refresh", self._instance_id
-        )
+        _LOGGER.debug("Radiator %s: post-toggle verification refresh", self._instance_id)
         await self.coordinator.async_request_refresh()
 
     async def async_will_remove_from_hass(self) -> None:

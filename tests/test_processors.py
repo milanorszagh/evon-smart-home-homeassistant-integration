@@ -1207,7 +1207,7 @@ class TestMigrationChain:
         # Should use while loop pattern
         assert "while config_entry.version < 3:" in source
 
-    def test_migration_v1_to_v3_via_while(self):
+    async def test_migration_v1_to_v3_via_while(self):
         """Test that v1 entry migrates through v2 to v3 in one call."""
         from custom_components.evon.__init__ import async_migrate_entry
         from custom_components.evon.const import CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL
@@ -1230,16 +1230,14 @@ class TestMigrationChain:
 
         hass.config_entries.async_update_entry = track_update
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+        result = await async_migrate_entry(hass, config_entry)
 
         assert result is True
         assert config_entry.version == 3
         assert versions == [2, 3]
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
 
-    def test_migration_v2_to_v3(self):
+    async def test_migration_v2_to_v3(self):
         """Test that v2 entry migrates to v3."""
         from custom_components.evon.__init__ import async_migrate_entry
         from custom_components.evon.const import CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL
@@ -1258,15 +1256,13 @@ class TestMigrationChain:
 
         hass.config_entries.async_update_entry = track_update
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+        result = await async_migrate_entry(hass, config_entry)
 
         assert result is True
         assert config_entry.version == 3
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
 
-    def test_migration_v3_is_noop(self):
+    async def test_migration_v3_is_noop(self):
         """Test that v3 entry is already current."""
         from custom_components.evon.__init__ import async_migrate_entry
 
@@ -1275,14 +1271,12 @@ class TestMigrationChain:
         config_entry = MagicMock()
         config_entry.version = 3
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+        result = await async_migrate_entry(hass, config_entry)
 
         assert result is True
         hass.config_entries.async_update_entry.assert_not_called()
 
-    def test_migration_future_version_fails(self):
+    async def test_migration_future_version_fails(self):
         """Test that future version returns False."""
         from custom_components.evon.__init__ import async_migrate_entry
 
@@ -1291,9 +1285,7 @@ class TestMigrationChain:
         config_entry = MagicMock()
         config_entry.version = 99
 
-        import asyncio
-
-        result = asyncio.get_event_loop().run_until_complete(async_migrate_entry(hass, config_entry))
+        result = await async_migrate_entry(hass, config_entry)
 
         assert result is False
 

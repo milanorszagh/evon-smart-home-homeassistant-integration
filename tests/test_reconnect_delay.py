@@ -24,9 +24,7 @@ class TestCalculateReconnectDelay:
             delay = _calculate_reconnect_delay(base, max_delay)
             min_expected = base * (1 - WS_RECONNECT_JITTER)
             max_expected = base * (1 + WS_RECONNECT_JITTER)
-            assert min_expected <= delay <= max_expected, (
-                f"delay={delay} outside [{min_expected}, {max_expected}]"
-            )
+            assert min_expected <= delay <= max_expected, f"delay={delay} outside [{min_expected}, {max_expected}]"
 
     def test_never_below_one(self):
         """Test that delay is always >= 1.0 seconds."""

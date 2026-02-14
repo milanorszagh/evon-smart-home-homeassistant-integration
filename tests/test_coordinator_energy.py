@@ -30,7 +30,7 @@ class TestBatchedEnergyStatistics:
         from homeassistant.exceptions import HomeAssistantError
         from homeassistant.util import dt as dt_util
 
-        from custom_components.evon.const import ENERGY_STATS_FAILURE_LOG_THRESHOLD
+        from custom_components.evon.const import DOMAIN, ENERGY_STATS_FAILURE_LOG_THRESHOLD
 
         # Create a namespace with all required names
         ns = {}
@@ -39,7 +39,16 @@ class TestBatchedEnergyStatistics:
         ns["HomeAssistantError"] = HomeAssistantError
         ns["dt_util"] = dt_util
         ns["ENERGY_STATS_FAILURE_LOG_THRESHOLD"] = ENERGY_STATS_FAILURE_LOG_THRESHOLD
+        ns["DOMAIN"] = DOMAIN
         ns["contextlib"] = contextlib
+        # Create a mock entity registry that maps unique_ids to entity_ids
+        mock_ent_reg = MagicMock()
+        mock_ent_reg.async_get_entity_id.side_effect = lambda domain, platform, unique_id: (
+            f"sensor.{unique_id.replace('evon_meter_energy_', '')}_energy_total"
+        )
+        mock_er = MagicMock()
+        mock_er.async_get.return_value = mock_ent_reg
+        ns["er"] = mock_er
         ns["_LOGGER"] = MagicMock()
 
         # Read and compile just the method as a standalone async function

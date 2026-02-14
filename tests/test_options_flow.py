@@ -25,9 +25,7 @@ class TestAsyncUpdateListener:
 
         # Trigger an options update (simulates user changing options in UI)
         # The update listener should call async_reload
-        with patch.object(
-            hass.config_entries, "async_reload", new_callable=AsyncMock
-        ) as mock_reload:
+        with patch.object(hass.config_entries, "async_reload", new_callable=AsyncMock) as mock_reload:
             hass.config_entries.async_update_entry(
                 mock_config_entry_v2,
                 options={**mock_config_entry_v2.options, "scan_interval": 60},
@@ -44,10 +42,9 @@ class TestAsyncUpdateListener:
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
         await hass.async_block_till_done()
 
-        with patch(
-            "custom_components.evon._apply_debug_logging"
-        ) as mock_apply_debug, patch.object(
-            hass.config_entries, "async_reload", new_callable=AsyncMock
+        with (
+            patch("custom_components.evon._apply_debug_logging") as mock_apply_debug,
+            patch.object(hass.config_entries, "async_reload", new_callable=AsyncMock),
         ):
             hass.config_entries.async_update_entry(
                 mock_config_entry_v2,

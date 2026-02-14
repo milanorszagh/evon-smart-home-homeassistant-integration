@@ -176,9 +176,7 @@ class EvonCameraRecorder:
                     await asyncio.sleep(_MIN_FRAME_INTERVAL - frame_elapsed)
 
         except asyncio.CancelledError:
-            _LOGGER.debug(
-                "Recording stopped by user for %s", self._camera.entity_id
-            )
+            _LOGGER.debug("Recording stopped by user for %s", self._camera.entity_id)
             return
 
         # Auto-stop when max duration reached
