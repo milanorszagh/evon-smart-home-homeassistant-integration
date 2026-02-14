@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 import textwrap
 import types
 from unittest.mock import MagicMock
@@ -21,7 +22,9 @@ def _load_ws_method():
     it outside of its package, we replace that import with direct references injected
     into the namespace.
     """
-    source_path = "/Users/milan/www/evon-ha/custom_components/evon/coordinator/__init__.py"
+    source_path = str(
+        Path(__file__).resolve().parent.parent / "custom_components" / "evon" / "coordinator" / "__init__.py"
+    )
     with open(source_path) as f:
         source = f.read()
 

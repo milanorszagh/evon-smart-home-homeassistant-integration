@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import types
 from unittest.mock import AsyncMock, MagicMock
 
@@ -55,7 +56,9 @@ class TestBatchedEnergyStatistics:
         import ast
         import textwrap
 
-        source_path = "/Users/milan/www/evon-ha/custom_components/evon/coordinator/__init__.py"
+        source_path = str(
+            Path(__file__).resolve().parent.parent / "custom_components" / "evon" / "coordinator" / "__init__.py"
+        )
         with open(source_path) as f:
             source = f.read()
 
