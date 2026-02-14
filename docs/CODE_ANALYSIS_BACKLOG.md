@@ -3,8 +3,8 @@
 Deep code analysis performed on 2026-02-13 identified **74 issues** across the
 Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
-**14 issues were fixed** in the initial pass. This document tracks the remaining
-**60 issues** organized by severity and category.
+**21 issues were fixed** across two passes. This document tracks the remaining
+**58 issues** organized by severity and category.
 
 ---
 
@@ -22,6 +22,13 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 | 8 | TS | Fix WS subscription leak in `getPropertyValues` |
 | 9 | TS | Add post-connection error handler in TS WS client |
 | 10 | TS | Fix API client retry to detect re-auth failure |
+| 11 | Python | Batch `statistics_during_period` calls for smart meters (P-H1) |
+| 12 | Python | Copy-on-write for WS data updates to prevent data races (P-H2) |
+| 13 | TS | Add `process.exit(1)` to `main().catch()` handler (T-H1) |
+| 14 | TS | Reset `sequenceId` on WS reconnect (T-H2) |
+| 15 | TS | Re-register WS subscriptions after reconnect (T-H3) |
+| 16 | TS | Handle disconnect during connect cleanly (T-H4) |
+| 17 | TS | Add SIGTERM/SIGINT graceful shutdown handler (T-L4) |
 
 ---
 
@@ -33,17 +40,13 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
 | ID | Category | File | Line | Description |
 |----|----------|------|------|-------------|
-| P-H1 | Performance | `coordinator/__init__.py` | 715 | **`statistics_during_period` serializes event loop.** Each smart meter triggers an `async_add_executor_job` call to the synchronous recorder API on every poll. With N meters this creates N sequential blocking executor calls per poll cycle, starving the event loop. Batch the queries or cache results with a TTL. |
-| P-H2 | Concurrency | `coordinator/__init__.py` | 513 | **`_handle_ws_values_changed` mutates shared data dict in-place.** A concurrent HTTP poll can read a partially-updated entity dict. The re-check at line 591 mitigates but does not fully prevent stale snapshots when an HTTP poll lands between two key writes in the for-loop at line 617. Consider copy-on-write or an atomic replacement pattern. |
+| | | | | *(P-H1 and P-H2 fixed — see Fixed Issues table)* |
 
 #### TypeScript
 
 | ID | Category | File | Line | Description |
 |----|----------|------|------|-------------|
-| T-H1 | Error Handling | `src/index.ts` | 39 | **`main().catch(console.error)` allows silent server death.** If `main()` rejects after startup (e.g., transport error), the process prints to stderr and exits silently. The MCP client receives no error response. Add `process.exit(1)` in the catch handler and/or use `server.onerror`. |
-| T-H2 | Bug | `src/ws-client.ts` | 509 | **`sequenceId` never resets on reconnect.** The monotonically increasing `sequenceId` is never reset on disconnect/reconnect, risking integer overflow on long-running sessions. While JavaScript uses 64-bit floats (safe up to 2^53), the server may use 32-bit integers. Reset to 1 on reconnect or use modular arithmetic. |
-| T-H3 | Bug | `src/ws-client.ts` | 463 | **WS reconnection does not re-register subscriptions.** The TS MCP WS client (`EvonWsClient`) has no reconnection loop. After a disconnect, the `close` event fires, `connected` is set to `false`, and pending requests are rejected. On next `call()`, `connect()` is invoked but prior `registerValuesChanged` subscriptions are lost. The `subscriptions` map is only used for local dispatch; the server-side registration is not restored. |
-| T-H4 | Bug | `src/ws-client.ts` | 218 | **`disconnect()` during `performConnect()` leaves client in limbo.** If `disconnect()` is called while `performConnect()` is awaiting, `this.ws` is set to `null` and `connected` to `false`, but the `performConnect()` promise remains pending until its internal timeout fires (up to `API_TIMEOUT_MS`). The caller of `connect()` is stuck awaiting `connectPromise`. |
+| | | | | *(T-H1, T-H2, T-H3, T-H4 fixed — see Fixed Issues table)* |
 
 #### Tests / CI
 
@@ -128,7 +131,7 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 | T-L1 | Bug | `src/ws-client.ts` | 556-558 | **WS `ValuesChanged` handler ignores malformed entries silently.** If a `ValuesChanged` event contains entries where `entry.value` is missing or `entry.value.Value` is undefined, the property is set to `undefined` without logging. This makes debugging data issues difficult. |
 | T-L2 | Bug | `src/helpers.ts` | 177-182 | **`timeRemaining` unit ambiguity in radiator state.** `NextSwitchPoint` is treated as hours (integer part = hours, fractional = minutes) but the property name and format string suggest minutes. The conversion `Math.floor(timeRemaining)` and `(timeRemaining % 1) * 60` is correct for hours-and-fraction but confusing. Add a comment or rename variables. |
 | T-L3 | Performance | `src/resources/*.ts` | varies | **Hardcoded resource URIs like `evon://climate`.** Resource URIs are hardcoded strings. If the naming convention changes, multiple files must be updated. Consider defining them in `constants.ts`. |
-| T-L4 | Reliability | `src/index.ts` | 39 | **No graceful shutdown handler.** The MCP server does not register `SIGTERM`/`SIGINT` handlers. When the process is killed, the WS client connection is not cleanly closed, potentially leaving server-side subscriptions active. |
+| | | | | *(T-L4 fixed — see Fixed Issues table)* |
 | T-L5 | Error Handling | `src/ws-client.ts` | 573 | **`console.error` usage throughout WS client on stdio transport.** Multiple `console.error` calls in the WS client write to stderr. While stderr is separate from stdout (used for MCP), some environments merge them. Use structured logging or suppress in production. |
 | T-L6 | Security | `src/tools/generic.ts` | 88 | **`callMethod` uses `sanitizeId` for method name but no semantic validation.** While `sanitizeId` prevents path traversal in the method parameter, it does not restrict which methods can be called. Combined with T-M9, this means any alphanumeric method name is accepted. |
 | T-L7 | Bug | `src/tools/radiators.ts` | 38-48 | **Bathroom radiator `on`/`off` actions are not truly mutual exclusive.** The `on` action toggles only if currently off, and `off` toggles only if currently on. But between the state check (`apiRequest`) and the toggle (`callMethod`), the state could change (same race as P-M1). |
@@ -153,11 +156,11 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
 | Severity | Python | TypeScript | Tests/CI | Total |
 |----------|--------|------------|----------|-------|
-| High     | 2      | 4          | 7        | 13    |
+| High     | 0      | 0          | 7        | 7     |
 | Medium   | 4      | 10         | 13       | 27    |
-| Low      | 9      | 10         | 6        | 25    |
-| **Total remaining** | **15** | **24** | **26** | **65** |
-| Fixed    | 3      | 4          | 7 (3 Test + 4 CI) | 14 |
+| Low      | 9      | 9          | 6        | 24    |
+| **Total remaining** | **13** | **19** | **26** | **58** |
+| Fixed    | 5      | 9          | 7 (3 Test + 4 CI) | 21 |
 | **Grand total** | **18** | **28** | **33** | **79** |
 
 > Note: The original analysis found 74 issues. During the fix pass, 5 additional
@@ -172,15 +175,15 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 ### Quick wins (< 1 hour each)
 
 1. **P-L1** -- Add null guard to `current_humidity` transform
-2. **T-L4** -- Add `SIGTERM`/`SIGINT` graceful shutdown handler
-3. **T-H1** -- Add `process.exit(1)` to `main().catch()` handler
+2. ~~**T-L4** -- Add `SIGTERM`/`SIGINT` graceful shutdown handler~~ ✅ Fixed
+3. ~~**T-H1** -- Add `process.exit(1)` to `main().catch()` handler~~ ✅ Fixed
 4. **C-L3** -- Add pip cache to CI
 5. **C-L5** -- Import `TRIGGER_TYPE_DOORBELL` from production code in test
 
 ### High-impact improvements (1-4 hours each)
 
-6. **P-H1** -- Batch `statistics_during_period` calls for smart meters
-7. **T-H3** -- Implement WS reconnection with subscription re-registration
+6. ~~**P-H1** -- Batch `statistics_during_period` calls for smart meters~~ ✅ Fixed
+7. ~~**T-H3** -- Implement WS reconnection with subscription re-registration~~ ✅ Fixed
 8. **T-L8** -- Extract shared login function between WS and API clients
 9. **C-H4** -- Add basic WS reconnection loop tests
 10. **C-H1** -- Add tests for `_async_cleanup_stale_entities`
