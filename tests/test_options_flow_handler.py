@@ -9,14 +9,18 @@ from custom_components.evon.const import (
     CONF_DEBUG_COORDINATOR,
     CONF_DEBUG_WEBSOCKET,
     CONF_HTTP_ONLY,
+    CONF_MAX_RECORDING_DURATION,
+    CONF_RECORDING_OUTPUT_FORMAT,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
     DEFAULT_DEBUG_API,
     DEFAULT_DEBUG_COORDINATOR,
     DEFAULT_DEBUG_WEBSOCKET,
     DEFAULT_HTTP_ONLY,
+    DEFAULT_MAX_RECORDING_DURATION,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SYNC_AREAS,
+    RECORDING_OUTPUT_MP4,
 )
 from tests.conftest import requires_ha_test_framework
 
@@ -89,21 +93,29 @@ class TestOptionsFlowIntegration:
 
         result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
 
-        # Submit with updated options
+        # Submit with updated options (include recording section if cameras are present)
+        user_input = {
+            CONF_SYNC_AREAS: True,
+            "connection": {
+                CONF_HTTP_ONLY: False,
+                CONF_SCAN_INTERVAL: 60,
+            },
+            "debug": {
+                CONF_DEBUG_API: True,
+                CONF_DEBUG_WEBSOCKET: False,
+                CONF_DEBUG_COORDINATOR: False,
+            },
+        }
+        # Add recording section if cameras are present in the schema
+        if "recording" in (result.get("data_schema") or {}).schema:
+            user_input["recording"] = {
+                CONF_MAX_RECORDING_DURATION: DEFAULT_MAX_RECORDING_DURATION,
+                CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
+            }
+
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={
-                CONF_SYNC_AREAS: True,
-                "connection": {
-                    CONF_HTTP_ONLY: False,
-                    CONF_SCAN_INTERVAL: 60,
-                },
-                "debug": {
-                    CONF_DEBUG_API: True,
-                    CONF_DEBUG_WEBSOCKET: False,
-                    CONF_DEBUG_COORDINATOR: False,
-                },
-            },
+            user_input=user_input,
         )
 
         assert result2["type"] == "create_entry"
@@ -122,21 +134,28 @@ class TestOptionsFlowIntegration:
 
         result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
 
-        # Submit with the defaults
+        # Submit with the defaults (include recording section if cameras are present)
+        user_input = {
+            CONF_SYNC_AREAS: DEFAULT_SYNC_AREAS,
+            "connection": {
+                CONF_HTTP_ONLY: DEFAULT_HTTP_ONLY,
+                CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
+            },
+            "debug": {
+                CONF_DEBUG_API: DEFAULT_DEBUG_API,
+                CONF_DEBUG_WEBSOCKET: DEFAULT_DEBUG_WEBSOCKET,
+                CONF_DEBUG_COORDINATOR: DEFAULT_DEBUG_COORDINATOR,
+            },
+        }
+        if "recording" in (result.get("data_schema") or {}).schema:
+            user_input["recording"] = {
+                CONF_MAX_RECORDING_DURATION: DEFAULT_MAX_RECORDING_DURATION,
+                CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
+            }
+
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={
-                CONF_SYNC_AREAS: DEFAULT_SYNC_AREAS,
-                "connection": {
-                    CONF_HTTP_ONLY: DEFAULT_HTTP_ONLY,
-                    CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL,
-                },
-                "debug": {
-                    CONF_DEBUG_API: DEFAULT_DEBUG_API,
-                    CONF_DEBUG_WEBSOCKET: DEFAULT_DEBUG_WEBSOCKET,
-                    CONF_DEBUG_COORDINATOR: DEFAULT_DEBUG_COORDINATOR,
-                },
-            },
+            user_input=user_input,
         )
 
         assert result2["type"] == "create_entry"
