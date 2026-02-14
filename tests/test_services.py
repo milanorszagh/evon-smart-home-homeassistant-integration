@@ -88,22 +88,23 @@ class TestServiceIntegration:
     @pytest.mark.asyncio
     async def test_refresh_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """Test the refresh service calls coordinator refresh."""
+        from unittest.mock import AsyncMock, patch
+
         mock_config_entry_v2.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
         await hass.async_block_till_done()
 
-        # Call the refresh service
-        await hass.services.async_call(
-            "evon",
-            "refresh",
-            {},
-            blocking=True,
-        )
-
-        # Verify coordinator.async_refresh was actually called
-        # The service handler iterates config entries and calls async_refresh
         coordinator = hass.data["evon"][mock_config_entry_v2.entry_id]["coordinator"]
-        assert coordinator.async_refresh.call_count >= 1
+
+        with patch.object(coordinator, "async_refresh", new_callable=AsyncMock) as mock_refresh:
+            await hass.services.async_call(
+                "evon",
+                "refresh",
+                {},
+                blocking=True,
+            )
+
+            assert mock_refresh.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_set_home_state_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
