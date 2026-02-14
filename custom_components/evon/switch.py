@@ -8,10 +8,11 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
@@ -197,6 +198,8 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_is_on: bool | None = None
         # Optimistic time remaining for immediate UI feedback when turning on
         self._optimistic_time_remaining_mins: float | None = None
+        # Cancel handle for delayed post-toggle verification refresh
+        self._cancel_post_toggle_verify: CALLBACK_TYPE | None = None
 
     def _reset_optimistic_state(self) -> None:
         """Reset radiator-specific optimistic state fields."""
@@ -330,6 +333,30 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self.async_write_ha_state()
             raise
         await self.coordinator.async_request_refresh()
+
+        # Schedule a delayed verification refresh to confirm the toggle
+        # actually converged to the expected state (mitigates race condition
+        # where the radiator turned off between our state check and the toggle).
+        if self._cancel_post_toggle_verify:
+            self._cancel_post_toggle_verify()
+        self._cancel_post_toggle_verify = async_call_later(
+            self.hass, 3, self._async_post_toggle_verify
+        )
+
+    async def _async_post_toggle_verify(self, _now: Any) -> None:
+        """Verify state converged after toggle by requesting a coordinator refresh."""
+        self._cancel_post_toggle_verify = None
+        _LOGGER.debug(
+            "Radiator %s: post-toggle verification refresh", self._instance_id
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel pending verification when entity is removed."""
+        if self._cancel_post_toggle_verify:
+            self._cancel_post_toggle_verify()
+            self._cancel_post_toggle_verify = None
+        await super().async_will_remove_from_hass()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
