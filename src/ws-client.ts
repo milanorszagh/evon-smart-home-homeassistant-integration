@@ -208,6 +208,11 @@ export class EvonWsClient {
           }
 
           resolve();
+
+          // Restore server-side subscriptions after reconnect
+          this.resubscribeAll().catch((err) => {
+            console.error("Resubscription after connect failed:", err);
+          });
         }
       });
 
@@ -233,7 +238,29 @@ export class EvonWsClient {
     }
     this.connected = false;
     this.token = null;
-    this.subscriptions.clear();
+  }
+
+  /**
+   * Re-register all local subscriptions with the server.
+   * Called after a successful reconnect to restore server-side state.
+   */
+  private async resubscribeAll(): Promise<void> {
+    if (this.subscriptions.size === 0) {
+      return;
+    }
+
+    const subs: PropertySubscription[] = Array.from(
+      this.subscriptions.keys()
+    ).map((instanceId) => ({
+      Instanceid: instanceId,
+      Properties: [],
+    }));
+
+    try {
+      await this.call("RegisterValuesChanged", [true, subs, true, true]);
+    } catch (error) {
+      console.error("Failed to resubscribe after reconnect:", error);
+    }
   }
 
   /**
