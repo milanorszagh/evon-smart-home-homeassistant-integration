@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,22 +14,14 @@ class TestBaseEntityLogic:
     @pytest.fixture(autouse=True)
     def setup_mocks(self):
         """Set up mocks for Home Assistant modules."""
-        # Store original modules
-        original_modules = {}
-        modules_to_mock = [
-            "homeassistant",
-            "homeassistant.config_entries",
-            "homeassistant.core",
-            "homeassistant.helpers",
-            "homeassistant.helpers.device_registry",
-            "homeassistant.helpers.update_coordinator",
-        ]
-
-        # Create mocks
-        for mod_name in modules_to_mock:
-            if mod_name in sys.modules:
-                original_modules[mod_name] = sys.modules[mod_name]
-            sys.modules[mod_name] = MagicMock()
+        modules_to_mock = {
+            "homeassistant": MagicMock(),
+            "homeassistant.config_entries": MagicMock(),
+            "homeassistant.core": MagicMock(),
+            "homeassistant.helpers": MagicMock(),
+            "homeassistant.helpers.device_registry": MagicMock(),
+            "homeassistant.helpers.update_coordinator": MagicMock(),
+        }
 
         # Set up specific mock behaviors - CoordinatorEntity needs to support subscripting
         class MockCoordinatorEntity:
@@ -39,18 +31,12 @@ class TestBaseEntityLogic:
             def __class_getitem__(cls, item):
                 return cls
 
-        sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
-        sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
-        sys.modules["homeassistant.core"].callback = lambda f: f
+        modules_to_mock["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
+        modules_to_mock["homeassistant.helpers.device_registry"].DeviceInfo = dict
+        modules_to_mock["homeassistant.core"].callback = lambda f: f
 
-        yield
-
-        # Restore original modules
-        for mod_name in modules_to_mock:
-            if mod_name in original_modules:
-                sys.modules[mod_name] = original_modules[mod_name]
-            else:
-                del sys.modules[mod_name]
+        with patch.dict(sys.modules, modules_to_mock):
+            yield
 
         # Clear only the modules this test imported (not all evon modules,
         # which would break other tests that hold references to them)

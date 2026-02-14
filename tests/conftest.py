@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import copy
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 # Add repo root to path so custom_components can be found
@@ -35,8 +37,30 @@ if not importlib.util.find_spec("homeassistant"):
     mock_ha.helpers.entity = MagicMock()
     mock_ha.helpers.update_coordinator = MagicMock()
     mock_ha.components = MagicMock()
-    mock_ha.components.climate = MagicMock()
-    mock_ha.components.light = MagicMock()
+    # Climate component with real string constants matching HA
+    mock_climate = MagicMock()
+    mock_climate.HVACMode = SimpleNamespace(
+        HEAT="heat", COOL="cool", OFF="off", AUTO="auto",
+        HEAT_COOL="heat_cool", DRY="dry", FAN_ONLY="fan_only",
+    )
+    mock_climate.ClimateEntityFeature = SimpleNamespace(
+        TARGET_TEMPERATURE=1, PRESET_MODE=16,
+        TARGET_TEMPERATURE_RANGE=2, FAN_MODE=8,
+    )
+    mock_climate.ATTR_TEMPERATURE = "temperature"
+    mock_ha.components.climate = mock_climate
+
+    # Light component with real string constants matching HA
+    mock_light = MagicMock()
+    mock_light.ColorMode = SimpleNamespace(
+        ONOFF="onoff", BRIGHTNESS="brightness", COLOR_TEMP="color_temp",
+        HS="hs", RGB="rgb", RGBW="rgbw", RGBWW="rgbww", XY="xy",
+        WHITE="white", UNKNOWN="unknown",
+    )
+    mock_light.LightEntityFeature = SimpleNamespace(
+        EFFECT=4, FLASH=8, TRANSITION=32,
+    )
+    mock_ha.components.light = mock_light
     mock_ha.components.cover = MagicMock()
     mock_ha.components.sensor = MagicMock()
     mock_ha.components.binary_sensor = MagicMock()
@@ -134,6 +158,20 @@ if not importlib.util.find_spec("homeassistant"):
     sys.modules["homeassistant.loader"] = mock_ha.loader
     sys.modules["homeassistant.helpers.config_validation"] = mock_ha.helpers.config_validation
     sys.modules["homeassistant.data_entry_flow"] = mock_ha.data_entry_flow
+
+    # Device automation and trigger modules (used by device_trigger.py)
+    mock_device_automation = MagicMock()
+    mock_device_automation.DEVICE_TRIGGER_BASE_SCHEMA = MagicMock()
+    sys.modules["homeassistant.components.device_automation"] = mock_device_automation
+
+    mock_ha_triggers = MagicMock()
+    sys.modules["homeassistant.components.homeassistant"] = MagicMock()
+    sys.modules["homeassistant.components.homeassistant.triggers"] = MagicMock()
+    sys.modules["homeassistant.components.homeassistant.triggers.event"] = mock_ha_triggers
+
+    mock_trigger_helpers = MagicMock()
+    sys.modules["homeassistant.helpers.trigger"] = mock_trigger_helpers
+    sys.modules["homeassistant.helpers.typing"] = MagicMock()
 
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
@@ -254,7 +292,7 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.test_connection = AsyncMock(return_value=True)
         mock_api.login = AsyncMock(return_value="test_token")
         mock_api.get_instances = AsyncMock(return_value=MOCK_INSTANCES)
-        mock_api.get_instance = AsyncMock(side_effect=lambda instance_id: MOCK_INSTANCE_DETAILS.get(instance_id, {}))
+        mock_api.get_instance = AsyncMock(side_effect=lambda instance_id: copy.deepcopy(MOCK_INSTANCE_DETAILS.get(instance_id, {})))
         # Light methods
         mock_api.turn_on_light = AsyncMock()
         mock_api.turn_off_light = AsyncMock()
@@ -277,7 +315,13 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.set_climate_comfort_mode = AsyncMock()
         mock_api.set_climate_energy_saving_mode = AsyncMock()
         mock_api.set_climate_freeze_protection_mode = AsyncMock()
-        mock_api.set_climate_temperature = AsyncMock()
+        async def _validated_set_climate_temperature(instance_id, temperature):
+            if not 5 <= temperature <= 40:
+                raise ValueError(
+                    f"Temperature {temperature} out of valid range 5-40"
+                )
+
+        mock_api.set_climate_temperature = AsyncMock(side_effect=_validated_set_climate_temperature)
         # Home state methods
         mock_api.activate_home_state = AsyncMock()
         # Season mode methods
@@ -305,8 +349,8 @@ if HAS_HA_TEST_FRAMEWORK:
         # Image fetch method
         mock_api.fetch_image = AsyncMock(return_value=b"\xff\xd8\xff\xe0\x00\x10JFIF")  # JPEG header bytes
         # WebSocket control support methods
-        mock_api.set_ws_client = lambda ws: None
-        mock_api.set_instance_classes = lambda instances: None
+        mock_api.set_ws_client = MagicMock()
+        mock_api.set_instance_classes = MagicMock()
         # Blind position/angle cache methods (synchronous, not async)
         mock_api._blind_positions = {}
         mock_api._blind_angles = {}

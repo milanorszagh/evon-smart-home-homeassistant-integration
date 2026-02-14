@@ -6,11 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from custom_components.evon.device_trigger import TRIGGER_TYPE_DOORBELL, TRIGGER_TYPES
 from tests.conftest import requires_ha_test_framework
-
-# Test constants without importing from HA
-TRIGGER_TYPE_DOORBELL = "doorbell"
-TRIGGER_TYPES = {TRIGGER_TYPE_DOORBELL}
 
 
 class TestDeviceTriggerConstants:
