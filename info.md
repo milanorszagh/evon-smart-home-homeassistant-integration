@@ -11,14 +11,18 @@ Control your [Evon Smart Home](https://www.evon-smarthome.com/) system directly 
 - **Climate**: Temperature control with presets and humidity display
 - **Season Mode**: Global heating/cooling switch
 - **Home State**: Switch between home modes (At Home, Night, Work, Holiday)
-- **Sensors**: Temperature, energy, air quality
+- **Sensors**: Temperature, power, energy (total, today, this month), voltage, current, frequency, feed-in, air quality (CO2)
 - **Switches**: Controllable relay outputs
+- **Valves**: Climate valve binary sensors
 - **Bathroom Radiators**: Electric heater control with timer
 - **Scenes**: Trigger Evon-defined scenes from Home Assistant
 - **Security Doors**: Door state and call in progress sensors
 - **Intercoms**: Door state, connection status, and doorbell events
 - **Cameras**: Live feed from 2N intercom cameras with recording controls and media browser integration
 - **Doorbell Snapshots**: Historical snapshots as image entities
+- **Services**: Bulk operations (all lights off, all blinds open/close, all climate comfort/eco/away), recording control
+- **Diagnostics**: Export integration diagnostics for troubleshooting
+- **Reconfigure Flow**: Change host/credentials without removing the integration
 
 ## Configuration
 
@@ -49,6 +53,8 @@ Works for both local and remote connections.
 - **Poll interval**: Configure how often device states are updated (5-300 seconds)
 - **Area sync**: Automatically assign devices to Home Assistant areas
 - **Non-dimmable lights**: Mark lights as on/off only
+- **Camera recording**: Max recording duration and output format (MP4/AVI)
+- **Debug logging**: Granular debug logging for API, WebSocket, and coordinator
 
 ## Support
 

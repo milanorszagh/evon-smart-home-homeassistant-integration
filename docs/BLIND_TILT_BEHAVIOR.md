@@ -19,10 +19,17 @@ This means the same tilt value produces **opposite physical results** depending 
 
 ### API Method
 
-The Evon API provides a single method for tilt control:
+The Evon API provides two methods for blind/tilt control:
+
+**HTTP (SetAngle)**:
 - **Method**: `SetAngle`
 - **Parameter**: Integer value 0-100
 - **Endpoint**: `POST /api/instances/{blind_id}/SetAngle` with body `[angle]`
+
+**WebSocket (preferred)**:
+- **Method**: `CallMethod MoveToPosition([angle, position])`
+- This is the preferred method as it allows setting tilt angle and position in a single call
+- Note: `SetValue Position` does **NOT** work — the hardware does not move
 
 There are no dedicated "open tilt" or "close tilt" commands that would handle direction automatically.
 
@@ -144,7 +151,7 @@ async def async_set_cover_tilt_position(self, **kwargs):
 
 Users should be aware that:
 
-1. Tilt values (0=open, 100=closed) are correct when the blind **last moved down**
+1. Tilt values (0=closed/blocking light, 100=open/horizontal) are correct when the blind **last moved down**
 2. If the blind last moved up (via any method), tilt will appear **inverted**
 3. To "reset" tilt orientation, move the blind down slightly before adjusting tilt
 4. This is the same behavior as the official Evon app

@@ -352,6 +352,23 @@ export class EvonWsClient {
   }
 
   /**
+   * Call a method on a device instance via WebSocket CallMethod.
+   * Use fireAndForget for methods that don't send a MethodReturn response (e.g. climate).
+   */
+  async callMethod(
+    instanceId: string,
+    method: string,
+    params: unknown[] = [],
+    fireAndForget = false
+  ): Promise<void> {
+    if (fireAndForget) {
+      await this.sendFireAndForget("CallMethod", [`${instanceId}.${method}`, params]);
+    } else {
+      await this.call("CallMethod", [`${instanceId}.${method}`, params]);
+    }
+  }
+
+  /**
    * Get property values for multiple devices in a single call.
    * Returns values via the ValuesChanged event mechanism.
    */
@@ -444,52 +461,79 @@ export class EvonWsClient {
   }
 
   /**
-   * Set blind position (0-100, where 0 is closed/up).
+   * Move blind to position and angle via CallMethod MoveToPosition.
+   * This is the only reliable WS method for blind control.
+   * SetValue on Position does NOT move the hardware.
    */
-  async setBlindPosition(instanceId: string, position: number): Promise<void> {
-    await this.setValue(instanceId, "Position", Math.max(0, Math.min(100, position)));
+  async moveBlindToPosition(instanceId: string, angle: number, position: number): Promise<void> {
+    await this.callMethod(instanceId, "MoveToPosition", [
+      Math.max(0, Math.min(100, angle)),
+      Math.max(0, Math.min(100, position)),
+    ]);
   }
 
   /**
-   * Set blind angle (0-100).
+   * Open a blind via CallMethod.
    */
-  async setBlindAngle(instanceId: string, angle: number): Promise<void> {
-    await this.setValue(instanceId, "Angle", Math.max(0, Math.min(100, angle)));
+  async openBlind(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "Open");
   }
 
   /**
-   * Set climate target temperature.
+   * Close a blind via CallMethod.
+   */
+  async closeBlind(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "Close");
+  }
+
+  /**
+   * Stop a blind via CallMethod.
+   */
+  async stopBlind(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "Stop");
+  }
+
+  /**
+   * Set climate target temperature for the current preset.
+   * Uses fire-and-forget because climate methods don't send MethodReturn.
    */
   async setClimateTemperature(instanceId: string, temperature: number): Promise<void> {
-    await this.setValue(instanceId, "SetTemperature", temperature);
+    await this.callMethod(instanceId, "WriteCurrentSetTemperature", [temperature], true);
   }
 
   /**
-   * Set climate mode (0=off, 1=comfort, 2=eco, 3=away).
+   * Set climate preset mode.
+   * Mode values: "comfort" | "eco" | "away"
+   * Uses fire-and-forget because climate methods don't send MethodReturn.
    */
-  async setClimateMode(instanceId: string, mode: number): Promise<void> {
-    await this.setValue(instanceId, "Mode", mode);
+  async setClimateMode(instanceId: string, mode: "comfort" | "eco" | "away"): Promise<void> {
+    const methodMap: Record<string, string> = {
+      comfort: "WriteDayMode",
+      eco: "WriteNightMode",
+      away: "WriteFreezeMode",
+    };
+    await this.callMethod(instanceId, methodMap[mode], [], true);
   }
 
   /**
-   * Activate a home state.
+   * Activate a home state via CallMethod.
    */
-  async setHomeStateActive(instanceId: string, active: boolean): Promise<void> {
-    await this.setValue(instanceId, "Active", active);
+  async activateHomeState(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "Activate");
   }
 
   /**
-   * Control bathroom radiator.
+   * Turn bathroom radiator on for configured duration via CallMethod.
    */
-  async setBathroomRadiatorOn(instanceId: string, on: boolean): Promise<void> {
-    await this.setValue(instanceId, "Output", on);
+  async setBathroomRadiatorOn(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "SwitchOneTime");
   }
 
   /**
-   * Set bathroom radiator timer (minutes).
+   * Toggle bathroom radiator on/off via CallMethod.
    */
-  async setBathroomRadiatorTimer(instanceId: string, minutes: number): Promise<void> {
-    await this.setValue(instanceId, "EnableForMins", minutes);
+  async toggleBathroomRadiator(instanceId: string): Promise<void> {
+    await this.callMethod(instanceId, "Switch");
   }
 
   // --------------------------------------------------------------------------
@@ -506,6 +550,25 @@ export class EvonWsClient {
 
   private resetConnectionState(): void {
     this.sequenceId = 1;
+  }
+
+  private async sendFireAndForget(methodName: string, args: unknown[]): Promise<void> {
+    if (!this.isConnected()) {
+      await this.connect();
+    }
+    if (!this.ws) {
+      throw new Error("WebSocket not connected");
+    }
+    const seq = this.sequenceId++;
+    const message: WsMessage = {
+      methodName: "CallWithReturn",
+      request: {
+        args,
+        methodName,
+        sequenceId: seq,
+      },
+    };
+    this.ws.send(JSON.stringify(message));
   }
 
   private async login(): Promise<string> {
@@ -740,20 +803,25 @@ export async function wsControlLight(
 }
 
 /**
- * Control a blind via WebSocket.
+ * Control a blind via WebSocket using CallMethod MoveToPosition.
+ * When setting only position or angle, the other value defaults to the current cached value
+ * or 0 if unknown. For best results, provide both angle and position.
  */
 export async function wsControlBlind(
   instanceId: string,
-  options: { position?: number; angle?: number }
+  options: { position?: number; angle?: number; action?: "open" | "close" | "stop" }
 ): Promise<void> {
   const client = getWsClient();
   await client.connect();
 
-  if (options.position !== undefined) {
-    await client.setBlindPosition(instanceId, options.position);
-  }
-  if (options.angle !== undefined) {
-    await client.setBlindAngle(instanceId, options.angle);
+  if (options.action === "open") {
+    await client.openBlind(instanceId);
+  } else if (options.action === "close") {
+    await client.closeBlind(instanceId);
+  } else if (options.action === "stop") {
+    await client.stopBlind(instanceId);
+  } else if (options.position !== undefined || options.angle !== undefined) {
+    await client.moveBlindToPosition(instanceId, options.angle ?? 0, options.position ?? 0);
   }
 }
 
@@ -789,20 +857,20 @@ export async function wsGetClimateState(
 }
 
 /**
- * Control climate via WebSocket.
+ * Control climate via WebSocket using CallMethod (fire-and-forget).
  */
 export async function wsControlClimate(
   instanceId: string,
-  options: { temperature?: number; mode?: number }
+  options: { temperature?: number; mode?: "comfort" | "eco" | "away" }
 ): Promise<void> {
   const client = getWsClient();
   await client.connect();
 
-  if (options.temperature !== undefined) {
-    await client.setClimateTemperature(instanceId, options.temperature);
-  }
   if (options.mode !== undefined) {
     await client.setClimateMode(instanceId, options.mode);
+  }
+  if (options.temperature !== undefined) {
+    await client.setClimateTemperature(instanceId, options.temperature);
   }
 }
 
@@ -836,12 +904,12 @@ export async function wsGetHomeStateStatus(
 }
 
 /**
- * Activate a home state via WebSocket.
+ * Activate a home state via WebSocket using CallMethod Activate.
  */
 export async function wsActivateHomeState(instanceId: string): Promise<void> {
   const client = getWsClient();
   await client.connect();
-  await client.setHomeStateActive(instanceId, true);
+  await client.activateHomeState(instanceId);
 }
 
 /**
@@ -886,19 +954,19 @@ export async function wsGetBathroomRadiatorState(
 }
 
 /**
- * Control bathroom radiator via WebSocket.
+ * Control bathroom radiator via WebSocket using CallMethod.
  */
 export async function wsControlBathroomRadiator(
   instanceId: string,
-  options: { on?: boolean; timerMinutes?: number }
+  options: { on?: boolean }
 ): Promise<void> {
   const client = getWsClient();
   await client.connect();
 
-  if (options.on !== undefined) {
-    await client.setBathroomRadiatorOn(instanceId, options.on);
-  }
-  if (options.timerMinutes !== undefined) {
-    await client.setBathroomRadiatorTimer(instanceId, options.timerMinutes);
+  if (options.on === true) {
+    await client.setBathroomRadiatorOn(instanceId);
+  } else if (options.on === false) {
+    // Toggle off - SwitchOff doesn't work via WS, use Switch to toggle
+    await client.toggleBathroomRadiator(instanceId);
   }
 }

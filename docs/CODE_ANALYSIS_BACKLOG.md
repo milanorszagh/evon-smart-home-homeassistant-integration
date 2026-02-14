@@ -117,12 +117,12 @@ The following issues were analyzed and determined to be either framework limitat
 | Low      | 0 (3 won't fix) | 0 (1 won't fix) | 0 | 0 (4 won't fix) |
 | **Total remaining** | **0** | **0** | **0 (1 deferred)** | **0 (1 deferred, 4 won't fix)** |
 | Fixed    | 13     | 18         | 37 (20 Test + 17 CI) | 68 |
-| **Grand total** | **13** | **18** | **38** | **69** |
+| **Grand total** | **13** | **18** | **38** | **73** |
 
 > Note: The original analysis found 74 issues. During the fix pass, 5 additional
 > sub-issues were identified (e.g., separate aspects of the same root cause).
 > After consolidating duplicates and refining categorization, the tracked total
-> is 69 distinct issues. Of these, 68 were fixed, 1 is deferred (C-H7 mypy errors),
+> is 73 distinct issues. Of these, 68 were fixed, 1 is deferred (C-H7 mypy errors),
 > and 4 are documented as won't fix with reasoning.
 
 ---

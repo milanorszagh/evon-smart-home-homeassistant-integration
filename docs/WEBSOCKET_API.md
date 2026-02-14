@@ -739,7 +739,7 @@ await ws.send(JSON.stringify({
 | `Frequency` | number | Grid frequency (Hz) |
 | `P1`, `P2`, `P3` | number | Active power per phase (Watts) |
 | `Q1`, `Q2`, `Q3` | number | Reactive power per phase (VAR) |
-| `S1`, `S3`, `Sges` | number | Apparent power (VA) |
+| `S1`, `S2`, `S3`, `Sges` | number | Apparent power (VA) |
 
 **Total Power Calculation:**
 The total power is computed as `P1 + P2 + P3`. The Home Assistant integration automatically calculates this from the per-phase values received via WebSocket.
@@ -1185,7 +1185,7 @@ Fetch saved pictures via: `http://{evon-host}{imageUrlClient}` with token cookie
 - `custom_components/evon/ws_client.py` - WebSocket client implementation
 - `custom_components/evon/ws_control.py` - WebSocket control mappings (canonical WS-native names → WS call format, plus `get_http_method_name()` for HTTP fallback translation)
 - `custom_components/evon/ws_mappings.py` - Property subscriptions and data mapping
-- `custom_components/evon/api.py` - HTTP API client with WebSocket fallback
+- `custom_components/evon/api.py` - API client with WebSocket-preferred control, HTTP fallback
 - `custom_components/evon/climate.py` - Climate entity with optimistic state
 
 **Test Scripts:**

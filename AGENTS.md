@@ -21,7 +21,7 @@ This repository contains two integrations for Evon Smart Home systems:
 | **README.md** | End users | Installation, features, configuration, platform descriptions (user-friendly, no internal details), version history |
 | **DEVELOPMENT.md** | Developers | Architecture, API reference, device classes, methods, code patterns, testing, MCP server setup |
 | **AGENTS.md** | AI agents | Critical API knowledge, debugging tips, gotchas, implementation patterns, version history (detailed) |
-| **info.md** | HACS | Brief feature summary for HACS integration page |
+| **info.md** | HACS | Brief feature summary (secondary reference; `hacs.json` has `render_readme: true`, so HACS displays README.md instead) |
 
 ### What Goes Where
 
@@ -396,6 +396,9 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 ### MCP Server
 - Entry point: `src/index.ts`
 - API client: `src/api-client.ts`
+- Authentication: `src/auth.ts`
+- WebSocket client: `src/ws-client.ts`
+- Helpers: `src/helpers.ts`
 - Configuration: `src/config.ts`, `src/constants.ts`, `src/types.ts`
 - Tools: `src/tools/` (lights, blinds, climate, home-state, radiators, sensors, generic)
 - Resources: `src/resources/` (lights, blinds, climate, home-state, radiators, summary)
@@ -412,6 +415,8 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
   - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras)
 - Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`, `camera.py`, `camera_recorder.py` (snapshot→MP4 recording), `image.py` (doorbell snapshots)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
+- WebSocket: `ws_client.py` (WebSocket client), `ws_control.py` (WebSocket control mappings), `ws_mappings.py` (WebSocket property mappings)
+- Utilities: `statistics.py` (long-term energy statistics), `device_trigger.py` (device automation triggers), `diagnostics.py` (integration diagnostics)
 
 ## Testing Changes
 
@@ -851,7 +856,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (994 tests):
+Tests are in the `tests/` directory (1116 tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -875,16 +880,31 @@ Tests are in the `tests/` directory (994 tests):
 
 **Core tests:**
 - `test_api.py` - API client tests (mocks homeassistant, works without HA installed)
+- `test_brightness_edges.py` - Brightness edge case tests
+- `test_bulk_service_failures.py` - Bulk service failure handling tests
+- `test_camera_mp4.py` - Camera MP4 recording tests
+- `test_concurrent_updates.py` - Concurrent WS + HTTP update tests
 - `test_config_flow.py` / `test_config_flow_unit.py` - Config and options flow tests
 - `test_coordinator.py` - Data coordinator tests
+- `test_coordinator_energy.py` - Energy statistics coordinator tests
+- `test_coordinator_ws_cow.py` - WS copy-on-write coordinator tests
 - `test_diagnostics.py` - Diagnostics export tests
 - `test_base_entity.py` - Base entity class tests
 - `test_constants.py` - Constants validation tests
+- `test_energy_rollover.py` - Energy meter rollover tests
+- `test_optimistic_state.py` - Optimistic state update tests
+- `test_options_flow.py` - Options flow integration tests
+- `test_options_flow_handler.py` - Options flow handler unit tests
+- `test_reconnect_delay.py` - WebSocket reconnect delay tests
+- `test_recording_services.py` - Recording service tests
 - `test_services.py` - Service handler tests
+- `test_service_invalid_params.py` - Service invalid parameter tests
+- `test_stale_entities.py` - Stale entity cleanup tests
 - `test_processors.py` - Data processor tests
 - `test_ws_client.py` - WebSocket client tests (periodic cleanup, sequenceId validation, fire-and-forget)
 - `test_ws_control.py` - WebSocket control mappings tests (method translation, HTTP fallback)
 - `test_ws_mappings.py` - WebSocket property mapping tests (all device types, edge cases)
+- `test_ws_reconnect.py` - WebSocket reconnect tests
 - `test_device_trigger.py` - Device trigger tests
 - `test_statistics.py` - Energy statistics import tests (daily, monthly, rate limiting, edge cases)
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
