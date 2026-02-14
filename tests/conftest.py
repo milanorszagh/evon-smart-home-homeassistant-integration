@@ -128,6 +128,7 @@ if not importlib.util.find_spec("homeassistant"):
     sys.modules["homeassistant.helpers.aiohttp_client"] = mock_ha.helpers.aiohttp_client
     sys.modules["homeassistant.helpers.entity_platform"] = mock_ha.helpers.entity_platform
     sys.modules["homeassistant.helpers.entity"] = mock_ha.helpers.entity
+    sys.modules["homeassistant.helpers.selector"] = mock_ha.helpers.selector
     sys.modules["homeassistant.helpers.update_coordinator"] = mock_ha.helpers.update_coordinator
     sys.modules["homeassistant.components"] = mock_ha.components
     sys.modules["homeassistant.components.climate"] = mock_ha.components.climate
