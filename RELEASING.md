@@ -100,6 +100,9 @@ Before releasing:
 - [ ] Version updated in ALL FOUR files: `manifest.json`, `pyproject.toml`, `package.json`, `package-lock.json`
 - [ ] Linting passes (`ruff check custom_components/evon/ && npm run lint`)
 - [ ] TypeScript builds (`npm run build`)
+- [ ] MCP tests pass (`npm run test:mcp`)
+- [ ] Mypy passes or errors are tracked (`mypy custom_components/evon/ --ignore-missing-imports`)
+- [ ] Security audit clean (`pip-audit -r requirements-test.txt && npm audit --audit-level=moderate`)
 - [ ] Changes tested on real hardware (if applicable)
 - [ ] Documentation updated (README.md, DEVELOPMENT.md, AGENTS.md as needed)
 

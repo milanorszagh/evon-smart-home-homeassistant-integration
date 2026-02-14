@@ -44,7 +44,7 @@ The SmartMeter provides `EnergyDataMonth` via the WebSocket API - a rolling wind
 
 | Array | Length | Description | Used |
 |-------|--------|-------------|------|
-| `EnergyDataDay` | 24 | Hourly values, rolling 24h window | Yes (today's consumption) |
+| `EnergyDataDay` | 1 | Today's consumption value (single numeric) | Yes (today's consumption) |
 | `EnergyDataYear` | 12 | Monthly values, rolling 12-month window | Yes (monthly statistics) |
 | `EnergyDataWeek` | 7 | Daily values for past 7 days (last = yesterday) | No |
 | `EnergyDataActual` | 96 | 15-min intervals, rolling 24h window (last = now) | No |
@@ -56,6 +56,8 @@ The SmartMeter provides `EnergyDataMonth` via the WebSocket API - a rolling wind
 The integration imports `EnergyDataMonth` into Home Assistant's **external statistics** system. This allows the data to be displayed using HA's native `statistics-graph` card.
 
 **Statistic ID**: `evon:energy_smartmeter{ID}` (e.g., `evon:energy_smartmeter3006939`)
+
+**Note**: Dots in meter IDs are normalized to underscores. For example, `SC1.SmartMeter1` becomes `evon:energy_sc1_smartmeter1`.
 
 ### Import Process (`statistics.py`)
 
@@ -115,6 +117,12 @@ The integration provides a built-in **Energy This Month** sensor that combines:
 
 This gives you accurate monthly totals without needing any manual configuration.
 
+## Monthly Statistics Import
+
+The integration also imports monthly consumption statistics from Evon's `EnergyDataYear` array (a 12-element rolling window of monthly values, last element = previous month).
+
+The `_import_monthly_statistics()` function in `statistics.py` creates external statistics with the ID format `evon:energy_monthly_{safe_meter_id}` (e.g., `evon:energy_monthly_smartmeter3006939`). These work the same way as daily statistics: a baseline point is added before the window, and cumulative sums are built so that `stat_types: [change]` shows per-month consumption.
+
 ## Dashboard Configuration
 
 ### Statistics Graph (Historical Data)
@@ -152,7 +160,7 @@ cards:
     entities:
       - entity: sensor.smart_meter_power
         name: Current Power
-      - entity: sensor.energy_today
+      - entity: sensor.smart_meter_energy_today
         name: Energy Today
       - entity: sensor.smart_meter_energy_total
         name: Energy Total
@@ -209,7 +217,7 @@ If dates appear shifted:
 |-------|-------------|
 | `EnergyDataMonth` | 31-day rolling window of daily values (last = yesterday) |
 | `EnergyDataYear` | 12-month rolling window of monthly values (last = previous month) |
-| `EnergyDataDay` | Today's consumption data (24-hour intervals) |
+| `EnergyDataDay` | Today's consumption value (single numeric) |
 | `Energy` | Current total meter reading |
 | `PowerActual` | Current power consumption (W) |
 

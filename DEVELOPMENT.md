@@ -419,6 +419,7 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (se
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
+WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 3  # 90s
 
 # Optimistic state and animation timing
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
@@ -881,7 +882,7 @@ ruff check custom_components/evon/ && ruff format --check custom_components/evon
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.12/3.13), HACS validation, Codecov upload |
+| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.12/3.13 on Ubuntu + Python 3.13 on macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
 | **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
 
@@ -1118,10 +1119,25 @@ Test files:
 - `test_diagnostics_unit.py` - Diagnostics unit tests (no HA dependency)
 - `test_cover_unit.py` - Cover entity unit tests (no HA dependency)
 - `test_binary_sensor_unit.py` - Binary sensor unit tests (no HA dependency)
+- `test_brightness_edges.py` - Brightness edge case tests
+- `test_bulk_service_failures.py` - Bulk service failure handling tests
+- `test_camera_mp4.py` - Camera MP4 recording tests
+- `test_concurrent_updates.py` - Concurrent WS + HTTP update tests
+- `test_coordinator_energy.py` - Energy statistics coordinator tests
+- `test_coordinator_ws_cow.py` - WS copy-on-write coordinator tests
+- `test_energy_rollover.py` - Energy meter rollover tests
+- `test_optimistic_state.py` - Optimistic state update tests
+- `test_options_flow.py` - Options flow integration tests
+- `test_options_flow_handler.py` - Options flow handler unit tests
+- `test_reconnect_delay.py` - WebSocket reconnect delay tests
+- `test_recording_services.py` - Recording service tests
 - `test_select_unit.py` - Select entity unit tests (no HA dependency)
 - `test_sensor_unit.py` - Sensor entity unit tests (no HA dependency)
+- `test_service_invalid_params.py` - Service invalid parameter tests
+- `test_stale_entities.py` - Stale entity cleanup tests
+- `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 994 tests total — 770 unit/mock tests + 224 integration tests (require HA test framework)
+Current coverage: 1116 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
@@ -1149,7 +1165,7 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 - Home Assistant: 2024.1.0+
 - Python: 3.12+
-- Node.js (MCP): 18+
+- Node.js (MCP): 18+ (CI uses Node.js 22 LTS)
 
 ---
 

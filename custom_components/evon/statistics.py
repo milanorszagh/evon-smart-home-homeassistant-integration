@@ -9,12 +9,18 @@ values for PREVIOUS days (not including today).
 The Evon SmartMeter provides `EnergyDataMonth`, a 31-element rolling window:
 - First element: Energy consumption from 31 days ago
 - Last element: Energy consumption from YESTERDAY (not today)
-- Today's consumption: Use HA's utility_meter on Energy Total sensor
+- Today's consumption: Provided by the built-in `EvonEnergyTodaySensor`
 
 ## How Statistics Work
 
 HA statistics store cumulative `sum` values. To display daily consumption,
 use `stat_types: [change]` which calculates the difference between days.
+
+## Built-in Sensors
+
+The integration now provides built-in `EvonEnergyTodaySensor` and
+`EvonEnergyThisMonthSensor` sensors for daily and monthly consumption,
+making the manual `utility_meter` YAML configuration obsolete.
 
 ## Dashboard Display
 
@@ -27,14 +33,6 @@ stat_types:
   - change
 period: day
 days_to_show: 31
-```
-
-For today's consumption, use a utility_meter in configuration.yaml:
-```yaml
-utility_meter:
-  energy_today:
-    source: sensor.smart_meter_energy_total
-    cycle: daily
 ```
 """
 
