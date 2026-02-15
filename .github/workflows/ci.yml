@@ -35,9 +35,7 @@ jobs:
         continue-on-error: true  # advisory-only initially
 
       - name: Install mypy and dependencies
-        run: |
-          pip install -r requirements-test.txt
-          pip install mypy
+        run: pip install -r requirements-test.txt
 
       - name: Run mypy
         run: mypy custom_components/evon/ --ignore-missing-imports
