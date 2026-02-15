@@ -378,6 +378,7 @@ class EvonApi:
                 return token
 
         except aiohttp.ClientError as err:
+            self._increment_login_backoff()
             raise EvonConnectionError(f"Connection error: {err}") from err
 
     def _increment_login_backoff(self) -> None:
