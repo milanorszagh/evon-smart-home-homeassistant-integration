@@ -4,4 +4,7 @@ pytest-cov>=6.0.0
 pytest-homeassistant-custom-component>=0.13.0
 ruff>=0.11.0
 mypy>=1.15.0
+# Required by homeassistant.components.camera.img_util (imported at module level).
+# Without this, any test that imports our camera.py fails on collection.
+# DO NOT REMOVE — see commit 450cf26 and 7d82b82 for history.
 PyTurboJPEG>=1.7.0
