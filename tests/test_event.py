@@ -93,9 +93,7 @@ class TestDoorbellEvent:
         from custom_components.evon.const import ENTITY_TYPE_INTERCOMS
 
         coordinator = MagicMock()
-        coordinator.data = {
-            ENTITY_TYPE_INTERCOMS: intercoms or []
-        }
+        coordinator.data = {ENTITY_TYPE_INTERCOMS: intercoms or []}
         coordinator.last_update_success = True
         return coordinator
 
