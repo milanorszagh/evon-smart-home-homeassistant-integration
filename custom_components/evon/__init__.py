@@ -139,6 +139,7 @@ async def _async_setup_websocket(
 PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.CAMERA,
+    Platform.EVENT,
     Platform.IMAGE,
     Platform.LIGHT,
     Platform.COVER,
