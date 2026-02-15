@@ -366,3 +366,101 @@ class TestEnergyThisMonthSensor:
     def test_native_value_none_when_value_is_none(self):
         sensor = _make_energy_month_sensor({"energy_this_month_calculated": None})
         assert sensor.native_value is None
+
+
+class TestWsStatusSensor:
+    """Tests for WebSocket status diagnostic sensor."""
+
+    def test_ws_status_sensor_connected(self):
+        """WS status sensor should show 'connected' when WS is connected."""
+        from custom_components.evon.sensor import EvonWsStatusSensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = MagicMock()
+        coordinator.ws_client.is_connected = True
+        coordinator.ws_client.reconnect_count = 3
+        coordinator.ws_client.messages_received = 100
+        coordinator.ws_client.requests_sent = 50
+        coordinator.ws_client.pending_request_count = 2
+        coordinator.ws_client.avg_response_time_ms = 15.5
+        coordinator.ws_client.last_error = None
+        coordinator.ws_client.connection_uptime = 3600.0
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        sensor = EvonWsStatusSensor(coordinator, entry)
+        assert sensor.native_value == "connected"
+        attrs = sensor.extra_state_attributes
+        assert attrs["reconnect_count"] == 3
+        assert attrs["messages_received"] == 100
+        assert attrs["connection_uptime_seconds"] == 3600.0
+
+    def test_ws_status_sensor_disconnected(self):
+        """WS status sensor should show 'disconnected' when WS is not connected."""
+        from custom_components.evon.sensor import EvonWsStatusSensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = MagicMock()
+        coordinator.ws_client.is_connected = False
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        sensor = EvonWsStatusSensor(coordinator, entry)
+        assert sensor.native_value == "disconnected"
+
+    def test_ws_status_sensor_no_ws_client(self):
+        """WS status sensor should show 'disabled' when WS client is None (HTTP-only mode)."""
+        from custom_components.evon.sensor import EvonWsStatusSensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = None
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        sensor = EvonWsStatusSensor(coordinator, entry)
+        assert sensor.native_value == "disabled"
+
+
+class TestWsLatencySensor:
+    """Tests for WebSocket latency diagnostic sensor."""
+
+    def test_ws_latency_sensor_value(self):
+        """WS latency sensor should return avg response time."""
+        from custom_components.evon.sensor import EvonWsLatencySensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = MagicMock()
+        coordinator.ws_client.avg_response_time_ms = 25.3
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        sensor = EvonWsLatencySensor(coordinator, entry)
+        assert sensor.native_value == 25.3
+
+    def test_ws_latency_sensor_none_when_no_data(self):
+        """WS latency sensor should return None when no response data."""
+        from custom_components.evon.sensor import EvonWsLatencySensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = MagicMock()
+        coordinator.ws_client.avg_response_time_ms = None
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        sensor = EvonWsLatencySensor(coordinator, entry)
+        assert sensor.native_value is None

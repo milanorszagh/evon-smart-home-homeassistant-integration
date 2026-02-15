@@ -29,6 +29,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
 from .base_entity import EvonEntity, entity_data
 from .const import (
     DOMAIN,
@@ -267,6 +269,11 @@ async def async_setup_entry(
                         )
                     )
 
+    # WebSocket diagnostic sensors
+    entities.append(EvonWsStatusSensor(coordinator, entry))
+    if coordinator.ws_client is not None:
+        entities.append(EvonWsLatencySensor(coordinator, entry))
+
     if entities:
         async_add_entities(entities)
 
@@ -452,3 +459,93 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for this sensor."""
         return self._build_device_info("Smart Meter")
+
+
+class EvonWsStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+    """Diagnostic sensor for WebSocket connection status."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:websocket"
+    _attr_translation_key = "websocket_status"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_websocket_status"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info — attached to integration system device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name="Evon Smart Home",
+            manufacturer="Evon",
+        )
+
+    @property
+    def native_value(self) -> str:
+        """Return connection state."""
+        ws_client = self.coordinator.ws_client
+        if ws_client is None:
+            return "disabled"
+        return "connected" if ws_client.is_connected else "disconnected"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return connection quality metrics."""
+        ws_client = self.coordinator.ws_client
+        if ws_client is None:
+            return {}
+        return {
+            "connection_uptime_seconds": round(ws_client.connection_uptime, 1),
+            "reconnect_count": ws_client.reconnect_count,
+            "messages_received": ws_client.messages_received,
+            "requests_sent": ws_client.requests_sent,
+            "pending_requests": ws_client.pending_request_count,
+            "avg_response_time_ms": round(ws_client.avg_response_time_ms, 1) if ws_client.avg_response_time_ms is not None else None,
+            "last_error": ws_client.last_error,
+        }
+
+
+class EvonWsLatencySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+    """Diagnostic sensor for WebSocket response latency (long-term statistics)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "ms"
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:timer-outline"
+    _attr_translation_key = "websocket_latency"
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_websocket_latency"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info — attached to integration system device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry.entry_id)},
+            name="Evon Smart Home",
+            manufacturer="Evon",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return average response time in ms."""
+        ws_client = self.coordinator.ws_client
+        if ws_client is None:
+            return None
+        return ws_client.avg_response_time_ms
