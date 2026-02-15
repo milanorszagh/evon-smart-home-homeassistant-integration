@@ -2474,3 +2474,64 @@ class TestResubscribeCopy:
         source = inspect.getsource(EvonWsClient._resubscribe)
         # Should use list() to copy
         assert "list(self._subscriptions)" in source
+
+
+class TestWsClientMetrics:
+    """Tests for WebSocket client metrics tracking."""
+
+    def test_initial_metrics(self):
+        """New client should have zero metrics."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        assert client.reconnect_count == 0
+        assert client.messages_received == 0
+        assert client.requests_sent == 0
+        assert client.last_error is None
+        assert client.avg_response_time_ms is None
+        assert client.connection_uptime == 0.0
+
+    def test_connected_at_set_on_connect(self):
+        """connected_at should be set when connection established."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        assert client._connected_at == 0.0
+        # Simulate connection
+        client._connected = True
+        client._connected_at = 100.0
+        assert client._connected_at == 100.0
+
+    def test_reconnect_count_increments(self):
+        """reconnect_count should increment on each reconnection."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        client._reconnect_count = 0
+        client._reconnect_count += 1
+        assert client.reconnect_count == 1
+
+    def test_avg_response_time_none_when_empty(self):
+        """avg_response_time_ms should be None when no responses tracked."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        assert client.avg_response_time_ms is None
+
+    def test_avg_response_time_calculated(self):
+        """avg_response_time_ms should be mean of response times."""
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        client._response_times.extend([10.0, 20.0, 30.0])
+        assert client.avg_response_time_ms == pytest.approx(20.0)

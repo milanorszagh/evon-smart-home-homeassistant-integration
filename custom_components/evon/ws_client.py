@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from collections.abc import Callable
 import contextlib
 import json
@@ -116,10 +117,58 @@ class EvonWsClient:
         self._pending_request_times: dict[int, float] = {}
         self._subscriptions: list[dict[str, Any]] = []
 
+        # Connection quality metrics
+        self._connected_at: float = 0.0
+        self._reconnect_count: int = 0
+        self._messages_received: int = 0
+        self._requests_sent: int = 0
+        self._last_error: str | None = None
+        self._response_times: deque[float] = deque(maxlen=100)
+        self._has_connected_once: bool = False
+
     @property
     def is_connected(self) -> bool:
         """Return whether the WebSocket is connected."""
         return self._connected and self._ws is not None and not self._ws.closed
+
+    @property
+    def reconnect_count(self) -> int:
+        """Return total number of reconnections."""
+        return self._reconnect_count
+
+    @property
+    def messages_received(self) -> int:
+        """Return total WebSocket messages received."""
+        return self._messages_received
+
+    @property
+    def requests_sent(self) -> int:
+        """Return total WebSocket requests sent."""
+        return self._requests_sent
+
+    @property
+    def last_error(self) -> str | None:
+        """Return last error message."""
+        return self._last_error
+
+    @property
+    def avg_response_time_ms(self) -> float | None:
+        """Return average response time in milliseconds."""
+        if not self._response_times:
+            return None
+        return sum(self._response_times) / len(self._response_times)
+
+    @property
+    def connection_uptime(self) -> float:
+        """Return seconds since connection established."""
+        if not self._connected or self._connected_at == 0.0:
+            return 0.0
+        return time.monotonic() - self._connected_at
+
+    @property
+    def pending_request_count(self) -> int:
+        """Return number of pending WebSocket requests."""
+        return len(self._pending_requests)
 
     def _get_valid_session(self) -> aiohttp.ClientSession:
         """Get a valid (non-closed) aiohttp session.
@@ -353,6 +402,9 @@ class EvonWsClient:
                 # Connect if not connected
                 if not self.is_connected:
                     if await self.connect():
+                        if self._has_connected_once:
+                            self._reconnect_count += 1
+                        self._has_connected_once = True
                         self._reconnect_delay = DEFAULT_WS_RECONNECT_DELAY
                         # Start message handler and wait for Connected message
                         _LOGGER.debug("WS connect OK, waiting for Connected message")
@@ -388,6 +440,7 @@ class EvonWsClient:
             except asyncio.CancelledError:
                 break
             except (aiohttp.ClientError, TimeoutError, OSError) as err:
+                self._last_error = str(err)
                 _LOGGER.error("WebSocket loop error: %s", err, exc_info=True)
                 await self.disconnect()
                 if self._running:
@@ -398,6 +451,7 @@ class EvonWsClient:
                         WS_RECONNECT_MAX_DELAY,
                     )
             except Exception as err:  # pylint: disable=broad-except
+                self._last_error = str(err)
                 _LOGGER.error("Unexpected WebSocket loop error: %s", err, exc_info=True)
                 await self.disconnect()
                 if self._running:
@@ -428,6 +482,7 @@ class EvonWsClient:
                 data = json.loads(msg.data)
                 if data and data[0] == WS_MSG_CONNECTED:
                     self._connected = True
+                    self._connected_at = time.monotonic()
                     _LOGGER.info("WebSocket connected to Evon Smart Home")
                     if self._on_connection_state:
                         self._on_connection_state(True)
@@ -465,6 +520,7 @@ class EvonWsClient:
             _LOGGER.debug("WS msg received: type=%s, len=%s", msg.type, len(msg.data) if msg.data else 0)
 
             if msg.type == aiohttp.WSMsgType.TEXT:
+                self._messages_received += 1
                 self._handle_message(msg.data)
             elif msg.type == aiohttp.WSMsgType.CLOSED:
                 _LOGGER.debug("WebSocket closed by server")
@@ -511,7 +567,10 @@ class EvonWsClient:
                 _LOGGER.debug("Callback received: seq=%s, pending=%s", sequence_id, list(self._pending_requests.keys()))
                 if sequence_id in self._pending_requests:
                     future = self._pending_requests.pop(sequence_id)
-                    self._pending_request_times.pop(sequence_id, None)
+                    start_time = self._pending_request_times.pop(sequence_id, None)
+                    if start_time is not None:
+                        elapsed_ms = (time.monotonic() - start_time) * 1000
+                        self._response_times.append(elapsed_ms)
                     if not future.done():
                         args = payload.get("args", [])
                         future.set_result(args[0] if args else None)
@@ -645,6 +704,7 @@ class EvonWsClient:
 
         sequence_id = self._sequence_id
         self._sequence_id += 1
+        self._requests_sent += 1
 
         message = {
             "methodName": "CallWithReturn",
