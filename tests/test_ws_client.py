@@ -2044,11 +2044,11 @@ class TestWsReceiveTimeout:
         assert disconnect_called
 
     def test_ws_receive_timeout_constant(self):
-        """Test WS_RECEIVE_TIMEOUT is 3x heartbeat interval."""
+        """Test WS_RECEIVE_TIMEOUT is 6x heartbeat interval."""
         from custom_components.evon.const import WS_HEARTBEAT_INTERVAL, WS_RECEIVE_TIMEOUT
 
-        assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 3
-        assert WS_RECEIVE_TIMEOUT == 90
+        assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 6
+        assert WS_RECEIVE_TIMEOUT == 180
 
     def test_handle_messages_uses_asyncio_timeout(self):
         """Test that _handle_messages wraps receive in asyncio.timeout."""
