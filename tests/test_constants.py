@@ -356,5 +356,6 @@ class TestOptionsConstants:
 def test_ws_receive_timeout_is_180s():
     """WS receive timeout should be 180s (6x heartbeat) to avoid false disconnects."""
     from custom_components.evon.const import WS_HEARTBEAT_INTERVAL, WS_RECEIVE_TIMEOUT
+
     assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 6
     assert WS_RECEIVE_TIMEOUT == 180

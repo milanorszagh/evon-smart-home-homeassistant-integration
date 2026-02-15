@@ -456,9 +456,7 @@ class EvonApi:
                             await self.login()
                         return await self._request(method, endpoint, data, retry=False)
                     except (EvonAuthError, EvonConnectionError) as err:
-                        raise EvonAuthError(
-                            f"Re-authentication failed: {err}"
-                        ) from err
+                        raise EvonAuthError(f"Re-authentication failed: {err}") from err
 
                 # Handle specific error status codes
                 reason = response.reason or "Unknown"

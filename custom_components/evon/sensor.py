@@ -506,7 +506,9 @@ class EvonWsStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEnt
             "messages_received": ws_client.messages_received,
             "requests_sent": ws_client.requests_sent,
             "pending_requests": ws_client.pending_request_count,
-            "avg_response_time_ms": round(ws_client.avg_response_time_ms, 1) if ws_client.avg_response_time_ms is not None else None,
+            "avg_response_time_ms": round(ws_client.avg_response_time_ms, 1)
+            if ws_client.avg_response_time_ms is not None
+            else None,
             "last_error": ws_client.last_error,
         }
 
