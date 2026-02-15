@@ -1,0 +1,320 @@
+{
+  "device_automation": {
+    "trigger_type": {
+      "doorbell": "Campainha pressionada"
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Atualizar",
+      "description": "Atualizar todos os estados dos dispositivos do sistema Evon."
+    },
+    "reconnect_websocket": {
+      "name": "Reconectar WebSocket",
+      "description": "Reconectar a conexão WebSocket ao sistema Evon. Use isto se as atualizações em tempo real pararem de funcionar."
+    },
+    "set_home_state": {
+      "name": "Definir Estado da Casa",
+      "description": "Definir o estado da casa (at_home, night, work, holiday).",
+      "fields": {
+        "state": {
+          "name": "Estado",
+          "description": "O estado da casa a definir."
+        }
+      }
+    },
+    "set_season_mode": {
+      "name": "Definir Modo de Estação",
+      "description": "Definir o modo de estação (heating or cooling).",
+      "fields": {
+        "mode": {
+          "name": "Modo",
+          "description": "O modo de estação a definir."
+        }
+      }
+    },
+    "all_lights_off": {
+      "name": "Desligar Todas as Luzes",
+      "description": "Desligar todas as luzes Evon de uma só vez."
+    },
+    "all_blinds_close": {
+      "name": "Fechar Todas as Persianas",
+      "description": "Fechar todas as persianas Evon de uma só vez."
+    },
+    "all_blinds_open": {
+      "name": "Abrir Todas as Persianas",
+      "description": "Abrir todas as persianas Evon de uma só vez."
+    },
+    "all_climate_comfort": {
+      "name": "Todos os Climas em Conforto",
+      "description": "Definir todos os controles de clima para o modo conforto (dia) de uma só vez."
+    },
+    "all_climate_eco": {
+      "name": "Todos os Climas em Eco",
+      "description": "Definir todos os controles de clima para o modo eco (economia de energia/noite) de uma só vez."
+    },
+    "all_climate_away": {
+      "name": "Todos os Climas em Ausente",
+      "description": "Definir todos os controles de clima para o modo ausente (proteção contra congelamento/calor) de uma só vez. Proteção contra congelamento no modo aquecimento, proteção contra calor no modo arrefecimento."
+    },
+    "start_recording": {
+      "name": "Iniciar Gravação",
+      "description": "Iniciar gravação de capturas de uma câmera Evon num ficheiro de vídeo.",
+      "fields": {
+        "entity_id": {
+          "name": "Entidade da Câmera",
+          "description": "A entidade da câmera a gravar."
+        },
+        "duration": {
+          "name": "Duração",
+          "description": "Duração máxima da gravação em segundos."
+        }
+      }
+    },
+    "stop_recording": {
+      "name": "Parar Gravação",
+      "description": "Parar uma gravação de câmera ativa e guardar o ficheiro de vídeo.",
+      "fields": {
+        "entity_id": {
+          "name": "Entidade da Câmera",
+          "description": "A entidade da câmera para parar a gravação."
+        }
+      }
+    }
+  },
+  "issues": {
+    "connection_failed": {
+      "title": "Falha na conexão ao Evon Smart Home",
+      "description": "A integração falhou ao conectar-se ao seu sistema Evon Smart Home {failures} vezes seguidas.\n\nÚltimo erro: {error}\n\nPor favor verifique:\n- O seu sistema Evon está ligado e conectado à rede\n- O URL do host na configuração da integração está correto\n- A sua rede permite conexões ao sistema Evon\n\nA integração irá recuperar automaticamente quando a conexão for restaurada."
+    },
+    "stale_entities_cleaned": {
+      "title": "Entidades obsoletas removidas",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Entidades obsoletas foram removidas",
+            "description": "A integração Evon removeu {count} entidades que já não existem no seu sistema Evon.\n\nEntidades removidas: {entities}\n\nIsto pode acontecer quando dispositivos são removidos ou renomeados na sua configuração Evon. Nenhuma ação é necessária - isto é apenas um aviso informativo."
+          }
+        }
+      }
+    },
+    "config_migration_failed": {
+      "title": "Falha na migração da configuração Evon",
+      "description": "A sua configuração Evon Smart Home foi criada com uma versão mais recente da integração (versão {current_version}) e não pode ser usada com a versão atual (suporta até versão {supported_version}).\n\nPor favor atualize a integração Evon Smart Home para a versão mais recente, ou remova e adicione novamente a integração."
+    }
+  },
+  "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Campainha",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Toque"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "identify": {
+        "name": "Identificar"
+      }
+    },
+    "switch": {
+      "camera_recording": {
+        "name": "Gravação"
+      }
+    },
+    "binary_sensor": {
+      "call_in_progress": {
+        "name": "Chamada em Curso"
+      },
+      "connection": {
+        "name": "Conexão"
+      },
+      "websocket": {
+        "name": "WebSocket"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      },
+      "energy_today": {
+        "name": "Energia Hoje"
+      },
+      "energy_this_month": {
+        "name": "Energia Este Mês"
+      },
+      "websocket_status": {
+        "name": "Estado WebSocket"
+      },
+      "websocket_latency": {
+        "name": "Latência WebSocket"
+      }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Modo de Estação",
+        "state": {
+          "heating": "Aquecimento (Inverno)",
+          "cooling": "Arrefecimento (Verão)"
+        }
+      },
+      "home_state": {
+        "name": "Estado da Casa",
+        "state": {
+          "HomeStateAtHome": "Em Casa",
+          "HomeStateHoliday": "Férias",
+          "HomeStateNight": "Noite",
+          "HomeStateWork": "Trabalho"
+        }
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "Rede local (recomendado)",
+        "remote": "Acesso remoto (via my.evon-smarthome.com)"
+      }
+    },
+    "recording_output_format": {
+      "options": {
+        "mp4": "Apenas MP4",
+        "mp4_and_frames": "MP4 + frames JPEG"
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar ao Evon Smart Home",
+        "description": "Escolha como conectar ao seu sistema Evon Smart Home.",
+        "data": {
+          "connection_type": "Tipo de conexão"
+        },
+        "data_description": {
+          "connection_type": "**Rede local** é recomendada para tempos de resposta mais rápidos e melhor confiabilidade. Use **Acesso remoto** apenas quando conectar de fora da sua rede doméstica."
+        }
+      },
+      "local": {
+        "title": "Conexão de Rede Local",
+        "description": "Insira os detalhes de conexão local do seu Evon Smart Home. Pode encontrar o endereço IP no seu router ou nas configurações do sistema Evon.",
+        "data": {
+          "host": "URL do host ou endereço IP",
+          "username": "Nome de utilizador",
+          "password": "Palavra-passe"
+        }
+      },
+      "remote": {
+        "title": "Conexão de Acesso Remoto",
+        "description": "Insira as credenciais de acesso remoto do seu Evon Smart Home. O Engine ID pode ser encontrado nas configurações do sistema Evon ou na documentação.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Nome de utilizador",
+          "password": "Palavra-passe"
+        },
+        "data_description": {
+          "engine_id": "O identificador único do seu sistema Evon Smart Home (por exemplo, 123456)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigurar Evon Smart Home",
+        "description": "Conexão atual: **{current_connection}**\n\nPode alternar entre acesso local e remoto ou atualizar as suas credenciais.",
+        "data": {
+          "connection_type": "Tipo de conexão"
+        },
+        "data_description": {
+          "connection_type": "**Rede local** é recomendada para tempos de resposta mais rápidos. Use **Acesso remoto** quando conectar de fora da sua rede doméstica."
+        }
+      },
+      "reconfigure_local": {
+        "title": "Reconfigurar Conexão Local",
+        "description": "Atualize os detalhes da sua conexão local.",
+        "data": {
+          "host": "URL do host ou endereço IP",
+          "username": "Nome de utilizador",
+          "password": "Palavra-passe"
+        }
+      },
+      "reconfigure_remote": {
+        "title": "Reconfigurar Conexão Remota",
+        "description": "Atualize as suas credenciais de acesso remoto.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Nome de utilizador",
+          "password": "Palavra-passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Falha ao conectar ao Evon Smart Home",
+      "invalid_auth": "Nome de utilizador ou palavra-passe inválidos",
+      "invalid_host": "URL do host inválido. Por favor insira um endereço IP ou hostname válido.",
+      "invalid_engine_id": "Engine ID inválido. Deve ter 4-12 caracteres alfanuméricos.",
+      "invalid_username": "Nome de utilizador não pode estar vazio.",
+      "invalid_password": "Palavra-passe não pode estar vazia.",
+      "unknown": "Erro inesperado"
+    },
+    "abort": {
+      "already_configured": "Este sistema Evon já está configurado",
+      "reconfigure_successful": "Configuração atualizada com sucesso"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opções Evon Smart Home",
+        "description": "Para alterar credenciais de conexão, use **Reconfigurar** no menu da integração.",
+        "data": {
+          "sync_areas": "Sincronizar áreas do Evon",
+          "non_dimmable_lights": "Luzes não reguláveis"
+        },
+        "data_description": {
+          "sync_areas": "Atribuir automaticamente dispositivos a áreas do Home Assistant com base na sua atribuição de divisão no sistema Evon. Nota: Alterar esta opção irá recarregar a integração.",
+          "non_dimmable_lights": "Selecione luzes que devem ser tratadas apenas como ligar/desligar (sem regulação). Útil para tiras LED conectadas via dimmers PWM que precisam de energia total. Nota: Alterar esta opção irá recarregar a integração."
+        },
+        "sections": {
+          "connection": {
+            "name": "HTTP API vs WebSocket",
+            "data": {
+              "http_only": "Usar apenas HTTP API (desativar WebSocket)",
+              "scan_interval": "Intervalo de consulta (segundos)"
+            },
+            "data_description": {
+              "http_only": "Desativar WebSocket e usar apenas polling HTTP. WebSocket é recomendado para atualizações de estado instantâneas. Ative isto apenas se tiver problemas de conexão com WebSocket. Nota: Alterar esta opção irá recarregar a integração.",
+              "scan_interval": "Com que frequência obter estados de dispositivos via polling HTTP. Usado apenas como fallback quando WebSocket está ativado, ou como método primário quando o modo apenas HTTP está ativado."
+            }
+          },
+          "recording": {
+            "name": "Gravação de Câmera",
+            "data": {
+              "max_recording_duration": "Duração máxima de gravação (segundos)",
+              "recording_output_format": "Formato de saída da gravação"
+            },
+            "data_description": {
+              "max_recording_duration": "Duração máxima para gravações de câmera em segundos (30-3600). Previne que gravações esquecidas encham o espaço em disco.",
+              "recording_output_format": "Escolha se deseja guardar apenas o vídeo MP4, ou também manter frames JPEG individuais."
+            }
+          },
+          "debug": {
+            "name": "Registo de Debug",
+            "description": "Ativar registo verboso para resolução de problemas.",
+            "data": {
+              "debug_api": "API",
+              "debug_websocket": "WebSocket",
+              "debug_coordinator": "Coordinator"
+            },
+            "data_description": {
+              "debug_api": "Ativar registo de debug para pedidos e respostas HTTP API. Útil para resolver problemas de conexão ou autenticação.",
+              "debug_websocket": "Ativar registo de debug para mensagens WebSocket. Útil para resolver problemas de atualização em tempo real.",
+              "debug_coordinator": "Ativar registo de debug para o coordenador de dados. Útil para resolver problemas de processamento de dados e atualizações de entidades."
+            }
+          }
+        }
+      }
+    }
+  }
+}

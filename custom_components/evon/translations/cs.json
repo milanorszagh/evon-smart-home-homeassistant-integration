@@ -1,0 +1,320 @@
+{
+  "device_automation": {
+    "trigger_type": {
+      "doorbell": "Zvonek stisknut"
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Obnovit",
+      "description": "Obnovit všechny stavy zařízení ze systému Evon."
+    },
+    "reconnect_websocket": {
+      "name": "Znovu připojit WebSocket",
+      "description": "Znovu připojit WebSocket spojení se systémem Evon. Použijte, pokud přestanou fungovat aktualizace v reálném čase."
+    },
+    "set_home_state": {
+      "name": "Nastavit stav domácnosti",
+      "description": "Nastavit stav domácnosti (at_home, night, work, holiday).",
+      "fields": {
+        "state": {
+          "name": "Stav",
+          "description": "Stav domácnosti, který má být nastaven."
+        }
+      }
+    },
+    "set_season_mode": {
+      "name": "Nastavit sezónní režim",
+      "description": "Nastavit sezónní režim (heating or cooling).",
+      "fields": {
+        "mode": {
+          "name": "Režim",
+          "description": "Sezónní režim, který má být nastaven."
+        }
+      }
+    },
+    "all_lights_off": {
+      "name": "Všechna světla zhasnout",
+      "description": "Vypnout všechna Evon světla najednou."
+    },
+    "all_blinds_close": {
+      "name": "Zavřít všechny žaluzie",
+      "description": "Zavřít všechny Evon žaluzie najednou."
+    },
+    "all_blinds_open": {
+      "name": "Otevřít všechny žaluzie",
+      "description": "Otevřít všechny Evon žaluzie najednou."
+    },
+    "all_climate_comfort": {
+      "name": "Všechny klimatizace komfort",
+      "description": "Nastavit všechna klimatizační zařízení do komfortního (denního) režimu najednou."
+    },
+    "all_climate_eco": {
+      "name": "Všechny klimatizace eco",
+      "description": "Nastavit všechna klimatizační zařízení do eco (úsporného/nočního) režimu najednou."
+    },
+    "all_climate_away": {
+      "name": "Všechny klimatizace absence",
+      "description": "Nastavit všechna klimatizační zařízení do režimu absence (ochrana proti mrazu/teplu) najednou. Ochrana proti mrazu v režimu topení, ochrana proti teplu v režimu chlazení."
+    },
+    "start_recording": {
+      "name": "Spustit nahrávání",
+      "description": "Spustit nahrávání snímků z Evon kamery do video souboru.",
+      "fields": {
+        "entity_id": {
+          "name": "Entita kamery",
+          "description": "Entita kamery, ze které se má nahrávat."
+        },
+        "duration": {
+          "name": "Délka trvání",
+          "description": "Maximální délka nahrávání v sekundách."
+        }
+      }
+    },
+    "stop_recording": {
+      "name": "Zastavit nahrávání",
+      "description": "Zastavit probíhající nahrávání kamery a uložit video soubor.",
+      "fields": {
+        "entity_id": {
+          "name": "Entita kamery",
+          "description": "Entita kamery, u které se má zastavit nahrávání."
+        }
+      }
+    }
+  },
+  "issues": {
+    "connection_failed": {
+      "title": "Připojení k Evon Smart Home selhalo",
+      "description": "Integrace se nepodařilo připojit k vašemu Evon Smart Home systému {failures} krát za sebou.\n\nPosledníchyba: {error}\n\nProsím zkontrolujte:\n- Váš Evon systém je zapnutý a připojený k síti\n- URL hostitele v konfiguraci integrace je správná\n- Vaše síť umožňuje připojení k Evon systému\n\nIntegrace se automaticky obnoví, jakmile bude připojení obnoveno."
+    },
+    "stale_entities_cleaned": {
+      "title": "Zastaralé entity odstraněny",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Zastaralé entity byly odstraněny",
+            "description": "Evon integrace odstranila {count} entit, které již ve vašem Evon systému neexistují.\n\nOdstraněné entity: {entities}\n\nTo se může stát, když jsou zařízení odstraněna nebo přejmenována ve vaší Evon konfiguraci. Není vyžadována žádná akce - toto je pouze informační oznámení."
+          }
+        }
+      }
+    },
+    "config_migration_failed": {
+      "title": "Migrace konfigurace Evon selhala",
+      "description": "Vaše konfigurace Evon Smart Home byla vytvořena s novější verzí integrace (verze {current_version}) a nelze ji použít s aktuální verzí (podporuje až verzi {supported_version}).\n\nProsím aktualizujte Evon Smart Home integraci na nejnovější verzi, nebo odeberte a znovu přidejte integraci."
+    }
+  },
+  "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Zvonek",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Zvonění"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "identify": {
+        "name": "Identifikovat"
+      }
+    },
+    "switch": {
+      "camera_recording": {
+        "name": "Nahrávání"
+      }
+    },
+    "binary_sensor": {
+      "call_in_progress": {
+        "name": "Probíhající hovor"
+      },
+      "connection": {
+        "name": "Připojení"
+      },
+      "websocket": {
+        "name": "WebSocket"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Teplota"
+      },
+      "energy_today": {
+        "name": "Energie dnes"
+      },
+      "energy_this_month": {
+        "name": "Energie tento měsíc"
+      },
+      "websocket_status": {
+        "name": "WebSocket stav"
+      },
+      "websocket_latency": {
+        "name": "WebSocket latence"
+      }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Sezónní režim",
+        "state": {
+          "heating": "Topení (zima)",
+          "cooling": "Chlazení (léto)"
+        }
+      },
+      "home_state": {
+        "name": "Stav domácnosti",
+        "state": {
+          "HomeStateAtHome": "Doma",
+          "HomeStateHoliday": "Dovolená",
+          "HomeStateNight": "Noc",
+          "HomeStateWork": "Práce"
+        }
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "Lokální síť (doporučeno)",
+        "remote": "Vzdálený přístup (přes my.evon-smarthome.com)"
+      }
+    },
+    "recording_output_format": {
+      "options": {
+        "mp4": "Pouze MP4",
+        "mp4_and_frames": "MP4 + JPEG snímky"
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Připojit k Evon Smart Home",
+        "description": "Zvolte způsob připojení k vašemu Evon Smart Home systému.",
+        "data": {
+          "connection_type": "Typ připojení"
+        },
+        "data_description": {
+          "connection_type": "**Lokální síť** je doporučena pro rychlejší odezvu a lepší spolehlivost. Použijte **Vzdálený přístup** pouze při připojování z vnější domácí sítě."
+        }
+      },
+      "local": {
+        "title": "Připojení k lokální síti",
+        "description": "Zadejte detaily připojení k vašemu Evon Smart Home v lokální síti. IP adresu najdete ve vašem routeru nebo v nastavení Evon systému.",
+        "data": {
+          "host": "URL hostitele nebo IP adresa",
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        }
+      },
+      "remote": {
+        "title": "Připojení ke vzdálenému přístupu",
+        "description": "Zadejte přihlašovací údaje pro vzdálený přístup k Evon Smart Home. Engine ID najdete v nastavení Evon systému nebo v dokumentaci.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        },
+        "data_description": {
+          "engine_id": "Váš unikátní identifikátor Evon Smart Home systému (např. 123456)"
+        }
+      },
+      "reconfigure": {
+        "title": "Překonfigurovat Evon Smart Home",
+        "description": "Aktuální připojení: **{current_connection}**\n\nMůžete přepínat mezi lokálním a vzdáleným přístupem nebo aktualizovat vaše přihlašovací údaje.",
+        "data": {
+          "connection_type": "Typ připojení"
+        },
+        "data_description": {
+          "connection_type": "**Lokální síť** je doporučena pro rychlejší odezvu. Použijte **Vzdálený přístup** při připojování z vnější domácí sítě."
+        }
+      },
+      "reconfigure_local": {
+        "title": "Překonfigurovat lokální připojení",
+        "description": "Aktualizujte detaily vašeho lokálního připojení.",
+        "data": {
+          "host": "URL hostitele nebo IP adresa",
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        }
+      },
+      "reconfigure_remote": {
+        "title": "Překonfigurovat vzdálené připojení",
+        "description": "Aktualizujte vaše přihlašovací údaje pro vzdálený přístup.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Uživatelské jméno",
+          "password": "Heslo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nepodařilo se připojit k Evon Smart Home",
+      "invalid_auth": "Neplatné uživatelské jméno nebo heslo",
+      "invalid_host": "Neplatná URL hostitele. Prosím zadejte platnou IP adresu nebo hostname.",
+      "invalid_engine_id": "Neplatné Engine ID. Musí obsahovat 4-12 alfanumerických znaků.",
+      "invalid_username": "Uživatelské jméno nesmí být prázdné.",
+      "invalid_password": "Heslo nesmí být prázdné.",
+      "unknown": "Neočekávaná chyba"
+    },
+    "abort": {
+      "already_configured": "Tento Evon systém je již nakonfigurován",
+      "reconfigure_successful": "Konfigurace úspěšně aktualizována"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti Evon Smart Home",
+        "description": "Pro změnu přihlašovacích údajů použijte **Překonfigurovat** z menu integrace.",
+        "data": {
+          "sync_areas": "Synchronizovat oblasti z Evon",
+          "non_dimmable_lights": "Nestmívatelná světla"
+        },
+        "data_description": {
+          "sync_areas": "Automaticky přiřadit zařízení do Home Assistant oblastí na základě jejich přiřazení místnosti v Evon systému. Poznámka: Změna této možnosti znovu načte integraci.",
+          "non_dimmable_lights": "Vyberte světla, která by měla být považována za zapnuto/vypnuto pouze (bez stmívání). Užitečné pro LED pásky připojené přes PWM stmívače, které potřebují plný výkon. Poznámka: Změna této možnosti znovu načte integraci."
+        },
+        "sections": {
+          "connection": {
+            "name": "HTTP API vs WebSocket",
+            "data": {
+              "http_only": "Používat pouze HTTP API (vypnout WebSocket)",
+              "scan_interval": "Interval dotazování (sekundy)"
+            },
+            "data_description": {
+              "http_only": "Vypnout WebSocket a používat pouze HTTP dotazování. WebSocket je doporučen pro okamžité aktualizace stavů. Zapněte tuto možnost pouze pokud máte problémy s připojením přes WebSocket. Poznámka: Změna této možnosti znovu načte integraci.",
+              "scan_interval": "Jak často načítat stavy zařízení přes HTTP dotazování. Používá se pouze jako záložní metoda, když je WebSocket zapnut, nebo jako primární metoda, když je zapnutý pouze HTTP režim."
+            }
+          },
+          "recording": {
+            "name": "Nahrávání kamery",
+            "data": {
+              "max_recording_duration": "Maximální délka nahrávání (sekundy)",
+              "recording_output_format": "Formát výstupu nahrávání"
+            },
+            "data_description": {
+              "max_recording_duration": "Maximální délka nahrávání kamery v sekundách (30-3600). Zabraňuje zapomenutým nahrávání zaplnit diskový prostor.",
+              "recording_output_format": "Zvolte, zda uložit pouze MP4 video, nebo také ponechat jednotlivé JPEG snímky."
+            }
+          },
+          "debug": {
+            "name": "Ladící protokolování",
+            "description": "Zapnout podrobné protokolování pro řešení problémů.",
+            "data": {
+              "debug_api": "API",
+              "debug_websocket": "WebSocket",
+              "debug_coordinator": "Coordinator"
+            },
+            "data_description": {
+              "debug_api": "Zapnout ladící protokolování pro HTTP API požadavky a odpovědi. Užitečné pro řešení problémů s připojením nebo autentizací.",
+              "debug_websocket": "Zapnout ladící protokolování pro WebSocket zprávy. Užitečné pro řešení problémů s aktualizacemi v reálném čase.",
+              "debug_coordinator": "Zapnout ladící protokolování pro data coordinator. Užitečné pro řešení problémů se zpracováním dat a aktualizacemi entit."
+            }
+          }
+        }
+      }
+    }
+  }
+}

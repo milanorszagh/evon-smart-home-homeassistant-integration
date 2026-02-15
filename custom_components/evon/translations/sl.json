@@ -1,0 +1,320 @@
+{
+  "device_automation": {
+    "trigger_type": {
+      "doorbell": "Pritisnjeno zvonec"
+    }
+  },
+  "services": {
+    "refresh": {
+      "name": "Osveži",
+      "description": "Osveži vsa stanja naprav iz sistema Evon."
+    },
+    "reconnect_websocket": {
+      "name": "Ponovno poveži WebSocket",
+      "description": "Ponovno poveži WebSocket povezavo s sistemom Evon. Uporabite to, če posodobitve v realnem času prenehajo delovati."
+    },
+    "set_home_state": {
+      "name": "Nastavi stanje doma",
+      "description": "Nastavi stanje doma (at_home, night, work, holiday).",
+      "fields": {
+        "state": {
+          "name": "Stanje",
+          "description": "Stanje doma, ki ga želite nastaviti."
+        }
+      }
+    },
+    "set_season_mode": {
+      "name": "Nastavi sezonski način",
+      "description": "Nastavi sezonski način (heating or cooling).",
+      "fields": {
+        "mode": {
+          "name": "Način",
+          "description": "Sezonski način, ki ga želite nastaviti."
+        }
+      }
+    },
+    "all_lights_off": {
+      "name": "Ugasni vse luči",
+      "description": "Hkrati ugasni vse Evon luči."
+    },
+    "all_blinds_close": {
+      "name": "Zapri vse senčila",
+      "description": "Hkrati zapri vsa Evon senčila."
+    },
+    "all_blinds_open": {
+      "name": "Odpri vse senčila",
+      "description": "Hkrati odpri vsa Evon senčila."
+    },
+    "all_climate_comfort": {
+      "name": "Vsa klima udobje",
+      "description": "Hkrati nastavi vse klimatske naprave v način udobja (dnevni)."
+    },
+    "all_climate_eco": {
+      "name": "Vsa klima eko",
+      "description": "Hkrati nastavi vse klimatske naprave v eko način (varčevanje z energijo/nočni)."
+    },
+    "all_climate_away": {
+      "name": "Vsa klima odsotnost",
+      "description": "Hkrati nastavi vse klimatske naprave v način odsotnosti (zaščita pred zmrzovanjem/vročino). Zaščita pred zmrzovanjem v načinu ogrevanja, zaščita pred vročino v načinu hlajenja."
+    },
+    "start_recording": {
+      "name": "Začni snemanje",
+      "description": "Začni snemati posnetke iz Evon kamere v video datoteko.",
+      "fields": {
+        "entity_id": {
+          "name": "Entiteta kamere",
+          "description": "Entiteta kamere, ki jo želite snemati."
+        },
+        "duration": {
+          "name": "Trajanje",
+          "description": "Največje trajanje snemanja v sekundah."
+        }
+      }
+    },
+    "stop_recording": {
+      "name": "Ustavi snemanje",
+      "description": "Ustavi aktivno snemanje kamere in shrani video datoteko.",
+      "fields": {
+        "entity_id": {
+          "name": "Entiteta kamere",
+          "description": "Entiteta kamere, pri kateri želite ustaviti snemanje."
+        }
+      }
+    }
+  },
+  "issues": {
+    "connection_failed": {
+      "title": "Povezava z Evon Smart Home ni uspela",
+      "description": "Integracija se ni uspela povezati z vašim sistemom Evon Smart Home {failures}-krat zapored.\n\nZadnja napaka: {error}\n\nProsimo preverite:\n- Vaš sistem Evon je vklopljen in povezan z omrežjem\n- URL gostitelja v konfiguraciji integracije je pravilen\n- Vaše omrežje dovoljuje povezave do sistema Evon\n\nIntegracija se bo samodejno obnovila, ko bo povezava ponovno vzpostavljena."
+    },
+    "stale_entities_cleaned": {
+      "title": "Odstranjene zastarele entitete",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Odstranjene zastarele entitete",
+            "description": "Integracija Evon je odstranila {count} entitet, ki ne obstajajo več v vašem sistemu Evon.\n\nOdstranjene entitete: {entities}\n\nTo se lahko zgodi, ko so naprave odstranjene ali preimenovane v vaši konfiguraciji Evon. Nobeno dejanje ni potrebno - to je samo obvestilo."
+          }
+        }
+      }
+    },
+    "config_migration_failed": {
+      "title": "Migracija konfiguracije Evon ni uspela",
+      "description": "Vaša konfiguracija Evon Smart Home je bila ustvarjena z novejšo različico integracije (različica {current_version}) in je ni mogoče uporabiti s trenutno različico (podpira do različice {supported_version}).\n\nProsimo posodobite integracijo Evon Smart Home na najnovejšo različico ali odstranite in ponovno dodajte integracijo."
+    }
+  },
+  "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Zvonec",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Zvonjenje"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "identify": {
+        "name": "Identificiraj"
+      }
+    },
+    "switch": {
+      "camera_recording": {
+        "name": "Snemanje"
+      }
+    },
+    "binary_sensor": {
+      "call_in_progress": {
+        "name": "Klic v teku"
+      },
+      "connection": {
+        "name": "Povezava"
+      },
+      "websocket": {
+        "name": "WebSocket"
+      }
+    },
+    "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      },
+      "energy_today": {
+        "name": "Energija danes"
+      },
+      "energy_this_month": {
+        "name": "Energija ta mesec"
+      },
+      "websocket_status": {
+        "name": "Status WebSocket"
+      },
+      "websocket_latency": {
+        "name": "Latenca WebSocket"
+      }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Sezonski način",
+        "state": {
+          "heating": "Ogrevanje (zima)",
+          "cooling": "Hlajenje (poletje)"
+        }
+      },
+      "home_state": {
+        "name": "Stanje doma",
+        "state": {
+          "HomeStateAtHome": "Doma",
+          "HomeStateHoliday": "Dopust",
+          "HomeStateNight": "Noč",
+          "HomeStateWork": "Delo"
+        }
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "local": "Lokalno omrežje (priporočeno)",
+        "remote": "Oddaljen dostop (prek my.evon-smarthome.com)"
+      }
+    },
+    "recording_output_format": {
+      "options": {
+        "mp4": "Samo MP4",
+        "mp4_and_frames": "MP4 + JPEG sličice"
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Poveži se z Evon Smart Home",
+        "description": "Izberite način povezave z vašim sistemom Evon Smart Home.",
+        "data": {
+          "connection_type": "Tip povezave"
+        },
+        "data_description": {
+          "connection_type": "**Lokalno omrežje** je priporočeno za hitrejše odzive in boljšo zanesljivost. Uporabite **Oddaljen dostop** samo, ko se povezujete izven vašega domačega omrežja."
+        }
+      },
+      "local": {
+        "title": "Povezava z lokalnim omrežjem",
+        "description": "Vnesite podatke za lokalno povezavo z vašim Evon Smart Home. IP naslov najdete v vašem usmerjevalniku ali nastavitvah sistema Evon.",
+        "data": {
+          "host": "URL gostitelja ali IP naslov",
+          "username": "Uporabniško ime",
+          "password": "Geslo"
+        }
+      },
+      "remote": {
+        "title": "Povezava z oddaljenim dostopom",
+        "description": "Vnesite poverilnice za oddaljen dostop do Evon Smart Home. Engine ID najdete v nastavitvah sistema Evon ali dokumentaciji.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Uporabniško ime",
+          "password": "Geslo"
+        },
+        "data_description": {
+          "engine_id": "Vaš edinstveni identifikator sistema Evon Smart Home (npr. 123456)"
+        }
+      },
+      "reconfigure": {
+        "title": "Ponovno konfiguriraj Evon Smart Home",
+        "description": "Trenutna povezava: **{current_connection}**\n\nLahko preklopite med lokalnim in oddaljenim dostopom ali posodobite svoje poverilnice.",
+        "data": {
+          "connection_type": "Tip povezave"
+        },
+        "data_description": {
+          "connection_type": "**Lokalno omrežje** je priporočeno za hitrejše odzive. Uporabite **Oddaljen dostop**, ko se povezujete izven vašega domačega omrežja."
+        }
+      },
+      "reconfigure_local": {
+        "title": "Ponovno konfiguriraj lokalno povezavo",
+        "description": "Posodobite podatke za lokalno povezavo.",
+        "data": {
+          "host": "URL gostitelja ali IP naslov",
+          "username": "Uporabniško ime",
+          "password": "Geslo"
+        }
+      },
+      "reconfigure_remote": {
+        "title": "Ponovno konfiguriraj oddaljeno povezavo",
+        "description": "Posodobite poverilnice za oddaljen dostop.",
+        "data": {
+          "engine_id": "Engine ID",
+          "username": "Uporabniško ime",
+          "password": "Geslo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Povezava z Evon Smart Home ni uspela",
+      "invalid_auth": "Napačno uporabniško ime ali geslo",
+      "invalid_host": "Neveljaven URL gostitelja. Prosimo vnesite veljaven IP naslov ali ime gostitelja.",
+      "invalid_engine_id": "Neveljaven Engine ID. Mora biti 4-12 alfanumeričnih znakov.",
+      "invalid_username": "Uporabniško ime ne sme biti prazno.",
+      "invalid_password": "Geslo ne sme biti prazno.",
+      "unknown": "Nepričakovana napaka"
+    },
+    "abort": {
+      "already_configured": "Ta sistem Evon je že konfiguriran",
+      "reconfigure_successful": "Konfiguracija uspešno posodobljena"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Možnosti Evon Smart Home",
+        "description": "Za spremembo poverilnic za povezavo uporabite **Ponovno konfiguriraj** iz menija integracije.",
+        "data": {
+          "sync_areas": "Sinhroniziraj prostore iz Evon",
+          "non_dimmable_lights": "Luči brez zatemnjevanja"
+        },
+        "data_description": {
+          "sync_areas": "Samodejno dodeli naprave v prostore Home Assistant glede na njihovo dodelitev prostora v sistemu Evon. Opomba: Sprememba te možnosti bo ponovno naložila integracijo.",
+          "non_dimmable_lights": "Izberite luči, ki naj se obravnavajo samo kot vklop/izklop (brez zatemnjevanja). Uporabno za LED trakove, povezane prek PWM zatemnitvenikov, ki potrebujejo polno moč. Opomba: Sprememba te možnosti bo ponovno naložila integracijo."
+        },
+        "sections": {
+          "connection": {
+            "name": "HTTP API proti WebSocket",
+            "data": {
+              "http_only": "Uporabi samo HTTP API (onemogoči WebSocket)",
+              "scan_interval": "Interval opazovanja (sekunde)"
+            },
+            "data_description": {
+              "http_only": "Onemogoči WebSocket in uporabi samo HTTP opazovanje. WebSocket je priporočen za takojšnje posodobitve stanja. Omogočite to samo, če imate težave s povezavo z WebSocket. Opomba: Sprememba te možnosti bo ponovno naložila integracijo.",
+              "scan_interval": "Kako pogosto se prevzamejo stanja naprav prek HTTP opazovanja. Uporablja se samo kot rezerva, ko je WebSocket omogočen, ali kot primarna metoda, ko je omogočen način samo HTTP."
+            }
+          },
+          "recording": {
+            "name": "Snemanje kamere",
+            "data": {
+              "max_recording_duration": "Največje trajanje snemanja (sekunde)",
+              "recording_output_format": "Format izhodnega snemanja"
+            },
+            "data_description": {
+              "max_recording_duration": "Največje trajanje za snemanje kamere v sekundah (30-3600). Preprečuje, da bi pozabljena snemanja zapolnila prostor na disku.",
+              "recording_output_format": "Izberite, ali želite shraniti samo MP4 video ali tudi posamezne JPEG sličice."
+            }
+          },
+          "debug": {
+            "name": "Beleženje razhroščevanja",
+            "description": "Omogoči podrobno beleženje za odpravljanje težav.",
+            "data": {
+              "debug_api": "API",
+              "debug_websocket": "WebSocket",
+              "debug_coordinator": "Coordinator"
+            },
+            "data_description": {
+              "debug_api": "Omogoči beleženje razhroščevanja za HTTP API zahteve in odgovore. Uporabno za odpravljanje težav s povezavo ali preverjanjem pristnosti.",
+              "debug_websocket": "Omogoči beleženje razhroščevanja za WebSocket sporočila. Uporabno za odpravljanje težav s posodobitvami v realnem času.",
+              "debug_coordinator": "Omogoči beleženje razhroščevanja za koordinator podatkov. Uporabno za odpravljanje težav pri obdelavi podatkov in posodobitvah entitet."
+            }
+          }
+        }
+      }
+    }
+  }
+}

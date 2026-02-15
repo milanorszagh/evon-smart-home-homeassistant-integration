@@ -104,6 +104,18 @@
     }
   },
   "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Türklingel",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Klingeln"
+            }
+          }
+        }
+      }
+    },
     "button": {
       "identify": {
         "name": "Identifizieren"
@@ -134,6 +146,12 @@
       },
       "energy_this_month": {
         "name": "Energie Diesen Monat"
+      },
+      "websocket_status": {
+        "name": "WebSocket Status"
+      },
+      "websocket_latency": {
+        "name": "WebSocket Latenz"
       }
     },
     "select": {
