@@ -104,6 +104,18 @@
     }
   },
   "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Doorbell",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Ring"
+            }
+          }
+        }
+      }
+    },
     "button": {
       "identify": {
         "name": "Identify"
@@ -134,6 +146,12 @@
       },
       "energy_this_month": {
         "name": "Energy This Month"
+      },
+      "websocket_status": {
+        "name": "WebSocket Status"
+      },
+      "websocket_latency": {
+        "name": "WebSocket Latency"
       }
     },
     "select": {
