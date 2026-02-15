@@ -449,11 +449,16 @@ class EvonApi:
             ) as response:
                 # Handle auth errors with retry
                 if response.status in (302, 401) and retry:
-                    async with self._token_lock:
-                        self._token = None
-                        self._token_timestamp = 0.0
-                        await self.login()
-                    return await self._request(method, endpoint, data, retry=False)
+                    try:
+                        async with self._token_lock:
+                            self._token = None
+                            self._token_timestamp = 0.0
+                            await self.login()
+                        return await self._request(method, endpoint, data, retry=False)
+                    except (EvonAuthError, EvonConnectionError) as err:
+                        raise EvonAuthError(
+                            f"Re-authentication failed: {err}"
+                        ) from err
 
                 # Handle specific error status codes
                 reason = response.reason or "Unknown"

@@ -1944,8 +1944,10 @@ class TestRequestAuthRetry:
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session.request = MagicMock(return_value=mock_response)
-        # login() will fail
-        mock_session.post = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        # login() will fail — post() is used as async context manager
+        mock_post_cm = AsyncMock()
+        mock_post_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        mock_session.post = MagicMock(return_value=mock_post_cm)
         api._session = mock_session
 
         with pytest.raises(EvonAuthError, match="Re-authentication failed"):
@@ -1967,7 +1969,9 @@ class TestRequestAuthRetry:
         mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session.request = MagicMock(return_value=mock_response)
-        mock_session.post = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        mock_post_cm = AsyncMock()
+        mock_post_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        mock_session.post = MagicMock(return_value=mock_post_cm)
         api._session = mock_session
 
         with pytest.raises(EvonAuthError):
