@@ -134,6 +134,12 @@
       },
       "energy_this_month": {
         "name": "Energy This Month"
+      },
+      "websocket_status": {
+        "name": "WebSocket Status"
+      },
+      "websocket_latency": {
+        "name": "WebSocket Latency"
       }
     },
     "select": {
