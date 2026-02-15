@@ -116,7 +116,7 @@ New `event.py` platform with `EvonDoorbellEvent` entity:
 - `event_types = ["ring"]`
 - `device_class = EventDeviceClass.DOORBELL`
 - Created for every 2N intercom in `coordinator.data[ENTITY_TYPE_INTERCOMS]`
-- Unique ID: `{instance_id}_doorbell_event`
+- Unique ID: `evon_doorbell_{instance_id}`
 
 ### State transition detection
 
