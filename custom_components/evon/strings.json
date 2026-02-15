@@ -104,6 +104,18 @@
     }
   },
   "entity": {
+    "event": {
+      "doorbell": {
+        "name": "Doorbell",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Ring"
+            }
+          }
+        }
+      }
+    },
     "button": {
       "identify": {
         "name": "Identify"
