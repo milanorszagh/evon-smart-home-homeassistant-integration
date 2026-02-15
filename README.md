@@ -158,7 +158,15 @@ The integration creates repair issues in **Settings** → **System** → **Repai
 
 Supported languages:
 - English (default)
-- German (Deutsch) - for DACH region customers
+- German (Deutsch)
+- French (Français)
+- Italian (Italiano)
+- Spanish (Español)
+- Portuguese (Português)
+- Polish (Polski)
+- Czech (Čeština)
+- Slovak (Slovenčina)
+- Slovenian (Slovenščina)
 
 ### Real-Time Updates & Control (WebSocket)
 
@@ -338,6 +346,11 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Intercom connection status
 - **WebSocket connection status** (diagnostic) - shows if real-time updates are active
 
+### Diagnostic Sensors
+
+- **WebSocket Status** - Connection state (connected/disconnected/disabled) with detailed attributes (reconnect count, messages received, uptime, pending requests, last error)
+- **WebSocket Latency** - Average response time in milliseconds for WebSocket commands (supports HA long-term statistics)
+
 ### Device Triggers
 
 The integration provides device triggers for automations:
@@ -355,6 +368,10 @@ The integration fires Home Assistant events that can be used in automations:
   - Use in automations to trigger notifications, announcements, or other actions
 
 \* *Doorbell events are untested - please report issues if you have 2N intercoms*
+
+### Event Entities
+
+- **Doorbell** - Event entity for 2N intercoms that fires a `ring` event when the doorbell is pressed. This provides a native HA event entity in addition to the `evon_doorbell` custom event.
 
 ### Cameras
 
@@ -653,6 +670,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
+| **1.18.0** | **Auth retry storm fix (Issue #2), WebSocket diagnostics, doorbell event entity, 8 new translations.** Fixed auth retry storm regression causing 700+ API requests/min on network errors: login backoff on network errors, safe re-auth wrapping to prevent token=None cascades, WS receive timeout relaxed from 90s to 180s. Added WebSocket diagnostic sensors (connection status with 7 attributes, response latency with long-term statistics). Added doorbell event entity for 2N intercoms (native HA EventEntity with ring detection). Added 8 translations: French, Italian, Slovenian, Spanish, Portuguese, Polish, Czech, Slovak. CI: bumped GitHub Actions, test dep cleanup, ruff format fixes. |
 | **1.17.1** | **Code quality audit (3 rounds)** - Deep analysis and hardening across the integration. Fixed 8 bugs (light brightness rounding, climate cooling temp range, diagnostics crash, select entity errors, device trigger safety, config flow IPv4 octet validation, config flow port parsing, camera corrupt frame handling). Hardened WebSocket client (periodic stale cleanup, stack traces, fire-and-forget error handling, sequenceId validation, subscription list safety). Extracted shared SavedPictures transformation, added empty ID validation across processors, hardened all service handlers. Added 260+ new tests (994 total). |
 | **1.17.0** | **Camera recording** - Snapshot-based video recording for 2N intercom cameras. Custom `evon-camera-recording-card` Lovelace card with record button, live stopwatch, and inline video playback. Services: `evon.start_recording` / `evon.stop_recording`. Recording switch entity for dashboard control. Configurable max duration and output format. Recordings accessible via HA media browser. **Also:** Code quality audit fixes (filesystem caching, timezone-aware datetimes, migration robustness, deprecated API cleanup). |
 | **1.16.0** | **Energy Today & Energy This Month sensors** - Built-in calculated sensors for daily and monthly energy consumption. Energy Today queries HA statistics, Energy This Month combines Evon's daily data with today's consumption. No more manual utility_meter configuration needed. **Also:** Climate WebSocket fixes, group climate services, debug logging options, and WebSocket stability improvements. |

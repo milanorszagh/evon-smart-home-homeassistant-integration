@@ -40,7 +40,7 @@ custom_components/evon/
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
-├── sensor.py            # Sensor platform (temperature, energy, air quality)
+├── sensor.py            # Sensor platform (temperature, energy, air quality, WS diagnostics)
 ├── switch.py            # Switch platform (relays, bathroom radiators)
 ├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
@@ -50,11 +50,12 @@ custom_components/evon/
 ├── www/                 # Frontend assets (auto-registered)
 │   └── evon-camera-recording-card.js  # Custom Lovelace card for recording UI
 ├── image.py             # Image platform (doorbell snapshots)
+├── event.py             # Event platform (doorbell ring events)
 ├── device_trigger.py    # Device triggers (doorbell press)
 ├── statistics.py        # External energy statistics import
 ├── diagnostics.py       # Diagnostics data export
 ├── strings.json         # UI strings
-└── translations/        # Localization files (en.json, de.json)
+└── translations/        # Localization files (en, de, fr, it, sl, es, pt, pl, cs, sk)
 ```
 
 ### MCP Server
@@ -1098,7 +1099,7 @@ pytest --cov=custom_components/evon --cov-report=term-missing
 
 Test files:
 - `test_api.py` - API client tests
-- `test_ws_client.py` - WebSocket client tests
+- `test_ws_client.py` - WebSocket client tests (includes metrics tests)
 - `test_ws_mappings.py` - WebSocket property mapping tests
 - `test_config_flow.py` / `test_config_flow_unit.py` - Configuration flow tests
 - `test_coordinator.py` - Coordinator and getter method tests
@@ -1106,6 +1107,7 @@ Test files:
 - `test_light.py`, `test_cover.py`, `test_climate.py` - Platform tests
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
+- `test_event.py` - Doorbell event entity tests
 - `test_camera.py`, `test_image.py` - Camera and image platform tests
 - `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration, PIL context manager)
 - `test_base_entity.py` - Base entity and optimistic state tests
