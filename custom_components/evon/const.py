@@ -159,7 +159,7 @@ WS_POLL_INTERVAL = 60  # Safety net poll interval when WebSocket connected (seco
 WS_HEARTBEAT_INTERVAL = 30  # WebSocket heartbeat/ping interval (seconds)
 WS_DEFAULT_REQUEST_TIMEOUT = 10.0  # Default timeout for WebSocket RPC requests (seconds)
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0  # Timeout for subscription requests (many devices) (seconds)
-WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 3  # 90s — detect silent connection death
+WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 6  # 180s — detect silent connection death (relaxed to avoid false disconnects on low-traffic systems)
 WS_LOG_MESSAGE_TRUNCATE = 500  # Max characters to log from WebSocket messages
 WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejecting new ones
 
