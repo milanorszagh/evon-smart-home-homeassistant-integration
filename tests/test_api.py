@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import aiohttp
 import pytest
 
 from custom_components.evon.api import (
@@ -1879,3 +1880,98 @@ class TestTryWsControl:
         result = await ws_api._try_ws_control("System.State1", "Activate", None)
         assert result is True
         ws_api._ws_client.call_method.assert_called_once_with("System.State1", "Activate", None, False)
+
+
+class TestLoginBackoff:
+    """Tests for login backoff on network errors."""
+
+    @pytest.mark.asyncio
+    async def test_login_network_error_increments_backoff(self):
+        """Network error during login should increment backoff counter."""
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        mock_session = MagicMock()
+        mock_session.closed = False
+        # post() is used as async context manager; raise on __aenter__
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        mock_session.post = MagicMock(return_value=mock_cm)
+        api._session = mock_session
+
+        assert api._login_failure_count == 0
+
+        with pytest.raises(EvonConnectionError):
+            await api.login()
+
+        assert api._login_failure_count == 1
+        assert api._login_backoff_until > 0
+
+    @pytest.mark.asyncio
+    async def test_login_network_error_respects_backoff(self):
+        """Second login attempt within backoff window should raise immediately."""
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        mock_session.post = MagicMock(return_value=mock_cm)
+        api._session = mock_session
+
+        with pytest.raises(EvonConnectionError):
+            await api.login()
+
+        # Second attempt should hit backoff
+        with pytest.raises(EvonAuthError, match="Login rate limited"):
+            await api.login()
+
+
+class TestRequestAuthRetry:
+    """Tests for safe auth retry in _request()."""
+
+    @pytest.mark.asyncio
+    async def test_request_401_login_failure_raises_auth_error(self):
+        """When 401 triggers re-login that fails, should raise EvonAuthError cleanly."""
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "old_token"
+        api._token_timestamp = 1.0
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+
+        # First request returns 401, then login fails with connection error
+        mock_response = AsyncMock()
+        mock_response.status = 401
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session.request = MagicMock(return_value=mock_response)
+        # login() will fail
+        mock_session.post = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        api._session = mock_session
+
+        with pytest.raises(EvonAuthError, match="Re-authentication failed"):
+            await api._request("GET", "/test")
+
+    @pytest.mark.asyncio
+    async def test_request_401_login_failure_does_not_leave_none_token(self):
+        """After failed re-auth, token should not be left as None for next caller."""
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "old_token"
+        api._token_timestamp = 1.0
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+
+        mock_response = AsyncMock()
+        mock_response.status = 401
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session.request = MagicMock(return_value=mock_response)
+        mock_session.post = AsyncMock(side_effect=aiohttp.ClientError("Connection refused"))
+        api._session = mock_session
+
+        with pytest.raises(EvonAuthError):
+            await api._request("GET", "/test")
+
+        # Backoff should be set, preventing immediate retry storm
+        assert api._login_failure_count >= 1
