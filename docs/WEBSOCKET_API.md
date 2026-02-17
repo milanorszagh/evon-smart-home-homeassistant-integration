@@ -334,7 +334,7 @@ await ws.send(JSON.stringify({
 }));
 ```
 
-### Test Results (January 2025)
+### Test Results (January 2026)
 
 Tested on: `SC1_M01.Light3` (Licht Zi3, SmartCOM.Light.LightDim)
 
@@ -438,7 +438,7 @@ await ws.send(JSON.stringify({
 // ❌ Old CallMethod format [instanceId, method, params] - doesn't trigger hardware
 ```
 
-**Test Results (January 2025):**
+**Test Results (January 2026):**
 
 Tested on: `SC1_M09.Blind2` (Jal. Zi3 1, SmartCOM.Blind.Blind)
 
@@ -717,7 +717,7 @@ await ws.send(JSON.stringify({
 - `Switch` is a toggle - caller must check state first to avoid turning ON when off
 - Timer duration is configured in the Evon system, not via API
 
-**Test Results (January 2025):**
+**Test Results (January 2026):**
 
 Tested on: `BathroomRadiator9506` (Heating.BathroomRadiator)
 
@@ -1109,14 +1109,16 @@ client.registerValuesChanged([
   { Instanceid: 'SC1_M04.Input3', Properties: ['IsOn'] },
 ], (instanceId, props) => {
   // Implement press type detection — handle ALL 3 WS patterns:
-  // - Single: one press+release, no second event within 1.0s
-  // - Double: two presses within 1.0s (watch for coalesced patterns!)
+  // - Single: one press+release, no second event within double-click delay (default 0.8s)
+  // - Double: two presses within double-click delay (watch for coalesced patterns!)
   // - Long: held >1500ms before release
 });
 ```
 
-#### Note on February 2025 Testing
-Previous testing (Feb 2025) reported 0 events from buttons. This may have been due to subscribing to incorrect properties (`State`, `Pressed`, `Value`) rather than `IsOn`/`ActValue`, or the Evon firmware may have been updated since then.
+**HA integration implementation:** The `ButtonPressDetector` class (`coordinator/button_press.py`) implements this press type detection as a standalone state machine. The double-click delay is user-configurable (0.2–1.4s, default 0.8s) via integration options.
+
+#### Note on Earlier Testing
+Initial testing reported 0 events from buttons, likely due to subscribing to incorrect properties (`State`, `Pressed`, `Value`) rather than `IsOn`/`ActValue`. Subscribing to `IsOn` reliably detects all button presses.
 
 #### Alternative: Indirect Detection
 You can also detect button presses indirectly by monitoring the devices they control. This is less precise (no press type detection, ~2s delay) but doesn't require subscribing to button instances:
@@ -1200,7 +1202,7 @@ ws.send(JSON.stringify({
 }));
 ```
 
-## Camera Control (2N Intercom) - Verified Working (February 2025)
+## Camera Control (2N Intercom) - Verified Working (February 2026)
 
 The 2N intercom cameras support live feed via WebSocket. The mechanism works by triggering image capture and fetching the result.
 

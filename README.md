@@ -41,10 +41,6 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 
 ## Known Limitations
 
-### Physical Buttons (Taster)
-
-Physical wall buttons (Taster) are exposed as **event entities** with press type detection (single press, double press, long press). They require a **WebSocket connection** — button events are not available in HTTP-only mode. Button presses can be used as automation triggers via device triggers or the `evon_button_press` bus event.
-
 ### Controllable Switches
 
 The integration supports controllable relay outputs (`SmartCOM.Light.Light`). If your Evon system doesn't have these configured, the switch platform will be empty.
@@ -128,6 +124,12 @@ After installation, configure via **Settings** → **Devices & Services** → **
 |--------|-------------|
 | **Max recording duration** | Maximum recording duration in seconds (30-3600, default: 300). Prevents forgotten recordings from filling disk. |
 | **Recording output format** | Choose "MP4 only" or "MP4 + JPEG frames" to also save individual frames. |
+
+**Physical Buttons** (collapsible section, shown when physical buttons are detected):
+
+| Option | Description |
+|--------|-------------|
+| **Double-click detection delay** | Time window for detecting double-press (0.2–1.4 seconds, default: 0.8s). Lower values make single-press faster but may miss double-presses. |
 
 **Debug Logging** (collapsible section):
 
@@ -367,6 +369,7 @@ The integration fires Home Assistant events that can be used in automations:
 ### Event Entities
 
 - **Doorbell** - Event entity for 2N intercoms that fires a `ring` event when the doorbell is pressed. This provides a native HA event entity in addition to the `evon_doorbell` custom event.
+- **Physical Buttons** - Event entities for wall buttons (Taster) with press type detection: `single_press`, `double_press`, and `long_press`. **Requires WebSocket connection** — button events are not available in HTTP-only mode. See [Physical Button Automations](#physical-button-automations) for examples.
 
 ### Cameras
 
@@ -541,6 +544,69 @@ automation:
       - service: evon.all_climate_eco
 ```
 
+### Physical Button Automations
+
+Physical wall buttons (Taster) fire event entities with three press types: `single_press`, `double_press`, and `long_press`. Use them to trigger any Home Assistant automation. Button events require the default WebSocket connection (not available in HTTP-only mode).
+
+**Toggle a smart plug on button press:**
+```yaml
+automation:
+  - alias: "Toggle desk lamp on button press"
+    trigger:
+      - platform: state
+        entity_id: event.hallway_button
+        attribute: event_type
+        to: "single_press"
+    action:
+      - service: switch.toggle
+        target:
+          entity_id: switch.desk_lamp
+```
+
+**Double-press to trigger a scene:**
+```yaml
+automation:
+  - alias: "Movie mode on double press"
+    trigger:
+      - platform: state
+        entity_id: event.living_room_button
+        attribute: event_type
+        to: "double_press"
+    action:
+      - service: scene.turn_on
+        target:
+          entity_id: scene.movie_mode
+```
+
+**Long press to turn off all lights:**
+```yaml
+automation:
+  - alias: "All lights off on long press"
+    trigger:
+      - platform: state
+        entity_id: event.bedroom_button
+        attribute: event_type
+        to: "long_press"
+    action:
+      - service: evon.all_lights_off
+```
+
+**Using the bus event (for advanced automations):**
+```yaml
+automation:
+  - alias: "Button press notification"
+    trigger:
+      - platform: event
+        event_type: evon_button_press
+        event_data:
+          press_type: double_press
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Button Pressed"
+          message: "{{ trigger.event.data.name }} was double-pressed"
+```
+
 **Switch to cooling in summer:**
 ```yaml
 automation:
@@ -665,7 +731,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
-| **1.19.0** | **Physical button (Taster) support** - Wall buttons exposed as HA event entities with press type detection (single, double, long press). WebSocket-only — buttons fire `ValuesChanged` events on `IsOn` property. Press detection uses timing logic: single (<0.6s), double (two presses within 0.6s), long (>1.5s hold). Device triggers for automations, `evon_button_press` bus event. Button entities discovered automatically. Translations for all 10 languages. Fixed stale entity cleanup removing button entities. **Also:** WS control mappings for blind group commands, recorder executor fix for statistics calls. |
+| **1.19.0** | **Physical button (Taster) support** - Wall buttons exposed as HA event entities with press type detection (single, double, long press). Configurable double-click detection delay (0.2–1.4s, default 0.8s) in integration settings. WebSocket-only — requires real-time updates enabled. Device triggers and `evon_button_press` bus event for automations. Translations for all 10 languages. **Also:** WS control mappings for blind group commands, recorder executor fix for statistics calls. |
 | **1.18.0** | **Auth retry storm fix (Issue #2), WebSocket diagnostics, doorbell event entity, 8 new translations.** Fixed auth retry storm regression causing 700+ API requests/min on network errors: login backoff on network errors, safe re-auth wrapping to prevent token=None cascades, WS receive timeout relaxed from 90s to 180s. Added WebSocket diagnostic sensors (connection status with 7 attributes, response latency with long-term statistics). Added doorbell event entity for 2N intercoms (native HA EventEntity with ring detection). Added 8 translations: French, Italian, Slovenian, Spanish, Portuguese, Polish, Czech, Slovak. CI: bumped GitHub Actions, test dep cleanup, ruff format fixes. |
 | **1.17.1** | **Code quality audit (3 rounds)** - Deep analysis and hardening across the integration. Fixed 8 bugs (light brightness rounding, climate cooling temp range, diagnostics crash, select entity errors, device trigger safety, config flow IPv4 octet validation, config flow port parsing, camera corrupt frame handling). Hardened WebSocket client (periodic stale cleanup, stack traces, fire-and-forget error handling, sequenceId validation, subscription list safety). Extracted shared SavedPictures transformation, added empty ID validation across processors, hardened all service handlers. Added 260+ new tests (994 total). |
 | **1.17.0** | **Camera recording** - Snapshot-based video recording for 2N intercom cameras. Custom `evon-camera-recording-card` Lovelace card with record button, live stopwatch, and inline video playback. Services: `evon.start_recording` / `evon.stop_recording`. Recording switch entity for dashboard control. Configurable max duration and output format. Recordings accessible via HA media browser. **Also:** Code quality audit fixes (filesystem caching, timezone-aware datetimes, migration robustness, deprecated API cleanup). |

@@ -22,6 +22,7 @@ custom_components/evon/
 ├── const.py             # Constants, device classes, repair identifiers
 ├── coordinator/         # Data update coordinator package
 │   ├── __init__.py      # Main coordinator with connection failure tracking, WebSocket integration
+│   ├── button_press.py  # ButtonPressDetector — standalone press type detection state machine
 │   └── processors/      # Device-specific data processors
 │       ├── __init__.py
 │       ├── lights.py
@@ -51,7 +52,7 @@ custom_components/evon/
 ├── www/                 # Frontend assets (auto-registered)
 │   └── evon-camera-recording-card.js  # Custom Lovelace card for recording UI
 ├── image.py             # Image platform (doorbell snapshots)
-├── event.py             # Event platform (doorbell ring events)
+├── event.py             # Event platform (doorbell ring, physical button press events)
 ├── device_trigger.py    # Device triggers (doorbell press)
 ├── statistics.py        # External energy statistics import
 ├── diagnostics.py       # Diagnostics data export
@@ -404,6 +405,7 @@ coordinator/       # Integrates WebSocket with data updates
 | security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress`, `SavedPictures`, `CamInstanceName` | `is_open`, `door_is_open`, `call_in_progress`, `saved_pictures` |
 | intercoms | `DoorBellTriggered`, `DoorOpenTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
 | cameras | `Image`, `ImageRequest`, `Error` | `image_path` |
+| button_events | `IsOn` | `is_on` |
 
 ### Constants
 
@@ -422,6 +424,10 @@ WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
 WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 6  # 180s
+
+# Button press detection
+DEFAULT_BUTTON_DOUBLE_CLICK_DELAY = 0.8   # Configurable via options (0.2-1.4s)
+BUTTON_LONG_PRESS_THRESHOLD = 1.5         # Hold duration for long press (seconds)
 
 # Optimistic state and animation timing
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
@@ -822,16 +828,19 @@ The integration provides two calculated sensors that don't exist in the Evon API
 
 Physical wall buttons (Taster) are exposed as **event entities** via WebSocket. They fire `ValuesChanged` events with `IsOn = True` on press and `IsOn = False` on release.
 
-**Press type detection** is implemented in the coordinator:
-- **Single press**: quick press/release, no second press within 1.0s
-- **Double press**: two presses within 1.0s
+**Press type detection** is implemented in the standalone `ButtonPressDetector` class (`coordinator/button_press.py`):
+- **Single press**: quick press/release, no second press within the configurable double-click delay (default 0.8s)
+- **Double press**: two presses within the double-click delay window
 - **Long press**: hold >1.5s (fires immediately on release)
+
+The double-click delay is user-configurable via integration options (0.2–1.4s). Lower values make single-press detection faster but increase the risk of missing double-presses.
 
 **Important notes:**
 - Buttons are **WebSocket-only** — no HTTP polling fallback (polling is ineffective for momentary presses)
 - The processor creates entities from the `/instances` list but ongoing state comes exclusively from WebSocket
 - Button presses fire `evon_button_press` bus events and update event entities
 - Device triggers are available for automation (single/double/long press per button)
+- The `ButtonPressDetector` is a standalone class with no HA dependencies, making it directly testable
 - The Evon controller sends **3 different WS patterns** for double-press (all handled):
   - `True, True, False` — second True without intervening False (coalesced release)
   - `True, False, False` — second False without intervening True (coalesced press)
@@ -1148,7 +1157,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1161 tests total
+Current coverage: 1164 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
