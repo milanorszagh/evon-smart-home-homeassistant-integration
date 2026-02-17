@@ -39,12 +39,6 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
 | **Physical Buttons** | Wall button (Taster) press events — single, double, and long press detection |
 
-## Known Limitations
-
-### Controllable Switches
-
-The integration supports controllable relay outputs (`SmartCOM.Light.Light`). If your Evon system doesn't have these configured, the switch platform will be empty.
-
 ---
 
 ## Installation
