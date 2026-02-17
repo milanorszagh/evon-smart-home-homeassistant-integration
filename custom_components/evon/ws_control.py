@@ -22,6 +22,7 @@ Light Control:
 Blind Control:
     - MoveToPosition([angle, position]): Set both tilt and position - angle comes FIRST!
     - Open/Close/Stop: Simple commands with no params
+    - OpenAll/CloseAll/StopAll: Group commands on Base.bBlind (fire_and_forget)
     - TRAP: SetValue on Position updates the value but doesn't move the hardware
 
 Climate Control:
@@ -135,6 +136,11 @@ BLIND_MAPPINGS: dict[str, WsControlMapping] = {
     "Open": WsControlMapping(None, "Open", None),
     "Close": WsControlMapping(None, "Close", None),
     "Stop": WsControlMapping(None, "Stop", None),
+    # Group commands (Base.bBlind.OpenAll etc.)
+    # fire_and_forget=True: command executes immediately, position feedback comes via WS subscription
+    "OpenAll": WsControlMapping(None, "OpenAll", lambda params: params if params else [None], True),
+    "CloseAll": WsControlMapping(None, "CloseAll", lambda params: params if params else [None], True),
+    "StopAll": WsControlMapping(None, "StopAll", lambda params: params if params else [None], True),
     # SetPosition/SetAngle handled specially in api._try_ws_control()
 }
 
