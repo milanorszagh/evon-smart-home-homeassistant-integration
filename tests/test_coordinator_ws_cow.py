@@ -53,6 +53,7 @@ class TestCopyOnWriteWSUpdates:
         """Create a coordinator-like object with the real WS handler bound."""
         from custom_components.evon.const import (
             DOMAIN,
+            ENTITY_TYPE_BUTTON_EVENTS,
             ENTITY_TYPE_INTERCOMS,
             ENTITY_TYPE_SMART_METERS,
         )
@@ -63,6 +64,7 @@ class TestCopyOnWriteWSUpdates:
         # Build namespace with all required names
         ns = {
             "_LOGGER": MagicMock(),
+            "ENTITY_TYPE_BUTTON_EVENTS": ENTITY_TYPE_BUTTON_EVENTS,
             "ENTITY_TYPE_INTERCOMS": ENTITY_TYPE_INTERCOMS,
             "ENTITY_TYPE_SMART_METERS": ENTITY_TYPE_SMART_METERS,
             "DOMAIN": DOMAIN,

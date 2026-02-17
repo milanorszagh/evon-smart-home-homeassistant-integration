@@ -36,7 +36,8 @@ custom_components/evon/
 │       ├── scenes.py
 │       ├── security_doors.py
 │       ├── intercoms.py
-│       └── cameras.py
+│       ├── cameras.py
+│       └── button_events.py
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
@@ -420,7 +421,7 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (se
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
-WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 3  # 90s
+WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 6  # 180s
 
 # Optimistic state and animation timing
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
@@ -576,7 +577,7 @@ All requests require: `Cookie: token=<token>`
 | `Base.ehThermostat` | Season mode | Yes |
 | `System.HomeState` | Home state | Yes |
 | `Heating.BathroomRadiator` | Bathroom heater | Yes |
-| `SmartCOM.Switch` | Physical button | **No** (momentary) |
+| `SmartCOM.Switch` | Physical button | No (event entity, WS-only) |
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
@@ -817,25 +818,22 @@ The integration provides two calculated sensors that don't exist in the Evon API
 
 ## Known Limitations
 
-### Physical Buttons (`SmartCOM.Switch` / `Base.bSwitch`)
+### Physical Buttons (`SmartCOM.Switch`)
 
-Cannot be monitored due to API limitations:
+Physical wall buttons (Taster) are exposed as **event entities** via WebSocket. They fire `ValuesChanged` events with `IsOn = True` on press and `IsOn = False` on release.
 
-**HTTP API:**
-- `IsOn` is only `true` while physically pressed (milliseconds)
-- No event history or push notifications
-- Polling is ineffective
+**Press type detection** is implemented in the coordinator:
+- **Single press**: quick press/release, no second press within 0.6s
+- **Double press**: two presses within 0.6s
+- **Long press**: hold >1.5s (fires immediately on release)
 
-**WebSocket API:**
-- Physical switches (Taster) are action triggers, not stateful devices
-- When pressed, the controller executes pre-configured actions
-- Button press events are NOT exposed via WebSocket
-- Only static configuration is available (ID, Name, Address, Channel)
-- No `Pressed`, `State`, or `Value` properties exist
+**Important notes:**
+- Buttons are **WebSocket-only** — no HTTP polling fallback (polling is ineffective for momentary presses)
+- The processor creates entities from the `/instances` list but ongoing state comes exclusively from WebSocket
+- Button presses fire `evon_button_press` bus events and update event entities
+- Device triggers are available for automation (single/double/long press per button)
 
-**Workaround:** Detect button presses indirectly by monitoring the devices they control (e.g., watch for light state changes). See `ws-switch-listener.mjs` for a test implementation and `docs/WEBSOCKET_API.md` for details.
-
-The integration does not create entities for these devices.
+See `docs/WEBSOCKET_API.md` for detailed WebSocket subscription data and timing measurements.
 
 ### Security Doors & Intercoms (Implemented!)
 
@@ -849,13 +847,18 @@ Unlike physical switches, **security doors and intercoms DO expose real-time eve
 
 These can be monitored in real-time using `RegisterValuesChanged`. See `ws-security-door.mjs` for a test implementation and `docs/WEBSOCKET_API.md` for full property documentation.
 
-**Integration Features (v1.14.0):**
+**Integration Features (v1.14.0+):**
 - **Security Door Sensors**: Binary sensors for door open/closed state and call in progress
 - **Intercom Sensors**: Binary sensors for door state and connection status
-- **Doorbell Events**: Home Assistant event `evon_doorbell` fired on doorbell press (False→True transition only) *(untested)*
+- **Doorbell Events**: Home Assistant event `evon_doorbell` fired on doorbell press (False→True transition only)
   - Event data: `device_id`, `name`
   - Use in automations to trigger notifications, announcements, or camera snapshots
   - Deduplication: only fires on state transition (not on repeated True values from WebSocket)
+- **Physical Button Events** *(v1.19.0)*: Event entities for wall buttons (Taster) with press type detection
+  - Event data: `device_id`, `name`, `press_type` (single_press, double_press, long_press)
+  - Bus event `evon_button_press` for automations
+  - Device triggers available for each press type per button
+  - WebSocket-only (requires real-time updates enabled)
 
 ---
 
@@ -1108,6 +1111,7 @@ Test files:
 - `test_sensor.py`, `test_switch.py`, `test_select.py` - Entity tests
 - `test_binary_sensor.py`, `test_button.py` - Additional entity tests
 - `test_event.py` - Doorbell event entity tests
+- `test_button_events.py` - Physical button event entity and press detection tests
 - `test_camera.py`, `test_image.py` - Camera and image platform tests
 - `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration, PIL context manager)
 - `test_base_entity.py` - Base entity and optimistic state tests
@@ -1139,7 +1143,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1116 tests total
+Current coverage: 1159 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

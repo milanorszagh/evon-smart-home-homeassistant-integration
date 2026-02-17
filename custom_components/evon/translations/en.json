@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Doorbell pressed"
+      "doorbell": "Doorbell pressed",
+      "button_single_press": "Button single press",
+      "button_double_press": "Button double press",
+      "button_long_press": "Button long press"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Ring"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Button",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Single press",
+              "double_press": "Double press",
+              "long_press": "Long press"
             }
           }
         }

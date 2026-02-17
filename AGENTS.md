@@ -262,25 +262,25 @@ The `System.HomeState` class controls home-wide modes. Key points:
 await callMethod("HomeStateNight", "Activate");
 ```
 
-### Physical Buttons (SmartCOM.Switch) - HARDWARE LEVEL ONLY
+### Physical Buttons (SmartCOM.Switch) - WebSocket Event Entities
 
-**CRITICAL**: Physical wall buttons (`SmartCOM.Switch` class) **operate at the hardware level and do NOT fire WebSocket events**:
+Physical wall buttons (`SmartCOM.Switch` class) are exposed as **HA event entities** with press type detection:
 
-1. **Hardware-level operation**: Buttons directly signal their associated actuators (blind motors, light relays) without going through the software layer
-2. **No WebSocket events**: Testing confirmed 0 ValuesChanged events even with active subscriptions
-3. **By design**: This ensures physical buttons work even if the software layer has issues
+1. **WebSocket events**: Buttons fire `ValuesChanged` events with `IsOn` property (`True` on press, `False` on release)
+2. **Press type detection**: The coordinator detects single press, double press, and long press based on timing
+3. **WebSocket-only**: No HTTP polling fallback — buttons only work when WebSocket is connected
 
 **What this means for agents:**
-- Do NOT create event entities, binary sensors, or triggers for `SmartCOM.Switch` devices
-- Do NOT attempt to implement button press detection - it will not work
-- The buttons work within Evon's internal system but cannot be observed externally
-- Only `SmartCOM.Light.Light` (controllable relay outputs) should be exposed as switches
-- Device state changes from button presses ARE visible (e.g., light turns on), but the button press itself is not
+- Button entities are created by `EvonButtonEvent` in `event.py` with `_entity_type = ENTITY_TYPE_BUTTON_EVENTS`
+- The processor (`process_button_events`) creates entities from the `/instances` list — no HTTP detail fetch needed
+- Press detection logic lives in coordinator's `_handle_button_press()` / `_button_press_timeout()` / `_fire_button_event()`
+- Bus event `evon_button_press` is fired with `device_id`, `name`, and `press_type`
+- Device triggers are available for automation (single/double/long press per button)
+- `SmartCOM.Light.Light` (controllable relay outputs) are a separate class exposed as switches
 
-**Testing performed (February 2025):**
-- Tested SC1_M08.Switch1Up (Taster Jal. WZ 3 Öffnen) - 0 events
-- Tested SC1_M07.Switch1Up (Taster Jal. WZ 1 Öffnen) - 0 events
-- Tested SC1_M04.Input3 (Taster Licht Esstisch) - 0 events
+**Testing confirmed (February 2026):**
+- Button instances fire WebSocket events reliably
+- Single press ~190ms, double press detection within 0.6s window, long press >1.5s
 
 ### Method Naming Convention
 
@@ -369,7 +369,7 @@ The integration caches angle and position separately so:
 
 ### TRAP #4: Switches Must Use HTTP
 
-Switch entities (`Base.bSwitch`) do NOT respond to WebSocket control. The HTTP API must be used (note: `SmartCOM.Switch` are physical wall buttons not exposed as HA entities):
+Switch entities (`Base.bSwitch`) do NOT respond to WebSocket control. The HTTP API must be used (note: `SmartCOM.Switch` are physical wall buttons exposed as event entities, not switches):
 ```
 POST /api/instances/{switch_id}/AmznTurnOn
 ```
@@ -589,7 +589,7 @@ When filtering devices from the API, use these class names:
 | Bathroom Radiator | `Heating.BathroomRadiator` | Yes (use `Switch` method to toggle) |
 | Home State | `System.HomeState` | Yes (use `Activate` method) |
 | Scene | `System.SceneApp` | Yes (use `Execute` method) |
-| Physical Buttons | `SmartCOM.Switch` | **NO** (read-only, unusable) |
+| Physical Buttons | `SmartCOM.Switch` | No (event entity, WS-only) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
 | Security Door | `Security.Door` | No (sensor only, stores SavedPictures) |
 | Intercom (2N) | `Security.Intercom.2N.Intercom2N` | No (sensor only) |
@@ -856,7 +856,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1116 tests):
+Tests are in the `tests/` directory (1159 tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -867,6 +867,7 @@ Tests are in the `tests/` directory (1116 tests):
 - `test_select.py` - Select entity tests (home state, season mode)
 - `test_binary_sensor.py` - Binary sensor tests (valves)
 - `test_button.py` - Button entity tests (scenes)
+- `test_button_events.py` - Physical button event entity and press detection tests
 - `test_camera.py` - Camera entity tests (including snapshot fetch, error handling)
 - `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration)
 - `test_image.py` - Image entity tests (including fetch errors, snapshot handling)
@@ -1022,10 +1023,11 @@ Before creating a release, ensure the following are up to date:
 **IMPORTANT**: Before updating version history, always check the existing entries to identify the current/latest version. Do not overwrite an already-released version with new features - create a new version number instead.
 
 - **v1.18.0**: **Auth retry storm fix (Issue #2), WebSocket diagnostics, doorbell event entity, 8 new translations.** Three complementary fixes for the auth retry storm regression (Issue #2) that caused 700+ API requests/min on network errors: (1) `login()` now calls `self._increment_login_backoff()` before raising `EvonConnectionError` on `aiohttp.ClientError`, preventing rapid-fire retries during network outages; (2) re-auth in `_request()` wrapped in try/except catching `EvonAuthError` and `EvonConnectionError`, re-raising as `EvonAuthError` to prevent `token=None` cascades; (3) WS receive timeout relaxed from 90s (3x heartbeat) to 180s (6x heartbeat) to prevent false disconnects on low-traffic systems. **WebSocket metrics**: Added rolling window response time tracking (`deque(maxlen=100)`), reconnect count, message/request counts, uptime, pending request count, last error tracking. First connect vs reconnect distinguished via `_has_connected_once` flag. **Diagnostic sensors**: `EvonWsStatusSensor` (connected/disconnected/disabled state with 7 extra attributes: reconnect_count, messages_received, requests_sent, pending_requests, connection_uptime, last_error, avg_response_time_ms) and `EvonWsLatencySensor` (avg response time in ms, `SensorStateClass.MEASUREMENT` for HA long-term statistics). Both use `EntityCategory.DIAGNOSTIC`. WS status sensor extends `CoordinatorEntity` directly (not `EvonEntity`) since it represents integration state, not an Evon device. **Doorbell event entity**: New `event.py` platform with `EvonDoorbellEvent` class. Extends `EvonEntity` + `EventEntity`, `device_class=DOORBELL`, `event_types=["ring"]`. Unique ID: `evon_doorbell_{instance_id}`. Tracks `_last_doorbell_state` and fires "ring" on False→True transition of `doorbell_triggered` from coordinator data. `Platform.EVENT` added to PLATFORMS list. **Translations**: Added 8 new translation files (fr, it, sl, es, pt, pl, cs, sk) with 223 keys each, matching en.json structure. All UI strings translated: config flow, options flow, services, entities, issues, selectors. **CI/deps**: Bumped GitHub Actions to latest major versions. Test dep cleanup: removed unused `aiohttp` from requirements-test.txt, bumped pytest>=8.3.0, pytest-asyncio>=0.24.0, pytest-cov>=6.0.0, pytest-homeassistant-custom-component>=0.13.0, mypy>=1.15.0. PyTurboJPEG documented as required (HA camera module-level import). Ruff format applied to new files. Redundant `pip install mypy` removed from CI. **Tests**: 876 tests passing (up from 856), 20 new tests covering login backoff, request auth retry, WS timeout, WS metrics, WS sensors, and doorbell events.
+- **v1.19.0**: **Physical button (Taster) support.** Wall buttons (`SmartCOM.Switch`) exposed as HA event entities (`EvonButtonEvent`) with press type detection (single_press, double_press, long_press). WebSocket-only — buttons fire `ValuesChanged` events on `IsOn` property. Press detection in coordinator: `_handle_button_press()` records press start, `_button_press_timeout()` fires after 0.6s double-click window, `_fire_button_event()` fires `evon_button_press` bus event and updates entity data. Processor (`process_button_events`) filters by `EVON_CLASS_PHYSICAL_BUTTON`, no HTTP detail fetch needed. Device triggers for all three press types per button device. Translations for all 10 languages. Fixed `_async_cleanup_stale_entities()` removing button entities (missing `ENTITY_TYPE_BUTTON_EVENTS` in entity type list). Also: WS control mappings for blind group commands (OpenAll/CloseAll/StopAll), recorder executor fix for statistics calls.
 - **v1.17.1**: **Code quality audit and hardening (3 rounds).** Three rounds of deep analysis across 4 parallel agents per round. Round 1 identified 35 issues, round 2 found 7, round 3 found 5 — total 24 fixes applied. **Bug fixes (8)**: Light brightness rounding (truncation turned brightness 2 to 0/off, now uses `round()`), climate cooling mode `max_temp` excluded preset temperatures from range calculation, diagnostics `KeyError` on partial teardown (now uses `.get()`), select `KeyError` on unknown option (now uses `.get()` with fallback), device trigger unsafe dict access (now uses `.get()`), config flow accepted IPv4 addresses with octets >255 (now validated), config flow `parsed.port` could raise `ValueError` on malformed URLs (now wrapped in try/except), camera recorder crashed on corrupt first JPEG frame (now loops to find first valid frame). **WebSocket hardening (6)**: Periodic stale request cleanup task (runs every 15s independent of message loop), `exc_info=True` on all exception logs for stack traces, subscription list copy in `_resubscribe()` to prevent mutation during await, fire-and-forget `send_str` wrapped in try/except (raises `EvonWsNotConnectedError`), `sequenceId` type validation (rejects non-int responses), `_do_subscribe()` stores defensive copy of subscription list (prevents shared reference mutation). **Coordinator hardening (2)**: `exc_info=True` on conversion error logs, second retarget guard after data snapshot identity check. **Input validation (2)**: Bulk service entity ID validation against `INSTANCE_ID_PATTERN`, select entities log warning for unrecognized options. **Camera hardening (3)**: PIL Image context manager for proper resource cleanup, JPEG decode crash handling with graceful fallback, `get_recent_recordings()` FileNotFoundError race fix (handles files deleted between glob and stat). **Data processing (4)**: Security doors `_transform_saved_pictures()` extracted to shared function with None timestamp filtering, WebSocket mappings deduplicated SavedPictures transformation using shared function, home states and scenes processors now skip instances with empty IDs, air quality `EVON_NO_DATA_VALUE = -999` constant extracted from magic numbers. **Service handler hardening**: All 6 service handlers (`handle_refresh`, `handle_reconnect_websocket`, `handle_set_home_state`, `handle_set_season_mode`, `_bulk_api_call`, `_bulk_entity_call`) now validate `entry_data` is a dict before accessing keys. **Other hardening (2)**: Recording duration validation (clamp to 30-3600s), switch negative time clamping and seconds overflow protection. **Statistics compatibility**: `StatisticMeanType` import made optional for older HA versions. **Tests**: 260+ new tests added (994 total, up from 560), covering button, camera, image, statistics, API, WebSocket client/control/mappings, binary sensor, instance ID extraction, and processors. Conftest mock data corrected (Evon API key names for SavedPictures). **CI fixes**: Climate tests updated for HA service-layer validation (`ServiceValidationError`), `test_base_entity.py` module cleanup narrowed to prevent cross-test pollution.
 - **v1.17.0**: Snapshot-based camera recording feature with custom Lovelace card. **Recording backend** (`camera_recorder.py`): `EvonCameraRecorder` rapidly polls snapshots and encodes to MP4 via PyAV with timestamp overlay. Services: `evon.start_recording` / `evon.stop_recording`. Recording switch entity for dashboard toggle. `get_recent_recordings()` returns recent MP4s with filename, timestamp, size, and URL. **Custom Lovelace card** (`www/evon-camera-recording-card.js`): Plain HTMLElement (no LitElement dependency) with record button + live stopwatch, recent recordings list with inline `<video>` playback via `auth/sign_path` signed URLs, and "All Recordings" link to media browser. Smart re-rendering: only re-renders when recording state or recordings list actually change, preventing video player flickering. **Frontend registration** (`__init__.py`): Static paths registered via `async_register_static_paths` + `StaticPathConfig` for both the JS card (`/evon/evon-camera-recording-card.js`) and recordings directory (`/evon/recordings/`). **Card config**: `type: custom:evon-camera-recording-card` with `entity` (camera entity) and optional `recording_switch` (auto-derived if omitted by replacing `camera.` prefix with `switch.` + `_recording` suffix). Camera `extra_state_attributes` now includes `recent_recordings` list. **Key gotchas**: HA's `media_source` integration must be enabled in `configuration.yaml` for media browser. Video URLs use `/evon/recordings/` custom static path (not `/media/local/` which returns 404). Lovelace resource must be registered in `/config/.storage/lovelace_resources`.
 - **v1.16.0**: Added **Energy Today** and **Energy This Month** calculated sensors. **Energy Today** queries HA's `statistics_during_period()` to get today's consumption from the Energy Total sensor. **Energy This Month** combines Evon's `EnergyDataMonth` array (previous days of this month) with today's consumption from HA statistics. Implementation: `_calculate_energy_today_and_month()` method in coordinator calculates values during each refresh cycle, storing them as `energy_today_calculated` and `energy_this_month_calculated` in meter data. Sensor classes `EvonEnergyTodaySensor` and `EvonEnergyThisMonthSensor` read these calculated values. **Note**: The `statistics_during_period` function is blocking and must be called via `async_add_executor_job()`. Also added `EnergyDataDay` WebSocket subscription for future use. Climate WebSocket updates now subscribe to setpoint limits and recompute preset temperatures to avoid stale clamping. Added group climate services (`all_climate_comfort`, `all_climate_eco`, `all_climate_away`). WebSocket error handling now logs stack traces and separates expected network errors from unexpected failures; MCP WebSocket calls now retry once after reconnect when the socket drops between connect and send. Coordinator WS updates now validate the entity list reference before indexing to avoid stale list access. Added MCP server unit tests (`tests-mcp/`) for API client, tool/resource registration, and CI coverage for them, plus documented logging guidelines and WS error handling policy in DEVELOPMENT.md.
-- **v1.15.0**: Camera support for 2N intercom cameras and doorbell snapshot image entities. **Camera**: Live feed via WebSocket using `SetValue ImageRequest=true` to trigger capture, then fetching JPEG from `/temp/` path. **Doorbell Snapshots**: Image entities (`image.py`) for up to 10 historical snapshots from `SavedPictures` property on Security Door. Each snapshot includes timestamp in attributes. **Class name fixes**: Security Door is `Security.Door` (not `SmartCOM.Security.SecurityDoor`), Intercom 2N is `Security.Intercom.2N.Intercom2N` (not `SmartCOM.Intercom.Intercom2N`). **Physical buttons (Taster)**: Verified they operate at hardware level and do NOT fire WebSocket events (tested SC1_M08.Switch1Up, SC1_M07.Switch1Up, SC1_M04.Input3 with 0 events received). **Security Door entities**: Door open/closed state (`IsOpen`/`DoorIsOpen`) and call in progress indicator (`CallInProgress`). **Intercom entities**: Doorbell events, door open events, connection status.
+- **v1.15.0**: Camera support for 2N intercom cameras and doorbell snapshot image entities. **Camera**: Live feed via WebSocket using `SetValue ImageRequest=true` to trigger capture, then fetching JPEG from `/temp/` path. **Doorbell Snapshots**: Image entities (`image.py`) for up to 10 historical snapshots from `SavedPictures` property on Security Door. Each snapshot includes timestamp in attributes. **Class name fixes**: Security Door is `Security.Door` (not `SmartCOM.Security.SecurityDoor`), Intercom 2N is `Security.Intercom.2N.Intercom2N` (not `SmartCOM.Intercom.Intercom2N`). **Physical buttons (Taster)**: Initial testing showed 0 events (Feb 2025), but later confirmed working (Feb 2026) — now fully supported as event entities in v1.19.0. **Security Door entities**: Door open/closed state (`IsOpen`/`DoorIsOpen`) and call in progress indicator (`CallInProgress`). **Intercom entities**: Doorbell events, door open events, connection status.
 - **v1.14.0**: WebSocket-based device control for lights and blinds. Lights use `CallMethod SwitchOn/SwitchOff` for explicit on/off (not `Switch([bool])` which is inconsistent) and `BrightnessSetScaled([brightness, transition])` for dimming. Blinds use `CallMethod MoveToPosition([angle, position])` for position and tilt control with cached values. Non-dimmable lights in light groups skip API calls when already on (for combined lights with Govee). Falls back to HTTP when WebSocket unavailable. Added security doors and intercoms with doorbell events (`evon_doorbell`), RGBW light color temperature support (untested), light/blind group classes, and climate humidity display.
 - **v1.13.0**: Added WebSocket support for real-time state updates (read-only).
 - **v1.12.0**: Remote access via `my.evon-smarthome.com` relay server. Reconfigure flow now allows switching between local and remote connection types. Security improvements: explicit SSL context with connection limits, header redaction, token TTL with auto-refresh and memory cleanup on close, comprehensive input validation (instance IDs, method names, Engine ID, username, password, host port), asyncio.Lock for token access, HTTP status handling (400/403/404/429/5xx with response.reason), Content-Type validation, Engine ID redaction in diagnostics.
@@ -1044,8 +1046,8 @@ Before creating a release, ensure the following are up to date:
 - **v1.6.0**: Added automatic cleanup of stale/orphaned entities on integration reload.
 - **v1.5.2**: Fixed reconfigure flow 500 error with modern HA config flow patterns.
 - **v1.5.0**: Added Home State selector (select entity) for switching between home modes. Added MCP tools (`list_home_states`, `set_home_state`) and resource (`evon://home_state`).
-- **v1.4.1**: Removed button event entities (not functional due to Evon API limitations)
-- **v1.4.0**: Added event entities for physical buttons (later removed in 1.4.1)
+- **v1.4.1**: Removed non-functional button event entities (WebSocket events weren't detected at that time; re-implemented in v1.19.0)
+- **v1.4.0**: Added event entities for physical buttons (removed in v1.4.1, re-implemented in v1.19.0 with press type detection)
 - **v1.3.3**: Fixed blind control - use `Open`/`Close` instead of `MoveUp`/`MoveDown`
 - **v1.3.2**: Added logbook integration for switch click events
 - **v1.3.1**: Best practices: Entity categories, availability detection, HomeAssistantError exceptions, EntityDescription refactoring

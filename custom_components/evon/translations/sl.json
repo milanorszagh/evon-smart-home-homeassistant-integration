@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Pritisnjeno zvonec"
+      "doorbell": "Pritisnjeno zvonec",
+      "button_single_press": "Enojni pritisk tipke",
+      "button_double_press": "Dvojni pritisk tipke",
+      "button_long_press": "Dolgi pritisk tipke"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Zvonjenje"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Tipka",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Enojni pritisk",
+              "double_press": "Dvojni pritisk",
+              "long_press": "Dolgi pritisk"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Koordinator"
             },
             "data_description": {
               "debug_api": "Omogoči beleženje razhroščevanja za HTTP API zahteve in odgovore. Uporabno za odpravljanje težav s povezavo ali preverjanjem pristnosti.",

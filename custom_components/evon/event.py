@@ -9,7 +9,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .base_entity import EvonEntity
-from .const import DOMAIN, ENTITY_TYPE_INTERCOMS
+from .const import DOMAIN, ENTITY_TYPE_BUTTON_EVENTS, ENTITY_TYPE_INTERCOMS
 from .coordinator import EvonDataUpdateCoordinator
 
 
@@ -31,6 +31,18 @@ async def async_setup_entry(
                     intercom["id"],
                     intercom["name"],
                     intercom.get("room_name", ""),
+                    entry,
+                )
+            )
+
+    if coordinator.data and ENTITY_TYPE_BUTTON_EVENTS in coordinator.data:
+        for button in coordinator.data[ENTITY_TYPE_BUTTON_EVENTS]:
+            entities.append(
+                EvonButtonEvent(
+                    coordinator,
+                    button["id"],
+                    button["name"],
+                    button.get("room_name", ""),
                     entry,
                 )
             )
@@ -90,4 +102,59 @@ class EvonDoorbellEvent(EvonEntity, EventEntity):
             self._trigger_event("ring")
 
         self._last_doorbell_state = current_state
+        super()._handle_coordinator_update()
+
+
+class EvonButtonEvent(EvonEntity, EventEntity):
+    """Event entity for Evon physical wall button (Taster) press events."""
+
+    _attr_device_class = EventDeviceClass.BUTTON
+    _attr_event_types = ["single_press", "double_press", "long_press"]
+    _attr_translation_key = "button"
+    _entity_type = ENTITY_TYPE_BUTTON_EVENTS
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the button event entity."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self._attr_unique_id = f"evon_button_{instance_id}"
+        self._last_event_id: int = 0
+
+    @property
+    def event_types(self) -> list[str]:
+        """Return supported event types."""
+        return ["single_press", "double_press", "long_press"]
+
+    @property
+    def unique_id(self) -> str:
+        """Return unique ID."""
+        return self._attr_unique_id
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return self._build_device_info("Button")
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        data = self._get_data()
+        if data is None:
+            super()._handle_coordinator_update()
+            return
+
+        current_event_type = data.get("last_event_type")
+        current_event_id = data.get("last_event_id", 0)
+
+        # Fire event when a new event occurs (tracked by monotonic counter)
+        if current_event_type and current_event_id != self._last_event_id:
+            self._trigger_event(current_event_type)
+            self._last_event_id = current_event_id
+
         super()._handle_coordinator_update()

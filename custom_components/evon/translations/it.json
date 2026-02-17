@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Campanello premuto"
+      "doorbell": "Campanello premuto",
+      "button_single_press": "Pressione singola del pulsante",
+      "button_double_press": "Doppia pressione del pulsante",
+      "button_long_press": "Pressione lunga del pulsante"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Suoneria"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Pulsante",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Pressione singola",
+              "double_press": "Doppia pressione",
+              "long_press": "Pressione lunga"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Coordinatore"
             },
             "data_description": {
               "debug_api": "Abilita il log di debug per le richieste e risposte dell'API HTTP. Utile per la risoluzione di problemi di connessione o autenticazione.",

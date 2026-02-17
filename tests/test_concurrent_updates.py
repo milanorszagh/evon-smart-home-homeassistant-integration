@@ -40,6 +40,7 @@ def coordinator_and_method():
     """Create a coordinator-like object with the real WS handler."""
     from custom_components.evon.const import (
         DOMAIN,
+        ENTITY_TYPE_BUTTON_EVENTS,
         ENTITY_TYPE_INTERCOMS,
         ENTITY_TYPE_SMART_METERS,
     )
@@ -49,6 +50,7 @@ def coordinator_and_method():
 
     ns = {
         "_LOGGER": MagicMock(),
+        "ENTITY_TYPE_BUTTON_EVENTS": ENTITY_TYPE_BUTTON_EVENTS,
         "ENTITY_TYPE_INTERCOMS": ENTITY_TYPE_INTERCOMS,
         "ENTITY_TYPE_SMART_METERS": ENTITY_TYPE_SMART_METERS,
         "DOMAIN": DOMAIN,
@@ -183,6 +185,7 @@ class TestConcurrentWSAndHTTP:
 
         ns = {
             "_LOGGER": MagicMock(),
+            "ENTITY_TYPE_BUTTON_EVENTS": "button_events",
             "ENTITY_TYPE_INTERCOMS": "intercoms",
             "ENTITY_TYPE_SMART_METERS": ENTITY_TYPE_SMART_METERS,
             "DOMAIN": "evon",

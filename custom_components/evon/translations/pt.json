@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Campainha pressionada"
+      "doorbell": "Campainha pressionada",
+      "button_single_press": "Pressão simples do botão",
+      "button_double_press": "Pressão dupla do botão",
+      "button_long_press": "Pressão longa do botão"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Toque"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Botão",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Pressão simples",
+              "double_press": "Pressão dupla",
+              "long_press": "Pressão longa"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Coordenador"
             },
             "data_description": {
               "debug_api": "Ativar registo de debug para pedidos e respostas HTTP API. Útil para resolver problemas de conexão ou autenticação.",

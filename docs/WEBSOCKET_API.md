@@ -870,6 +870,26 @@ This is because switches in Evon systems are typically physical relays that requ
 
 **⚠️ Important:** `ModeSaved`, `MainState`, and `SetTemperature` are for READING state only. To CHANGE presets or temperature, use CallMethod with `WriteDayMode`, `WriteNightMode`, `WriteFreezeMode`, or `WriteCurrentSetTemperature`. See "Climate Control" section above.
 
+#### Climate Module Architecture (SmartCOM C1144/C1244)
+
+Evon uses SmartCOM C1144v40 (or C1244) modules for room climate control. Each module supports **4 independent thermostat zones**, but not all zones need to be active. The instance naming follows a fixed pattern:
+
+| Instance Pattern | Zone | Description |
+|-----------------|------|-------------|
+| `SC1_M{nn}.Thermostat1` | Zone 1 | First thermostat on the module |
+| `SC1_M{nn}.Thermostat2` | Zone 2 | Second thermostat (may be unused) |
+| `SC1_M{nn}.Thermostat3` | Zone 3 | Third thermostat on the module |
+| `SC1_M{nn}.Thermostat4` | Zone 4 | Fourth thermostat (may be unused) |
+
+**Unused zones** have an empty `Name` property and report zero/default values for temperature. The integration correctly ignores these by filtering out instances with empty names during discovery. However, the Evon controller still sends WebSocket `ValuesChanged` events for unused zones — these appear as "unknown instance" in logs and are safely ignored.
+
+Each climate module also has associated input instances:
+
+| Instance Pattern | Class | Description |
+|-----------------|-------|-------------|
+| `SC1_M{nn}.Input1/3` | `SmartCOM.Clima.RoomControlUnit` | Room control panels (wall-mounted thermostat displays with temperature sensor) |
+| `SC1_M{nn}.Input2/4` | `SmartCOM.Digital.DigitalInput` | Lock contacts ("Sperrkontakt") — window/door contact sensors that can disable heating when open |
+
 ### Home States
 | Class | Description |
 |-------|-------------|
@@ -965,86 +985,135 @@ client.registerValuesChanged([
 See `ws-security-door.mjs` for a complete test implementation.
 
 ### Physical Switches (Taster)
+
+Physical wall buttons ("Taster" in German) use the `SmartCOM.Switch` class. These are the physical push-buttons mounted on walls for controlling lights and blinds.
+
 | Class | Description |
 |-------|-------------|
+| `SmartCOM.Switch` | Physical wall buttons (light buttons, blind buttons) |
 | `Base.bSwitch` | Base switch class |
 | `Base.bSwitchUniversal` | Universal switches/buttons |
 
-**⚠️ Important Finding:** Physical wall switches (Taster) do NOT expose dynamic state properties. They only have static configuration:
+#### Key Properties (from API)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `ID` | string | Instance identifier |
+| `ID` | string | Instance identifier (e.g., `SC1_M01.Input1`) |
 | `Name` | string | Display name (e.g., "Taster Licht Zi3") |
-| `Group` | string | Room ID |
-| `Error` | boolean | Error state |
+| `ClassName` | string | Always `SmartCOM.Switch` for physical buttons |
+| `IsOn` | boolean | Current pressed state |
+| `ActValue` | number | Analog value (0 or 1) |
 | `Address` | number | Hardware address |
 | `Channel` | number | Hardware channel |
 | `Line` | number | Hardware line |
+| `Group` | string | Room ID |
+| `Error` | boolean | Error state |
+| `MinLongclick` | number | Long-press threshold in ms (default: 1500) |
+| `MaxDblClick` | number | Double-click window in ms (default: 300) |
 
-**No `Pressed`, `State`, or `Value` properties exist.** See "Physical Switches" section below for details.
+#### Instance ID Naming Conventions
 
-## Physical Switches (Taster) - Detailed Findings (February 2025)
+- **Light buttons**: `SC1_M{nn}.Input{1-4}` — 4 buttons per module
+- **Blind buttons**: `SC1_M{nn}.Switch{1-2}Up` / `SC1_M{nn}.Switch{1-2}Down` — paired up/down per blind
+- Modules M01-M04 are light modules, M07-M10 are blind modules
 
-### The Problem
-Physical wall switches ("Taster" in German) in Evon systems **operate at the hardware level and do NOT fire WebSocket events**. When you press a button:
+#### Button Press Types
 
-1. The button sends a signal directly to the SmartCOM module
-2. The module directly signals the associated actuator (blind motor, light relay, etc.)
-3. The target device state changes
-4. **The button press itself bypasses the software layer entirely**
+Evon hardware supports three press types at the controller level:
+- **Single press**: Standard toggle
+- **Double press**: Detected within `MaxDblClick` window (default 300ms)
+- **Long press**: Detected after `MinLongclick` threshold (default 1500ms)
 
-### Why This Happens
-This is by design for reliability - physical buttons need to work even if the software layer has issues. The button-to-device mapping is configured at the hardware/controller level, not in software.
+#### Button Instance ID Patterns
 
-### Testing Performed (February 2025)
-We tested three different switch types via WebSocket subscription:
+Button instances follow these naming conventions:
 
-| Switch | Instance ID | Type | Result |
-|--------|-------------|------|--------|
-| Taster Jal. WZ 3 Öffnen | SC1_M08.Switch1Up | Blind button | **0 events** |
-| Taster Jal. WZ 1 Öffnen | SC1_M07.Switch1Up | Blind button | **0 events** |
-| Taster Licht Esstisch | SC1_M04.Input3 | Light button | **0 events** |
+| Type | Pattern | Example |
+|------|---------|---------|
+| Light buttons | `SC1_M{nn}.Input{1-4}` | `SC1_M01.Input1` |
+| Blind buttons (up) | `SC1_M{nn}.Switch{1-2}Up` | `SC1_M07.Switch1Up` |
+| Blind buttons (down) | `SC1_M{nn}.Switch{1-2}Down` | `SC1_M07.Switch1Down` |
 
-Despite pressing the physical buttons multiple times during 60-second monitoring windows, **no ValuesChanged events were received**. The subscription confirmed successfully and returned initial values, but no state changes propagated through WebSocket.
+Each SmartCOM module has up to 4 button inputs. Light modules use `Input{1-4}`, blind modules use paired `Switch{n}Up`/`Switch{n}Down`. The number of buttons varies by installation.
 
-### Workaround: Indirect Detection
-You can detect button presses by monitoring the devices they control:
+### WebSocket Behavior for Physical Switches
+
+#### Confirmed Working (February 2026)
+
+**Physical buttons DO fire WebSocket `ValuesChanged` events.** Subscribing to `IsOn` and `ActValue` properties on button instances reliably detects all button presses.
+
+**How it works:**
+- `IsOn = True` when the button is **pressed down**
+- `IsOn = False` when the button is **released**
+- `ActValue` mirrors `IsOn` (redundant — only `IsOn` is needed)
+- Button events arrive **~2 seconds before** the controlled device (light/blind) changes state
+
+**Press type detection via timing:**
+
+| Press Type | Pattern | Duration |
+|-----------|---------|----------|
+| **Single press** | One True→False cycle | ~190ms |
+| **Double press** | Two True→False cycles within ~500ms | ~340ms total |
+| **Long press** | One True→False cycle | >1500ms (matches `MinLongclick` default) |
+
+**Example events from a single button press:**
+```
+[09:39:39.771] SC1_M01.Input1.IsOn = True    ← button pressed
+[09:39:39.961] SC1_M01.Input1.IsOn = False   ← button released (190ms later)
+[09:39:41.967] SC1_M01.Light1.IsOn = True    ← light turns on (~2s later)
+```
+
+**Example events from a double press:**
+```
+[09:39:46.430] SC1_M04.Input3.IsOn = True    ← first press
+[09:39:46.566] SC1_M04.Input3.IsOn = False   ← first release (136ms)
+[09:39:46.770] SC1_M04.Input3.IsOn = True    ← second press (204ms gap)
+[09:39:46.970] SC1_M04.Input3.IsOn = False   ← second release (200ms)
+```
+
+**Example events from a long press:**
+```
+[09:39:51.359] SC1_M01.Input1.IsOn = True    ← button held down
+[09:39:53.962] SC1_M01.Input1.IsOn = False   ← released after 2603ms
+```
+
+**Subscription example:**
+```javascript
+client.registerValuesChanged([
+  { Instanceid: 'SC1_M01.Input1', Properties: ['IsOn'] },
+  { Instanceid: 'SC1_M04.Input3', Properties: ['IsOn'] },
+], (instanceId, props) => {
+  // Implement press type detection using timing:
+  // - Single: one True→False in <500ms
+  // - Double: two True→False cycles within 600ms
+  // - Long: True held for >1500ms before False
+});
+```
+
+#### Note on February 2025 Testing
+Previous testing (Feb 2025) reported 0 events from buttons. This may have been due to subscribing to incorrect properties (`State`, `Pressed`, `Value`) rather than `IsOn`/`ActValue`, or the Evon firmware may have been updated since then.
+
+#### Alternative: Indirect Detection
+You can also detect button presses indirectly by monitoring the devices they control. This is less precise (no press type detection, ~2s delay) but doesn't require subscribing to button instances:
 
 ```javascript
-// Monitor light state changes
 client.registerValuesChanged([
   { Instanceid: 'SC1_M01.Light3', Properties: ['IsOn', 'DirectOn'] }
 ], (instanceId, props) => {
   if (props.IsOn !== undefined) {
-    console.log(`Light changed - likely button press on "Taster Licht Zi3"`);
+    console.log(`Light changed - likely button press`);
   }
 });
 ```
 
-### Switch-to-Light Mapping (Example)
-| Switch ID | Switch Name | Controls |
-|-----------|-------------|----------|
-| `SC1_M01.Input1` | Taster Licht Terrasse | `SC1_M01.Light1` |
-| `SC1_M01.Input2` | Taster Licht Zi1 | `SC1_M01.Light2` |
-| `SC1_M01.Input3` | Taster Licht Zi3 | `SC1_M01.Light3` |
-| `SC1_M01.Input4` | Taster Licht Bad 2 | `SC1_M01.Light4` |
-| `SC1_M02.Input1` | Taster Licht WC | `SC1_M02.Light1` |
-| `SC1_M02.Input2` | Taster Wandlicht Vorraum | `SC1_M02.Light2` |
-| `SC1_M02.Input3` | Taster Licht Bad | `SC1_M02.Light3` |
-| `SC1_M02.Input4` | Taster LED Vorraum | `SC1_M02.Light4` |
+### Other Input Types on Climate Modules (Not Buttons)
 
-### Methods Tested (All Failed to Return Button Events)
-- `RegisterValuesChanged` with various property names (`State`, `Pressed`, `Value`, `Active`, etc.)
-- `GetPropertyNames` - returned nothing
-- `GetMethods` - returned nothing
-- `SubscribeEvents` - returned nothing
-- `Subscribe` - returned nothing
+Climate modules also have Input instances, but these are **not** physical wall buttons:
 
-### Future Investigation
-- Check if there's a separate event stream for inputs
-- Investigate if admin users have access to additional APIs
-- Look for system-level event logs
+| Class | Description |
+|-------|-------------|
+| `SmartCOM.Clima.RoomControlUnit` | Room control panels (wall-mounted thermostat displays) |
+| `SmartCOM.Digital.DigitalInput` | Lock contacts ("Sperrkontakt") — e.g., window contact sensors |
 
 **Note:** The doorbell switch (`Intercom2N1000.DoorSwitch`) DOES expose state - see "Security Doors & Intercoms" section above.
 

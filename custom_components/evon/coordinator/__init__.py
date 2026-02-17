@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 from datetime import timedelta
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -21,6 +22,8 @@ from homeassistant.util import dt as dt_util
 
 from ..api import EvonApi, EvonApiError
 from ..const import (
+    BUTTON_DOUBLE_CLICK_WINDOW,
+    BUTTON_LONG_PRESS_THRESHOLD,
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -28,6 +31,7 @@ from ..const import (
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_CLIMATES,
     ENTITY_TYPE_HOME_STATES,
@@ -38,6 +42,7 @@ from ..const import (
     ENTITY_TYPE_SMART_METERS,
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
+    EVON_CLASS_PHYSICAL_BUTTON,
     EVON_CLASS_SCENE,
     REPAIR_CONNECTION_FAILED,
     WS_POLL_INTERVAL,
@@ -46,6 +51,7 @@ from .processors import (
     process_air_quality,
     process_bathroom_radiators,
     process_blinds,
+    process_button_events,
     process_cameras,
     process_climates,
     process_home_states,
@@ -102,6 +108,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ws_client: EvonWsClient | None = None
         self._ws_connected = False
 
+        # Button press detection state per button instance ID
+        self._button_press_state: dict[str, dict[str, Any]] = {}
+
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
         self._base_scan_interval = scan_interval
@@ -132,14 +141,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._fetch_rooms()
 
             # Prefetch all instance details in parallel (eliminates N+1 API calls)
-            # Scenes don't need detail fetch; everything else does
+            # Scenes don't need detail fetch; buttons are WS-only (no HTTP detail needed)
             instance_ids_to_fetch = []
             for inst in instances:
                 class_name = inst.get("ClassName", "")
                 inst_id = inst.get("ID", "")
                 if not inst_id:
                     continue
-                if class_name != EVON_CLASS_SCENE:
+                if class_name not in (EVON_CLASS_SCENE, EVON_CLASS_PHYSICAL_BUTTON):
                     instance_ids_to_fetch.append(inst_id)
 
             # Also fetch Base.ehThermostat for season mode
@@ -176,13 +185,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             security_doors = process_security_doors(instance_details, instances, self._get_room_name)
             intercoms = process_intercoms(instance_details, instances, self._get_room_name)
             cameras = process_cameras(instance_details, instances, self._get_room_name)
+            button_events = process_button_events(instances, self._get_room_name)
 
             _LOGGER.debug(
-                "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d",
+                "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d, button_events=%d",
                 len(lights),
                 len(climates),
                 len(smart_meters),
                 len(blinds),
+                len(button_events),
             )
 
             # Success - reset failure counter and clear any connection repair
@@ -206,6 +217,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ENTITY_TYPE_SECURITY_DOORS: security_doors,
                 ENTITY_TYPE_INTERCOMS: intercoms,
                 ENTITY_TYPE_CAMERAS: cameras,
+                ENTITY_TYPE_BUTTON_EVENTS: button_events,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -458,6 +470,12 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._ws_client.stop()
             self._ws_client = None
             self._ws_connected = False
+            # Cancel pending button press timers
+            for state in self._button_press_state.values():
+                timer = state.get("pending_timer")
+                if timer is not None:
+                    timer.cancel()
+            self._button_press_state.clear()
             # Clear caches (rebuilt on next _async_update_data call)
             self._instances_cache = []
             self._rooms_cache = {}
@@ -622,6 +640,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     _LOGGER.info("Doorbell event fired for %s", instance_id)
 
+                # Button press detection: track IsOn transitions for press type
+                if entity_type == ENTITY_TYPE_BUTTON_EVENTS and key == "is_on":
+                    self._handle_button_press(instance_id, updated_entity, value)
+
         # Atomically replace in the entities list AND _data_index
         entities_list = data_snapshot.get(entity_type)
         if entities_list and isinstance(entities_list, list):
@@ -638,6 +660,135 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Notify listeners
         self.async_set_updated_data(data_snapshot)
+
+    def _handle_button_press(
+        self,
+        instance_id: str,
+        entity_data: dict[str, Any],
+        is_on: bool,
+    ) -> None:
+        """Detect button press type from IsOn transitions.
+
+        Press types:
+        - single_press: one press+release cycle, no second press within BUTTON_DOUBLE_CLICK_WINDOW
+        - double_press: two press+release cycles within BUTTON_DOUBLE_CLICK_WINDOW
+        - long_press: held longer than BUTTON_LONG_PRESS_THRESHOLD
+
+        Args:
+            instance_id: The button instance ID.
+            entity_data: The entity data dict (mutable, will set last_event_type).
+            is_on: Current IsOn value (True=pressed, False=released).
+        """
+        now = time.monotonic()
+
+        if instance_id not in self._button_press_state:
+            self._button_press_state[instance_id] = {
+                "press_start": None,
+                "release_count": 0,
+                "pending_timer": None,
+            }
+
+        state = self._button_press_state[instance_id]
+
+        if is_on:
+            # Button pressed — record start time
+            state["press_start"] = now
+        else:
+            # Button released — determine press type
+            press_start = state.get("press_start")
+            if press_start is None:
+                return
+
+            hold_duration = now - press_start
+            state["press_start"] = None
+
+            if hold_duration >= BUTTON_LONG_PRESS_THRESHOLD:
+                # Long press — fire immediately
+                if state.get("pending_timer") is not None:
+                    state["pending_timer"].cancel()
+                    state["pending_timer"] = None
+                state["release_count"] = 0
+                self._fire_button_event(instance_id, entity_data, "long_press")
+            else:
+                # Short press — increment count, schedule delayed check
+                state["release_count"] += 1
+
+                # Cancel any existing pending timer
+                if state.get("pending_timer") is not None:
+                    state["pending_timer"].cancel()
+
+                # Schedule delayed check for single vs double press
+                state["pending_timer"] = self.hass.loop.call_later(
+                    BUTTON_DOUBLE_CLICK_WINDOW,
+                    self._button_press_timeout,
+                    instance_id,
+                )
+
+    def _button_press_timeout(
+        self,
+        instance_id: str,
+    ) -> None:
+        """Handle button press timeout — fire single or double press event.
+
+        Called after BUTTON_DOUBLE_CLICK_WINDOW expires with no further presses.
+        Re-looks up entity_data from _data_index to avoid stale references from
+        copy-on-write updates that may have occurred during the timeout window.
+        """
+        state = self._button_press_state.get(instance_id)
+        if state is None:
+            return
+
+        release_count = state.get("release_count", 0)
+        state["release_count"] = 0
+        state["pending_timer"] = None
+
+        # Re-lookup current entity data (may have been replaced by CoW)
+        entity_data = self._data_index.get((ENTITY_TYPE_BUTTON_EVENTS, instance_id))
+        if entity_data is None:
+            return
+
+        if release_count >= 2:  # 3+ clicks also treated as double press
+            self._fire_button_event(instance_id, entity_data, "double_press")
+        elif release_count == 1:
+            self._fire_button_event(instance_id, entity_data, "single_press")
+
+    def _fire_button_event(
+        self,
+        instance_id: str,
+        entity_data: dict[str, Any],
+        press_type: str,
+    ) -> None:
+        """Fire a button press event on the HA bus and update entity data.
+
+        Args:
+            instance_id: The button instance ID.
+            entity_data: The entity data dict (will set last_event_type).
+            press_type: The press type (single_press, double_press, long_press).
+        """
+        button_name = entity_data.get("name", "")
+        self.hass.bus.async_fire(
+            f"{DOMAIN}_button_press",
+            {
+                "device_id": instance_id,
+                "name": button_name,
+                "press_type": press_type,
+            },
+        )
+        _LOGGER.info(
+            "Button event fired: %s (%s) — %s",
+            button_name,
+            instance_id,
+            press_type,
+        )
+
+        # Update entity data so the event entity can pick it up.
+        # Use a monotonic counter so repeated same-type presses are detected.
+        entity_data["last_event_type"] = press_type
+        entity_data["last_event_id"] = entity_data.get("last_event_id", 0) + 1
+
+        # Notify coordinator listeners so event entity gets updated
+        if self.data:
+            self.async_set_updated_data(self.data)
 
     def _maybe_import_energy_statistics(
         self,

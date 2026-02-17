@@ -6,7 +6,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from custom_components.evon.device_trigger import TRIGGER_TYPE_DOORBELL, TRIGGER_TYPES
+from custom_components.evon.device_trigger import (
+    TRIGGER_TYPE_BUTTON_DOUBLE,
+    TRIGGER_TYPE_BUTTON_LONG,
+    TRIGGER_TYPE_BUTTON_SINGLE,
+    TRIGGER_TYPE_DOORBELL,
+    TRIGGER_TYPES,
+)
 from tests.conftest import requires_ha_test_framework
 
 
@@ -18,9 +24,12 @@ class TestDeviceTriggerConstants:
         assert TRIGGER_TYPE_DOORBELL == "doorbell"
 
     def test_trigger_types_set(self):
-        """Test trigger types set contains doorbell."""
+        """Test trigger types set contains all trigger types."""
         assert "doorbell" in TRIGGER_TYPES
-        assert len(TRIGGER_TYPES) == 1
+        assert TRIGGER_TYPE_BUTTON_SINGLE in TRIGGER_TYPES
+        assert TRIGGER_TYPE_BUTTON_DOUBLE in TRIGGER_TYPES
+        assert TRIGGER_TYPE_BUTTON_LONG in TRIGGER_TYPES
+        assert len(TRIGGER_TYPES) == 4
 
 
 @requires_ha_test_framework

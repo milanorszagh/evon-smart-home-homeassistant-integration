@@ -68,7 +68,7 @@ EVON_CLASS_LIGHT = "SmartCOM.Light.Light"  # Relay outputs — exposed as HA swi
 EVON_CLASS_BLIND = "SmartCOM.Blind.Blind"
 EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "Heating.ClimateControlUniversal"
-EVON_CLASS_PHYSICAL_BUTTON = "SmartCOM.Switch"  # Physical wall buttons (Tasters) — NOT exposed as HA entities
+EVON_CLASS_PHYSICAL_BUTTON = "SmartCOM.Switch"  # Physical wall buttons (Tasters) — exposed as HA event entities
 EVON_CLASS_SMART_METER = "Energy.SmartMeter"
 EVON_CLASS_AIR_QUALITY = "System.Location.AirQuality"
 EVON_CLASS_VALVE = "SmartCOM.Clima.Valve"
@@ -96,6 +96,11 @@ ENTITY_TYPE_SECURITY_DOORS = "security_doors"
 ENTITY_TYPE_HOME_STATES = "home_states"
 ENTITY_TYPE_VALVES = "valves"
 ENTITY_TYPE_CAMERAS = "cameras"
+ENTITY_TYPE_BUTTON_EVENTS = "button_events"
+
+# Button press detection timing (seconds)
+BUTTON_DOUBLE_CLICK_WINDOW = 1.0  # Max time between releases for double press
+BUTTON_LONG_PRESS_THRESHOLD = 1.5  # Min hold duration for long press
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"

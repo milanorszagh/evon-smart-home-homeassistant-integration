@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Zvonek stisknut"
+      "doorbell": "Zvonek stisknut",
+      "button_single_press": "Jednoduché stisknutí tlačítka",
+      "button_double_press": "Dvojité stisknutí tlačítka",
+      "button_long_press": "Dlouhé stisknutí tlačítka"
     }
   },
   "services": {
@@ -85,7 +88,7 @@
   "issues": {
     "connection_failed": {
       "title": "Připojení k Evon Smart Home selhalo",
-      "description": "Integrace se nepodařilo připojit k vašemu Evon Smart Home systému {failures} krát za sebou.\n\nPosledníchyba: {error}\n\nProsím zkontrolujte:\n- Váš Evon systém je zapnutý a připojený k síti\n- URL hostitele v konfiguraci integrace je správná\n- Vaše síť umožňuje připojení k Evon systému\n\nIntegrace se automaticky obnoví, jakmile bude připojení obnoveno."
+      "description": "Integrace se nepodařilo připojit k vašemu Evon Smart Home systému {failures} krát za sebou.\n\nPoslední chyba: {error}\n\nProsím zkontrolujte:\n- Váš Evon systém je zapnutý a připojený k síti\n- URL hostitele v konfiguraci integrace je správná\n- Vaše síť umožňuje připojení k Evon systému\n\nIntegrace se automaticky obnoví, jakmile bude připojení obnoveno."
     },
     "stale_entities_cleaned": {
       "title": "Zastaralé entity odstraněny",
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Zvonění"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Tlačítko",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Jednoduché stisknutí",
+              "double_press": "Dvojité stisknutí",
+              "long_press": "Dlouhé stisknutí"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Koordinátor"
             },
             "data_description": {
               "debug_api": "Zapnout ladící protokolování pro HTTP API požadavky a odpovědi. Užitečné pro řešení problémů s připojením nebo autentizací.",

@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Naciśnięto dzwonek"
+      "doorbell": "Naciśnięto dzwonek",
+      "button_single_press": "Pojedyncze naciśnięcie przycisku",
+      "button_double_press": "Podwójne naciśnięcie przycisku",
+      "button_long_press": "Długie naciśnięcie przycisku"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Dzwonek"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Przycisk",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Pojedyncze naciśnięcie",
+              "double_press": "Podwójne naciśnięcie",
+              "long_press": "Długie naciśnięcie"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Koordynator"
             },
             "data_description": {
               "debug_api": "Włącz logowanie debug dla żądań i odpowiedzi HTTP API. Przydatne do rozwiązywania problemów z połączeniem lub uwierzytelnianiem.",

@@ -9,6 +9,7 @@ from .const import (
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_CLIMATES,
     ENTITY_TYPE_HOME_STATES,
@@ -52,7 +53,7 @@ CLASS_TO_TYPE: dict[str, str] = {
     "Base.ehBlind": ENTITY_TYPE_BLINDS,
     EVON_CLASS_CLIMATE: ENTITY_TYPE_CLIMATES,
     EVON_CLASS_CLIMATE_UNIVERSAL: ENTITY_TYPE_CLIMATES,
-    EVON_CLASS_PHYSICAL_BUTTON: ENTITY_TYPE_SWITCHES,
+    EVON_CLASS_PHYSICAL_BUTTON: ENTITY_TYPE_BUTTON_EVENTS,
     "Base.bSwitch": ENTITY_TYPE_SWITCHES,
     EVON_CLASS_HOME_STATE: ENTITY_TYPE_HOME_STATES,
     EVON_CLASS_BATHROOM_RADIATOR: ENTITY_TYPE_BATHROOM_RADIATORS,
@@ -96,6 +97,7 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
         "MaxSetValueCool",
     ],
     ENTITY_TYPE_SWITCHES: ["IsOn", "State"],
+    ENTITY_TYPE_BUTTON_EVENTS: ["IsOn"],
     ENTITY_TYPE_HOME_STATES: ["Active"],
     ENTITY_TYPE_BATHROOM_RADIATORS: ["Output", "NextSwitchPoint"],
     # SmartMeter: real-time measurements (P1+P2+P3 computed to power)
@@ -159,6 +161,9 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
     ENTITY_TYPE_SWITCHES: {
         "IsOn": "is_on",
         "State": "is_on",  # Some switches use State instead
+    },
+    ENTITY_TYPE_BUTTON_EVENTS: {
+        "IsOn": "is_on",
     },
     ENTITY_TYPE_HOME_STATES: {
         "Active": "active",

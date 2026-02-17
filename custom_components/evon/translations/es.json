@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Timbre presionado"
+      "doorbell": "Timbre presionado",
+      "button_single_press": "Pulsación simple del botón",
+      "button_double_press": "Doble pulsación del botón",
+      "button_long_press": "Pulsación larga del botón"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Llamada"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Botón",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Pulsación simple",
+              "double_press": "Doble pulsación",
+              "long_press": "Pulsación larga"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Coordinador"
             },
             "data_description": {
               "debug_api": "Habilitar registro de depuración para solicitudes y respuestas de HTTP API. Útil para solucionar problemas de conexión o autenticación.",

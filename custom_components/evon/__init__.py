@@ -40,6 +40,7 @@ from .const import (
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_CLIMATES,
     ENTITY_TYPE_INTERCOMS,
@@ -529,6 +530,7 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
         "evon_snapshot_",
         "evon_radiator_",
         "evon_identify_",
+        "evon_button_",
         "evon_climate_",
         "evon_camera_",
         "evon_switch_",
@@ -637,6 +639,7 @@ async def _async_cleanup_stale_entities(
         ENTITY_TYPE_SECURITY_DOORS,
         ENTITY_TYPE_INTERCOMS,
         ENTITY_TYPE_CAMERAS,
+        ENTITY_TYPE_BUTTON_EVENTS,
     ]:
         if entity_type in coordinator.data:
             for device in coordinator.data[entity_type]:

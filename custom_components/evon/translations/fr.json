@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Sonnette pressée"
+      "doorbell": "Sonnette pressée",
+      "button_single_press": "Appui simple sur le bouton",
+      "button_double_press": "Double appui sur le bouton",
+      "button_long_press": "Appui long sur le bouton"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Sonnerie"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Bouton",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Appui simple",
+              "double_press": "Double appui",
+              "long_press": "Appui long"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Coordinateur"
             },
             "data_description": {
               "debug_api": "Activer la journalisation de débogage pour les requêtes et réponses de l'API HTTP. Utile pour dépanner les problèmes de connexion ou d'authentification.",

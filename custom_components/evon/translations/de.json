@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Türklingel gedrückt"
+      "doorbell": "Türklingel gedrückt",
+      "button_single_press": "Taster einfach gedrückt",
+      "button_double_press": "Taster doppelt gedrückt",
+      "button_long_press": "Taster lang gedrückt"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Klingeln"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Taster",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Einfacher Druck",
+              "double_press": "Doppeldruck",
+              "long_press": "Langer Druck"
             }
           }
         }

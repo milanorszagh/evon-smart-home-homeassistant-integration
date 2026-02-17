@@ -1,7 +1,10 @@
 {
   "device_automation": {
     "trigger_type": {
-      "doorbell": "Zvonček stlačený"
+      "doorbell": "Zvonček stlačený",
+      "button_single_press": "Jednoduché stlačenie tlačidla",
+      "button_double_press": "Dvojité stlačenie tlačidla",
+      "button_long_press": "Dlhé stlačenie tlačidla"
     }
   },
   "services": {
@@ -111,6 +114,18 @@
           "event_type": {
             "state": {
               "ring": "Zvonenie"
+            }
+          }
+        }
+      },
+      "button": {
+        "name": "Tlačidlo",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "single_press": "Jednoduché stlačenie",
+              "double_press": "Dvojité stlačenie",
+              "long_press": "Dlhé stlačenie"
             }
           }
         }
@@ -305,7 +320,7 @@
             "data": {
               "debug_api": "API",
               "debug_websocket": "WebSocket",
-              "debug_coordinator": "Coordinator"
+              "debug_coordinator": "Koordinátor"
             },
             "data_description": {
               "debug_api": "Zapnúť ladiace protokolovanie pre HTTP API požiadavky a odpovede. Užitočné pre riešenie problémov s pripojením alebo autentizáciou.",
