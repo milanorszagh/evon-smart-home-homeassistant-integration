@@ -66,6 +66,7 @@ custom_components/evon/
 src/
 ├── index.ts             # MCP server entry point
 ├── api-client.ts        # Evon HTTP API client
+├── auth.ts              # Shared authentication for HTTP and WebSocket clients
 ├── ws-client.ts         # Evon WebSocket client (real-time)
 ├── config.ts            # Environment configuration
 ├── constants.ts         # Shared constants (HTTP + WS device classes)
