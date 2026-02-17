@@ -99,7 +99,8 @@ ENTITY_TYPE_CAMERAS = "cameras"
 ENTITY_TYPE_BUTTON_EVENTS = "button_events"
 
 # Button press detection timing (seconds)
-BUTTON_DOUBLE_CLICK_WINDOW = 1.0  # Max time between releases for double press
+# Double-click window must be >0.6s (Evon double-press span is ~400-600ms)
+BUTTON_DOUBLE_CLICK_WINDOW = 1.0  # Max time after last release to wait for more presses
 BUTTON_LONG_PRESS_THRESHOLD = 1.5  # Min hold duration for long press
 
 # Options keys

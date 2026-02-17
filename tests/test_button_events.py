@@ -333,10 +333,25 @@ class TestButtonPressDetection:
                 }
             state = self._button_press_state[instance_id]
             if is_on:
+                # If already pressed, Evon coalesced the release — implicit release
+                if state["press_start"] is not None:
+                    state["release_count"] += 1
+                    if state.get("pending_timer") is not None:
+                        state["pending_timer"].cancel()
+                        state["pending_timer"] = None
                 state["press_start"] = now
             else:
                 press_start = state.get("press_start")
                 if press_start is None:
+                    # Extra False with active timer — count as additional release
+                    if state.get("pending_timer") is not None:
+                        state["release_count"] += 1
+                        state["pending_timer"].cancel()
+                        state["pending_timer"] = self.hass.loop.call_later(
+                            BUTTON_DOUBLE_CLICK_WINDOW,
+                            self._button_press_timeout,
+                            instance_id,
+                        )
                     return
                 hold_duration = now - press_start
                 state["press_start"] = None
@@ -476,7 +491,7 @@ class TestButtonPressDetection:
             mock_time.return_value = 0.19
             coordinator._handle_button_press("btn1", entity_data, False)
 
-            # Second press+release (within 0.6s window)
+            # Second press+release (within double-click window)
             mock_time.return_value = 0.4
             coordinator._handle_button_press("btn1", entity_data, True)
             mock_time.return_value = 0.55
@@ -515,6 +530,56 @@ class TestButtonPressDetection:
         coordinator.hass.bus.async_fire.assert_called_once()
         call_args = coordinator.hass.bus.async_fire.call_args
         assert call_args[0][1]["press_type"] == "double_press"
+
+    def test_double_press_true_true_false_pattern(self):
+        """Evon controller sends True, True, False for double-press (coalesced release)."""
+        coordinator = self._make_coordinator()
+        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
+        self._register_entity(coordinator, entity_data)
+
+        mock_timer = MagicMock()
+        coordinator.hass.loop.call_later.return_value = mock_timer
+
+        with patch("time.monotonic") as mock_time:
+            # True (press 1)
+            mock_time.return_value = 0.0
+            coordinator._handle_button_press("btn1", entity_data, True)
+            # True (press 2 — implicit release of press 1)
+            mock_time.return_value = 0.2
+            coordinator._handle_button_press("btn1", entity_data, True)
+            # False (release of press 2)
+            mock_time.return_value = 0.4
+            coordinator._handle_button_press("btn1", entity_data, False)
+
+        coordinator._button_press_timeout("btn1")
+
+        coordinator.hass.bus.async_fire.assert_called_once()
+        assert coordinator.hass.bus.async_fire.call_args[0][1]["press_type"] == "double_press"
+
+    def test_double_press_true_false_false_pattern(self):
+        """Evon controller sends True, False, False for double-press (coalesced press)."""
+        coordinator = self._make_coordinator()
+        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
+        self._register_entity(coordinator, entity_data)
+
+        mock_timer = MagicMock()
+        coordinator.hass.loop.call_later.return_value = mock_timer
+
+        with patch("time.monotonic") as mock_time:
+            # True (press 1)
+            mock_time.return_value = 0.0
+            coordinator._handle_button_press("btn1", entity_data, True)
+            # False (release 1)
+            mock_time.return_value = 0.2
+            coordinator._handle_button_press("btn1", entity_data, False)
+            # False (extra release — no matching press)
+            mock_time.return_value = 0.4
+            coordinator._handle_button_press("btn1", entity_data, False)
+
+        coordinator._button_press_timeout("btn1")
+
+        coordinator.hass.bus.async_fire.assert_called_once()
+        assert coordinator.hass.bus.async_fire.call_args[0][1]["press_type"] == "double_press"
 
     def test_long_press_cancels_pending_timer(self):
         """A long press after a short press should cancel the pending timer."""
@@ -573,11 +638,11 @@ class TestButtonPressDetection:
         assert original_data["last_event_type"] is None
 
     def test_release_without_press_ignored(self):
-        """A release without a prior press should be ignored."""
+        """A release without a prior press and no timer should be ignored."""
         coordinator = self._make_coordinator()
         entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
 
-        # Initialize state with no press_start
+        # Initialize state with no press_start and no timer
         coordinator._button_press_state["btn1"] = {
             "press_start": None,
             "release_count": 0,

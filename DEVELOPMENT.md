@@ -823,8 +823,8 @@ The integration provides two calculated sensors that don't exist in the Evon API
 Physical wall buttons (Taster) are exposed as **event entities** via WebSocket. They fire `ValuesChanged` events with `IsOn = True` on press and `IsOn = False` on release.
 
 **Press type detection** is implemented in the coordinator:
-- **Single press**: quick press/release, no second press within 0.6s
-- **Double press**: two presses within 0.6s
+- **Single press**: quick press/release, no second press within 1.0s
+- **Double press**: two presses within 1.0s
 - **Long press**: hold >1.5s (fires immediately on release)
 
 **Important notes:**
@@ -832,6 +832,11 @@ Physical wall buttons (Taster) are exposed as **event entities** via WebSocket. 
 - The processor creates entities from the `/instances` list but ongoing state comes exclusively from WebSocket
 - Button presses fire `evon_button_press` bus events and update event entities
 - Device triggers are available for automation (single/double/long press per button)
+- The Evon controller sends **3 different WS patterns** for double-press (all handled):
+  - `True, True, False` — second True without intervening False (coalesced release)
+  - `True, False, False` — second False without intervening True (coalesced press)
+  - `True, False, True, False` — standard 4-event pattern (rare)
+- Button press handler processes **every** WS event (not just state changes) to catch coalesced patterns
 
 See `docs/WEBSOCKET_API.md` for detailed WebSocket subscription data and timing measurements.
 
@@ -1143,7 +1148,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1159 tests total
+Current coverage: 1161 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

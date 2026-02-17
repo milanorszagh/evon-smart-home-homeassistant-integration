@@ -1053,29 +1053,54 @@ Each SmartCOM module has up to 4 button inputs. Light modules use `Input{1-4}`, 
 | Press Type | Pattern | Duration |
 |-----------|---------|----------|
 | **Single press** | One True→False cycle | ~190ms |
-| **Double press** | Two True→False cycles within ~500ms | ~340ms total |
+| **Double press** | See WS patterns below | ~400ms total |
 | **Long press** | One True→False cycle | >1500ms (matches `MinLongclick` default) |
 
 **Example events from a single button press:**
 ```
-[09:39:39.771] SC1_M01.Input1.IsOn = True    ← button pressed
-[09:39:39.961] SC1_M01.Input1.IsOn = False   ← button released (190ms later)
-[09:39:41.967] SC1_M01.Light1.IsOn = True    ← light turns on (~2s later)
+[17:28:31.680] SC1_M01.Input3.IsOn = True    ← button pressed
+[17:28:31.878] SC1_M01.Input3.IsOn = False   ← button released (198ms later)
 ```
 
-**Example events from a double press:**
+**Double-press WS patterns (Evon controller behavior):**
+
+The Evon controller does **not** always send a clean True→False→True→False sequence for double-press. Testing reveals **3 different patterns**, all of which must be handled:
+
+| Pattern | WS Events | Frequency |
+|---------|-----------|-----------|
+| **Coalesced release** | True, True, False | ~40% |
+| **Coalesced press** | True, False, False | ~40% |
+| **Standard 4-event** | True, False, True, False | ~20% |
+
+**Pattern 1: True, True, False** (second True without intervening False):
 ```
-[09:39:46.430] SC1_M04.Input3.IsOn = True    ← first press
-[09:39:46.566] SC1_M04.Input3.IsOn = False   ← first release (136ms)
-[09:39:46.770] SC1_M04.Input3.IsOn = True    ← second press (204ms gap)
-[09:39:46.970] SC1_M04.Input3.IsOn = False   ← second release (200ms)
+[17:28:37.691] SC1_M01.Input3.IsOn = True    ← press 1
+[17:28:37.888] SC1_M01.Input3.IsOn = True    ← press 2 (first release coalesced)
+[17:28:38.093] SC1_M01.Input3.IsOn = False   ← final release
+```
+
+**Pattern 2: True, False, False** (second False without intervening True):
+```
+[17:30:03.617] SC1_M01.Input3.IsOn = True    ← press 1
+[17:30:03.819] SC1_M01.Input3.IsOn = False   ← release 1
+[17:30:04.020] SC1_M01.Input3.IsOn = False   ← release 2 (second press coalesced)
+```
+
+**Pattern 3: True, False, True, False** (standard — rare):
+```
+[17:29:55.989] SC1_M01.Input3.IsOn = True    ← press 1
+[17:29:56.196] SC1_M01.Input3.IsOn = False   ← release 1
+[17:29:56.391] SC1_M01.Input3.IsOn = True    ← press 2
+[17:29:56.590] SC1_M01.Input3.IsOn = False   ← release 2
 ```
 
 **Example events from a long press:**
 ```
-[09:39:51.359] SC1_M01.Input1.IsOn = True    ← button held down
-[09:39:53.962] SC1_M01.Input1.IsOn = False   ← released after 2603ms
+[17:28:31.680] SC1_M01.Input3.IsOn = True    ← button held down
+[17:28:34.080] SC1_M01.Input3.IsOn = False   ← released after ~2400ms
 ```
+
+**Implementation note:** Because of the coalesced patterns, button press detection must process **every** WS event (not just state changes). A second True while already pressed implies the first release was coalesced. A second False with an active double-click timer implies the second press was coalesced.
 
 **Subscription example:**
 ```javascript
@@ -1083,10 +1108,10 @@ client.registerValuesChanged([
   { Instanceid: 'SC1_M01.Input1', Properties: ['IsOn'] },
   { Instanceid: 'SC1_M04.Input3', Properties: ['IsOn'] },
 ], (instanceId, props) => {
-  // Implement press type detection using timing:
-  // - Single: one True→False in <500ms
-  // - Double: two True→False cycles within 600ms
-  // - Long: True held for >1500ms before False
+  // Implement press type detection — handle ALL 3 WS patterns:
+  // - Single: one press+release, no second event within 1.0s
+  // - Double: two presses within 1.0s (watch for coalesced patterns!)
+  // - Long: held >1500ms before release
 });
 ```
 

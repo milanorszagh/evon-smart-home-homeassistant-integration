@@ -640,9 +640,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     _LOGGER.info("Doorbell event fired for %s", instance_id)
 
-                # Button press detection: track IsOn transitions for press type
-                if entity_type == ENTITY_TYPE_BUTTON_EVENTS and key == "is_on":
-                    self._handle_button_press(instance_id, updated_entity, value)
+            # Button press detection: process EVERY WS event (not just changes).
+            # Evon controller may coalesce rapid True→False into just False,
+            # so we can't rely on old_value != value for double-press detection.
+            if entity_type == ENTITY_TYPE_BUTTON_EVENTS and key == "is_on":
+                self._handle_button_press(instance_id, updated_entity, value)
 
         # Atomically replace in the entities list AND _data_index
         entities_list = data_snapshot.get(entity_type)
@@ -667,11 +669,17 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entity_data: dict[str, Any],
         is_on: bool,
     ) -> None:
-        """Detect button press type from IsOn transitions.
+        """Detect button press type from IsOn WS events.
+
+        Called for EVERY WS event on button entities (not just state changes),
+        because the Evon controller sends 3 different patterns for double-press:
+        - True, True, False (coalesced release — second True without intervening False)
+        - True, False, False (coalesced press — second False without intervening True)
+        - True, False, True, False (standard 4-event — rare)
 
         Press types:
-        - single_press: one press+release cycle, no second press within BUTTON_DOUBLE_CLICK_WINDOW
-        - double_press: two press+release cycles within BUTTON_DOUBLE_CLICK_WINDOW
+        - single_press: one press+release, no second press within BUTTON_DOUBLE_CLICK_WINDOW
+        - double_press: two presses within BUTTON_DOUBLE_CLICK_WINDOW
         - long_press: held longer than BUTTON_LONG_PRESS_THRESHOLD
 
         Args:
@@ -691,12 +699,32 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state = self._button_press_state[instance_id]
 
         if is_on:
-            # Button pressed — record start time
+            # Button pressed — record start time.
+            # If already pressed (press_start set), the Evon controller coalesced
+            # the first release — treat the previous press as a completed short press.
+            # This handles the True, True, False WS pattern for double-press.
+            if state["press_start"] is not None:
+                state["release_count"] += 1
+                if state.get("pending_timer") is not None:
+                    state["pending_timer"].cancel()
+                    state["pending_timer"] = None
             state["press_start"] = now
         else:
             # Button released — determine press type
             press_start = state.get("press_start")
             if press_start is None:
+                # No matching press — Evon controller may coalesce rapid True→False
+                # into just False. If we have a pending timer (first release already
+                # happened), count this as an additional release for double-press.
+                # This handles the True, False, False WS pattern for double-press.
+                if state.get("pending_timer") is not None:
+                    state["release_count"] += 1
+                    state["pending_timer"].cancel()
+                    state["pending_timer"] = self.hass.loop.call_later(
+                        BUTTON_DOUBLE_CLICK_WINDOW,
+                        self._button_press_timeout,
+                        instance_id,
+                    )
                 return
 
             hold_duration = now - press_start
