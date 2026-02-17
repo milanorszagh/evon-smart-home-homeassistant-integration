@@ -303,6 +303,15 @@
               "scan_interval": "Jak často načítat stavy zařízení přes HTTP dotazování. Používá se pouze jako záložní metoda, když je WebSocket zapnut, nebo jako primární metoda, když je zapnutý pouze HTTP režim."
             }
           },
+          "buttons": {
+            "name": "Fyzické tlačítka",
+            "data": {
+              "button_double_click_delay": "Zpoždění dvojkliku (sekundy)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Doba čekání po uvolnění tlačítka před vyvoláním události jednoduchého stisku. Delší zpoždění zlepšuje detekci dvojkliku, ale zpomaluje reakci na jednoduchý stisk. Rozsah: 0,2–1,4 sekundy."
+            }
+          },
           "recording": {
             "name": "Nahrávání kamery",
             "data": {

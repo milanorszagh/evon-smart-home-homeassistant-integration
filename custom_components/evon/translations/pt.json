@@ -303,6 +303,15 @@
               "scan_interval": "Com que frequência obter estados de dispositivos via polling HTTP. Usado apenas como fallback quando WebSocket está ativado, ou como método primário quando o modo apenas HTTP está ativado."
             }
           },
+          "buttons": {
+            "name": "Botões físicos",
+            "data": {
+              "button_double_click_delay": "Atraso de duplo clique (segundos)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Tempo de espera após soltar um botão antes de disparar um evento de pressão simples. Um atraso maior melhora a deteção de duplo clique mas torna as pressões simples mais lentas. Intervalo: 0,2–1,4 segundos."
+            }
+          },
           "recording": {
             "name": "Gravação de Câmera",
             "data": {

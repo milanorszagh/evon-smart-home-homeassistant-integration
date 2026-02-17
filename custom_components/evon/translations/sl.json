@@ -303,6 +303,15 @@
               "scan_interval": "Kako pogosto se prevzamejo stanja naprav prek HTTP opazovanja. Uporablja se samo kot rezerva, ko je WebSocket omogočen, ali kot primarna metoda, ko je omogočen način samo HTTP."
             }
           },
+          "buttons": {
+            "name": "Fizični gumbi",
+            "data": {
+              "button_double_click_delay": "Zakasnitev dvojnega klika (sekunde)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Čas čakanja po sprostitvi gumba, preden se sproži dogodek enojnega pritiska. Daljša zakasnitev izboljša zaznavanje dvojnega klika, vendar upočasni odziv na enojni pritisk. Razpon: 0,2–1,4 sekunde."
+            }
+          },
           "recording": {
             "name": "Snemanje kamere",
             "data": {

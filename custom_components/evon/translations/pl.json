@@ -303,6 +303,15 @@
               "scan_interval": "Jak często pobierać stany urządzeń przez odpytywanie HTTP. Używane tylko jako zapasowa metoda, gdy WebSocket jest włączony, lub jako główna metoda, gdy włączony jest tryb tylko HTTP."
             }
           },
+          "buttons": {
+            "name": "Przyciski fizyczne",
+            "data": {
+              "button_double_click_delay": "Opóźnienie podwójnego kliknięcia (sekundy)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Czas oczekiwania po zwolnieniu przycisku przed wywołaniem zdarzenia pojedynczego naciśnięcia. Dłuższe opóźnienie poprawia wykrywanie podwójnego kliknięcia, ale spowalnia reakcję na pojedyncze naciśnięcie. Zakres: 0,2–1,4 sekundy."
+            }
+          },
           "recording": {
             "name": "Nagrywanie z kamery",
             "data": {

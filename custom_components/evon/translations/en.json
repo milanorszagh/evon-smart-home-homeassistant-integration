@@ -303,6 +303,15 @@
               "scan_interval": "How often to fetch device states via HTTP polling. Only used as fallback when WebSocket is enabled, or as primary method when HTTP only mode is enabled."
             }
           },
+          "buttons": {
+            "name": "Physical Buttons",
+            "data": {
+              "button_double_click_delay": "Double-click delay (seconds)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Time to wait after a button release before firing a single press event. A longer delay improves double-press detection but makes single presses feel slower. Range: 0.2–1.4 seconds."
+            }
+          },
           "recording": {
             "name": "Camera Recording",
             "data": {

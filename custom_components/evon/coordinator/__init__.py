@@ -22,9 +22,9 @@ from homeassistant.util import dt as dt_util
 
 from ..api import EvonApi, EvonApiError
 from ..const import (
-    BUTTON_DOUBLE_CLICK_WINDOW,
     BUTTON_LONG_PRESS_THRESHOLD,
     CONNECTION_FAILURE_THRESHOLD,
+    DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     ENERGY_STATS_FAILURE_LOG_THRESHOLD,
@@ -80,6 +80,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         sync_areas: bool = False,
         use_websocket: bool = False,
+        button_double_click_delay: float = DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -110,6 +111,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Button press detection state per button instance ID
         self._button_press_state: dict[str, dict[str, Any]] = {}
+        self._button_double_click_delay = button_double_click_delay
 
     def set_update_interval(self, scan_interval: int) -> None:
         """Update the polling interval."""
@@ -678,8 +680,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         - True, False, True, False (standard 4-event — rare)
 
         Press types:
-        - single_press: one press+release, no second press within BUTTON_DOUBLE_CLICK_WINDOW
-        - double_press: two presses within BUTTON_DOUBLE_CLICK_WINDOW
+        - single_press: one press+release, no second press within button_double_click_delay
+        - double_press: two presses within button_double_click_delay
         - long_press: held longer than BUTTON_LONG_PRESS_THRESHOLD
 
         Args:
@@ -721,7 +723,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     state["release_count"] += 1
                     state["pending_timer"].cancel()
                     state["pending_timer"] = self.hass.loop.call_later(
-                        BUTTON_DOUBLE_CLICK_WINDOW,
+                        self._button_double_click_delay,
                         self._button_press_timeout,
                         instance_id,
                     )
@@ -747,7 +749,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # Schedule delayed check for single vs double press
                 state["pending_timer"] = self.hass.loop.call_later(
-                    BUTTON_DOUBLE_CLICK_WINDOW,
+                    self._button_double_click_delay,
                     self._button_press_timeout,
                     instance_id,
                 )
@@ -758,7 +760,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Handle button press timeout — fire single or double press event.
 
-        Called after BUTTON_DOUBLE_CLICK_WINDOW expires with no further presses.
+        Called after button_double_click_delay expires with no further presses.
         Re-looks up entity_data from _data_index to avoid stale references from
         copy-on-write updates that may have occurred during the timeout window.
         """

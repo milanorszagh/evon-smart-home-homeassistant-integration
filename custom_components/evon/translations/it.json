@@ -303,6 +303,15 @@
               "scan_interval": "Quanto spesso recuperare gli stati dei dispositivi tramite polling HTTP. Utilizzato solo come fallback quando WebSocket è abilitato, o come metodo primario quando è abilitata la modalità solo HTTP."
             }
           },
+          "buttons": {
+            "name": "Pulsanti fisici",
+            "data": {
+              "button_double_click_delay": "Ritardo doppio clic (secondi)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Tempo di attesa dopo il rilascio di un pulsante prima di attivare un evento di pressione singola. Un ritardo maggiore migliora il rilevamento del doppio clic ma rallenta la risposta alla pressione singola. Intervallo: 0,2–1,4 secondi."
+            }
+          },
           "recording": {
             "name": "Registrazione telecamera",
             "data": {

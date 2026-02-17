@@ -17,6 +17,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import INSTANCE_ID_PATTERN, EvonApi
 from .const import (
+    CONF_BUTTON_DOUBLE_CLICK_DELAY,
     CONF_CONNECTION_TYPE,
     CONF_DEBUG_API,
     CONF_DEBUG_COORDINATOR,
@@ -30,6 +31,7 @@ from .const import (
     CONF_USERNAME,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     DEFAULT_DEBUG_API,
     DEFAULT_DEBUG_COORDINATOR,
     DEFAULT_DEBUG_WEBSOCKET,
@@ -203,9 +205,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     sync_areas = entry.options.get(CONF_SYNC_AREAS, DEFAULT_SYNC_AREAS)
     http_only = entry.options.get(CONF_HTTP_ONLY, DEFAULT_HTTP_ONLY)
     use_websocket = not http_only
+    button_double_click_delay = entry.options.get(CONF_BUTTON_DOUBLE_CLICK_DELAY, DEFAULT_BUTTON_DOUBLE_CLICK_DELAY)
 
     # Create coordinator
-    coordinator = EvonDataUpdateCoordinator(hass, api, scan_interval, sync_areas, use_websocket)
+    coordinator = EvonDataUpdateCoordinator(
+        hass, api, scan_interval, sync_areas, use_websocket, button_double_click_delay
+    )
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()

@@ -303,6 +303,15 @@
               "scan_interval": "Con qué frecuencia obtener los estados de los dispositivos a través del sondeo HTTP. Solo se usa como respaldo cuando WebSocket está habilitado, o como método principal cuando el modo solo HTTP está habilitado."
             }
           },
+          "buttons": {
+            "name": "Botones físicos",
+            "data": {
+              "button_double_click_delay": "Retardo de doble clic (segundos)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Tiempo de espera después de soltar un botón antes de activar un evento de pulsación simple. Un retardo mayor mejora la detección de doble clic pero hace más lentas las pulsaciones simples. Rango: 0,2–1,4 segundos."
+            }
+          },
           "recording": {
             "name": "Grabación de cámara",
             "data": {

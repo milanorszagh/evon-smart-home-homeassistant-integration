@@ -24,6 +24,7 @@ import voluptuous as vol
 
 from .api import EvonApi, EvonApiError, EvonAuthError
 from .const import (
+    CONF_BUTTON_DOUBLE_CLICK_DELAY,
     CONF_CONNECTION_TYPE,
     CONF_DEBUG_API,
     CONF_DEBUG_COORDINATOR,
@@ -37,6 +38,7 @@ from .const import (
     CONF_SYNC_AREAS,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
+    DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     DEFAULT_DEBUG_API,
     DEFAULT_DEBUG_COORDINATOR,
     DEFAULT_DEBUG_WEBSOCKET,
@@ -47,10 +49,13 @@ from .const import (
     DOMAIN,
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
+    ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_LIGHTS,
+    MAX_BUTTON_DOUBLE_CLICK_DELAY,
     MAX_POLL_INTERVAL,
     MAX_RECORDING_DURATION,
+    MIN_BUTTON_DOUBLE_CLICK_DELAY,
     MIN_PASSWORD_LENGTH,
     MIN_POLL_INTERVAL,
     MIN_RECORDING_DURATION,
@@ -608,10 +613,14 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION
         )
         current_recording_format = self.config_entry.options.get(CONF_RECORDING_OUTPUT_FORMAT, RECORDING_OUTPUT_MP4)
+        current_double_click_delay = self.config_entry.options.get(
+            CONF_BUTTON_DOUBLE_CLICK_DELAY, DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
+        )
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
         has_cameras = False
+        has_buttons = False
         if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
             if coordinator and coordinator.data:
@@ -622,6 +631,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                         light_options[light_id] = light_name
                 if ENTITY_TYPE_CAMERAS in coordinator.data and coordinator.data[ENTITY_TYPE_CAMERAS]:
                     has_cameras = True
+                if ENTITY_TYPE_BUTTON_EVENTS in coordinator.data and coordinator.data[ENTITY_TYPE_BUTTON_EVENTS]:
+                    has_buttons = True
 
         # Build schema with sections for better organization
         schema_dict: dict[Any, Any] = {
@@ -637,18 +648,22 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                 )
             )
 
-        # Connection section: http_only + poll interval grouped together
-        schema_dict[vol.Required("connection")] = section(
-            vol.Schema(
-                {
-                    vol.Required(CONF_HTTP_ONLY, default=current_http_only): bool,
-                    vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
-                        vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
-                    ),
-                }
-            ),
-            {"collapsed": True},
-        )
+        # Button settings section: only shown when physical buttons are present
+        if has_buttons:
+            schema_dict[vol.Required("buttons")] = section(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_BUTTON_DOUBLE_CLICK_DELAY, default=current_double_click_delay): vol.All(
+                            vol.Coerce(float),
+                            vol.Range(
+                                min=MIN_BUTTON_DOUBLE_CLICK_DELAY,
+                                max=MAX_BUTTON_DOUBLE_CLICK_DELAY,
+                            ),
+                        ),
+                    }
+                ),
+                {"collapsed": True},
+            )
 
         # Camera recording section: only shown when cameras are present
         if has_cameras:
@@ -673,6 +688,19 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                 ),
                 {"collapsed": True},
             )
+
+        # Connection section: http_only + poll interval grouped together
+        schema_dict[vol.Required("connection")] = section(
+            vol.Schema(
+                {
+                    vol.Required(CONF_HTTP_ONLY, default=current_http_only): bool,
+                    vol.Required(CONF_SCAN_INTERVAL, default=current_interval): vol.All(
+                        vol.Coerce(int), vol.Range(min=MIN_POLL_INTERVAL, max=MAX_POLL_INTERVAL)
+                    ),
+                }
+            ),
+            {"collapsed": True},
+        )
 
         # Debug logging section: collapsed by default
         schema_dict[vol.Required("debug")] = section(

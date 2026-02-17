@@ -300,8 +300,8 @@ class TestButtonPressDetection:
         import types
 
         from custom_components.evon.const import (
-            BUTTON_DOUBLE_CLICK_WINDOW,
             BUTTON_LONG_PRESS_THRESHOLD,
+            DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
             DOMAIN,
             ENTITY_TYPE_BUTTON_EVENTS,
         )
@@ -348,7 +348,7 @@ class TestButtonPressDetection:
                         state["release_count"] += 1
                         state["pending_timer"].cancel()
                         state["pending_timer"] = self.hass.loop.call_later(
-                            BUTTON_DOUBLE_CLICK_WINDOW,
+                            DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
                             self._button_press_timeout,
                             instance_id,
                         )
@@ -366,7 +366,7 @@ class TestButtonPressDetection:
                     if state.get("pending_timer") is not None:
                         state["pending_timer"].cancel()
                     state["pending_timer"] = self.hass.loop.call_later(
-                        BUTTON_DOUBLE_CLICK_WINDOW,
+                        DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
                         self._button_press_timeout,
                         instance_id,
                     )
@@ -453,7 +453,7 @@ class TestButtonPressDetection:
         # Should schedule a timer
         coordinator.hass.loop.call_later.assert_called_once()
         delay = coordinator.hass.loop.call_later.call_args[0][0]
-        assert delay == 1.0  # BUTTON_DOUBLE_CLICK_WINDOW
+        assert delay == 0.8  # DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
 
     def test_single_press_timeout(self):
         """Timer expiry with release_count=1 should fire single_press."""

@@ -303,6 +303,15 @@
               "scan_interval": "Wie oft Gerätezustände über HTTP-Abfragen abgerufen werden. Wird als Fallback verwendet, wenn WebSocket aktiviert ist, oder als primäre Methode, wenn Nur-HTTP-Modus aktiviert ist."
             }
           },
+          "buttons": {
+            "name": "Physische Taster",
+            "data": {
+              "button_double_click_delay": "Doppelklick-Verzögerung (Sekunden)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Wartezeit nach dem Loslassen eines Tasters, bevor ein Einzeldruck ausgelöst wird. Eine längere Verzögerung verbessert die Doppelklick-Erkennung, macht Einzeldrücke aber langsamer. Bereich: 0,2–1,4 Sekunden."
+            }
+          },
           "recording": {
             "name": "Kamera-Aufnahme",
             "data": {

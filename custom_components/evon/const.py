@@ -99,9 +99,11 @@ ENTITY_TYPE_CAMERAS = "cameras"
 ENTITY_TYPE_BUTTON_EVENTS = "button_events"
 
 # Button press detection timing (seconds)
-# Double-click window must be >0.6s (Evon double-press span is ~400-600ms)
-BUTTON_DOUBLE_CLICK_WINDOW = 1.0  # Max time after last release to wait for more presses
 BUTTON_LONG_PRESS_THRESHOLD = 1.5  # Min hold duration for long press
+CONF_BUTTON_DOUBLE_CLICK_DELAY = "button_double_click_delay"
+DEFAULT_BUTTON_DOUBLE_CLICK_DELAY = 0.8  # seconds
+MIN_BUTTON_DOUBLE_CLICK_DELAY = 0.2  # Evon double-press span is ~400-600ms
+MAX_BUTTON_DOUBLE_CLICK_DELAY = 1.4  # Must stay below BUTTON_LONG_PRESS_THRESHOLD
 
 # Options keys
 CONF_NON_DIMMABLE_LIGHTS = "non_dimmable_lights"

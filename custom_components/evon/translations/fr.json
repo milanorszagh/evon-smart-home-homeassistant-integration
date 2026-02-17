@@ -303,6 +303,15 @@
               "scan_interval": "Fréquence de récupération des états des appareils via l'interrogation HTTP. Utilisé uniquement comme solution de secours lorsque WebSocket est activé, ou comme méthode principale lorsque le mode HTTP uniquement est activé."
             }
           },
+          "buttons": {
+            "name": "Boutons physiques",
+            "data": {
+              "button_double_click_delay": "Délai de double-clic (secondes)"
+            },
+            "data_description": {
+              "button_double_click_delay": "Temps d'attente après le relâchement d'un bouton avant de déclencher un appui simple. Un délai plus long améliore la détection du double-clic mais ralentit la réaction aux appuis simples. Plage : 0,2–1,4 secondes."
+            }
+          },
           "recording": {
             "name": "Enregistrement de caméra",
             "data": {
