@@ -73,16 +73,6 @@ class EvonDoorbellEvent(EvonEntity, EventEntity):
         self._last_doorbell_state: bool = False
 
     @property
-    def event_types(self) -> list[str]:
-        """Return supported event types."""
-        return ["ring"]
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return self._attr_unique_id
-
-    @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
         return self._build_device_info("Intercom")
@@ -125,16 +115,6 @@ class EvonButtonEvent(EvonEntity, EventEntity):
         super().__init__(coordinator, instance_id, name, room_name, entry)
         self._attr_unique_id = f"evon_button_{instance_id}"
         self._last_event_id: int = 0
-
-    @property
-    def event_types(self) -> list[str]:
-        """Return supported event types."""
-        return ["single_press", "double_press", "long_press"]
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        return self._attr_unique_id
 
     @property
     def device_info(self) -> DeviceInfo:

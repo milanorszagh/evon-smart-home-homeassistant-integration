@@ -609,6 +609,13 @@ MOCK_INSTANCES = [
         "Name": "RGBW Light",
         "Group": "room_living",
     },
+    # Physical Button (Taster)
+    {
+        "ID": "switch_1",
+        "ClassName": "SmartCOM.Switch",
+        "Name": "Hallway Button",
+        "Group": "room_living",
+    },
     # Rooms
     {
         "ID": "room_living",

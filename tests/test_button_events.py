@@ -48,16 +48,28 @@ def setup_button_mocks():
         sys.modules[mod] = MagicMock()
 
     class MockCoordinatorEntity:
+        _attr_unique_id: str | None = None
+
         def __init__(self, coordinator):
             self.coordinator = coordinator
 
         def __class_getitem__(cls, item):
             return cls
 
+        @property
+        def unique_id(self) -> str | None:
+            return self._attr_unique_id
+
         def async_write_ha_state(self):
             pass
 
     class MockEventEntity:
+        _attr_event_types: list[str] = []
+
+        @property
+        def event_types(self) -> list[str]:
+            return self._attr_event_types
+
         def _trigger_event(self, event_type, event_attributes=None):
             pass
 
@@ -289,400 +301,277 @@ class TestButtonEventEntity:
 
 
 class TestButtonPressDetection:
-    """Tests for button press type detection logic in coordinator."""
+    """Tests for button press type detection logic using ButtonPressDetector."""
 
-    def _make_coordinator(self):
-        """Create a minimal coordinator with button press state tracking.
+    def _make_detector(self, double_click_delay=None):
+        """Create a ButtonPressDetector with a mock callback and timer scheduler.
 
-        Uses the actual press detection functions from the coordinator module
-        source, bound to a fake coordinator object.
+        Uses the real production ButtonPressDetector class directly.
         """
-        import types
+        from custom_components.evon.const import DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
+        from custom_components.evon.coordinator.button_press import ButtonPressDetector
 
-        from custom_components.evon.const import (
-            BUTTON_LONG_PRESS_THRESHOLD,
-            DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
-            DOMAIN,
-            ENTITY_TYPE_BUTTON_EVENTS,
+        callback = MagicMock()
+        scheduler = MagicMock()
+
+        delay = double_click_delay if double_click_delay is not None else DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
+
+        detector = ButtonPressDetector(
+            on_press=callback,
+            schedule_timer=scheduler,
+            double_click_delay=delay,
         )
 
-        class FakeCoordinator:
-            pass
-
-        coordinator = FakeCoordinator()
-        coordinator._button_press_state = {}
-        coordinator._data_index = {}
-        coordinator.data = {}
-        coordinator.hass = MagicMock()
-        coordinator.hass.loop = MagicMock()
-        coordinator.hass.bus = MagicMock()
-        coordinator.async_set_updated_data = MagicMock()
-
-        # Define the methods inline (mirroring coordinator logic) to avoid
-        # importing EvonDataUpdateCoordinator which requires HA framework.
-        # These MUST match the production signatures exactly.
-        def _handle_button_press(self, instance_id, entity_data, is_on):
-            import time as _time
-
-            now = _time.monotonic()
-            if instance_id not in self._button_press_state:
-                self._button_press_state[instance_id] = {
-                    "press_start": None,
-                    "release_count": 0,
-                    "pending_timer": None,
-                }
-            state = self._button_press_state[instance_id]
-            if is_on:
-                # If already pressed, Evon coalesced the release — implicit release
-                if state["press_start"] is not None:
-                    state["release_count"] += 1
-                    if state.get("pending_timer") is not None:
-                        state["pending_timer"].cancel()
-                        state["pending_timer"] = None
-                state["press_start"] = now
-            else:
-                press_start = state.get("press_start")
-                if press_start is None:
-                    # Extra False with active timer — count as additional release
-                    if state.get("pending_timer") is not None:
-                        state["release_count"] += 1
-                        state["pending_timer"].cancel()
-                        state["pending_timer"] = self.hass.loop.call_later(
-                            DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
-                            self._button_press_timeout,
-                            instance_id,
-                        )
-                    return
-                hold_duration = now - press_start
-                state["press_start"] = None
-                if hold_duration >= BUTTON_LONG_PRESS_THRESHOLD:
-                    if state.get("pending_timer") is not None:
-                        state["pending_timer"].cancel()
-                        state["pending_timer"] = None
-                    state["release_count"] = 0
-                    self._fire_button_event(instance_id, entity_data, "long_press")
-                else:
-                    state["release_count"] += 1
-                    if state.get("pending_timer") is not None:
-                        state["pending_timer"].cancel()
-                    state["pending_timer"] = self.hass.loop.call_later(
-                        DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
-                        self._button_press_timeout,
-                        instance_id,
-                    )
-
-        def _button_press_timeout(self, instance_id):
-            state = self._button_press_state.get(instance_id)
-            if state is None:
-                return
-            release_count = state.get("release_count", 0)
-            state["release_count"] = 0
-            state["pending_timer"] = None
-            # Re-lookup current entity data (may have been replaced by CoW)
-            entity_data = self._data_index.get((ENTITY_TYPE_BUTTON_EVENTS, instance_id))
-            if entity_data is None:
-                return
-            if release_count >= 2:  # 3+ clicks also treated as double press
-                self._fire_button_event(instance_id, entity_data, "double_press")
-            elif release_count == 1:
-                self._fire_button_event(instance_id, entity_data, "single_press")
-
-        def _fire_button_event(self, instance_id, entity_data, press_type):
-            button_name = entity_data.get("name", "")
-            self.hass.bus.async_fire(
-                f"{DOMAIN}_button_press",
-                {"device_id": instance_id, "name": button_name, "press_type": press_type},
-            )
-            entity_data["last_event_type"] = press_type
-            entity_data["last_event_id"] = entity_data.get("last_event_id", 0) + 1
-            if self.data:
-                self.async_set_updated_data(self.data)
-
-        coordinator._handle_button_press = types.MethodType(_handle_button_press, coordinator)
-        coordinator._button_press_timeout = types.MethodType(_button_press_timeout, coordinator)
-        coordinator._fire_button_event = types.MethodType(_fire_button_event, coordinator)
-
-        return coordinator
-
-    def _register_entity(self, coordinator, entity_data):
-        """Register entity_data in coordinator's _data_index for CoW re-lookup."""
-        from custom_components.evon.const import ENTITY_TYPE_BUTTON_EVENTS
-
-        coordinator._data_index[(ENTITY_TYPE_BUTTON_EVENTS, entity_data["id"])] = entity_data
+        return detector, callback, scheduler
 
     def test_long_press_fires_immediately(self):
         """A press held > 1.5s should fire long_press immediately on release."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
-        with patch("time.monotonic") as mock_time:
-            # Press at t=0
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
-
-            # Release at t=2.0 (>1.5s threshold)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 2.0
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        # Should fire long_press event immediately (no timer)
-        coordinator.hass.bus.async_fire.assert_called_once()
-        call_args = coordinator.hass.bus.async_fire.call_args
-        assert call_args[0][0] == "evon_button_press"
-        assert call_args[0][1]["press_type"] == "long_press"
-        assert call_args[0][1]["device_id"] == "btn1"
+        callback.assert_called_once_with("btn1", entity_data, "long_press")
 
     def test_short_press_schedules_timer(self):
         """A short press should schedule a delayed timer, not fire immediately."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
-        with patch("time.monotonic") as mock_time:
-            # Press at t=0
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
-
-            # Release at t=0.19 (short press)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.19
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        # Should NOT fire event immediately
-        coordinator.hass.bus.async_fire.assert_not_called()
-
-        # Should schedule a timer
-        coordinator.hass.loop.call_later.assert_called_once()
-        delay = coordinator.hass.loop.call_later.call_args[0][0]
+        callback.assert_not_called()
+        scheduler.assert_called_once()
+        delay = scheduler.call_args[0][0]
         assert delay == 0.8  # DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
 
     def test_single_press_timeout(self):
         """Timer expiry with release_count=1 should fire single_press."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
-        with patch("time.monotonic") as mock_time:
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.19
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        # Simulate timer expiry (no entity_data arg — re-looks up from _data_index)
-        coordinator._button_press_timeout("btn1")
+        detector.timeout("btn1", entity_data)
 
-        coordinator.hass.bus.async_fire.assert_called_once()
-        call_args = coordinator.hass.bus.async_fire.call_args
-        assert call_args[0][1]["press_type"] == "single_press"
+        callback.assert_called_once_with("btn1", entity_data, "single_press")
 
     def test_double_press(self):
         """Two short presses within window should fire double_press."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
-        # Mock call_later to return a cancellable timer
         mock_timer = MagicMock()
-        coordinator.hass.loop.call_later.return_value = mock_timer
+        scheduler.return_value = mock_timer
 
-        with patch("time.monotonic") as mock_time:
-            # First press+release
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.19
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-            # Second press+release (within double-click window)
             mock_time.return_value = 0.4
-            coordinator._handle_button_press("btn1", entity_data, True)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.55
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        # First timer should have been cancelled
         mock_timer.cancel.assert_called()
 
-        # Simulate timer expiry — should fire double_press
-        coordinator._button_press_timeout("btn1")
+        detector.timeout("btn1", entity_data)
 
-        coordinator.hass.bus.async_fire.assert_called_once()
-        call_args = coordinator.hass.bus.async_fire.call_args
-        assert call_args[0][1]["press_type"] == "double_press"
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
     def test_triple_press_fires_double(self):
         """Three rapid presses within window should fire double_press."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
         mock_timer = MagicMock()
-        coordinator.hass.loop.call_later.return_value = mock_timer
+        scheduler.return_value = mock_timer
 
-        with patch("time.monotonic") as mock_time:
-            # Three rapid press+release cycles
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             for press_t, release_t in [(0.0, 0.1), (0.2, 0.3), (0.4, 0.5)]:
                 mock_time.return_value = press_t
-                coordinator._handle_button_press("btn1", entity_data, True)
+                detector.handle_event("btn1", entity_data, True)
                 mock_time.return_value = release_t
-                coordinator._handle_button_press("btn1", entity_data, False)
+                detector.handle_event("btn1", entity_data, False)
 
-        # Simulate timer expiry — 3+ clicks treated as double_press
-        coordinator._button_press_timeout("btn1")
+        detector.timeout("btn1", entity_data)
 
-        coordinator.hass.bus.async_fire.assert_called_once()
-        call_args = coordinator.hass.bus.async_fire.call_args
-        assert call_args[0][1]["press_type"] == "double_press"
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
     def test_double_press_true_true_false_pattern(self):
         """Evon controller sends True, True, False for double-press (coalesced release)."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
         mock_timer = MagicMock()
-        coordinator.hass.loop.call_later.return_value = mock_timer
+        scheduler.return_value = mock_timer
 
-        with patch("time.monotonic") as mock_time:
-            # True (press 1)
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
-            # True (press 2 — implicit release of press 1)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.2
-            coordinator._handle_button_press("btn1", entity_data, True)
-            # False (release of press 2)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.4
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        coordinator._button_press_timeout("btn1")
+        detector.timeout("btn1", entity_data)
 
-        coordinator.hass.bus.async_fire.assert_called_once()
-        assert coordinator.hass.bus.async_fire.call_args[0][1]["press_type"] == "double_press"
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
     def test_double_press_true_false_false_pattern(self):
         """Evon controller sends True, False, False for double-press (coalesced press)."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
         mock_timer = MagicMock()
-        coordinator.hass.loop.call_later.return_value = mock_timer
+        scheduler.return_value = mock_timer
 
-        with patch("time.monotonic") as mock_time:
-            # True (press 1)
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
-            # False (release 1)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.2
-            coordinator._handle_button_press("btn1", entity_data, False)
-            # False (extra release — no matching press)
+            detector.handle_event("btn1", entity_data, False)
             mock_time.return_value = 0.4
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        coordinator._button_press_timeout("btn1")
+        detector.timeout("btn1", entity_data)
 
-        coordinator.hass.bus.async_fire.assert_called_once()
-        assert coordinator.hass.bus.async_fire.call_args[0][1]["press_type"] == "double_press"
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
     def test_long_press_cancels_pending_timer(self):
         """A long press after a short press should cancel the pending timer."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, entity_data)
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
         mock_timer = MagicMock()
-        coordinator.hass.loop.call_later.return_value = mock_timer
+        scheduler.return_value = mock_timer
 
-        with patch("time.monotonic") as mock_time:
-            # First short press+release
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", entity_data, True)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 0.19
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-            # Second press — held long
             mock_time.return_value = 0.4
-            coordinator._handle_button_press("btn1", entity_data, True)
+            detector.handle_event("btn1", entity_data, True)
             mock_time.return_value = 2.0
-            coordinator._handle_button_press("btn1", entity_data, False)
+            detector.handle_event("btn1", entity_data, False)
 
-        # Timer from first press should have been cancelled
         mock_timer.cancel.assert_called()
 
-        # Should fire long_press (not double_press)
-        coordinator.hass.bus.async_fire.assert_called_once()
-        call_args = coordinator.hass.bus.async_fire.call_args
-        assert call_args[0][1]["press_type"] == "long_press"
+        callback.assert_called_once_with("btn1", entity_data, "long_press")
 
     def test_cow_relookup_in_timeout(self):
-        """Timeout should use fresh entity_data from _data_index, not stale ref."""
-        coordinator = self._make_coordinator()
-        original_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        self._register_entity(coordinator, original_data)
+        """Timeout with different entity_data should use the provided data."""
+        detector, callback, scheduler = self._make_detector()
+        original_data = {"id": "btn1", "name": "Test Button"}
 
-        with patch("time.monotonic") as mock_time:
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
             mock_time.return_value = 0.0
-            coordinator._handle_button_press("btn1", original_data, True)
+            detector.handle_event("btn1", original_data, True)
             mock_time.return_value = 0.19
-            coordinator._handle_button_press("btn1", original_data, False)
+            detector.handle_event("btn1", original_data, False)
 
-        # Simulate CoW: replace entity_data in _data_index with a new dict
-        from custom_components.evon.const import ENTITY_TYPE_BUTTON_EVENTS
+        # Simulate CoW: pass different entity_data to timeout
+        new_data = {"id": "btn1", "name": "Test Button"}
+        detector.timeout("btn1", new_data)
 
-        new_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
-        coordinator._data_index[(ENTITY_TYPE_BUTTON_EVENTS, "btn1")] = new_data
-
-        # Simulate timer expiry — should update new_data, NOT original_data
-        coordinator._button_press_timeout("btn1")
-
-        assert new_data["last_event_type"] == "single_press"
-        assert new_data["last_event_id"] == 1
-        # Original should be untouched
-        assert original_data["last_event_type"] is None
+        # Callback should receive new_data, not original_data
+        callback.assert_called_once_with("btn1", new_data, "single_press")
 
     def test_release_without_press_ignored(self):
         """A release without a prior press and no timer should be ignored."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
         # Initialize state with no press_start and no timer
-        coordinator._button_press_state["btn1"] = {
+        detector.state["btn1"] = {
             "press_start": None,
             "release_count": 0,
             "pending_timer": None,
         }
 
-        coordinator._handle_button_press("btn1", entity_data, False)
+        detector.handle_event("btn1", entity_data, False)
 
-        coordinator.hass.bus.async_fire.assert_not_called()
-        coordinator.hass.loop.call_later.assert_not_called()
+        callback.assert_not_called()
+        scheduler.assert_not_called()
 
-    def test_fire_button_event_updates_entity_data(self):
-        """_fire_button_event should update last_event_type and last_event_id."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Test Button", "last_event_type": None, "last_event_id": 0}
+    def test_cancel_all_timers(self):
+        """cancel_all_timers should cancel pending timers and clear state."""
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
 
-        coordinator._fire_button_event("btn1", entity_data, "single_press")
+        mock_timer = MagicMock()
+        scheduler.return_value = mock_timer
 
-        assert entity_data["last_event_type"] == "single_press"
-        assert entity_data["last_event_id"] == 1
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
+            mock_time.return_value = 0.0
+            detector.handle_event("btn1", entity_data, True)
+            mock_time.return_value = 0.19
+            detector.handle_event("btn1", entity_data, False)
 
-        # Second fire should increment
-        coordinator._fire_button_event("btn1", entity_data, "single_press")
-        assert entity_data["last_event_id"] == 2
+        assert len(detector.state) == 1
 
-    def test_fire_button_event_bus_event(self):
-        """_fire_button_event should fire HA bus event with correct data."""
-        coordinator = self._make_coordinator()
-        entity_data = {"id": "btn1", "name": "Living Room Button", "last_event_type": None, "last_event_id": 0}
+        detector.cancel_all_timers()
 
-        coordinator._fire_button_event("btn1", entity_data, "double_press")
+        mock_timer.cancel.assert_called()
+        assert len(detector.state) == 0
 
-        coordinator.hass.bus.async_fire.assert_called_once_with(
-            "evon_button_press",
-            {
-                "device_id": "btn1",
-                "name": "Living Room Button",
-                "press_type": "double_press",
-            },
-        )
+    def test_custom_double_click_delay(self):
+        """Non-default double_click_delay should be used in timer scheduling."""
+        detector, callback, scheduler = self._make_detector(double_click_delay=0.3)
+        entity_data = {"id": "btn1", "name": "Test Button"}
+
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
+            mock_time.return_value = 0.0
+            detector.handle_event("btn1", entity_data, True)
+            mock_time.return_value = 0.19
+            detector.handle_event("btn1", entity_data, False)
+
+        scheduler.assert_called_once()
+        delay = scheduler.call_args[0][0]
+        assert delay == 0.3
+
+    def test_max_double_click_delay(self):
+        """Maximum double_click_delay (1.4s) should be used correctly."""
+        detector, callback, scheduler = self._make_detector(double_click_delay=1.4)
+        entity_data = {"id": "btn1", "name": "Test Button"}
+
+        mock_timer = MagicMock()
+        scheduler.return_value = mock_timer
+
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
+            # Two short presses
+            mock_time.return_value = 0.0
+            detector.handle_event("btn1", entity_data, True)
+            mock_time.return_value = 0.19
+            detector.handle_event("btn1", entity_data, False)
+
+            mock_time.return_value = 0.4
+            detector.handle_event("btn1", entity_data, True)
+            mock_time.return_value = 0.55
+            detector.handle_event("btn1", entity_data, False)
+
+        # All timer calls should use 1.4s delay
+        for call in scheduler.call_args_list:
+            assert call[0][0] == 1.4
+
+        detector.timeout("btn1", entity_data)
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
 
 # --- async_setup_entry Tests ---
@@ -718,7 +607,7 @@ class TestAsyncSetupEntry:
         entry.entry_id = "test_entry"
         hass.data = {"evon": {"test_entry": {"coordinator": coordinator}}}
 
-        asyncio.get_event_loop().run_until_complete(async_setup_entry(hass, entry, added_entities.extend))
+        asyncio.run(async_setup_entry(hass, entry, added_entities.extend))
 
         button_entities = [e for e in added_entities if isinstance(e, EvonButtonEvent)]
         assert len(button_entities) == 2

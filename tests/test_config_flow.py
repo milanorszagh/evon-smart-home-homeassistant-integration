@@ -543,6 +543,9 @@ async def test_options_flow(
         result["flow_id"],
         {
             "sync_areas": True,
+            "buttons": {
+                "button_double_click_delay": 0.8,
+            },
             "connection": {
                 "http_only": False,
                 "scan_interval": 60,
@@ -588,6 +591,9 @@ async def test_options_flow_http_only(
         result["flow_id"],
         {
             "sync_areas": False,
+            "buttons": {
+                "button_double_click_delay": 0.8,
+            },
             "connection": {
                 "http_only": True,
                 "scan_interval": 30,

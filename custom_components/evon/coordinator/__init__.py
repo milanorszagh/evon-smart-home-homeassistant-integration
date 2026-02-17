@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 from datetime import timedelta
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -22,7 +21,6 @@ from homeassistant.util import dt as dt_util
 
 from ..api import EvonApi, EvonApiError
 from ..const import (
-    BUTTON_LONG_PRESS_THRESHOLD,
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     DEFAULT_SCAN_INTERVAL,
@@ -47,6 +45,7 @@ from ..const import (
     REPAIR_CONNECTION_FAILED,
     WS_POLL_INTERVAL,
 )
+from .button_press import ButtonPressDetector
 from .processors import (
     process_air_quality,
     process_bathroom_radiators,
@@ -109,8 +108,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ws_client: EvonWsClient | None = None
         self._ws_connected = False
 
-        # Button press detection state per button instance ID
-        self._button_press_state: dict[str, dict[str, Any]] = {}
+        # Button press detection — uses standalone detector for testability
+        self._button_detector: ButtonPressDetector | None = None
         self._button_double_click_delay = button_double_click_delay
 
     def set_update_interval(self, scan_interval: int) -> None:
@@ -473,11 +472,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._ws_client = None
             self._ws_connected = False
             # Cancel pending button press timers
-            for state in self._button_press_state.values():
-                timer = state.get("pending_timer")
-                if timer is not None:
-                    timer.cancel()
-            self._button_press_state.clear()
+            if self._button_detector is not None:
+                self._button_detector.cancel_all_timers()
+                self._button_detector = None
             # Clear caches (rebuilt on next _async_update_data call)
             self._instances_cache = []
             self._rooms_cache = {}
@@ -665,6 +662,17 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Notify listeners
         self.async_set_updated_data(data_snapshot)
 
+    def _get_button_detector(self) -> ButtonPressDetector:
+        """Get or create the ButtonPressDetector instance (lazy init)."""
+        if self._button_detector is None:
+            self._button_detector = ButtonPressDetector(
+                on_press=self._fire_button_event,
+                schedule_timer=self.hass.loop.call_later,
+                on_timeout=self._button_press_timeout,
+                double_click_delay=self._button_double_click_delay,
+            )
+        return self._button_detector
+
     def _handle_button_press(
         self,
         instance_id: str,
@@ -673,114 +681,32 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Detect button press type from IsOn WS events.
 
-        Called for EVERY WS event on button entities (not just state changes),
-        because the Evon controller sends 3 different patterns for double-press:
-        - True, True, False (coalesced release — second True without intervening False)
-        - True, False, False (coalesced press — second False without intervening True)
-        - True, False, True, False (standard 4-event — rare)
-
-        Press types:
-        - single_press: one press+release, no second press within button_double_click_delay
-        - double_press: two presses within button_double_click_delay
-        - long_press: held longer than BUTTON_LONG_PRESS_THRESHOLD
-
-        Args:
-            instance_id: The button instance ID.
-            entity_data: The entity data dict (mutable, will set last_event_type).
-            is_on: Current IsOn value (True=pressed, False=released).
+        Delegates to ButtonPressDetector for the state machine logic.
         """
-        now = time.monotonic()
-
-        if instance_id not in self._button_press_state:
-            self._button_press_state[instance_id] = {
-                "press_start": None,
-                "release_count": 0,
-                "pending_timer": None,
-            }
-
-        state = self._button_press_state[instance_id]
-
-        if is_on:
-            # Button pressed — record start time.
-            # If already pressed (press_start set), the Evon controller coalesced
-            # the first release — treat the previous press as a completed short press.
-            # This handles the True, True, False WS pattern for double-press.
-            if state["press_start"] is not None:
-                state["release_count"] += 1
-                if state.get("pending_timer") is not None:
-                    state["pending_timer"].cancel()
-                    state["pending_timer"] = None
-            state["press_start"] = now
-        else:
-            # Button released — determine press type
-            press_start = state.get("press_start")
-            if press_start is None:
-                # No matching press — Evon controller may coalesce rapid True→False
-                # into just False. If we have a pending timer (first release already
-                # happened), count this as an additional release for double-press.
-                # This handles the True, False, False WS pattern for double-press.
-                if state.get("pending_timer") is not None:
-                    state["release_count"] += 1
-                    state["pending_timer"].cancel()
-                    state["pending_timer"] = self.hass.loop.call_later(
-                        self._button_double_click_delay,
-                        self._button_press_timeout,
-                        instance_id,
-                    )
-                return
-
-            hold_duration = now - press_start
-            state["press_start"] = None
-
-            if hold_duration >= BUTTON_LONG_PRESS_THRESHOLD:
-                # Long press — fire immediately
-                if state.get("pending_timer") is not None:
-                    state["pending_timer"].cancel()
-                    state["pending_timer"] = None
-                state["release_count"] = 0
-                self._fire_button_event(instance_id, entity_data, "long_press")
-            else:
-                # Short press — increment count, schedule delayed check
-                state["release_count"] += 1
-
-                # Cancel any existing pending timer
-                if state.get("pending_timer") is not None:
-                    state["pending_timer"].cancel()
-
-                # Schedule delayed check for single vs double press
-                state["pending_timer"] = self.hass.loop.call_later(
-                    self._button_double_click_delay,
-                    self._button_press_timeout,
-                    instance_id,
-                )
+        self._get_button_detector().handle_event(instance_id, entity_data, is_on)
 
     def _button_press_timeout(
         self,
         instance_id: str,
     ) -> None:
-        """Handle button press timeout — fire single or double press event.
+        """Handle button press timeout with CoW re-lookup.
 
-        Called after button_double_click_delay expires with no further presses.
+        Called after double_click_delay expires with no further presses.
         Re-looks up entity_data from _data_index to avoid stale references from
         copy-on-write updates that may have occurred during the timeout window.
         """
-        state = self._button_press_state.get(instance_id)
-        if state is None:
-            return
-
-        release_count = state.get("release_count", 0)
-        state["release_count"] = 0
-        state["pending_timer"] = None
-
         # Re-lookup current entity data (may have been replaced by CoW)
         entity_data = self._data_index.get((ENTITY_TYPE_BUTTON_EVENTS, instance_id))
         if entity_data is None:
             return
 
-        if release_count >= 2:  # 3+ clicks also treated as double press
-            self._fire_button_event(instance_id, entity_data, "double_press")
-        elif release_count == 1:
-            self._fire_button_event(instance_id, entity_data, "single_press")
+        detector = self._get_button_detector()
+        detector.timeout(instance_id, entity_data)
+
+        # Notify coordinator listeners — needed here because the timeout fires
+        # outside the WS handler (which has its own async_set_updated_data call).
+        if self.data:
+            self.async_set_updated_data(self.data)
 
     def _fire_button_event(
         self,
@@ -804,7 +730,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "press_type": press_type,
             },
         )
-        _LOGGER.info(
+        _LOGGER.debug(
             "Button event fired: %s (%s) — %s",
             button_name,
             instance_id,
@@ -815,10 +741,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Use a monotonic counter so repeated same-type presses are detected.
         entity_data["last_event_type"] = press_type
         entity_data["last_event_id"] = entity_data.get("last_event_id", 0) + 1
-
-        # Notify coordinator listeners so event entity gets updated
-        if self.data:
-            self.async_set_updated_data(self.data)
 
     def _maybe_import_energy_statistics(
         self,

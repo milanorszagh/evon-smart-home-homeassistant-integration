@@ -48,16 +48,28 @@ def setup_event_mocks():
         sys.modules[mod] = MagicMock()
 
     class MockCoordinatorEntity:
+        _attr_unique_id: str | None = None
+
         def __init__(self, coordinator):
             self.coordinator = coordinator
 
         def __class_getitem__(cls, item):
             return cls
 
+        @property
+        def unique_id(self) -> str | None:
+            return self._attr_unique_id
+
         def async_write_ha_state(self):
             pass
 
     class MockEventEntity:
+        _attr_event_types: list[str] = []
+
+        @property
+        def event_types(self) -> list[str]:
+            return self._attr_event_types
+
         def _trigger_event(self, event_type, event_attributes=None):
             pass
 
