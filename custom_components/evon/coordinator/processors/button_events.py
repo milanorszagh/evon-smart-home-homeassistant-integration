@@ -32,7 +32,7 @@ def process_button_events(
     for instance in instances:
         if instance.get("ClassName") != EVON_CLASS_PHYSICAL_BUTTON:
             continue
-        if not instance.get("Name"):
+        if not instance.get("ID") or not instance.get("Name"):
             continue
 
         buttons.append(
