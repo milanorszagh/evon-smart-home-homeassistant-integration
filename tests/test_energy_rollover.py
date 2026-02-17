@@ -53,6 +53,10 @@ def calc_method(mock_hass):
 
     from custom_components.evon.const import ENERGY_STATS_FAILURE_LOG_THRESHOLD
 
+    # Create a mock recorder instance with its own executor job
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock()
+
     ns = {}
     ns["statistics_during_period"] = statistics_during_period
     ns["UnitOfEnergy"] = UnitOfEnergy
@@ -62,6 +66,7 @@ def calc_method(mock_hass):
     ns["contextlib"] = contextlib
     ns["_LOGGER"] = MagicMock()
     ns["DOMAIN"] = "evon"
+    ns["get_recorder_instance"] = lambda hass: mock_recorder
 
     # Mock entity registry to return predictable entity_ids
     mock_ent_reg = MagicMock()
@@ -78,6 +83,7 @@ def calc_method(mock_hass):
     obj = MagicMock()
     obj.hass = mock_hass
     obj._energy_stats_consecutive_failures = 0
+    obj._mock_recorder = mock_recorder
 
     return obj, types.MethodType(real_method, obj)
 
@@ -96,7 +102,7 @@ class TestMidnightBoundary:
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": []}]
 
         # Return statistics showing 2 kWh today
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.evon_meter_energy_meter_a": [{"change": 2.0}],
         }
 
@@ -117,7 +123,7 @@ class TestMidnightBoundary:
         # energy_data_month has 1 entry (day 1's consumption)
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": [10.5]}]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.evon_meter_energy_meter_a": [{"change": 3.0}],
         }
 
@@ -137,7 +143,7 @@ class TestMidnightBoundary:
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": []}]
 
         # No statistics yet (empty dict)
-        mock_hass.async_add_executor_job.return_value = {}
+        coordinator._mock_recorder.async_add_executor_job.return_value = {}
 
         midnight = datetime(2024, 3, 1, 0, 0, 0, tzinfo=_UTC)
         with _patch_dt_now(midnight):
@@ -161,7 +167,7 @@ class TestMonthBoundary:
         energy_data = [5.0] * 30
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": energy_data}]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.evon_meter_energy_meter_a": [{"change": 4.0}],
         }
 
@@ -182,7 +188,7 @@ class TestMonthBoundary:
         energy_data = [1.5, "2.5", 3.0, "invalid", 4.0]
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": energy_data}]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.evon_meter_energy_meter_a": [{"change": 1.0}],
         }
 
@@ -207,7 +213,7 @@ class TestStatsFailure:
 
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": [5.0]}]
 
-        mock_hass.async_add_executor_job.side_effect = ValueError("recorder not ready")
+        coordinator._mock_recorder.async_add_executor_job.side_effect = ValueError("recorder not ready")
 
         day2 = datetime(2024, 3, 2, 12, 0, 0, tzinfo=_UTC)
         with _patch_dt_now(day2):
@@ -225,7 +231,7 @@ class TestStatsFailure:
 
         smart_meters = [{"name": "Meter A", "id": "meter_a", "energy_data_month": []}]
 
-        mock_hass.async_add_executor_job.return_value = {}
+        coordinator._mock_recorder.async_add_executor_job.return_value = {}
 
         day1 = datetime(2024, 3, 1, 12, 0, 0, tzinfo=_UTC)
         with _patch_dt_now(day1):

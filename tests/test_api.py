@@ -1930,9 +1930,11 @@ class TestRequestAuthRetry:
     @pytest.mark.asyncio
     async def test_request_401_login_failure_raises_auth_error(self):
         """When 401 triggers re-login that fails, should raise EvonAuthError cleanly."""
+        import time
+
         api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
         api._token = "old_token"
-        api._token_timestamp = 1.0
+        api._token_timestamp = time.monotonic()
 
         mock_session = MagicMock()
         mock_session.closed = False
@@ -1956,9 +1958,11 @@ class TestRequestAuthRetry:
     @pytest.mark.asyncio
     async def test_request_401_login_failure_does_not_leave_none_token(self):
         """After failed re-auth, token should not be left as None for next caller."""
+        import time
+
         api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
         api._token = "old_token"
-        api._token_timestamp = 1.0
+        api._token_timestamp = time.monotonic()
 
         mock_session = MagicMock()
         mock_session.closed = False

@@ -33,6 +33,10 @@ class TestBatchedEnergyStatistics:
 
         from custom_components.evon.const import DOMAIN, ENERGY_STATS_FAILURE_LOG_THRESHOLD
 
+        # Create a mock recorder instance with its own executor job
+        mock_recorder = MagicMock()
+        mock_recorder.async_add_executor_job = AsyncMock()
+
         # Create a namespace with all required names
         ns = {}
         ns["statistics_during_period"] = statistics_during_period
@@ -42,6 +46,7 @@ class TestBatchedEnergyStatistics:
         ns["ENERGY_STATS_FAILURE_LOG_THRESHOLD"] = ENERGY_STATS_FAILURE_LOG_THRESHOLD
         ns["DOMAIN"] = DOMAIN
         ns["contextlib"] = contextlib
+        ns["get_recorder_instance"] = lambda hass: mock_recorder
         # Create a mock entity registry that maps unique_ids to entity_ids
         mock_ent_reg = MagicMock()
         mock_ent_reg.async_get_entity_id.side_effect = lambda domain, platform, unique_id: (
@@ -78,6 +83,7 @@ class TestBatchedEnergyStatistics:
         obj = MagicMock()
         obj.hass = mock_hass
         obj._energy_stats_consecutive_failures = 0
+        obj._mock_recorder = mock_recorder
 
         # Bind the real method
         bound = types.MethodType(real_method, obj)
@@ -95,18 +101,18 @@ class TestBatchedEnergyStatistics:
             {"name": "Meter C", "id": "meter_c"},
         ]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.meter_a_energy_total": [{"change": 1.5}, {"change": 2.0}],
             "sensor.meter_b_energy_total": [{"change": 3.0}],
         }
 
         await calc(smart_meters)
 
-        # The key assertion: exactly ONE call to async_add_executor_job
-        assert mock_hass.async_add_executor_job.call_count == 1
+        # The key assertion: exactly ONE call to recorder's async_add_executor_job
+        assert coordinator._mock_recorder.async_add_executor_job.call_count == 1
 
         # Verify the call included all 3 entity IDs
-        call_args = mock_hass.async_add_executor_job.call_args
+        call_args = coordinator._mock_recorder.async_add_executor_job.call_args
         entity_ids_arg = call_args[0][4]  # 5th positional arg is the entity_ids list
         assert len(entity_ids_arg) == 3
         assert "sensor.meter_a_energy_total" in entity_ids_arg
@@ -122,7 +128,7 @@ class TestBatchedEnergyStatistics:
             {"name": "Meter A", "id": "meter_a"},
         ]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.meter_a_energy_total": [
                 {"change": 1.5},
                 {"change": 2.0},
@@ -143,7 +149,7 @@ class TestBatchedEnergyStatistics:
             {"name": "Meter A", "id": "meter_a"},
         ]
 
-        mock_hass.async_add_executor_job.return_value = {}
+        coordinator._mock_recorder.async_add_executor_job.return_value = {}
 
         await calc(smart_meters)
 
@@ -152,11 +158,11 @@ class TestBatchedEnergyStatistics:
     @pytest.mark.asyncio
     async def test_empty_meters_no_call(self, coordinator_and_method, mock_hass):
         """Verify no call is made when there are no smart meters."""
-        _, calc = coordinator_and_method
+        coordinator, calc = coordinator_and_method
 
         await calc([])
 
-        assert mock_hass.async_add_executor_job.call_count == 0
+        assert coordinator._mock_recorder.async_add_executor_job.call_count == 0
 
     @pytest.mark.asyncio
     async def test_month_calculation_with_energy_data(self, coordinator_and_method, mock_hass):
@@ -171,7 +177,7 @@ class TestBatchedEnergyStatistics:
             },
         ]
 
-        mock_hass.async_add_executor_job.return_value = {
+        coordinator._mock_recorder.async_add_executor_job.return_value = {
             "sensor.meter_a_energy_total": [{"change": 5.0}],
         }
 
@@ -191,7 +197,7 @@ class TestBatchedEnergyStatistics:
             {"name": "Meter B", "id": "meter_b"},
         ]
 
-        mock_hass.async_add_executor_job.side_effect = Exception("Recorder not ready")
+        coordinator._mock_recorder.async_add_executor_job.side_effect = Exception("Recorder not ready")
 
         await calc(smart_meters)
 

@@ -249,7 +249,9 @@ async def _import_meter_statistics(
             statistics[0]["start"].date(),
             statistics[-1]["start"].date(),
         )
-        async_add_external_statistics(hass, metadata, statistics)
+        await get_instance(hass).async_add_executor_job(
+            async_add_external_statistics, hass, metadata, statistics
+        )
         _LOGGER.debug("Statistics import completed for %s", statistic_id)
     else:
         _LOGGER.debug("No new statistics to import for %s (already up to date)", statistic_id)
@@ -378,7 +380,9 @@ async def _import_monthly_statistics(
             statistics[0]["start"].strftime("%Y-%m"),
             statistics[-1]["start"].strftime("%Y-%m"),
         )
-        async_add_external_statistics(hass, metadata, statistics)
+        await get_instance(hass).async_add_executor_job(
+            async_add_external_statistics, hass, metadata, statistics
+        )
         _LOGGER.debug("Monthly statistics import completed for %s", statistic_id)
     else:
         _LOGGER.debug("No monthly statistics to import for %s", statistic_id)

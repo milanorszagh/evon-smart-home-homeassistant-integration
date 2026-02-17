@@ -9,6 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
+from homeassistant.components.recorder import get_instance as get_recorder_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
@@ -722,7 +723,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Make ONE batched statistics_during_period call for all meters
         stats: dict[str, Any] = {}
         try:
-            stats = await self.hass.async_add_executor_job(
+            stats = await get_recorder_instance(self.hass).async_add_executor_job(
                 statistics_during_period,
                 self.hass,
                 start_of_day,

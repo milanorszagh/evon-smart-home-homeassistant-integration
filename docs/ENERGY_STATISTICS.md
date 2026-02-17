@@ -77,8 +77,12 @@ The integration imports `EnergyDataMonth` into Home Assistant's **external stati
 ```
 Evon WebSocket → Coordinator → statistics.py → HA Recorder Database
                                     ↓
-                    async_add_external_statistics()
+                    get_instance(hass).async_add_executor_job(
+                        async_add_external_statistics, ...
+                    )
 ```
+
+**Important**: Both `statistics_during_period()` and `async_add_external_statistics()` must run on the recorder's own executor via `get_instance(hass).async_add_executor_job()`, NOT on the general executor (`hass.async_add_executor_job()`). Using the general executor triggers HA warnings about blocking the database executor.
 
 ## Today's Energy Consumption
 
@@ -230,7 +234,7 @@ The coordinator's `_calculate_energy_today_and_month()` method:
 4. Adds today's consumption to get this month's total
 5. Stores values in meter data as `energy_today_calculated` and `energy_this_month_calculated`
 
-**Note**: `statistics_during_period()` is a blocking call and must be run via `async_add_executor_job()`.
+**Note**: `statistics_during_period()` is a blocking call and must be run via the recorder's own executor: `get_recorder_instance(hass).async_add_executor_job()`. Similarly, `async_add_external_statistics()` (despite its `async_` prefix, it's synchronous) must also use the recorder executor.
 
 ### Feed-in Energy (Solar Export)
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -25,6 +25,13 @@ def _make_hass():
     hass = MagicMock()
     hass.data = {}
     return hass
+
+
+def _make_recorder_mock():
+    """Create a recorder mock whose async_add_executor_job passes through to the function."""
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = AsyncMock(side_effect=lambda fn, *args: fn(*args))
+    return mock_recorder
 
 
 class TestGetLastImportTimes:
@@ -53,7 +60,7 @@ class TestImportEnergyStatisticsRateLimiting:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(hass, "Meter1", "Meter", [], force=True)
@@ -64,7 +71,7 @@ class TestImportEnergyStatisticsRateLimiting:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             # First call: forced
@@ -80,7 +87,7 @@ class TestImportEnergyStatisticsRateLimiting:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(hass, "Meter1", "Meter", [1.0], force=True)
@@ -106,7 +113,10 @@ class TestImportMeterStatistics:
     async def test_basic_daily_import(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_meter_statistics(hass, "evon:energy_meter1", "Meter 1", [1.0, 2.0, 3.0])
         mock_add.assert_called_once()
         metadata, statistics = mock_add.call_args[0][1], mock_add.call_args[0][2]
@@ -125,7 +135,10 @@ class TestImportMeterStatistics:
     async def test_none_values_cleaned_to_zero(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_meter_statistics(hass, "evon:test", "Test", [None, 2.0, None])
         statistics = mock_add.call_args[0][2]
         # [0.0, 2.0, 0.0] → cumulative: [0.0, 2.0, 2.0]
@@ -137,7 +150,10 @@ class TestImportMeterStatistics:
     async def test_string_values_converted(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_meter_statistics(hass, "evon:test", "Test", ["1.5", "invalid", "3.0"])
         statistics = mock_add.call_args[0][2]
         # [1.5, 0.0, 3.0] → cumulative: [1.5, 1.5, 4.5]
@@ -149,7 +165,10 @@ class TestImportMeterStatistics:
     async def test_empty_cleaned_values_returns_early(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_meter_statistics(hass, "evon:test", "Test", [])
         mock_add.assert_not_called()
 
@@ -157,7 +176,10 @@ class TestImportMeterStatistics:
     async def test_single_day(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_meter_statistics(hass, "evon:test", "Test", [5.0])
         statistics = mock_add.call_args[0][2]
         assert len(statistics) == 2  # baseline + 1 day
@@ -172,7 +194,10 @@ class TestImportMonthlyStatistics:
     async def test_basic_monthly_import(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_monthly_statistics(hass, "evon:monthly_test", "Test Monthly", [10.0, 20.0, 30.0])
         mock_add.assert_called_once()
         metadata, statistics = mock_add.call_args[0][1], mock_add.call_args[0][2]
@@ -188,7 +213,10 @@ class TestImportMonthlyStatistics:
     async def test_empty_monthly_returns_early(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_monthly_statistics(hass, "evon:test", "Test", [])
         mock_add.assert_not_called()
 
@@ -196,7 +224,10 @@ class TestImportMonthlyStatistics:
     async def test_monthly_none_values_cleaned(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_monthly_statistics(hass, "evon:test", "Test", [None, 20.0])
         statistics = mock_add.call_args[0][2]
         assert statistics[1]["sum"] == 0.0
@@ -206,7 +237,10 @@ class TestImportMonthlyStatistics:
     async def test_single_month(self):
         hass = _make_hass()
         mock_add = MagicMock()
-        with patch("custom_components.evon.statistics.async_add_external_statistics", mock_add):
+        with (
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
             await _import_monthly_statistics(hass, "evon:test", "Test", [42.0])
         statistics = mock_add.call_args[0][2]
         assert len(statistics) == 2  # baseline + 1 month
@@ -221,7 +255,7 @@ class TestImportEnergyStatisticsFull:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(hass, "SmartMeter.123", "Meter", [1.0], force=True)
@@ -233,7 +267,7 @@ class TestImportEnergyStatisticsFull:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(hass, "Meter1", "Meter", [1.0], feed_in_data_month=[0.5], force=True)
@@ -248,7 +282,7 @@ class TestImportEnergyStatisticsFull:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(hass, "Meter1", "Meter", [1.0], energy_data_year=[10.0], force=True)
@@ -260,7 +294,7 @@ class TestImportEnergyStatisticsFull:
         hass = _make_hass()
         mock_add = MagicMock()
         with (
-            patch("custom_components.evon.statistics.get_instance", return_value=MagicMock()),
+            patch("custom_components.evon.statistics.get_instance", return_value=_make_recorder_mock()),
             patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
         ):
             await import_energy_statistics(
@@ -288,7 +322,7 @@ if HAS_HA_TEST_FRAMEWORK:
 @pytest.mark.asyncio
 async def test_import_energy_statistics_basic(hass: HomeAssistant) -> None:
     """Test basic import flow with simple energy data."""
-    mock_recorder_instance = MagicMock()
+    mock_recorder_instance = _make_recorder_mock()
     mock_add_stats = MagicMock()
 
     with (
@@ -340,7 +374,7 @@ async def test_import_energy_statistics_empty_data(hass: HomeAssistant) -> None:
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",
@@ -367,7 +401,7 @@ async def test_import_energy_statistics_rate_limiting(hass: HomeAssistant) -> No
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",
@@ -405,7 +439,7 @@ async def test_import_energy_statistics_with_feed_in(hass: HomeAssistant) -> Non
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",
@@ -444,7 +478,7 @@ async def test_import_energy_statistics_with_monthly(hass: HomeAssistant) -> Non
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",
@@ -482,7 +516,7 @@ async def test_import_statistics_data_cleaning(hass: HomeAssistant) -> None:
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",
@@ -521,7 +555,7 @@ async def test_import_statistics_cumulative_sum(hass: HomeAssistant) -> None:
     with (
         patch(
             "custom_components.evon.statistics.get_instance",
-            return_value=MagicMock(),
+            return_value=_make_recorder_mock(),
         ),
         patch(
             "custom_components.evon.statistics.async_add_external_statistics",

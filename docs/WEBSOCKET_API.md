@@ -453,6 +453,30 @@ Tested on: `SC1_M09.Blind2` (Jal. Zi3 1, SmartCOM.Blind.Blind)
 | SetValue Position | ❌ FAIL | Value updates but hardware doesn't move |
 | Old CallMethod format | ❌ FAIL | Returns success but no hardware movement |
 
+**Group Commands (Verified Working - February 2026):**
+
+Blind group commands operate on `Base.bBlind` and control all blinds simultaneously:
+
+```javascript
+// ✅ Open all blinds
+await ws.send(JSON.stringify({
+  methodName: "CallWithReturn",
+  request: {
+    args: ["Base.bBlind.OpenAll", [null]],
+    methodName: "CallMethod",
+    sequenceId: seq++
+  }
+}));
+
+// ✅ Close all blinds
+// Base.bBlind.CloseAll([null])
+
+// ✅ Stop all blinds
+// Base.bBlind.StopAll([null])
+```
+
+**Note:** Group commands use `fire_and_forget` mode - they execute immediately but don't return a `MethodReturn` response. Position feedback comes via WebSocket subscriptions. Measured latency: ~1-2ms via WebSocket vs ~22 seconds via HTTP fallback.
+
 ### Climate Control (Verified Working - February 2026)
 
 **Key Discovery:** Climate control requires understanding the READ vs CHANGE distinction:
