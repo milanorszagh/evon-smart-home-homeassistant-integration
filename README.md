@@ -627,41 +627,6 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 ---
 
-## WebSocket Client
-
-A TypeScript WebSocket client (`src/ws-client.ts`) is included for real-time communication with Evon systems. This provides:
-
-- **Real-time subscriptions** - Get instant notifications when device states change
-- **Faster control** - Lower latency than HTTP API for device control
-- **Batch queries** - Request multiple device properties in a single call
-
-### Usage
-
-```typescript
-import { getWsClient, wsGetLights, wsControlLight } from './dist/ws-client.js';
-
-// Get singleton client
-const client = getWsClient();
-await client.connect();
-
-// Get all lights
-const lights = await wsGetLights();
-
-// Control a light
-await wsControlLight('SC1_M01.Light1', { on: true, brightness: 75 });
-
-// Subscribe to real-time changes
-client.registerValuesChanged([
-  { Instanceid: 'SC1_M01.Light1', Properties: ['IsOn', 'Brightness'] }
-], (instanceId, props) => {
-  console.log(`${instanceId} changed:`, props);
-});
-```
-
-See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for complete API documentation.
-
----
-
 ## Troubleshooting
 
 ### Connection Issues
