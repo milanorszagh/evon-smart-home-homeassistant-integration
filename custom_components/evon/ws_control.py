@@ -61,8 +61,13 @@ Climate Control:
         - CallMethod Base.ehThermostat.AllNightMode([])  → eco for all
         - CallMethod Base.ehThermostat.AllFreezeMode([]) → away for all
 
-Switch Control:
-    - WebSocket CallMethod doesn't work for switches - must use HTTP API fallback
+Switch Control (relay outputs, Base.bSwitch):
+    - SwitchOn/SwitchOff: Explicit on/off via CallMethod (same as lights)
+    - HTTP fallback translates SwitchOn→AmznTurnOn, SwitchOff→AmznTurnOff
+
+    Note: "Switches" in Evon are relay outputs (Base.bSwitch, class SmartCOM.Light.Light).
+    Physical wall buttons (Tasters) use class SmartCOM.Switch and are event-only entities
+    — they are NOT controllable and have no control mappings.
 """
 
 from __future__ import annotations
@@ -82,7 +87,6 @@ from .const import (
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
-    EVON_CLASS_PHYSICAL_BUTTON,
     EVON_CLASS_SCENE,
 )
 
@@ -165,12 +169,12 @@ CLIMATE_MAPPINGS: dict[str, WsControlMapping] = {
     ),
 }
 
-# Switch control mappings (SmartCOM.Switch.Switch, Base.bSwitch)
-# Note: AmznTurnOn/Off are NOT mapped - they must use HTTP because WebSocket
-# CallMethod doesn't trigger actual hardware control on Evon systems.
-# Empty dict means all switch commands fall back to HTTP.
+# Switch control mappings (Base.bSwitch)
+# SwitchOn/SwitchOff via WebSocket CallMethod — same as lights.
+# Previously empty (forced HTTP fallback) but WS works for relay switches.
 SWITCH_MAPPINGS: dict[str, WsControlMapping] = {
-    # AmznTurnOn/Off intentionally omitted - use HTTP fallback
+    "SwitchOn": WsControlMapping(None, "SwitchOn", None),
+    "SwitchOff": WsControlMapping(None, "SwitchOff", None),
 }
 
 # Home state control mappings (System.HomeState)
@@ -209,8 +213,7 @@ CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
     # Climate
     EVON_CLASS_CLIMATE: CLIMATE_MAPPINGS,
     EVON_CLASS_CLIMATE_UNIVERSAL: CLIMATE_MAPPINGS,
-    # Switches
-    EVON_CLASS_PHYSICAL_BUTTON: SWITCH_MAPPINGS,
+    # Switches (relay outputs)
     "Base.bSwitch": SWITCH_MAPPINGS,
     # Home states
     EVON_CLASS_HOME_STATE: HOME_STATE_MAPPINGS,

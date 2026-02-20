@@ -30,14 +30,14 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
 | **Temperature Sensors** | Room temperature readings |
-| **Switches** | Controllable relay outputs |
+| **Switches (Relays)** | Controllable relay outputs (on/off) |
 | **Bathroom Radiators** | Electric heater control with timer |
 | **Scenes** | Trigger Evon-defined scenes from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
 | **Intercoms** | Door open/closed state, doorbell events, connection status |
 | **Cameras** | Live feed from 2N intercom cameras, snapshot-based video recording |
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
-| **Physical Buttons** | Wall button (Taster) press events — single, double, and long press detection |
+| **Physical Buttons** | Wall button (Taster) press events — single, double, and long press detection. Not to be confused with relay switches above — Evon uses class `SmartCOM.Switch` for physical buttons. |
 
 ---
 
@@ -193,7 +193,7 @@ WebSocket is **enabled by default** for instant state synchronization and device
 
 **How it works:**
 - **Bidirectional communication**: Same WebSocket connection handles both state updates AND device control
-- **State updates**: When a light is turned on via wall switch, HA updates immediately (no polling delay)
+- **State updates**: When a light is turned on via a physical wall button (Taster), HA updates immediately (no polling delay)
 - **Device control**: Commands execute in <50ms - tap a light and it responds instantly
 - **Automatic fallback**: If WebSocket is unavailable, commands fall back to HTTP API seamlessly
 - HTTP polling continues at reduced frequency (1 minute) as a safety net
@@ -266,7 +266,7 @@ The Evon system automatically decides when to heat or cool based on the target t
 
 ### Season Mode
 
-Global switch that controls whether the house is in heating (winter) or cooling (summer) mode. Changing this affects all climate devices simultaneously.
+Global setting that controls whether the house is in heating (winter) or cooling (summer) mode. Changing this affects all climate devices simultaneously.
 
 Options:
 - **Heating (Winter)** - House in heating mode
@@ -434,7 +434,9 @@ cards:
       # ... repeat for snapshot_2 through snapshot_10
 ```
 
-### Switches
+### Switches (Relays)
+
+Evon "switches" are **relay outputs** (`Base.bSwitch` / `SmartCOM.Light.Light` class) — not to be confused with physical wall buttons (Tasters), which use a different Evon class (`SmartCOM.Switch`) and are exposed as [event entities](#event-entities).
 
 - Controllable relay outputs (on/off)
 - Bathroom radiators with timer (turns off automatically after configured duration)
@@ -542,10 +544,10 @@ automation:
 
 Physical wall buttons (Taster) fire event entities with three press types: `single_press`, `double_press`, and `long_press`. Use them to trigger any Home Assistant automation. Button events require the default WebSocket connection (not available in HTTP-only mode).
 
-**Toggle a smart plug on button press:**
+**Toggle a relay on button press:**
 ```yaml
 automation:
-  - alias: "Toggle desk lamp on button press"
+  - alias: "Toggle desk lamp relay on button press"
     trigger:
       - platform: state
         entity_id: event.hallway_button
@@ -554,7 +556,7 @@ automation:
     action:
       - service: switch.toggle
         target:
-          entity_id: switch.desk_lamp
+          entity_id: switch.desk_lamp  # relay output entity
 ```
 
 **Double-press to trigger a scene:**
@@ -690,6 +692,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
+| **1.19.1** | **Fix switch (relay) 401 errors** - Relay switches (`Base.bSwitch`) now use `SwitchOn`/`SwitchOff` via WebSocket, same as lights. Previously switches were the only entity type forced to HTTP-only control, making them vulnerable to auth token issues. Also: reduced login backoff from 5 min to 1 min, removed physical buttons (`SmartCOM.Switch`) from control mappings (they're event-only), clarified relay vs. physical button naming throughout documentation. |
 | **1.19.0** | **Physical button (Taster) support** - Wall buttons exposed as HA event entities with press type detection (single, double, long press). Configurable double-click detection delay (0.2–1.4s, default 0.8s) in integration settings. WebSocket-only — requires real-time updates enabled. Device triggers and `evon_button_press` bus event for automations. Translations for all 10 languages. **Also:** WS control mappings for blind group commands, thread-safety fix for statistics import, 1164 tests. |
 | **1.18.0** | **Auth retry storm fix (Issue #2), WebSocket diagnostics, doorbell event entity, 8 new translations.** Fixed auth retry storm regression causing 700+ API requests/min on network errors: login backoff on network errors, safe re-auth wrapping to prevent token=None cascades, WS receive timeout relaxed from 90s to 180s. Added WebSocket diagnostic sensors (connection status with 7 attributes, response latency with long-term statistics). Added doorbell event entity for 2N intercoms (native HA EventEntity with ring detection). Added 8 translations: French, Italian, Slovenian, Spanish, Portuguese, Polish, Czech, Slovak. CI: bumped GitHub Actions, test dep cleanup, ruff format fixes. |
 | **1.17.1** | **Code quality audit (3 rounds)** - Deep analysis and hardening across the integration. Fixed 8 bugs (light brightness rounding, climate cooling temp range, diagnostics crash, select entity errors, device trigger safety, config flow IPv4 octet validation, config flow port parsing, camera corrupt frame handling). Hardened WebSocket client (periodic stale cleanup, stack traces, fire-and-forget error handling, sequenceId validation, subscription list safety). Extracted shared SavedPictures transformation, added empty ID validation across processors, hardened all service handlers. Added 260+ new tests (994 total). |

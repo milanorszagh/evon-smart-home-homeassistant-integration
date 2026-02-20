@@ -719,17 +719,22 @@ class TestWsControlMappings:
         assert mapping is not None
         assert mapping.method_name == "WriteCurrentSetTemperature"
 
-    def test_switch_mappings_turn_on_uses_http(self):
-        """Test switch turn on has no WS mapping (uses HTTP fallback)."""
-        # AmznTurnOn is intentionally not mapped to WebSocket
-        mapping = get_ws_control_mapping("SmartCOM.Switch", "AmznTurnOn")
-        assert mapping is None  # No WS mapping, will use HTTP
+    def test_switch_mappings_turn_on(self):
+        """Test relay switch SwitchOn uses WebSocket."""
+        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOn")
+        assert mapping is not None
+        assert mapping.method_name == "SwitchOn"
 
-    def test_switch_mappings_turn_off_uses_http(self):
-        """Test switch turn off has no WS mapping (uses HTTP fallback)."""
-        # AmznTurnOff is intentionally not mapped to WebSocket
-        mapping = get_ws_control_mapping("SmartCOM.Switch", "AmznTurnOff")
-        assert mapping is None  # No WS mapping, will use HTTP
+    def test_switch_mappings_turn_off(self):
+        """Test relay switch SwitchOff uses WebSocket."""
+        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOff")
+        assert mapping is not None
+        assert mapping.method_name == "SwitchOff"
+
+    def test_physical_button_no_control_mapping(self):
+        """Test physical buttons (SmartCOM.Switch) have no control mapping."""
+        mapping = get_ws_control_mapping("SmartCOM.Switch", "SwitchOn")
+        assert mapping is None
 
     def test_home_state_mappings_activate(self):
         """Test home state activate mapping."""
@@ -799,10 +804,17 @@ class TestWsControlMappings:
         # Position still uses HTTP
         assert get_ws_control_mapping("Base.ehBlind", "SetPosition") is None
 
-    def test_base_bswitch_mappings_uses_http(self):
-        """Test Base.bSwitch on/off uses HTTP fallback."""
-        mapping = get_ws_control_mapping("Base.bSwitch", "AmznTurnOn")
-        assert mapping is None  # No WS mapping, will use HTTP
+    def test_base_bswitch_mappings_switch_on(self):
+        """Test Base.bSwitch SwitchOn uses WebSocket."""
+        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOn")
+        assert mapping is not None
+        assert mapping.method_name == "SwitchOn"
+
+    def test_base_bswitch_mappings_switch_off(self):
+        """Test Base.bSwitch SwitchOff uses WebSocket."""
+        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOff")
+        assert mapping is not None
+        assert mapping.method_name == "SwitchOff"
 
 
 class TestWebSocketControlFindings:
@@ -900,17 +912,17 @@ class TestWebSocketControlFindings:
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetPosition") is None
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetAngle") is None
 
-    def test_switch_must_use_http(self):
-        """TRAP: Switch control via WebSocket does NOT trigger hardware.
+    def test_switch_uses_websocket(self):
+        """Relay switches (Base.bSwitch) use SwitchOn/SwitchOff via WebSocket.
 
-        WebSocket CallMethod returns success but the physical relay doesn't switch.
-        Must use HTTP API for switches: POST /api/instances/{id}/AmznTurnOn
+        Physical buttons (SmartCOM.Switch) are event-only and have no control mappings.
         """
-        # Intentionally no WebSocket mapping for switches
-        assert get_ws_control_mapping("SmartCOM.Switch.Switch", "AmznTurnOn") is None
-        assert get_ws_control_mapping("SmartCOM.Switch.Switch", "AmznTurnOff") is None
-        assert get_ws_control_mapping("Base.bSwitch", "AmznTurnOn") is None
-        assert get_ws_control_mapping("Base.bSwitch", "AmznTurnOff") is None
+        # Relay switches have WS mappings
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOn") is not None
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOff") is not None
+        # SmartCOM.Switch.Switch is not a relay - no control mappings
+        assert get_ws_control_mapping("SmartCOM.Switch.Switch", "SwitchOn") is None
+        assert get_ws_control_mapping("SmartCOM.Switch.Switch", "SwitchOff") is None
 
     def test_callmethod_format_must_include_method_in_instance_id(self):
         """TRAP: CallMethod format must be [instanceId.methodName, params].

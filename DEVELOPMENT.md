@@ -584,7 +584,8 @@ All requests require: `Cookie: token=<token>`
 | `Base.ehThermostat` | Season mode | Yes |
 | `System.HomeState` | Home state | Yes |
 | `Heating.BathroomRadiator` | Bathroom heater | Yes |
-| `SmartCOM.Switch` | Physical button | No (event entity, WS-only) |
+| `Base.bSwitch` | Relay output (switch entity) | Yes |
+| `SmartCOM.Switch` | Physical wall button (Taster) — event entity, NOT a relay | No (event entity, WS-only) |
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
@@ -656,7 +657,7 @@ The integration supports WebSocket-based control for faster response times. WS-n
 - `CallMethod IncreaseSetTemperature([])` / `DecreaseSetTemperature([])` for ±0.5°C
 - `CallMethod Base.ehThermostat.AllDayMode/AllNightMode/AllFreezeMode([])` for global preset changes
 
-**Switches:** WebSocket CallMethod does NOT work for switches - the integration falls back to HTTP API automatically.
+**Switches (Relays):** Relay switches (`Base.bSwitch`) use `SwitchOn`/`SwitchOff` via WebSocket CallMethod, same as lights. HTTP fallback translates these to `AmznTurnOn`/`AmznTurnOff`. Note: physical wall buttons (`SmartCOM.Switch`) are event-only entities and have no control mappings.
 
 **Fallback:** When WebSocket control fails or is unavailable, the integration automatically falls back to HTTP API.
 
@@ -852,7 +853,7 @@ See `docs/WEBSOCKET_API.md` for detailed WebSocket subscription data and timing 
 
 ### Security Doors & Intercoms (Implemented!)
 
-Unlike physical switches, **security doors and intercoms DO expose real-time events** via WebSocket:
+Like relay switches and physical buttons, **security doors and intercoms also expose real-time events** via WebSocket:
 
 | Device | Instance Example | Key Properties |
 |--------|------------------|----------------|

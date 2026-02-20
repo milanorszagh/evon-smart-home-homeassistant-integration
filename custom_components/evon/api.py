@@ -792,11 +792,11 @@ class EvonApi:
     # Switch methods
     async def turn_on_switch(self, instance_id: str) -> None:
         """Turn on a switch."""
-        await self.call_method(instance_id, "AmznTurnOn")
+        await self.call_method(instance_id, "SwitchOn")
 
     async def turn_off_switch(self, instance_id: str) -> None:
         """Turn off a switch."""
-        await self.call_method(instance_id, "AmznTurnOff")
+        await self.call_method(instance_id, "SwitchOff")
 
     # Home state methods
     async def get_home_states(self, home_state_class: str = "System.HomeState") -> list[dict[str, Any]]:

@@ -23,7 +23,7 @@ Three bugs in v1.17.1 create a cascading failure that generates >700 API request
 
 3. **Aggressive WS receive timeout** (`ws_client.py:463`): The 90s `asyncio.timeout` on `_ws.receive()` triggers false disconnects on low-traffic systems, causing reconnection storms that compound the auth issue.
 
-Switch control is forced to HTTP fallback (Evon API limitation — WS doesn't fire events for switches), making switches uniquely vulnerable to auth storms.
+Switch control was previously forced to HTTP fallback (empty WS mappings), making relay switches (`Base.bSwitch`) uniquely vulnerable to auth storms. This has been fixed — relay switches now use `SwitchOn`/`SwitchOff` via WebSocket, same as lights.
 
 ### Fix A: Safe auth retry in `_request()` (`api.py:450-455`)
 

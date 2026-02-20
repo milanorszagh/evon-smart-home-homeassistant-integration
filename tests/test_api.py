@@ -1844,10 +1844,10 @@ class TestTryWsControl:
         )
 
     @pytest.mark.asyncio
-    async def test_switch_no_mapping_returns_false(self, ws_api):
-        """Switch commands always return False (empty mappings = HTTP fallback)."""
+    async def test_physical_button_no_mapping_returns_false(self, ws_api):
+        """Physical button commands return False (no control mappings)."""
         ws_api._instance_classes["SC1.Switch1"] = "SmartCOM.Switch"
-        result = await ws_api._try_ws_control("SC1.Switch1", "AmznTurnOn", None)
+        result = await ws_api._try_ws_control("SC1.Switch1", "SwitchOn", None)
         assert result is False
 
     @pytest.mark.asyncio

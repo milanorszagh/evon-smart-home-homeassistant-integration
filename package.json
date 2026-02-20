@@ -1,6 +1,6 @@
 {
   "name": "evon-ha",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "description": "Home Assistant integration for Evon Smart Home with MCP server",
   "engines": {
     "node": ">=18.0.0"

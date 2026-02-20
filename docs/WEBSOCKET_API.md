@@ -254,7 +254,7 @@ The Evon WebSocket API supports two mechanisms for device control:
 | Climate Presets | ✅ `CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode` | `[instanceId.WriteDayMode, []]` (fire-and-forget*) | Same |
 | Bathroom Radiator On | ✅ `CallMethod SwitchOneTime` | `[instanceId.SwitchOneTime, []]` | `SwitchOneTime` |
 | Bathroom Radiator Off | ✅ `CallMethod Switch` | `[instanceId.Switch, []]` (toggle) | `Switch` |
-| Switch On/Off | ❌ Does not work | - | ✅ `AmznTurnOn/Off` |
+| Switch (Relay) On/Off | ✅ `CallMethod SwitchOn/SwitchOff` | `[instanceId.SwitchOn, []]` | `AmznTurnOn/Off` |
 | Scene Activation | ✅ `CallMethod Execute` | `[instanceId.Execute, []]` | `Execute` |
 | Home State | ✅ `CallMethod Activate` | `[instanceId.Activate, []]` | `Activate` |
 | Smart Meter | ✅ `RegisterValuesChanged` | Subscribe to IL1-3, UL1N-3N, P1-3, Frequency | Read-only |
@@ -272,7 +272,7 @@ The Evon WebSocket API supports two mechanisms for device control:
 - **Smart Meters**: Subscribe via `RegisterValuesChanged` for real-time power/voltage/current updates
 - **Air Quality**: Subscribe via `RegisterValuesChanged` for humidity, temperature, CO2 updates
 - **Valves**: Subscribe via `RegisterValuesChanged` for open/closed state updates
-- **Switches**: Use HTTP API (WebSocket doesn't trigger hardware)
+- **Switches (Relays)**: Use `CallMethod SwitchOn/SwitchOff([])`, same as lights. HTTP fallback translates to `AmznTurnOn/AmznTurnOff`
 
 ### Light Control (Verified Working)
 
@@ -362,7 +362,7 @@ The brightness scale for lights is **0-100**:
 The HTTP API (`POST /api/instances/{id}/{method}`) remains available as a fallback:
 - Works for all device types
 - Required when WebSocket is not connected
-- Required for switches (WebSocket doesn't trigger hardware)
+- Used as automatic fallback for all device types when WebSocket is unavailable
 
 The integration automatically falls back to HTTP when:
 1. WebSocket client is not connected
@@ -770,17 +770,17 @@ The total power is computed as `P1 + P2 + P3`. The Home Assistant integration au
 
 **Note:** Smart meters are read-only sensors - there are no control methods available via WebSocket.
 
-### Switch Control (HTTP Only)
+### Switch Control (Relays)
 
-**Important:** Switches (`SmartCOM.Switch`, `Base.bSwitch`) do NOT support WebSocket control. All switch commands must use the HTTP API:
+Relay switches (`Base.bSwitch`) use `SwitchOn`/`SwitchOff` via WebSocket CallMethod — same as lights:
 
 ```javascript
-// ❌ WebSocket SetValue on IsOn - does NOT work for switches
-// ❌ WebSocket CallMethod AmznTurnOn - does NOT work for switches
-// ✅ Use HTTP API: POST /api/instances/Switch1/AmznTurnOn
+// ✅ WebSocket CallMethod SwitchOn/SwitchOff - works for relay switches
+// ❌ WebSocket SetValue on IsOn - does NOT work
+// ✅ HTTP fallback: POST /api/instances/Switch1/AmznTurnOn
 ```
 
-This is because switches in Evon systems are typically physical relays that require the HTTP API to trigger hardware actions.
+**Note on Evon naming:** `SmartCOM.Switch` is **not** a relay — it's the class for physical wall buttons (Tasters), which are event-only entities and have no control methods. Relay outputs use class `SmartCOM.Light.Light` / `Base.bSwitch`.
 
 ## Device Classes
 

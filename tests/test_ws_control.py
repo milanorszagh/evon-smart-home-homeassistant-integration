@@ -145,16 +145,17 @@ class TestClimateMappings:
 
 
 class TestSwitchMappings:
-    """Test that switch mappings are intentionally empty (HTTP fallback)."""
+    """Test that switch mappings use SwitchOn/SwitchOff via WebSocket."""
 
-    def test_empty(self):
-        assert len(SWITCH_MAPPINGS) == 0
+    def test_switch_on(self):
+        m = SWITCH_MAPPINGS["SwitchOn"]
+        assert m.method_name == "SwitchOn"
+        assert m.property_name is None
 
-    def test_no_turn_on(self):
-        assert "AmznTurnOn" not in SWITCH_MAPPINGS
-
-    def test_no_turn_off(self):
-        assert "AmznTurnOff" not in SWITCH_MAPPINGS
+    def test_switch_off(self):
+        m = SWITCH_MAPPINGS["SwitchOff"]
+        assert m.method_name == "SwitchOff"
+        assert m.property_name is None
 
 
 class TestHomeStateMappings:
@@ -208,8 +209,9 @@ class TestClassControlMappings:
             assert CLASS_CONTROL_MAPPINGS[cls] is CLIMATE_MAPPINGS
 
     def test_switch_classes(self):
-        for cls in [EVON_CLASS_PHYSICAL_BUTTON, "Base.bSwitch"]:
-            assert CLASS_CONTROL_MAPPINGS[cls] is SWITCH_MAPPINGS
+        assert CLASS_CONTROL_MAPPINGS["Base.bSwitch"] is SWITCH_MAPPINGS
+        # Physical buttons are event-only, not in control mappings
+        assert EVON_CLASS_PHYSICAL_BUTTON not in CLASS_CONTROL_MAPPINGS
 
     def test_home_state_class(self):
         assert CLASS_CONTROL_MAPPINGS[EVON_CLASS_HOME_STATE] is HOME_STATE_MAPPINGS
@@ -275,7 +277,7 @@ class TestGetWsControlMapping:
         mapping = get_ws_control_mapping(EVON_CLASS_LIGHT, "NonExistentMethod")
         assert mapping is None
 
-    def test_switch_class_returns_none_for_all(self):
-        """Switch mappings are empty, so all methods return None."""
-        mapping = get_ws_control_mapping(EVON_CLASS_PHYSICAL_BUTTON, "AmznTurnOn")
+    def test_physical_button_returns_none(self):
+        """Physical buttons (SmartCOM.Switch) have no control mappings."""
+        mapping = get_ws_control_mapping(EVON_CLASS_PHYSICAL_BUTTON, "SwitchOn")
         assert mapping is None

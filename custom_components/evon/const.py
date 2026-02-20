@@ -139,7 +139,7 @@ COVER_STOP_DELAY = 0.3
 OPTIMISTIC_STATE_TIMEOUT = 30.0
 
 # Login rate limiting
-LOGIN_MAX_BACKOFF = 300  # Maximum backoff delay in seconds (5 minutes)
+LOGIN_MAX_BACKOFF = 60  # Maximum backoff delay in seconds (1 minute)
 LOGIN_BACKOFF_BASE = 2  # Exponential backoff base (2^failures seconds)
 
 # Camera/Image fetch settings
