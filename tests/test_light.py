@@ -19,7 +19,6 @@ async def test_light_setup(hass, mock_config_entry_v2, mock_evon_api_class):
     await hass.async_block_till_done()
 
     # Check that dimmable light entity was created
-    # Note: SmartCOM.Light.Light (non-dimmable/relay) entities are created as switches, not lights
     state = hass.states.get("light.living_room_light")
     assert state is not None
     assert state.state == "on"
@@ -338,3 +337,100 @@ async def test_light_brightness_pct_attribute(hass, mock_config_entry_v2, mock_e
     assert state is not None
     # light_1 has ScaledBrightness=75 in MOCK_INSTANCE_DETAILS
     assert state.attributes.get("brightness_pct") == 75
+
+
+# =============================================================================
+# On/Off Light (SmartCOM.Light.Light relay) Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_onoff_light_setup(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that SmartCOM.Light.Light is created as a light entity with ColorMode.ONOFF."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.kitchen_relay")
+    assert state is not None
+    # IsOn=False in mock data → state should be "off"
+    assert state.state == "off"
+    assert state.attributes.get("color_mode") is None  # off lights don't report color_mode
+    assert "onoff" in state.attributes.get("supported_color_modes", [])
+    assert state.attributes.get("brightness") is None
+
+
+@pytest.mark.asyncio
+async def test_onoff_light_turn_on(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test turning on an on/off light uses turn_on_light API."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {"entity_id": "light.kitchen_relay"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.turn_on_light.assert_any_call("light_2")
+
+
+@pytest.mark.asyncio
+async def test_onoff_light_turn_off(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test turning off an on/off light uses turn_off_light API."""
+    from tests.conftest import MOCK_INSTANCE_DETAILS
+
+    mock_instance_details = MOCK_INSTANCE_DETAILS.copy()
+    mock_instance_details["light_2"] = {"IsOn": True, "ScaledBrightness": 0}
+    mock_evon_api_class.get_instance = AsyncMock(
+        side_effect=lambda instance_id: mock_instance_details.get(instance_id, {})
+    )
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "light",
+        "turn_off",
+        {"entity_id": "light.kitchen_relay"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.turn_off_light.assert_any_call("light_2")
+
+
+@pytest.mark.asyncio
+async def test_onoff_light_no_brightness(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that on/off light does not report brightness even when on."""
+    from tests.conftest import MOCK_INSTANCE_DETAILS
+
+    mock_instance_details = MOCK_INSTANCE_DETAILS.copy()
+    mock_instance_details["light_2"] = {"IsOn": True, "ScaledBrightness": 0}
+    mock_evon_api_class.get_instance = AsyncMock(
+        side_effect=lambda instance_id: mock_instance_details.get(instance_id, {})
+    )
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.kitchen_relay")
+    assert state is not None
+    assert state.state == "on"
+    assert state.attributes.get("brightness") is None
+    assert state.attributes.get("color_mode") == "onoff"
+
+
+@pytest.mark.asyncio
+async def test_onoff_light_attributes(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test on/off light attributes include evon_id."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.kitchen_relay")
+    assert state is not None
+    assert state.attributes.get("evon_id") == "light_2"

@@ -78,12 +78,13 @@ class EvonLight(EvonEntity, LightEntity):
         self._attr_name = None  # Use device name
         self._attr_unique_id = f"evon_light_{instance_id}"
 
-        # Check if this light should be non-dimmable (from options)
+        # Check if this light supports dimming (from coordinator data and options)
+        data = self._get_data()
+        supports_dimming = data.get("supports_dimming", True) if data else True
         non_dimmable_lights = entry.options.get(CONF_NON_DIMMABLE_LIGHTS, [])
-        self._is_dimmable = instance_id not in non_dimmable_lights
+        self._is_dimmable = supports_dimming and instance_id not in non_dimmable_lights
 
         # Check if this light supports color temperature from coordinator data
-        data = self._get_data()
         self._supports_color_temp = data.get("supports_color_temp", False) if data else False
 
         if self._supports_color_temp:

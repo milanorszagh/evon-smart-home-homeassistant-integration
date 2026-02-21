@@ -64,7 +64,7 @@ EVON_PRESET_COOLING = {
 
 # Evon class names
 EVON_CLASS_LIGHT_DIM = "SmartCOM.Light.LightDim"
-EVON_CLASS_LIGHT = "SmartCOM.Light.Light"  # Relay outputs — exposed as HA switches (not lights)
+EVON_CLASS_LIGHT = "SmartCOM.Light.Light"  # Relay outputs — exposed as HA lights (ColorMode.ONOFF)
 EVON_CLASS_BLIND = "SmartCOM.Blind.Blind"
 EVON_CLASS_CLIMATE = "SmartCOM.Clima.ClimateControl"
 EVON_CLASS_CLIMATE_UNIVERSAL = "Heating.ClimateControlUniversal"

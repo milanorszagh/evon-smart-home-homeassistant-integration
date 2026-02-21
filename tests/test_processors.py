@@ -295,6 +295,7 @@ class TestLightProcessor:
         assert light["is_on"] is True
         assert light["brightness"] == 75
         assert light["supports_color_temp"] is False
+        assert light["supports_dimming"] is True
 
     def test_process_lights_rgbw(self):
         """Test light processor handles RGBW lights with color temp."""
@@ -327,24 +328,26 @@ class TestLightProcessor:
         assert light["min_color_temp"] == 2700
         assert light["max_color_temp"] == 6500
 
-    def test_process_lights_filters_by_class(self):
-        """Test light processor only includes light classes."""
+    def test_process_lights_includes_onoff_light(self):
+        """Test light processor includes SmartCOM.Light.Light as non-dimmable."""
         from custom_components.evon.coordinator.processors.lights import process_lights
 
         instances = [
-            {"ID": "switch_1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch"},
+            {"ID": "relay_1", "ClassName": "SmartCOM.Light.Light", "Name": "Relay"},
             {"ID": "light_1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Light"},
         ]
         instance_details = {
-            "switch_1": {"IsOn": True, "ScaledBrightness": 50},
+            "relay_1": {"IsOn": True, "ScaledBrightness": 0},
             "light_1": {"IsOn": True, "ScaledBrightness": 50},
         }
 
         result = process_lights(instance_details, instances, lambda x: "")
 
-        # Should only include LightDim, not Light (which is a switch)
-        assert len(result) == 1
-        assert result[0]["id"] == "light_1"
+        assert len(result) == 2
+        relay = next(r for r in result if r["id"] == "relay_1")
+        light = next(r for r in result if r["id"] == "light_1")
+        assert relay["supports_dimming"] is False
+        assert light["supports_dimming"] is True
 
     def test_process_lights_skips_unnamed(self):
         """Test light processor skips instances without names."""
@@ -581,47 +584,23 @@ class TestClimateProcessor:
 class TestSwitchProcessor:
     """Tests for switch data processor."""
 
-    def test_process_switches(self):
-        """Test switch processor extracts data correctly."""
+    def test_process_switches_returns_empty(self):
+        """Test switch processor returns empty list (no switch classes currently)."""
         from custom_components.evon.coordinator.processors.switches import process_switches
 
         instances = [
             {
-                "ID": "switch_1",
+                "ID": "light_1",
                 "ClassName": "SmartCOM.Light.Light",
                 "Name": "Kitchen Outlet",
                 "Group": "room_kitchen",
             },
         ]
-        instance_details = {"switch_1": {"IsOn": True}}
+        instance_details = {"light_1": {"IsOn": True}}
 
         result = process_switches(instance_details, instances, lambda x: "Kitchen")
 
-        assert len(result) == 1
-        switch = result[0]
-        assert switch["id"] == "switch_1"
-        assert switch["name"] == "Kitchen Outlet"
-        assert switch["room_name"] == "Kitchen"
-        assert switch["is_on"] is True
-
-    def test_process_switches_filters_dim_lights(self):
-        """Test switch processor excludes dimmable lights."""
-        from custom_components.evon.coordinator.processors.switches import process_switches
-
-        instances = [
-            {"ID": "switch_1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch"},
-            {"ID": "light_1", "ClassName": "SmartCOM.Light.DimLight", "Name": "Dim Light"},
-        ]
-        instance_details = {
-            "switch_1": {"IsOn": False},
-            "light_1": {"IsOn": False},
-        }
-
-        result = process_switches(instance_details, instances, lambda x: "")
-
-        # Should only include SmartCOM.Light.Light
-        assert len(result) == 1
-        assert result[0]["id"] == "switch_1"
+        assert result == []
 
 
 class TestSceneProcessor:
@@ -1443,34 +1422,13 @@ class TestProcessorEdgeCases:
 
     # --- Switch processor ---
 
-    def test_switch_skips_unnamed_instance(self):
-        from custom_components.evon.coordinator.processors.switches import process_switches
-
-        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": ""}]
-        result = process_switches({"S1": {"IsOn": False}}, instances, self._get_room_name)
-        assert result == []
-
-    def test_switch_skips_wrong_class(self):
-        from custom_components.evon.coordinator.processors.switches import process_switches
-
-        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.LightDim", "Name": "Dimmer"}]
-        result = process_switches({"S1": {"IsOn": True}}, instances, self._get_room_name)
-        assert result == []
-
-    def test_switch_skips_missing_details(self):
+    def test_switch_returns_empty(self):
+        """Switch processor returns empty list (no switch classes currently)."""
         from custom_components.evon.coordinator.processors.switches import process_switches
 
         instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch 1"}]
-        result = process_switches({}, instances, self._get_room_name)
+        result = process_switches({"S1": {"IsOn": False}}, instances, self._get_room_name)
         assert result == []
-
-    def test_switch_defaults_when_details_empty(self):
-        from custom_components.evon.coordinator.processors.switches import process_switches
-
-        instances = [{"ID": "S1", "ClassName": "SmartCOM.Light.Light", "Name": "Switch 1", "Group": "g1"}]
-        result = process_switches({"S1": {}}, instances, self._get_room_name)
-        assert len(result) == 1
-        assert result[0]["is_on"] is False
 
     # --- Blind processor ---
 

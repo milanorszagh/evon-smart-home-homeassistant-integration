@@ -6,12 +6,12 @@ from collections.abc import Callable
 import logging
 from typing import Any
 
-from ...const import EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW
+from ...const import EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW
 
 _LOGGER = logging.getLogger(__name__)
 
 # Light classes to process
-LIGHT_CLASSES = {EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW}
+LIGHT_CLASSES = {EVON_CLASS_LIGHT, EVON_CLASS_LIGHT_DIM, EVON_CLASS_LIGHT_GROUP, EVON_CLASS_LIGHT_RGBW}
 
 
 def process_lights(
@@ -45,6 +45,7 @@ def process_lights(
 
         # Check if this light supports color temperature (RGBW lights)
         supports_color_temp = class_name == EVON_CLASS_LIGHT_RGBW
+        supports_dimming = class_name != EVON_CLASS_LIGHT
 
         light_data: dict[str, Any] = {
             "id": instance_id,
@@ -53,6 +54,7 @@ def process_lights(
             "is_on": details.get("IsOn", False),
             "brightness": details.get("ScaledBrightness", 0),
             "supports_color_temp": supports_color_temp,
+            "supports_dimming": supports_dimming,
         }
 
         # Add color temp properties for RGBW lights

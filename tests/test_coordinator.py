@@ -116,12 +116,14 @@ class TestCoordinatorGetters:
 
         coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
 
-        # light_2 is a SmartCOM.Light.Light (relay/switch)
-        switch_data = coordinator.get_entity_data("switches", "light_2")
-        assert switch_data is not None
-        assert switch_data["id"] == "light_2"
-
+        # Switch processor currently returns empty (no switch classes)
+        assert coordinator.get_entity_data("switches", "light_2") is None
         assert coordinator.get_entity_data("switches", "nonexistent") is None
+
+        # light_2 (SmartCOM.Light.Light) is now in lights
+        light_data = coordinator.get_entity_data("lights", "light_2")
+        assert light_data is not None
+        assert light_data["id"] == "light_2"
 
     async def test_get_entity_data_smart_meters(
         self,
