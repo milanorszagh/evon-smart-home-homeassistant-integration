@@ -534,7 +534,7 @@ class TestButtonPressDetection:
             mock_time.return_value = 0.0
             detector.handle_event("btn1", entity_data, False)  # orphan release (swallowed True)
             mock_time.return_value = 0.2
-            detector.handle_event("btn1", entity_data, True)   # second press
+            detector.handle_event("btn1", entity_data, True)  # second press
             mock_time.return_value = 0.4
             detector.handle_event("btn1", entity_data, False)  # second release
 
