@@ -1064,13 +1064,14 @@ Each SmartCOM module has up to 4 button inputs. Light modules use `Input{1-4}`, 
 
 **Double-press WS patterns (Evon controller behavior):**
 
-The Evon controller does **not** always send a clean True→False→True→False sequence for double-press. Testing reveals **3 different patterns**, all of which must be handled:
+The Evon controller does **not** always send a clean True→False→True→False sequence for double-press. Testing reveals **4 different patterns**, all of which must be handled:
 
 | Pattern | WS Events | Frequency |
 |---------|-----------|-----------|
-| **Coalesced release** | True, True, False | ~40% |
-| **Coalesced press** | True, False, False | ~40% |
-| **Standard 4-event** | True, False, True, False | ~20% |
+| **Coalesced release** | True, True, False | ~35% |
+| **Coalesced press** | True, False, False | ~35% |
+| **Standard 4-event** | True, False, True, False | ~15% |
+| **Swallowed first True** | False, True, False | ~15% |
 
 **Pattern 1: True, True, False** (second True without intervening False):
 ```
@@ -1100,7 +1101,14 @@ The Evon controller does **not** always send a clean True→False→True→False
 [17:28:34.080] SC1_M01.Input3.IsOn = False   ← released after ~2400ms
 ```
 
-**Implementation note:** Because of the coalesced patterns, button press detection must process **every** WS event (not just state changes). A second True while already pressed implies the first release was coalesced. A second False with an active double-click timer implies the second press was coalesced.
+**Pattern 4: False, True, False** (swallowed first True — controller drops the first press-down):
+```
+[00:39:47.025] SC1_M02.Input4.IsOn = False   ← release 1 (press 1 True swallowed)
+[00:39:47.229] SC1_M02.Input4.IsOn = True    ← press 2
+[00:39:47.411] SC1_M02.Input4.IsOn = False   ← release 2
+```
+
+**Implementation note:** Because of the coalesced patterns, button press detection must process **every** WS event (not just state changes). A second True while already pressed implies the first release was coalesced. A second False with an active double-click timer implies the second press was coalesced. An orphaned False (no prior press, no pending timer) implies the controller swallowed the first True — count it as an implicit release.
 
 **Subscription example:**
 ```javascript
@@ -1108,7 +1116,7 @@ client.registerValuesChanged([
   { Instanceid: 'SC1_M01.Input1', Properties: ['IsOn'] },
   { Instanceid: 'SC1_M04.Input3', Properties: ['IsOn'] },
 ], (instanceId, props) => {
-  // Implement press type detection — handle ALL 3 WS patterns:
+  // Implement press type detection — handle ALL 4 WS patterns:
   // - Single: one press+release, no second event within double-click delay (default 0.8s)
   // - Double: two presses within double-click delay (watch for coalesced patterns!)
   // - Long: held >1500ms before release

@@ -843,10 +843,11 @@ The double-click delay is user-configurable via integration options (0.2–1.4s)
 - Button presses fire `evon_button_press` bus events and update event entities
 - Device triggers are available for automation (single/double/long press per button)
 - The `ButtonPressDetector` is a standalone class with no HA dependencies, making it directly testable
-- The Evon controller sends **3 different WS patterns** for double-press (all handled):
+- The Evon controller sends **4 different WS patterns** for double-press (all handled):
   - `True, True, False` — second True without intervening False (coalesced release)
   - `True, False, False` — second False without intervening True (coalesced press)
   - `True, False, True, False` — standard 4-event pattern (rare)
+  - `False, True, False` — controller swallows first True, delivers only first release + second press-release
 - Button press handler processes **every** WS event (not just state changes) to catch coalesced patterns
 
 See `docs/WEBSOCKET_API.md` for detailed WebSocket subscription data and timing measurements.

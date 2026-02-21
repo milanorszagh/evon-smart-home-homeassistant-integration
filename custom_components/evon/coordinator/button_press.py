@@ -39,10 +39,12 @@ class TimeoutCallback(Protocol):
 class ButtonPressDetector:
     """Detects single, double, and long press from raw IsOn WS events.
 
-    The Evon controller sends 3 different patterns for double-press:
+    The Evon controller sends 4 different patterns for double-press:
     - True, True, False (coalesced release — second True without intervening False)
     - True, False, False (coalesced press — second False without intervening True)
     - True, False, True, False (standard 4-event — rare)
+    - False, True, False (swallowed first True — controller drops the first press-down,
+      delivers only the first release + second press-release)
 
     Press types:
     - single_press: one press+release, no second press within double_click_delay
@@ -124,18 +126,21 @@ class ButtonPressDetector:
             # Button released — determine press type
             press_start = state.get("press_start")
             if press_start is None:
-                # No matching press — Evon controller may coalesce rapid True→False
-                # into just False. If we have a pending timer (first release already
-                # happened), count this as an additional release for double-press.
-                # This handles the True, False, False WS pattern for double-press.
+                # No matching press — Evon controller may coalesce rapid presses.
+                # Count this as an additional release for double-press detection.
+                # This handles two WS patterns:
+                # - True, False, False (coalesced press — pending_timer exists from
+                #   the first release)
+                # - False, True, False (swallowed first True — no pending_timer,
+                #   controller dropped the first press-down and only sent the release)
+                state["release_count"] += 1
                 if state.get("pending_timer") is not None:
-                    state["release_count"] += 1
                     state["pending_timer"].cancel()
-                    state["pending_timer"] = self._schedule_timer(
-                        self._double_click_delay,
-                        self._handle_timeout,
-                        instance_id,
-                    )
+                state["pending_timer"] = self._schedule_timer(
+                    self._double_click_delay,
+                    self._handle_timeout,
+                    instance_id,
+                )
                 return
 
             hold_duration = now - press_start

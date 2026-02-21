@@ -493,10 +493,17 @@ class TestButtonPressDetection:
         # Callback should receive new_data, not original_data
         callback.assert_called_once_with("btn1", new_data, "single_press")
 
-    def test_release_without_press_ignored(self):
-        """A release without a prior press and no timer should be ignored."""
+    def test_orphan_release_schedules_timer(self):
+        """A release without a prior press should count as implicit release and schedule timer.
+
+        This supports the swallowed-first-True pattern (False, True, False) where
+        the controller drops the first press-down event.
+        """
         detector, callback, scheduler = self._make_detector()
         entity_data = {"id": "btn1", "name": "Test Button"}
+
+        mock_timer = MagicMock()
+        scheduler.return_value = mock_timer
 
         # Initialize state with no press_start and no timer
         detector.state["btn1"] = {
@@ -508,7 +515,32 @@ class TestButtonPressDetection:
         detector.handle_event("btn1", entity_data, False)
 
         callback.assert_not_called()
-        scheduler.assert_not_called()
+        scheduler.assert_called_once()
+        assert detector.state["btn1"]["release_count"] == 1
+
+    def test_double_press_false_true_false_pattern(self):
+        """Evon controller sends False, True, False for double-press (swallowed first True).
+
+        The controller drops the first press-down, delivering only the first release
+        followed by the second press-release. This is the 4th coalesced pattern.
+        """
+        detector, callback, scheduler = self._make_detector()
+        entity_data = {"id": "btn1", "name": "Test Button"}
+
+        mock_timer = MagicMock()
+        scheduler.return_value = mock_timer
+
+        with patch("custom_components.evon.coordinator.button_press.time.monotonic") as mock_time:
+            mock_time.return_value = 0.0
+            detector.handle_event("btn1", entity_data, False)  # orphan release (swallowed True)
+            mock_time.return_value = 0.2
+            detector.handle_event("btn1", entity_data, True)   # second press
+            mock_time.return_value = 0.4
+            detector.handle_event("btn1", entity_data, False)  # second release
+
+        detector.timeout("btn1", entity_data)
+
+        callback.assert_called_once_with("btn1", entity_data, "double_press")
 
     def test_cancel_all_timers(self):
         """cancel_all_timers should cancel pending timers and clear state."""
