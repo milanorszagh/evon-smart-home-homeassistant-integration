@@ -4,6 +4,8 @@
 
 **Commit messages:** Do not add Co-Authored-By lines to commit messages.
 
+**GitHub Releases:** Do NOT include the version number in the release title. HACS automatically prepends the tag name (e.g., `v1.19.2 - `), so including it in the title creates duplication like `v1.19.2 - v1.19.2 — Fix ...`. Use only a descriptive title, e.g., `--title "Fix double-click detection"`.
+
 This document provides critical information for AI agents working with this codebase.
 
 ## Project Overview
