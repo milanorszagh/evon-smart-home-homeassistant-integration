@@ -19,7 +19,7 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 
 | Device Type | Features |
 |-------------|----------|
-| **Lights** | On/off, brightness control, color temperature (RGBW lights) |
+| **Lights** | On/off, brightness control, color temperature (RGBW lights), relay outputs — L1144/L1244 (on/off only) |
 | **Light Groups** | Control multiple lights as a single entity |
 | **Blinds/Covers** | Open/close/stop, position, tilt angle |
 | **Blind Groups** | Control multiple blinds as a single entity |
@@ -30,7 +30,7 @@ Home Assistant custom integration for [Evon Smart Home](https://www.evon-smartho
 | **Air Quality** | CO2 levels, humidity (if available) |
 | **Valves** | Climate valve open/closed state |
 | **Temperature Sensors** | Room temperature readings |
-| **Switches (Relays)** | Controllable relay outputs (on/off) |
+| **Relay Outputs** | On/off light entities for relay modules (L1144, L1244) |
 | **Bathroom Radiators** | Electric heater control with timer |
 | **Scenes** | Trigger Evon-defined scenes from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
@@ -241,7 +241,8 @@ For local connections:
 - Brightness control (0-100%)
 - Color temperature control for RGBW lights (warm to cool white) *
 - Light Groups: Control multiple lights as a single entity
-- Non-dimmable lights can be configured to show as simple on/off switches
+- Relay outputs (L1144/L1244 modules) appear as on/off lights automatically
+- Dimmable lights can be configured as non-dimmable (useful for LED strips with PWM controllers)
 
 \* *RGBW color temperature support is untested - please report issues if you have RGBW Evon modules*
 
@@ -434,12 +435,13 @@ cards:
       # ... repeat for snapshot_2 through snapshot_10
 ```
 
-### Switches (Relays)
+### Relay Outputs
 
-Evon "switches" are **relay outputs** (`Base.bSwitch` / `SmartCOM.Light.Light` class) — not to be confused with physical wall buttons (Tasters), which use a different Evon class (`SmartCOM.Switch`) and are exposed as [event entities](#event-entities).
+Evon relay modules (`SmartCOM.Light.Light` / L1144, L1244) are exposed as **on/off light entities** (`ColorMode.ONOFF`) — no dimming, just on/off control. Not to be confused with physical wall buttons (Tasters), which use a different Evon class (`SmartCOM.Switch`) and are exposed as [event entities](#event-entities).
 
-- Controllable relay outputs (on/off)
-- Bathroom radiators with timer (turns off automatically after configured duration)
+### Bathroom Radiators
+
+- Electric heater control with timer (turns off automatically after configured duration)
 
 ---
 
@@ -554,9 +556,9 @@ automation:
         attribute: event_type
         to: "single_press"
     action:
-      - service: switch.toggle
+      - service: light.toggle
         target:
-          entity_id: switch.desk_lamp  # relay output entity
+          entity_id: light.desk_lamp  # relay output entity (on/off light)
 ```
 
 **Double-press to trigger a scene:**
@@ -692,6 +694,7 @@ logger:
 
 | Version | Changes |
 |---------|---------|
+| **1.19.3** | **Relay outputs as light entities (breaking change)** - Evon relay modules (`SmartCOM.Light.Light` / L1144, L1244) are now exposed as on/off light entities (`ColorMode.ONOFF`) instead of switches. Existing `switch.xxx` entities for relay outputs become `light.xxx` entities. |
 | **1.19.2** | **Fix double-click detection for 4th button pattern** - Physical button (Taster) double-click now correctly detected when the Evon controller swallows the first press-down event, sending `False, True, False` instead of the expected `True, False, True, False`. Previously this pattern was ignored and detected as a single press. Confirmed via raw WebSocket capture on hardware. |
 | **1.19.1** | **Fix switch (relay) 401 errors** - Relay switches (`Base.bSwitch`) now use `SwitchOn`/`SwitchOff` via WebSocket, same as lights. Previously switches were the only entity type forced to HTTP-only control, making them vulnerable to auth token issues. Also: reduced login backoff from 5 min to 1 min, removed physical buttons (`SmartCOM.Switch`) from control mappings (they're event-only), clarified relay vs. physical button naming throughout documentation. |
 | **1.19.0** | **Physical button (Taster) support** - Wall buttons exposed as HA event entities with press type detection (single, double, long press). Configurable double-click detection delay (0.2–1.4s, default 0.8s) in integration settings. WebSocket-only — requires real-time updates enabled. Device triggers and `evon_button_press` bus event for automations. Translations for all 10 languages. **Also:** WS control mappings for blind group commands, thread-safety fix for statistics import, 1164 tests. |

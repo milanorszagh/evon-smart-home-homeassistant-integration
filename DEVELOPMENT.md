@@ -43,7 +43,7 @@ custom_components/evon/
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality, WS diagnostics)
-├── switch.py            # Switch platform (relays, bathroom radiators)
+├── switch.py            # Switch platform (bathroom radiators)
 ├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
 ├── button.py            # Button platform (scenes)
@@ -397,7 +397,7 @@ coordinator/       # Integrates WebSocket with data updates
 | lights | `IsOn`, `ScaledBrightness`, `ColorTemp`, `MinColorTemperature`, `MaxColorTemperature` | `is_on`, `brightness`, `color_temp` |
 | blinds | `Position`, `Angle` | `position`, `angle` |
 | climates | `SetTemperature`, `ActualTemperature`, `ModeSaved`, `MainState`, `IsOn`, `Mode`, `Humidity`, `CoolingMode`, `DisableCooling`, + heating/cooling setpoints and limits | `target_temperature`, `current_temperature`, `mode_saved` (both `ModeSaved` and `MainState` map here), `humidity` |
-| switches | `IsOn`, `State` | `is_on` |
+| switches | *(no switch classes currently — relay outputs moved to lights)* | — |
 | home_states | `Active` | `active` |
 | bathroom_radiators | `Output`, `NextSwitchPoint` | `is_on`, `time_remaining` |
 | smart_meters | `P1`, `P2`, `P3`, `IL1-3`, `UL1N-3N`, `Frequency`, `Energy`, `Energy24h`, `EnergyDataDay/Month/Year`, `FeedInEnergy`, `FeedIn24h`, `FeedInDataMonth` | `power` (computed P1+P2+P3), per-phase values, energy totals |
@@ -574,7 +574,7 @@ All requests require: `Cookie: token=<token>`
 | Class Name | Type | Controllable |
 |------------|------|--------------|
 | `SmartCOM.Light.LightDim` | Dimmable light | Yes |
-| `SmartCOM.Light.Light` | Relay output (processed as **switch**) | Yes |
+| `SmartCOM.Light.Light` | Relay output (processed as **on/off light**) | Yes |
 | `SmartCOM.Light.DynamicRGBWLight` | RGBW light | Yes |
 | `SmartCOM.Light.LightGroup` | Light group | Yes |
 | `SmartCOM.Blind.Blind` | Blind/shutter | Yes |
@@ -657,7 +657,7 @@ The integration supports WebSocket-based control for faster response times. WS-n
 - `CallMethod IncreaseSetTemperature([])` / `DecreaseSetTemperature([])` for ±0.5°C
 - `CallMethod Base.ehThermostat.AllDayMode/AllNightMode/AllFreezeMode([])` for global preset changes
 
-**Switches (Relays):** Relay switches (`Base.bSwitch`) use `SwitchOn`/`SwitchOff` via WebSocket CallMethod, same as lights. HTTP fallback translates these to `AmznTurnOn`/`AmznTurnOff`. Note: physical wall buttons (`SmartCOM.Switch`) are event-only entities and have no control mappings.
+**Relay Outputs:** Relay modules (`SmartCOM.Light.Light`) are exposed as on/off light entities and use `SwitchOn`/`SwitchOff` via WebSocket CallMethod, same as dimmable lights. HTTP fallback translates these to `AmznTurnOn`/`AmznTurnOff`. Note: physical wall buttons (`SmartCOM.Switch`) are event-only entities and have no control mappings.
 
 **Fallback:** When WebSocket control fails or is unavailable, the integration automatically falls back to HTTP API.
 
@@ -1160,7 +1160,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1164 tests total
+Current coverage: 1161 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
