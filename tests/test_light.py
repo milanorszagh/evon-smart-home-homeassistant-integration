@@ -81,6 +81,25 @@ async def test_light_set_brightness(hass, mock_config_entry_v2, mock_evon_api_cl
 
 
 @pytest.mark.asyncio
+async def test_light_brightness_minimum_clamp(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Test that brightness=1 (HA min) maps to 1% on Evon, not 0%."""
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Set brightness to 1 (HA minimum non-zero brightness)
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {"entity_id": "light.living_room_light", "brightness": 1},
+        blocking=True,
+    )
+
+    # round(1 * 100 / 255) = round(0.392) = 0, but we clamp to min 1
+    mock_evon_api_class.set_light_brightness.assert_called_once_with("light_1", 1)
+
+
+@pytest.mark.asyncio
 async def test_light_optimistic_state(hass, mock_config_entry_v2, mock_evon_api_class):
     """Test that optimistic state updates are applied immediately."""
     mock_config_entry_v2.add_to_hass(hass)

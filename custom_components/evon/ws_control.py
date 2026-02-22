@@ -61,12 +61,14 @@ Climate Control:
         - CallMethod Base.ehThermostat.AllNightMode([])  → eco for all
         - CallMethod Base.ehThermostat.AllFreezeMode([]) → away for all
 
-Switch Control (relay outputs, Base.bSwitch):
+Switch Control (relay outputs):
+    - Base.bSwitch was removed as dead code — no real devices use it.
+    - SmartCOM.Light.Light is the actual class for relay outputs (now on the light platform).
+    - SWITCH_MAPPINGS retained for potential future switch classes.
     - SwitchOn/SwitchOff: Explicit on/off via CallMethod (same as lights)
     - HTTP fallback translates SwitchOn→AmznTurnOn, SwitchOff→AmznTurnOff
 
-    Note: "Switches" in Evon are relay outputs (Base.bSwitch, class SmartCOM.Light.Light).
-    Physical wall buttons (Tasters) use class SmartCOM.Switch and are event-only entities
+    Note: Physical wall buttons (Tasters) use class SmartCOM.Switch and are event-only entities
     — they are NOT controllable and have no control mappings.
 """
 
@@ -169,9 +171,9 @@ CLIMATE_MAPPINGS: dict[str, WsControlMapping] = {
     ),
 }
 
-# Switch control mappings (Base.bSwitch)
-# SwitchOn/SwitchOff via WebSocket CallMethod — same as lights.
-# Previously empty (forced HTTP fallback) but WS works for relay switches.
+# Switch control mappings — placeholder for future switch classes.
+# Base.bSwitch was removed as dead code (no real devices use it).
+# SmartCOM.Light.Light relay outputs are on the light platform instead.
 SWITCH_MAPPINGS: dict[str, WsControlMapping] = {
     "SwitchOn": WsControlMapping(None, "SwitchOn", None),
     "SwitchOff": WsControlMapping(None, "SwitchOff", None),
@@ -213,8 +215,6 @@ CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
     # Climate
     EVON_CLASS_CLIMATE: CLIMATE_MAPPINGS,
     EVON_CLASS_CLIMATE_UNIVERSAL: CLIMATE_MAPPINGS,
-    # Switches (relay outputs)
-    "Base.bSwitch": SWITCH_MAPPINGS,
     # Home states
     EVON_CLASS_HOME_STATE: HOME_STATE_MAPPINGS,
     # Bathroom radiators

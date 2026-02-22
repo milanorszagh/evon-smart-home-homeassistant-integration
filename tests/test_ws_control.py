@@ -209,7 +209,8 @@ class TestClassControlMappings:
             assert CLASS_CONTROL_MAPPINGS[cls] is CLIMATE_MAPPINGS
 
     def test_switch_classes(self):
-        assert CLASS_CONTROL_MAPPINGS["Base.bSwitch"] is SWITCH_MAPPINGS
+        # Base.bSwitch removed as dead code — no real devices use it
+        assert "Base.bSwitch" not in CLASS_CONTROL_MAPPINGS
         # Physical buttons are event-only, not in control mappings
         assert EVON_CLASS_PHYSICAL_BUTTON not in CLASS_CONTROL_MAPPINGS
 

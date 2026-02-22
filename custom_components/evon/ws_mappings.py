@@ -54,7 +54,6 @@ CLASS_TO_TYPE: dict[str, str] = {
     EVON_CLASS_CLIMATE: ENTITY_TYPE_CLIMATES,
     EVON_CLASS_CLIMATE_UNIVERSAL: ENTITY_TYPE_CLIMATES,
     EVON_CLASS_PHYSICAL_BUTTON: ENTITY_TYPE_BUTTON_EVENTS,
-    "Base.bSwitch": ENTITY_TYPE_SWITCHES,
     EVON_CLASS_HOME_STATE: ENTITY_TYPE_HOME_STATES,
     EVON_CLASS_BATHROOM_RADIATOR: ENTITY_TYPE_BATHROOM_RADIATORS,
     EVON_CLASS_SMART_METER: ENTITY_TYPE_SMART_METERS,
@@ -231,6 +230,15 @@ def get_entity_type(class_name: str) -> str | None:
     Returns:
         The entity type (e.g., ENTITY_TYPE_LIGHTS, ENTITY_TYPE_BLINDS) or None if unknown.
     """
+    # Base.bSwitch is legacy dead code — no real devices use it.
+    # SmartCOM.Light.Light is the actual class for relay outputs (light platform).
+    if class_name == "Base.bSwitch":
+        _LOGGER.warning(
+            "Encountered legacy class Base.bSwitch (instance will be ignored). "
+            "Real relay outputs use SmartCOM.Light.Light on the light platform"
+        )
+        return None
+
     # Try exact match first
     if class_name in CLASS_TO_TYPE:
         return CLASS_TO_TYPE[class_name]
