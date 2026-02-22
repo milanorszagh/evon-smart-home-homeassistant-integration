@@ -936,7 +936,7 @@ Unlike physical switches, security doors and intercoms **DO expose real-time sta
 |-------|-------------|
 | `Security.Door` | Entry doors with intercom integration |
 | `Security.Intercom.2N.Intercom2N` | 2N branded intercoms |
-| `Base.bSwitch` (Intercom.DoorSwitch) | Doorbell button on intercom |
+| `Base.bSwitch` (Intercom.DoorSwitch) | Doorbell button sub-instance on intercom (not the legacy Base.bSwitch relay class) |
 
 **Security.Door Properties:**
 | Property | Type | Description |

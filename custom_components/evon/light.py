@@ -154,7 +154,7 @@ class EvonLight(EvonEntity, LightEntity):
         if data:
             # Evon uses 0-100, Home Assistant uses 0-255
             evon_brightness = data.get("brightness", 0)
-            return int(evon_brightness * 255 / 100)
+            return round(evon_brightness * 255 / 100)
         return None
 
     @property

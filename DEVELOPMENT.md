@@ -441,6 +441,8 @@ CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0      # Wait for WS image_path update after Ima
 IMAGE_FETCH_TIMEOUT = 10               # Timeout for fetching images from Evon server (seconds)
 ```
 
+**Settling period usage:** `OPTIMISTIC_SETTLING_PERIOD` (2.5s) is applied in `_handle_coordinator_update` for lights, switches (relays), climate, and covers. During this window, coordinator updates are completely ignored to prevent UI flicker from intermediate WebSocket states (e.g., Evon's light fade-out animation 0→target, relay switching delays, or stale HTTP safety-net polls). `OPTIMISTIC_SETTLING_PERIOD_SHORT` (1.0s) is used only for bathroom radiators (no animation, just response delay). Entities without optimistic state (binary sensors, event entities, sensors) do not need settling periods.
+
 **Note:** The setting is inverted - `http_only = False` means WebSocket is enabled. This allows users to disable WebSocket (by checking "Use HTTP API only") if they experience connection issues, while keeping WebSocket as the recommended default.
 
 ### Implementation Notes

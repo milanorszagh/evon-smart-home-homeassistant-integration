@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 from typing import Any
@@ -10,7 +11,6 @@ from urllib.parse import urlparse
 from homeassistant import config_entries
 from homeassistant.components.repairs import RepairsFlow
 from homeassistant.config_entries import ConfigFlowResult
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -30,12 +30,15 @@ from .const import (
     CONF_DEBUG_COORDINATOR,
     CONF_DEBUG_WEBSOCKET,
     CONF_ENGINE_ID,
+    CONF_HOST,
     CONF_HTTP_ONLY,
     CONF_MAX_RECORDING_DURATION,
     CONF_NON_DIMMABLE_LIGHTS,
+    CONF_PASSWORD,
     CONF_RECORDING_OUTPUT_FORMAT,
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
+    CONF_USERNAME,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
@@ -114,17 +117,15 @@ def normalize_host(host: str) -> str:
     if len(hostname) > MAX_HOST_LENGTH:
         raise InvalidHostError("Hostname is too long")
 
-    # Validate hostname format (basic check for valid characters)
-    # Allows: alphanumeric, dots, hyphens (for hostnames)
-    # Also allows valid IPv4 addresses
-    if hostname and not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$|^\d{1,3}(\.\d{1,3}){3}$", hostname):
-        raise InvalidHostError("Invalid hostname format")
-
-    # Validate IPv4 octets are in range 0-255
-    if hostname and re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname):
-        octets = hostname.split(".")
-        if any(int(o) > 255 for o in octets):
-            raise InvalidHostError("Invalid IPv4 address: octet out of range")
+    # Validate hostname format
+    if hostname:
+        # Check if it's a valid IP address (v4 or v6)
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            # Not an IP - validate as hostname
+            if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$", hostname):
+                raise InvalidHostError("Invalid hostname format") from None
 
     # Validate port if specified (must be 1-65535)
     try:

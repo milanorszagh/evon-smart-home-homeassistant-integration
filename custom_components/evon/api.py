@@ -587,6 +587,11 @@ class EvonApi:
         """
         from .ws_control import get_ws_control_mapping
 
+        # Capture ws_client reference to avoid race with shutdown clearing self._ws_client
+        ws = self._ws_client
+        if ws is None or not ws.is_connected:
+            return False
+
         class_name = self._instance_classes.get(instance_id, "")
         if not class_name:
             _LOGGER.debug("WS control: No class found for instance %s, using HTTP", instance_id)
@@ -608,9 +613,7 @@ class EvonApi:
                     new_position,
                     class_name,
                 )
-                result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                    instance_id, "MoveToPosition", [cached_angle, new_position], False
-                )
+                result = await ws.call_method(instance_id, "MoveToPosition", [cached_angle, new_position], False)
                 _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
 
@@ -628,9 +631,7 @@ class EvonApi:
                     cached_position,
                     class_name,
                 )
-                result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                    instance_id, "MoveToPosition", [new_angle, cached_position], False
-                )
+                result = await ws.call_method(instance_id, "MoveToPosition", [new_angle, cached_position], False)
                 _LOGGER.debug("WS control: MoveToPosition result = %s", result)
                 return result
 
@@ -645,9 +646,7 @@ class EvonApi:
             _LOGGER.debug(
                 "WS control: SetValue %s.%s = %s (class: %s)", instance_id, mapping.property_name, value, class_name
             )
-            result = await self._ws_client.set_value(  # type: ignore[union-attr]
-                instance_id, mapping.property_name, value
-            )
+            result = await ws.set_value(instance_id, mapping.property_name, value)
             _LOGGER.debug("WS control: SetValue result = %s", result)
             return result
         else:
@@ -661,9 +660,7 @@ class EvonApi:
                 class_name,
                 mapping.fire_and_forget,
             )
-            result = await self._ws_client.call_method(  # type: ignore[union-attr]
-                instance_id, mapping.method_name, method_params, mapping.fire_and_forget
-            )
+            result = await ws.call_method(instance_id, mapping.method_name, method_params, mapping.fire_and_forget)
             _LOGGER.debug("WS control: CallMethod result = %s", result)
             return result
 
@@ -676,13 +673,13 @@ class EvonApi:
         Returns:
             True if it's a blind class, False otherwise.
         """
-        from .const import EVON_CLASS_BLIND, EVON_CLASS_BLIND_GROUP
+        from .const import EVON_CLASS_BLIND, EVON_CLASS_BLIND_BASE, EVON_CLASS_BLIND_EH, EVON_CLASS_BLIND_GROUP
 
         blind_classes = {
             EVON_CLASS_BLIND,
             EVON_CLASS_BLIND_GROUP,
-            "Base.bBlind",
-            "Base.ehBlind",
+            EVON_CLASS_BLIND_BASE,
+            EVON_CLASS_BLIND_EH,
         }
         return class_name in blind_classes
 
@@ -987,21 +984,29 @@ class EvonApi:
         Returns:
             The image bytes, or None if fetch failed
         """
-        try:
-            url = f"{self._host}{image_path}"
-            token = await self._ensure_token()
-            session = await self._get_session()
-            cookies = {"token": token}
-            timeout = aiohttp.ClientTimeout(total=IMAGE_FETCH_TIMEOUT)
+        for attempt in range(2):
+            try:
+                url = f"{self._host}{image_path}"
+                token = await self._ensure_token()
+                session = await self._get_session()
+                cookies = {"token": token}
+                timeout = aiohttp.ClientTimeout(total=IMAGE_FETCH_TIMEOUT)
 
-            async with session.get(url, cookies=cookies, timeout=timeout) as resp:
-                if resp.status == 200:
-                    return await resp.read()
-                _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)
-        except aiohttp.ClientError as err:
-            _LOGGER.debug("Failed to fetch image: %s", err)
-        except EvonConnectionError:
-            _LOGGER.debug("Failed to fetch image: session error")
-        except Exception as err:
-            _LOGGER.warning("Unexpected error fetching image: %s", err)
+                async with session.get(url, cookies=cookies, timeout=timeout) as resp:
+                    if resp.status == 200:
+                        return await resp.read()
+                    if resp.status in (302, 401) and attempt == 0:
+                        _LOGGER.debug("Image fetch got %d, refreshing token and retrying", resp.status)
+                        async with self._token_lock:
+                            self._token = None
+                            await self.login()
+                        continue
+                    _LOGGER.debug("Failed to fetch image: HTTP %d", resp.status)
+            except aiohttp.ClientError as err:
+                _LOGGER.debug("Failed to fetch image: %s", err)
+            except EvonConnectionError:
+                _LOGGER.debug("Failed to fetch image: session error")
+            except Exception as err:
+                _LOGGER.warning("Unexpected error fetching image: %s", err)
+            break
         return None

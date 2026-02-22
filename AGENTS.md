@@ -725,8 +725,36 @@ def _handle_coordinator_update(self):
 
 1. **Empty device names**: Skip instances where `Name` is empty - these are templates/base classes
 2. **Token expiry**: Tokens expire; implement retry logic with re-authentication
-3. **Brightness values**: Evon uses 0-100, Home Assistant uses 0-255 - convert appropriately
+3. **Brightness values**: Evon uses 0-100, Home Assistant uses 0-255 — convert with `round()` in both directions for consistency. Minimum brightness is clamped to 1% (Evon) to prevent HA brightness=1 mapping to 0%.
 4. **Position inversion**: Evon and HA have opposite conventions for cover position
+
+## Architecture Decisions (Do Not Change)
+
+These are intentional design choices. Do NOT flag them as bugs or attempt to "fix" them during code reviews:
+
+1. **Scenes not in `CLASS_TO_TYPE` (ws_mappings.py)**: `EVON_CLASS_SCENE` is intentionally omitted. Scenes are fire-and-forget button entities (`button.py`) with no observable state — they don't need WebSocket subscriptions.
+
+2. **HVAC COOL and HEAT both call comfort mode (climate.py)**: Correct behavior. The heating/cooling distinction is controlled by the global Season Mode (per-system `Base.ehThermostat.IsCool`), not per-room HVAC mode. Setting any non-OFF mode restores the comfort preset.
+
+3. **`ENTITY_TYPE_SWITCHES` entries in `SUBSCRIBE_PROPERTIES`/`PROPERTY_MAPPINGS` (ws_mappings.py)**: Retained for future switch classes but currently unreachable — no class in `CLASS_TO_TYPE` maps to this entity type. `Base.bSwitch` was removed as dead code; `SmartCOM.Light.Light` relay outputs are on the light platform.
+
+4. **Duplicate WebSocket status sensors (binary_sensor.py + sensor.py)**: Intentional — the binary sensor provides simple on/off for automations, while the text sensor provides rich diagnostics (uptime, latency, reconnect count). Both serve different use cases.
+
+5. **`energy_today` treating missing data as 0 kWh (coordinator)**: Intentional. Changing this would alter behavior for existing users' energy dashboards. The current behavior is the safer default.
+
+6. **`_sequence_id` growing unbounded (ws_client.py)**: Safe. Python handles arbitrary-precision integers. The counter resets to 1 on every reconnect. Only relevant for connections lasting months without a single reconnect — unrealistic.
+
+7. **Settling period not on all entity types**: Settling periods (`OPTIMISTIC_SETTLING_PERIOD`) are applied to lights, switches, climate, and covers — entities where intermediate WebSocket states cause visible UI flicker. Entities like binary sensors and event entities don't need them because they have no optimistic state.
+
+8. **`cover.py` uses `asyncio.sleep(COVER_STOP_DELAY)` inline**: Intentional 0.3s anti-flicker delay for toggle-style blind control. The `if self.hass is not None` guard after sleep is sufficient — the sleep is too short for CancelledError to be a practical concern.
+
+9. **`_extract_instance_id_from_unique_id` is a 123-line reverse parser (__init__.py)**: Intentional — changing the unique_id format would break existing installations. The function handles all known formats correctly.
+
+10. **Login logic duplicated between `EvonApi.login()` and `EvonWsClient._login()`**: The two paths have subtle differences (WS accepts token on 302 redirect, different header handling for remote connections). Unifying them risks breaking authentication.
+
+11. **Climate substring match `EVON_CLASS_CLIMATE_UNIVERSAL not in class_name`**: Intentionally lenient to handle potential Evon subclass variants (e.g., `Heating.ClimateControlUniversal.V2`).
+
+12. **Source-inspection tests using `ast.parse()` (test_processors.py)**: Camera/recorder code can't be imported in the test environment due to missing HA dependencies. Source inspection is the accepted tradeoff.
 
 ## Environment Variables (MCP Server)
 
@@ -882,6 +910,7 @@ Tests are in the `tests/` directory (1160 tests):
 - `test_button_events.py` - Physical button event entity and press detection tests
 - `test_camera.py` - Camera entity tests (including snapshot fetch, error handling)
 - `test_camera_recorder.py` - Camera recording tests (lifecycle, encoding, duration)
+- `test_event.py` - Event entity tests (doorbell ring detection)
 - `test_image.py` - Image entity tests (including fetch errors, snapshot handling)
 
 **Unit tests (no HA dependency):**

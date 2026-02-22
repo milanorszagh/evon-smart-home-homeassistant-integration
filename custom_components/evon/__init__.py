@@ -96,7 +96,7 @@ def _apply_debug_logging(entry: ConfigEntry) -> None:
     coord_logger = logging.getLogger("custom_components.evon.coordinator")
     coord_logger.setLevel(logging.DEBUG if debug_coord else logging.INFO)
 
-    _LOGGER.info(
+    _LOGGER.debug(
         "Debug logging: API=%s, WebSocket=%s, Coordinator=%s",
         "DEBUG" if debug_api else "INFO",
         "DEBUG" if debug_ws else "INFO",
@@ -220,6 +220,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api": api,
         "coordinator": coordinator,
         "cameras": {},  # instance_id -> EvonCamera, populated by camera platform
+        "last_options": dict(entry.options),
     }
 
     # Apply debug logging settings
@@ -704,8 +705,20 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     # Apply debug logging immediately (takes effect without reload)
     _apply_debug_logging(entry)
 
-    # Reload integration to apply all other option changes
-    await hass.config_entries.async_reload(entry.entry_id)
+    # Skip reload if only debug logging options changed
+    debug_keys = {CONF_DEBUG_API, CONF_DEBUG_WEBSOCKET, CONF_DEBUG_COORDINATOR}
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    old_options = entry_data.get("last_options", {})
+
+    old_non_debug = {k: v for k, v in old_options.items() if k not in debug_keys}
+    new_non_debug = {k: v for k, v in entry.options.items() if k not in debug_keys}
+
+    if old_non_debug != new_non_debug:
+        await hass.config_entries.async_reload(entry.entry_id)
+    else:
+        # Update stored options for next comparison
+        if isinstance(entry_data, dict):
+            entry_data["last_options"] = dict(entry.options)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

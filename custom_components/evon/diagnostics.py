@@ -6,18 +6,21 @@ from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_ENGINE_ID,
     CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
     DOMAIN,
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_BLINDS,
+    ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_CLIMATES,
+    ENTITY_TYPE_HOME_STATES,
     ENTITY_TYPE_INTERCOMS,
     ENTITY_TYPE_LIGHTS,
     ENTITY_TYPE_SCENES,
@@ -55,6 +58,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         ENTITY_TYPE_SECURITY_DOORS,
         ENTITY_TYPE_INTERCOMS,
         ENTITY_TYPE_CAMERAS,
+        ENTITY_TYPE_BUTTON_EVENTS,
+        ENTITY_TYPE_HOME_STATES,
     ]
 
     # Get device counts from coordinator data
@@ -103,6 +108,8 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         ENTITY_TYPE_SECURITY_DOORS: [("id", "id"), ("name", "name"), ("is_locked", "is_locked")],
         ENTITY_TYPE_INTERCOMS: [("id", "id"), ("name", "name")],
         ENTITY_TYPE_CAMERAS: [("id", "id"), ("name", "name"), ("error", "error")],
+        ENTITY_TYPE_BUTTON_EVENTS: [("id", "id"), ("name", "name")],
+        ENTITY_TYPE_HOME_STATES: [("id", "id"), ("name", "name"), ("active", "active")],
     }
 
     # Build device summaries (without sensitive data)

@@ -22,6 +22,8 @@ from .const import (
     EVON_CLASS_AIR_QUALITY,
     EVON_CLASS_BATHROOM_RADIATOR,
     EVON_CLASS_BLIND,
+    EVON_CLASS_BLIND_BASE,
+    EVON_CLASS_BLIND_EH,
     EVON_CLASS_BLIND_GROUP,
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
@@ -29,6 +31,7 @@ from .const import (
     EVON_CLASS_INTERCOM_2N,
     EVON_CLASS_INTERCOM_2N_CAM,
     EVON_CLASS_LIGHT,
+    EVON_CLASS_LIGHT_BASE,
     EVON_CLASS_LIGHT_DIM,
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
@@ -45,12 +48,12 @@ CLASS_TO_TYPE: dict[str, str] = {
     EVON_CLASS_LIGHT: ENTITY_TYPE_LIGHTS,
     EVON_CLASS_LIGHT_DIM: ENTITY_TYPE_LIGHTS,
     EVON_CLASS_LIGHT_GROUP: ENTITY_TYPE_LIGHTS,
-    "Base.bLight": ENTITY_TYPE_LIGHTS,
+    EVON_CLASS_LIGHT_BASE: ENTITY_TYPE_LIGHTS,
     EVON_CLASS_LIGHT_RGBW: ENTITY_TYPE_LIGHTS,
     EVON_CLASS_BLIND: ENTITY_TYPE_BLINDS,
     EVON_CLASS_BLIND_GROUP: ENTITY_TYPE_BLINDS,
-    "Base.bBlind": ENTITY_TYPE_BLINDS,
-    "Base.ehBlind": ENTITY_TYPE_BLINDS,
+    EVON_CLASS_BLIND_BASE: ENTITY_TYPE_BLINDS,
+    EVON_CLASS_BLIND_EH: ENTITY_TYPE_BLINDS,
     EVON_CLASS_CLIMATE: ENTITY_TYPE_CLIMATES,
     EVON_CLASS_CLIMATE_UNIVERSAL: ENTITY_TYPE_CLIMATES,
     EVON_CLASS_PHYSICAL_BUTTON: ENTITY_TYPE_BUTTON_EVENTS,
@@ -63,6 +66,10 @@ CLASS_TO_TYPE: dict[str, str] = {
     EVON_CLASS_INTERCOM_2N: ENTITY_TYPE_INTERCOMS,
     EVON_CLASS_INTERCOM_2N_CAM: ENTITY_TYPE_CAMERAS,
 }
+
+# Note: EVON_CLASS_SCENE (System.SceneApp) is intentionally NOT in CLASS_TO_TYPE.
+# Scenes are fire-and-forget button entities with no observable state properties —
+# they don't need WebSocket subscriptions or real-time updates.
 
 # Properties to subscribe for each entity type
 # These are the WebSocket property names
@@ -95,6 +102,9 @@ SUBSCRIBE_PROPERTIES: dict[str, list[str]] = {
         "MinSetValueCool",
         "MaxSetValueCool",
     ],
+    # ENTITY_TYPE_SWITCHES is retained for future switch classes.
+    # Currently unreachable — no class in CLASS_TO_TYPE maps to ENTITY_TYPE_SWITCHES
+    # (Base.bSwitch was removed as dead code, SmartCOM.Light.Light is on the light platform).
     ENTITY_TYPE_SWITCHES: ["IsOn", "State"],
     ENTITY_TYPE_BUTTON_EVENTS: ["IsOn"],
     ENTITY_TYPE_HOME_STATES: ["Active"],
@@ -157,6 +167,9 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "CoolingMode": "is_cooling",
         "Humidity": "humidity",
     },
+    # ENTITY_TYPE_SWITCHES is retained for future switch classes.
+    # Currently unreachable — no class in CLASS_TO_TYPE maps to ENTITY_TYPE_SWITCHES
+    # (Base.bSwitch was removed as dead code, SmartCOM.Light.Light is on the light platform).
     ENTITY_TYPE_SWITCHES: {
         "IsOn": "is_on",
         "State": "is_on",  # Some switches use State instead

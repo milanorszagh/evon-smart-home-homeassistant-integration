@@ -1,11 +1,16 @@
 """Constants for the Evon Smart Home integration."""
 
+from __future__ import annotations
+
+from homeassistant.const import (  # noqa: F401  # re-exported for use by other modules
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+)
+
 DOMAIN = "evon"
 
 # Configuration keys
-CONF_HOST = "host"
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_SYNC_AREAS = "sync_areas"
 CONF_CONNECTION_TYPE = "connection_type"
@@ -77,7 +82,10 @@ EVON_CLASS_BATHROOM_RADIATOR = "Heating.BathroomRadiator"
 EVON_CLASS_SCENE = "System.SceneApp"
 EVON_CLASS_LIGHT_RGBW = "SmartCOM.Light.DynamicRGBWLight"
 EVON_CLASS_LIGHT_GROUP = "SmartCOM.Light.LightGroup"
+EVON_CLASS_LIGHT_BASE = "Base.bLight"
 EVON_CLASS_BLIND_GROUP = "SmartCOM.Blind.BlindGroup"
+EVON_CLASS_BLIND_BASE = "Base.bBlind"
+EVON_CLASS_BLIND_EH = "Base.ehBlind"
 EVON_CLASS_SECURITY_DOOR = "Security.Door"
 EVON_CLASS_INTERCOM_2N = "Security.Intercom.2N.Intercom2N"
 EVON_CLASS_INTERCOM_2N_CAM = "Security.Intercom.2N.Intercom2NCam"

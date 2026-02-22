@@ -646,6 +646,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._handle_button_press(instance_id, updated_entity, value)
 
         # Atomically replace in the entities list AND _data_index
+        # INVARIANT: No `await` must be added between the data_snapshot fetch (line ~598)
+        # and this list mutation. The single-threaded event loop ensures no interleaving,
+        # but adding an `await` would open a TOCTOU race with HTTP poll replacing self.data.
         entities_list = data_snapshot.get(entity_type)
         if entities_list and isinstance(entities_list, list):
             for idx, e in enumerate(entities_list):

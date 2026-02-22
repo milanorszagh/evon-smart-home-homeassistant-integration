@@ -158,7 +158,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self._optimistic_option = None
                 self._optimistic_state_set_at = None
 
-        self.async_write_ha_state()
+        super()._handle_coordinator_update()
 
 
 class EvonSeasonModeSelect(EvonEntity, SelectEntity):
@@ -259,4 +259,4 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
                 self._optimistic_option = None
                 self._optimistic_state_set_at = None
 
-        self.async_write_ha_state()
+        super()._handle_coordinator_update()

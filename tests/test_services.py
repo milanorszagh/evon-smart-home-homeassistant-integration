@@ -224,8 +224,11 @@ class TestServiceIntegration:
         )
 
         # Service iterates through lights and turns off those that are on
-        # (the mock data has light_1 with is_on=True)
-        mock_evon_api_class.turn_off_light.assert_called()
+        # Mock data has light_1, light_group_1, rgbw_light_1 with is_on=True
+        assert mock_evon_api_class.turn_off_light.call_count == 3
+        mock_evon_api_class.turn_off_light.assert_any_call("light_1")
+        mock_evon_api_class.turn_off_light.assert_any_call("light_group_1")
+        mock_evon_api_class.turn_off_light.assert_any_call("rgbw_light_1")
 
     @pytest.mark.asyncio
     async def test_all_blinds_close_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -245,8 +248,10 @@ class TestServiceIntegration:
         )
 
         # Service iterates through all blinds and closes them
-        # (the mock data has blind_1)
-        mock_evon_api_class.close_blind.assert_called()
+        # Mock data has blind_1 and blind_group_1
+        assert mock_evon_api_class.close_blind.call_count == 2
+        mock_evon_api_class.close_blind.assert_any_call("blind_1")
+        mock_evon_api_class.close_blind.assert_any_call("blind_group_1")
 
     @pytest.mark.asyncio
     async def test_all_blinds_open_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -266,29 +271,34 @@ class TestServiceIntegration:
         )
 
         # Service iterates through all blinds and opens them
-        mock_evon_api_class.open_blind.assert_called()
+        # Mock data has blind_1 and blind_group_1
+        assert mock_evon_api_class.open_blind.call_count == 2
+        mock_evon_api_class.open_blind.assert_any_call("blind_1")
+        mock_evon_api_class.open_blind.assert_any_call("blind_group_1")
 
     @pytest.mark.asyncio
     async def test_reconnect_websocket_service(self, hass, mock_config_entry_v2, mock_evon_api_class):
-        """Test the reconnect_websocket service."""
+        """Test the reconnect_websocket service with http_only=True skips WS reconnect."""
+        from unittest.mock import AsyncMock, patch
+
         mock_config_entry_v2.add_to_hass(hass)
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
         await hass.async_block_till_done()
 
-        # Call reconnect service - should not raise
-        await hass.services.async_call(
-            "evon",
-            "reconnect_websocket",
-            {},
-            blocking=True,
-        )
+        coordinator = hass.data["evon"][mock_config_entry_v2.entry_id]["coordinator"]
 
-        # Verify the WS client reconnect was triggered
-        # The service handler calls ws_client.reconnect() for entries with WS enabled
-        # Since our test config has http_only=True, the service still completes
-        # but we verify no error was raised and the service handler executed
-        entry_data = hass.data["evon"][mock_config_entry_v2.entry_id]
-        assert "coordinator" in entry_data
+        with patch.object(coordinator, "async_shutdown_websocket", new_callable=AsyncMock) as mock_shutdown:
+            # Call reconnect service - should not raise
+            await hass.services.async_call(
+                "evon",
+                "reconnect_websocket",
+                {},
+                blocking=True,
+            )
+
+            # Since test config has http_only=True, use_websocket is False,
+            # so async_shutdown_websocket should NOT be called
+            mock_shutdown.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_services_registered_after_setup(self, hass, mock_config_entry_v2, mock_evon_api_class):

@@ -47,6 +47,7 @@ rejected because:
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 from homeassistant.components.cover import (
@@ -67,6 +68,7 @@ from .const import (
     COVER_STOP_DELAY,
     DOMAIN,
     ENTITY_TYPE_BLINDS,
+    OPTIMISTIC_SETTLING_PERIOD,
     OPTIMISTIC_STATE_TOLERANCE,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -465,13 +467,21 @@ class EvonCover(EvonEntity, CoverEntity):
         # Only clear optimistic state when coordinator data matches expected value
         data = self._get_data()
         if data:
-            # Update API caches for WebSocket control
-            # Position is Evon native (0=open, 100=closed)
+            # Always update API caches for WebSocket control, even during settling period
             evon_position = data.get("position", 0)
             evon_angle = data.get("angle", 0)
             self._api.update_blind_position(self._instance_id, evon_position)
             self._api.update_blind_angle(self._instance_id, evon_angle)
 
+        # During settling period, ignore coordinator updates to prevent UI flicker
+        # from intermediate position values during blind movement
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+        ):
+            return
+
+        if data:
             all_cleared = True
 
             if self._optimistic_position is not None:

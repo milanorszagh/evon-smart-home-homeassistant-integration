@@ -202,6 +202,10 @@ class EvonWsClient:
         if self.is_connected:
             return True
 
+        if self._password is None:
+            _LOGGER.error("Cannot connect: credentials cleared after stop()")
+            return False
+
         # Reset sequence ID on each connection to avoid stale counters
         self._sequence_id = 1
 

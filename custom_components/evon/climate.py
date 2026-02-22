@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -29,6 +30,7 @@ from .const import (
     ENTITY_TYPE_CLIMATES,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
+    OPTIMISTIC_SETTLING_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -241,6 +243,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
             if hvac_mode == HVACMode.OFF:
                 await self._api.set_climate_freeze_protection_mode(self._instance_id)
             else:
+                # Both HEAT and COOL map to comfort mode because the heating/cooling
+                # distinction is controlled by the global Season Mode (per-system),
+                # not per-room HVAC mode. Setting to non-OFF restores comfort preset.
                 await self._api.set_climate_comfort_mode(self._instance_id)
         except EvonApiError:
             self._optimistic_hvac_mode = None
@@ -303,6 +308,15 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        # During settling period, completely ignore coordinator updates
+        # This prevents UI flicker from stale HTTP safety-net polls or
+        # intermediate WebSocket states overwriting optimistic values
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+        ):
+            return
+
         # Only clear optimistic state when coordinator data matches expected value
         data = self._get_data()
         if data:

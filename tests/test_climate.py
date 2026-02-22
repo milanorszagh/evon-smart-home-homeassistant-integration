@@ -193,23 +193,24 @@ async def test_climate_cooling_mode_preset(hass, mock_config_entry_v2, mock_evon
     MOCK_INSTANCE_DETAILS["climate_1"]["ModeSaved"] = 7  # Comfort in cooling mode
     MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = True
 
-    mock_config_entry_v2.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
-    await hass.async_block_till_done()
+    try:
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
 
-    state = hass.states.get("climate.living_room_climate")
-    assert state is not None
+        state = hass.states.get("climate.living_room_climate")
+        assert state is not None
 
-    # ModeSaved 7 in cooling mode should map to "comfort"
-    assert state.attributes.get("preset_mode") == "comfort"
-    # Season mode should be cooling
-    assert state.attributes.get("season_mode") == "cooling"
-    # When IsOn is True and in cooling mode, hvac_action should be "cooling"
-    assert state.attributes.get("hvac_action") == "cooling"
-
-    # Reset mock data for other tests
-    MOCK_INSTANCE_DETAILS["climate_1"]["ModeSaved"] = 4
-    MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
+        # ModeSaved 7 in cooling mode should map to "comfort"
+        assert state.attributes.get("preset_mode") == "comfort"
+        # Season mode should be cooling
+        assert state.attributes.get("season_mode") == "cooling"
+        # When IsOn is True and in cooling mode, hvac_action should be "cooling"
+        assert state.attributes.get("hvac_action") == "cooling"
+    finally:
+        # Reset mock data for other tests
+        MOCK_INSTANCE_DETAILS["climate_1"]["ModeSaved"] = 4
+        MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
 
 
 @pytest.mark.asyncio
@@ -313,20 +314,21 @@ async def test_climate_hvac_modes_cooling_enabled(hass, mock_config_entry_v2, mo
     MOCK_INSTANCE_DETAILS["climate_1"]["DisableCooling"] = False
     MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = True
 
-    mock_config_entry_v2.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
-    await hass.async_block_till_done()
+    try:
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
 
-    state = hass.states.get("climate.living_room_climate")
-    assert state is not None
-    hvac_modes = state.attributes.get("hvac_modes")
-    assert "heat" in hvac_modes
-    assert "cool" in hvac_modes
-    assert "off" in hvac_modes
-
-    # Reset mock data for other tests
-    MOCK_INSTANCE_DETAILS["climate_1"].pop("DisableCooling", None)
-    MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
+        state = hass.states.get("climate.living_room_climate")
+        assert state is not None
+        hvac_modes = state.attributes.get("hvac_modes")
+        assert "heat" in hvac_modes
+        assert "cool" in hvac_modes
+        assert "off" in hvac_modes
+    finally:
+        # Reset mock data for other tests
+        MOCK_INSTANCE_DETAILS["climate_1"].pop("DisableCooling", None)
+        MOCK_INSTANCE_DETAILS["climate_1"]["CoolingMode"] = False
 
 
 @pytest.mark.asyncio
