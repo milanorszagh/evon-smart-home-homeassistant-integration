@@ -24,6 +24,8 @@ def process_switches(
     Returns:
         List of processed switch data dictionaries
     """
-    # No switch classes currently — SmartCOM.Light.Light moved to light platform.
-    # Kept as a placeholder for future switch-type modules.
+    # No switch classes currently.
+    # Base.bSwitch was removed as dead code — no real devices use it.
+    # SmartCOM.Light.Light is the actual class for relay outputs (light platform).
+    # Kept as a placeholder for future switch-type Evon classes.
     return []

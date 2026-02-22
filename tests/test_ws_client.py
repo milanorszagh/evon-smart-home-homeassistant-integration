@@ -719,17 +719,10 @@ class TestWsControlMappings:
         assert mapping is not None
         assert mapping.method_name == "WriteCurrentSetTemperature"
 
-    def test_switch_mappings_turn_on(self):
-        """Test relay switch SwitchOn uses WebSocket."""
-        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOn")
-        assert mapping is not None
-        assert mapping.method_name == "SwitchOn"
-
-    def test_switch_mappings_turn_off(self):
-        """Test relay switch SwitchOff uses WebSocket."""
-        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOff")
-        assert mapping is not None
-        assert mapping.method_name == "SwitchOff"
+    def test_switch_mappings_removed(self):
+        """Test Base.bSwitch removed as dead code — no real devices use it."""
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOn") is None
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOff") is None
 
     def test_physical_button_no_control_mapping(self):
         """Test physical buttons (SmartCOM.Switch) have no control mapping."""
@@ -804,17 +797,10 @@ class TestWsControlMappings:
         # Position still uses HTTP
         assert get_ws_control_mapping("Base.ehBlind", "SetPosition") is None
 
-    def test_base_bswitch_mappings_switch_on(self):
-        """Test Base.bSwitch SwitchOn uses WebSocket."""
-        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOn")
-        assert mapping is not None
-        assert mapping.method_name == "SwitchOn"
-
-    def test_base_bswitch_mappings_switch_off(self):
-        """Test Base.bSwitch SwitchOff uses WebSocket."""
-        mapping = get_ws_control_mapping("Base.bSwitch", "SwitchOff")
-        assert mapping is not None
-        assert mapping.method_name == "SwitchOff"
+    def test_base_bswitch_removed(self):
+        """Test Base.bSwitch removed as dead code — no real devices use it."""
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOn") is None
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOff") is None
 
 
 class TestWebSocketControlFindings:
@@ -831,7 +817,7 @@ class TestWebSocketControlFindings:
     3. Light control uses SwitchOn/SwitchOff (explicit) and BrightnessSetScaled
        - Switch([bool]) exists but is INCONSISTENT on some devices!
     4. Blind control uses MoveToPosition([angle, position]) - angle comes FIRST
-    5. Switches do NOT respond to WebSocket control - must use HTTP API
+    5. Base.bSwitch was dead code — removed (SmartCOM.Light.Light is on the light platform)
 
     TRAPS TO AVOID:
     1. Using old CallMethod format [instanceId, methodName, params] - doesn't work
@@ -912,14 +898,15 @@ class TestWebSocketControlFindings:
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetPosition") is None
         assert get_ws_control_mapping("SmartCOM.Blind.Blind", "SetAngle") is None
 
-    def test_switch_uses_websocket(self):
-        """Relay switches (Base.bSwitch) use SwitchOn/SwitchOff via WebSocket.
+    def test_switch_dead_code_removed(self):
+        """Base.bSwitch was dead code and has been removed from control mappings.
 
+        SmartCOM.Light.Light is the actual class for relay outputs (light platform).
         Physical buttons (SmartCOM.Switch) are event-only and have no control mappings.
         """
-        # Relay switches have WS mappings
-        assert get_ws_control_mapping("Base.bSwitch", "SwitchOn") is not None
-        assert get_ws_control_mapping("Base.bSwitch", "SwitchOff") is not None
+        # Base.bSwitch removed — no real devices use it
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOn") is None
+        assert get_ws_control_mapping("Base.bSwitch", "SwitchOff") is None
         # SmartCOM.Switch.Switch is not a relay - no control mappings
         assert get_ws_control_mapping("SmartCOM.Switch.Switch", "SwitchOn") is None
         assert get_ws_control_mapping("SmartCOM.Switch.Switch", "SwitchOff") is None

@@ -145,7 +145,10 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        # Only request refresh if WebSocket is not connected
+        # When WS is connected, we trust optimistic state + WS ValuesChanged events
+        if not self.coordinator.ws_connected:
+            await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
@@ -160,12 +163,25 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        # Only request refresh if WebSocket is not connected
+        # When WS is connected, we trust optimistic state + WS ValuesChanged events
+        if not self.coordinator.ws_connected:
+            await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         # Only clear optimistic state when coordinator data matches expected value
+        # AND settling period has passed (prevents UI flicker from intermediate states)
         if self._optimistic_is_on is not None:
+            # During settling period, keep optimistic state to avoid intermediate state flicker
+            # Note: Don't call super() - it triggers async_write_ha_state() which can cause
+            # frontend animation glitches even with unchanged optimistic values
+            if (
+                self._optimistic_state_set_at is not None
+                and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD_SHORT
+            ):
+                return
+
             data = self._get_data()
             if data:
                 actual_is_on = data.get("is_on", False)
@@ -279,7 +295,10 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        # Only request refresh if WebSocket is not connected
+        # When WS is connected, we trust optimistic state + WS ValuesChanged events
+        if not self.coordinator.ws_connected:
+            await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the radiator.
@@ -332,7 +351,10 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        # Only request refresh if WebSocket is not connected
+        # When WS is connected, we trust optimistic state + WS ValuesChanged events
+        if not self.coordinator.ws_connected:
+            await self.coordinator.async_request_refresh()
 
         # Schedule a delayed verification refresh to confirm the toggle
         # actually converged to the expected state (mitigates race condition

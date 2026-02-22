@@ -248,7 +248,7 @@ class EvonLight(EvonEntity, LightEntity):
             # Handle brightness change
             if ATTR_BRIGHTNESS in kwargs and (self._is_dimmable or self._supports_color_temp):
                 # Convert from Home Assistant 0-255 to Evon 0-100 and clamp to valid range
-                brightness = max(0, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
+                brightness = max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
                 await self._api.set_light_brightness(self._instance_id, brightness)
             elif ATTR_COLOR_TEMP_KELVIN not in kwargs:
                 # Only turn on if no brightness or color temp change
