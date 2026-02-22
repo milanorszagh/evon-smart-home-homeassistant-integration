@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Relaisausgänge zu Light-Entitäten migriert",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Relaisausgänge zu Light-Entitäten migriert",
+            "description": "Evon Relaisausgänge (L1144/L1244-Module) wurden von switch-Entitäten zu light-Entitäten migriert.\n\n{count} switch-Entitäten wurden entfernt und durch light-Entitäten ersetzt: {entities}\n\nBitte aktualisieren Sie alle Automationen, Dashboards oder Skripte, die auf die alten switch-Entitäts-IDs verweisen, um die neuen light-Entitäts-IDs zu verwenden."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Evon Konfigurationsmigration fehlgeschlagen",
       "description": "Ihre Evon Smart Home Konfiguration wurde mit einer neueren Version der Integration erstellt (Version {current_version}) und kann nicht mit der aktuellen Version verwendet werden (unterstützt bis Version {supported_version}).\n\nBitte aktualisieren Sie die Evon Smart Home Integration auf die neueste Version oder entfernen und fügen Sie die Integration erneut hinzu."

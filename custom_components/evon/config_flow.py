@@ -740,6 +740,6 @@ class EvonStaleEntitiesRepairFlow(RepairsFlow):
 
 async def async_create_fix_flow(hass: HomeAssistant, issue_id: str, data: dict[str, Any] | None) -> RepairsFlow:
     """Create a repair flow for the given issue."""
-    if issue_id.startswith("stale_entities_cleaned"):
+    if issue_id.startswith("stale_entities_cleaned") or issue_id.startswith("relay_migrated_to_light"):
         return EvonStaleEntitiesRepairFlow()
     raise ValueError(f"Unknown issue: {issue_id}")

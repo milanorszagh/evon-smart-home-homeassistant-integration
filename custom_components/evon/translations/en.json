@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Relay outputs migrated to light entities",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Relay outputs migrated to light entities",
+            "description": "Evon relay outputs (L1144/L1244 modules) have been migrated from switch entities to light entities.\n\n{count} switch entities were removed and replaced with light entities: {entities}\n\nPlease update any automations, dashboards, or scripts that reference the old switch entity IDs to use the new light entity IDs."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Evon configuration migration failed",
       "description": "Your Evon Smart Home configuration was created with a newer version of the integration (version {current_version}) and cannot be used with the current version (supports up to version {supported_version}).\n\nPlease update the Evon Smart Home integration to the latest version, or remove and re-add the integration."

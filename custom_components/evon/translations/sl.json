@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Relejna izhodi migrirani v light entitete",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Relejna izhodi migrirani v light entitete",
+            "description": "Evon relejni izhodi (moduli L1144/L1244) so bili migrirani iz switch entitet v light entitete.\n\n{count} switch entitet je bilo odstranjenih in zamenjanih z light entitetami: {entities}\n\nPosodobite vse avtomatizacije, nadzorne plošče ali skripte, ki se sklicujejo na stare ID-je switch entitet, da bodo uporabljale nove ID-je light entitet."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Migracija konfiguracije Evon ni uspela",
       "description": "Vaša konfiguracija Evon Smart Home je bila ustvarjena z novejšo različico integracije (različica {current_version}) in je ni mogoče uporabiti s trenutno različico (podpira do različice {supported_version}).\n\nProsimo posodobite integracijo Evon Smart Home na najnovejšo različico ali odstranite in ponovno dodajte integracijo."

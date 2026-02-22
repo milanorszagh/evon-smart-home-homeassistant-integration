@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Salidas de relé migradas a entidades light",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Salidas de relé migradas a entidades light",
+            "description": "Las salidas de relé de Evon (módulos L1144/L1244) han sido migradas de entidades switch a entidades light.\n\n{count} entidades switch fueron eliminadas y reemplazadas por entidades light: {entities}\n\nActualice todas las automatizaciones, paneles o scripts que hagan referencia a los IDs de entidades switch anteriores para usar los nuevos IDs de entidades light."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Falló la migración de configuración de Evon",
       "description": "Su configuración de Evon Smart Home se creó con una versión más reciente de la integración (versión {current_version}) y no se puede usar con la versión actual (admite hasta la versión {supported_version}).\n\nActualice la integración Evon Smart Home a la última versión, o elimine y vuelva a agregar la integración."

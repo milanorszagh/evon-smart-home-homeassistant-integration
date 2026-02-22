@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Wyjścia przekaźników zmigrowane do encji light",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Wyjścia przekaźników zmigrowane do encji light",
+            "description": "Wyjścia przekaźników Evon (moduły L1144/L1244) zostały zmigrowane z encji switch do encji light.\n\n{count} encji switch zostało usuniętych i zastąpionych encjami light: {entities}\n\nZaktualizuj wszystkie automatyzacje, dashboardy lub skrypty odwołujące się do starych identyfikatorów encji switch, aby używały nowych identyfikatorów encji light."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Migracja konfiguracji Evon nie powiodła się",
       "description": "Twoja konfiguracja Evon Smart Home została utworzona przy użyciu nowszej wersji integracji (wersja {current_version}) i nie może być użyta z obecną wersją (obsługuje do wersji {supported_version}).\n\nZaktualizuj integrację Evon Smart Home do najnowszej wersji lub usuń i dodaj ponownie integrację."
