@@ -32,7 +32,8 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 
 # 4. Create GitHub release
-gh release create vX.Y.Z --title "vX.Y.Z - Title" --notes "Release notes here"
+gh release create vX.Y.Z --title "Descriptive title here" --notes "Release notes here"
+# NOTE: Do NOT include the version in the title — HACS auto-prepends the tag.
 ```
 
 ## Hotfix Release (from previous tag)
@@ -62,7 +63,8 @@ git tag -a vX.Y.Z -m "Fix description"
 git push origin vX.Y.Z
 
 # 6. Create GitHub release
-gh release create vX.Y.Z --title "vX.Y.Z - Title" --notes "Release notes here"
+gh release create vX.Y.Z --title "Descriptive title here" --notes "Release notes here"
+# NOTE: Do NOT include the version in the title — HACS auto-prepends the tag.
 
 # 7. Switch back to main and DELETE the release branch
 git checkout main
