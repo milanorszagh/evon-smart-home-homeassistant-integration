@@ -627,6 +627,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             if coordinator and coordinator.data:
                 if ENTITY_TYPE_LIGHTS in coordinator.data:
                     for light in coordinator.data[ENTITY_TYPE_LIGHTS]:
+                        if not light.get("supports_dimming", True):
+                            continue  # Already ONOFF by hardware — no need to offer override
                         light_id = light["id"]
                         light_name = light["name"]
                         light_options[light_id] = light_name

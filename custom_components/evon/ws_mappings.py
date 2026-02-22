@@ -243,15 +243,6 @@ def get_entity_type(class_name: str) -> str | None:
     Returns:
         The entity type (e.g., ENTITY_TYPE_LIGHTS, ENTITY_TYPE_BLINDS) or None if unknown.
     """
-    # Base.bSwitch is legacy dead code — no real devices use it.
-    # SmartCOM.Light.Light is the actual class for relay outputs (light platform).
-    if class_name == "Base.bSwitch":
-        _LOGGER.warning(
-            "Encountered legacy class Base.bSwitch (instance will be ignored). "
-            "Real relay outputs use SmartCOM.Light.Light on the light platform"
-        )
-        return None
-
     # Try exact match first
     if class_name in CLASS_TO_TYPE:
         return CLASS_TO_TYPE[class_name]
