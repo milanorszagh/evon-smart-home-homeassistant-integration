@@ -654,8 +654,15 @@ async def _async_cleanup_stale_entities(
     # Get entity registry
     entity_registry = er.async_get(hass)
 
+    # Collect light instance IDs for relay migration detection
+    light_device_ids: set[str] = set()
+    if ENTITY_TYPE_LIGHTS in coordinator.data:
+        for device in coordinator.data[ENTITY_TYPE_LIGHTS]:
+            light_device_ids.add(device["id"])
+
     # Find entities belonging to this config entry
     entities_to_remove: list[str] = []
+    migrated_relay_entities: list[str] = []
     for entity_entry in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
         unique_id = entity_entry.unique_id
         if not unique_id:
@@ -665,6 +672,17 @@ async def _async_cleanup_stale_entities(
         instance_id = _extract_instance_id_from_unique_id(unique_id, entry.entry_id)
         if instance_id is None:
             # Special entity or unrecognized format - skip
+            continue
+
+        # v1.19.3 migration: relay outputs moved from switch to light platform
+        # Detect old switch entities whose instance_id now exists as a light
+        if unique_id.startswith("evon_switch_") and instance_id in light_device_ids:
+            migrated_relay_entities.append(entity_entry.entity_id)
+            _LOGGER.debug(
+                "Marking migrated relay entity for removal: %s -> light platform (instance_id: %s)",
+                entity_entry.entity_id,
+                instance_id,
+            )
             continue
 
         # Check if this device still exists
@@ -679,7 +697,6 @@ async def _async_cleanup_stale_entities(
 
     if entities_to_remove:
         _LOGGER.info("Cleaned up %d stale entities from Evon integration", len(entities_to_remove))
-        # Create informational repair to notify user
         ir.async_create_issue(
             hass,
             DOMAIN,
@@ -691,6 +708,30 @@ async def _async_cleanup_stale_entities(
             translation_placeholders={
                 "count": str(len(entities_to_remove)),
                 "entities": ", ".join(entities_to_remove[:5]) + ("..." if len(entities_to_remove) > 5 else ""),
+            },
+        )
+
+    # Remove migrated relay switch entities and notify user
+    for entity_id in migrated_relay_entities:
+        _LOGGER.info("Removing migrated relay entity: %s (now on light platform)", entity_id)
+        entity_registry.async_remove(entity_id)
+
+    if migrated_relay_entities:
+        _LOGGER.info(
+            "Migrated %d relay entities from switch to light platform",
+            len(migrated_relay_entities),
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"relay_migrated_to_light_{entry.entry_id}",
+            is_fixable=True,
+            is_persistent=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="relay_migrated_to_light",
+            translation_placeholders={
+                "count": str(len(migrated_relay_entities)),
+                "entities": ", ".join(migrated_relay_entities),
             },
         )
 

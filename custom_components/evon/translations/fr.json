@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Sorties relais migrées vers des entités light",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Sorties relais migrées vers des entités light",
+            "description": "Les sorties relais Evon (modules L1144/L1244) ont été migrées des entités switch vers des entités light.\n\n{count} entités switch ont été supprimées et remplacées par des entités light : {entities}\n\nVeuillez mettre à jour toutes les automatisations, tableaux de bord ou scripts qui référencent les anciens IDs d'entités switch pour utiliser les nouveaux IDs d'entités light."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Échec de la migration de configuration Evon",
       "description": "Votre configuration Evon Smart Home a été créée avec une version plus récente de l'intégration (version {current_version}) et ne peut pas être utilisée avec la version actuelle (prend en charge jusqu'à la version {supported_version}).\n\nVeuillez mettre à jour l'intégration Evon Smart Home vers la dernière version, ou supprimer et réajouter l'intégration."

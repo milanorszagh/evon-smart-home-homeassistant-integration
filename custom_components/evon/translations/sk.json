@@ -101,6 +101,17 @@
         }
       }
     },
+    "relay_migrated_to_light": {
+      "title": "Výstupy relé migrované na entity light",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Výstupy relé migrované na entity light",
+            "description": "Výstupy relé Evon (moduly L1144/L1244) boli migrované z entít switch na entity light.\n\n{count} entít switch bolo odstránených a nahradených entitami light: {entities}\n\nProsím aktualizujte všetky automatizácie, dashboardy alebo skripty, ktoré odkazujú na staré ID entít switch, aby používali nové ID entít light."
+          }
+        }
+      }
+    },
     "config_migration_failed": {
       "title": "Migrácia konfigurácie Evon zlyhala",
       "description": "Vaša konfigurácia Evon Smart Home bola vytvorená s novšou verziou integrácie (verzia {current_version}) a nemožno ju použiť s aktuálnou verziou (podporuje až verziu {supported_version}).\n\nProsím aktualizujte Evon Smart Home integráciu na najnovšiu verziu, alebo odstráňte a znovu pridajte integráciu."
