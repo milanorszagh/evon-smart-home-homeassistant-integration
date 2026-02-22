@@ -43,7 +43,7 @@ custom_components/evon/
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
 ├── sensor.py            # Sensor platform (temperature, energy, air quality, WS diagnostics)
-├── switch.py            # Switch platform (bathroom radiators)
+├── switch.py            # Switch platform (bathroom radiators, camera recording toggles)
 ├── select.py            # Select platform (home state, season mode)
 ├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
 ├── button.py            # Button platform (scenes)
@@ -584,7 +584,6 @@ All requests require: `Cookie: token=<token>`
 | `Base.ehThermostat` | Season mode | Yes |
 | `System.HomeState` | Home state | Yes |
 | `Heating.BathroomRadiator` | Bathroom heater | Yes |
-| `Base.bSwitch` | Relay output (switch entity) | Yes |
 | `SmartCOM.Switch` | Physical wall button (Taster) — event entity, NOT a relay | No (event entity, WS-only) |
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
@@ -885,8 +884,8 @@ These can be monitored in real-time using `RegisterValuesChanged`. See `ws-secur
 
 ```bash
 # Python
-ruff check custom_components/evon/
-ruff format custom_components/evon/
+ruff check custom_components/evon/ tests/
+ruff format custom_components/evon/ tests/
 
 # TypeScript
 npm run lint
@@ -896,7 +895,7 @@ npm run lint:fix
 ### Pre-commit Check
 
 ```bash
-ruff check custom_components/evon/ && ruff format --check custom_components/evon/ && npm run lint
+ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
 ```
 
 ### CI Pipelines
@@ -1160,7 +1159,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1161 tests total
+Current coverage: 1160 tests total
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

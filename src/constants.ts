@@ -36,7 +36,7 @@ export const WS_DEVICE_CLASSES = {
   BATHROOM_RADIATOR: "Heating.BathroomRadiator",
 
   // Inputs
-  SWITCH: "Base.bSwitch",
+  SWITCH: "Base.bSwitch", // Legacy — not used by MCP server or HA integration
   SWITCH_UNIVERSAL: "Base.bSwitchUniversal",
 
   // Rooms/Areas

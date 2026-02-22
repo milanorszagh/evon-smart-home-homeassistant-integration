@@ -770,17 +770,19 @@ The total power is computed as `P1 + P2 + P3`. The Home Assistant integration au
 
 **Note:** Smart meters are read-only sensors - there are no control methods available via WebSocket.
 
-### Switch Control (Relays)
+### Relay Outputs (SmartCOM.Light.Light)
 
-Relay switches (`Base.bSwitch`) use `SwitchOn`/`SwitchOff` via WebSocket CallMethod — same as lights:
+Relay outputs are exposed as `SmartCOM.Light.Light` on the **light** platform (on/off only, no dimming). They use `SwitchOn`/`SwitchOff` via WebSocket CallMethod — the same mechanism as dimmable lights:
 
 ```javascript
-// ✅ WebSocket CallMethod SwitchOn/SwitchOff - works for relay switches
+// ✅ WebSocket CallMethod SwitchOn/SwitchOff - works for relay outputs
 // ❌ WebSocket SetValue on IsOn - does NOT work
-// ✅ HTTP fallback: POST /api/instances/Switch1/AmznTurnOn
+// ✅ HTTP fallback: POST /api/instances/Relay1/AmznTurnOn
 ```
 
-**Note on Evon naming:** `SmartCOM.Switch` is **not** a relay — it's the class for physical wall buttons (Tasters), which are event-only entities and have no control methods. Relay outputs use class `SmartCOM.Light.Light` / `Base.bSwitch`.
+**Legacy note:** `Base.bSwitch` was previously referenced for relay outputs but is no longer used by the Home Assistant integration. The integration maps all relay outputs exclusively through `SmartCOM.Light.Light`.
+
+**Note on Evon naming:** `SmartCOM.Switch` is **not** a relay — it's the class for physical wall buttons (Tasters), which are event-only entities and have no control methods.
 
 ## Device Classes
 
@@ -788,6 +790,7 @@ Relay switches (`Base.bSwitch`) use `SwitchOn`/`SwitchOff` via WebSocket CallMet
 | Class | Description |
 |-------|-------------|
 | `Base.bLight` | Base light class (returns all lights) |
+| `SmartCOM.Light.Light` | Relay outputs (on/off only, no dimming) |
 | `SmartCOM.Light.LightDim` | Dimmable lights |
 | `SmartCOM.Light.DynamicRGBWLight` | RGBW lights |
 | `SmartCOM.Light.LightGroup` | Light groups |
@@ -991,7 +994,7 @@ Physical wall buttons ("Taster" in German) use the `SmartCOM.Switch` class. Thes
 | Class | Description |
 |-------|-------------|
 | `SmartCOM.Switch` | Physical wall buttons (light buttons, blind buttons) |
-| `Base.bSwitch` | Base switch class |
+| `Base.bSwitch` | Base switch class (legacy — unused in HA integration; returns `None` and logs a warning) |
 | `Base.bSwitchUniversal` | Universal switches/buttons |
 
 #### Key Properties (from API)
