@@ -674,7 +674,7 @@ async def _async_cleanup_stale_entities(
             # Special entity or unrecognized format - skip
             continue
 
-        # v1.19.3 migration: relay outputs moved from switch to light platform
+        # v1.20.0 migration: relay outputs moved from switch to light platform
         # Detect old switch entities whose instance_id now exists as a light
         if unique_id.startswith("evon_switch_") and instance_id in light_device_ids:
             migrated_relay_entities.append(entity_entry.entity_id)
