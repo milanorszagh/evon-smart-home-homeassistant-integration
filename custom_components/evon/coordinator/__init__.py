@@ -12,14 +12,15 @@ import aiohttp
 from homeassistant.components.recorder import get_instance as get_recorder_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.const import UnitOfEnergy
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from ..api import EvonApi, EvonApiError
+from ..api import EvonApi, EvonApiError, EvonAuthError
 from ..const import (
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
@@ -76,6 +77,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         hass: HomeAssistant,
         api: EvonApi,
+        config_entry: ConfigEntry,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         sync_areas: bool = False,
         use_websocket: bool = False,
@@ -89,6 +91,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.api = api
+        self.config_entry = config_entry
         self._instances_cache: list[dict[str, Any]] = []
         self._sync_areas = sync_areas
         self._rooms_cache: dict[str, str] = {}
@@ -238,6 +241,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             return result
 
+        except EvonAuthError as err:
+            raise ConfigEntryAuthFailed(
+                f"Authentication failed: {err}"
+            ) from err
         except EvonApiError as err:
             return self._handle_api_error(err)
 
@@ -490,15 +497,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Args:
             connected: Whether the WebSocket is now connected.
         """
-        from homeassistant.components.persistent_notification import (
-            async_create,
-            async_dismiss,
-        )
-
-        from ..const import DOMAIN
-
         self._ws_connected = connected
-        notification_id = f"{DOMAIN}_websocket_status"
 
         if connected:
             # Reduce polling frequency when WebSocket is connected
@@ -507,8 +506,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "WebSocket connected, reduced poll interval to %d seconds",
                 WS_POLL_INTERVAL,
             )
-            # Dismiss any disconnect notification
-            async_dismiss(self.hass, notification_id)
+            # Clear any disconnect repair issue
+            ir.async_delete_issue(self.hass, DOMAIN, "websocket_disconnected")
         else:
             # Resume normal polling when WebSocket disconnects
             self.update_interval = timedelta(seconds=self._base_scan_interval)
@@ -516,21 +515,21 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "WebSocket disconnected, resumed poll interval to %d seconds",
                 self._base_scan_interval,
             )
-            # Create disconnect notification
-            async_create(
+            # Create disconnect repair issue
+            ir.async_create_issue(
                 self.hass,
-                message=(
-                    "The WebSocket connection to your Evon system has been lost. "
-                    "Real-time updates are temporarily unavailable. "
-                    "The integration is using HTTP polling as fallback.\n\n"
-                    "The connection will automatically reconnect when available. "
-                    "If this persists, try calling the `evon.reconnect_websocket` service."
-                ),
-                title="Evon WebSocket Disconnected",
-                notification_id=notification_id,
+                DOMAIN,
+                "websocket_disconnected",
+                is_fixable=False,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="websocket_disconnected",
             )
             # Trigger an immediate refresh to get latest state
-            self.hass.async_create_task(self.async_request_refresh())
+            self.hass.async_create_task(
+                self.async_request_refresh(),
+                name="evon_ws_disconnect_refresh",
+            )
 
     def _handle_ws_values_changed(
         self,
@@ -588,7 +587,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 exc_info=True,
             )
             # Schedule HTTP refresh to recover from the conversion failure
-            self.hass.async_create_task(self.async_request_refresh())
+            self.hass.async_create_task(
+                self.async_request_refresh(),
+                name="evon_ws_button_refresh",
+            )
             return
 
         if not coord_data:
@@ -608,7 +610,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         final_data = self.data
         if final_data is not data_snapshot:
             _LOGGER.debug("Data replaced again during WS processing for %s, dropping update", instance_id)
-            self.hass.async_create_task(self.async_request_refresh())
+            self.hass.async_create_task(
+                self.async_request_refresh(),
+                name="evon_ws_values_refresh",
+            )
             return
 
         # Copy-on-write: create a shallow copy of the entity before applying changes
@@ -776,7 +781,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 feed_in_data_month=entity_data.get("feed_in_data_month"),
                 energy_data_year=entity_data.get("energy_data_year"),
                 force=force,
-            )
+            ),
+            name=f"evon_import_energy_{instance_id}",
         )
         _LOGGER.debug(
             "Triggered energy statistics import for %s (force=%s)",

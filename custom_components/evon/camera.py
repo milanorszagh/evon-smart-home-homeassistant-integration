@@ -91,7 +91,10 @@ class EvonCamera(EvonEntity, Camera):
                 self._tracked_image_path = new_path
                 self._image_event.set()
         # Refresh recordings cache asynchronously (non-blocking)
-        self.hass.async_create_task(self._recorder.async_refresh_recordings_cache())
+        self.hass.async_create_task(
+            self._recorder.async_refresh_recordings_cache(),
+            name="evon_refresh_recordings",
+        )
         super()._handle_coordinator_update()
 
     @property

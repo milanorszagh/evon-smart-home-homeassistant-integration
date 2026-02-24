@@ -402,6 +402,81 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+        """Handle reauth when credentials become invalid."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle reauth credential input."""
+        errors: dict[str, str] = {}
+        reauth_entry = self._get_reauth_entry()
+        current_data = reauth_entry.data
+
+        if user_input is not None:
+            username = user_input[CONF_USERNAME].strip()
+
+            # Validate username
+            username_error = validate_username(username)
+            if username_error:
+                errors["base"] = username_error
+
+            # Validate password
+            if not errors:
+                password_error = validate_password(user_input[CONF_PASSWORD])
+                if password_error:
+                    errors["base"] = password_error
+
+            if not errors:
+                # Test connection with new credentials
+                session = async_get_clientsession(self.hass)
+                connection_type = current_data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
+
+                if connection_type == CONNECTION_TYPE_REMOTE:
+                    api = EvonApi(
+                        engine_id=current_data[CONF_ENGINE_ID],
+                        username=username,
+                        password=user_input[CONF_PASSWORD],
+                        session=session,
+                    )
+                else:
+                    api = EvonApi(
+                        host=current_data[CONF_HOST],
+                        username=username,
+                        password=user_input[CONF_PASSWORD],
+                        session=session,
+                    )
+
+                try:
+                    if await api.test_connection():
+                        return self.async_update_reload_and_abort(
+                            reauth_entry,
+                            data={
+                                **current_data,
+                                CONF_USERNAME: username,
+                                CONF_PASSWORD: user_input[CONF_PASSWORD],
+                            },
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except EvonAuthError:
+                    errors["base"] = "invalid_auth"
+                except EvonApiError:
+                    errors["base"] = "cannot_connect"
+                except Exception as ex:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during reauth: %s", ex)
+                    errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_USERNAME, default=current_data.get(CONF_USERNAME, "")): str,
+                    vol.Required(CONF_PASSWORD): str,
+                }
+            ),
+            errors=errors,
+        )
+
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration - allow changing connection type."""
         reconfigure_entry = self._get_reconfigure_entry()

@@ -112,6 +112,10 @@
         }
       }
     },
+    "websocket_disconnected": {
+      "title": "Evon WebSocket disconnected",
+      "description": "The WebSocket connection to your Evon system has been lost. Real-time updates are temporarily unavailable and the integration is using HTTP polling as fallback.\n\nThe connection will automatically reconnect when available. If this persists, try calling the `evon.reconnect_websocket` service."
+    },
     "config_migration_failed": {
       "title": "Migrácia konfigurácie Evon zlyhala",
       "description": "Vaša konfigurácia Evon Smart Home bola vytvorená s novšou verziou integrácie (verzia {current_version}) a nemožno ju použiť s aktuálnou verziou (podporuje až verziu {supported_version}).\n\nProsím aktualizujte Evon Smart Home integráciu na najnovšiu verziu, alebo odstráňte a znovu pridajte integráciu."
@@ -246,6 +250,14 @@
           "engine_id": "Váš unikátny identifikátor Evon Smart Home systému (napr. 123456)"
         }
       },
+      "reauth_confirm": {
+        "title": "Znovu overiť Evon Smart Home",
+        "description": "Prihlasovacie údaje pre váš systém Evon Smart Home už nie sú platné. Zadajte prosím aktualizované prihlasovacie údaje.",
+        "data": {
+          "username": "Používateľské meno",
+          "password": "Heslo"
+        }
+      },
       "reconfigure": {
         "title": "Prekonfigurovať Evon Smart Home",
         "description": "Aktuálne pripojenie: **{current_connection}**\n\nMôžete prepínať medzi lokálnym a vzdialeným prístupom alebo aktualizovať vaše prihlasovacie údaje.",
@@ -286,6 +298,7 @@
     },
     "abort": {
       "already_configured": "Tento Evon systém je už nakonfigurovaný",
+      "reauth_successful": "Opätovné overenie bolo úspešné",
       "reconfigure_successful": "Konfigurácia úspešne aktualizovaná"
     }
   },

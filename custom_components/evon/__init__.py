@@ -55,6 +55,7 @@ from .const import (
     EVON_REMOTE_HOST,
     HOME_STATE_MAP,
     REPAIR_CONFIG_MIGRATION,
+    REPAIR_CONNECTION_FAILED,
     REPAIR_STALE_ENTITIES_CLEANED,
     SERVICE_ALL_BLINDS_CLOSE,
     SERVICE_ALL_BLINDS_OPEN,
@@ -209,7 +210,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create coordinator
     coordinator = EvonDataUpdateCoordinator(
-        hass, api, scan_interval, sync_areas, use_websocket, button_double_click_delay
+        hass, api, entry, scan_interval, sync_areas, use_websocket, button_double_click_delay
     )
 
     # Fetch initial data
@@ -820,6 +821,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     # Clean up any repair issues for this entry
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"relay_migrated_to_light_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, REPAIR_CONNECTION_FAILED)
+    ir.async_delete_issue(hass, DOMAIN, "websocket_disconnected")
 
     _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 

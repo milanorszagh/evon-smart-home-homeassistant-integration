@@ -112,6 +112,10 @@
         }
       }
     },
+    "websocket_disconnected": {
+      "title": "Evon WebSocket disconnected",
+      "description": "The WebSocket connection to your Evon system has been lost. Real-time updates are temporarily unavailable and the integration is using HTTP polling as fallback.\n\nThe connection will automatically reconnect when available. If this persists, try calling the `evon.reconnect_websocket` service."
+    },
     "config_migration_failed": {
       "title": "Falló la migración de configuración de Evon",
       "description": "Su configuración de Evon Smart Home se creó con una versión más reciente de la integración (versión {current_version}) y no se puede usar con la versión actual (admite hasta la versión {supported_version}).\n\nActualice la integración Evon Smart Home a la última versión, o elimine y vuelva a agregar la integración."
@@ -246,6 +250,14 @@
           "engine_id": "Su identificador único del sistema Evon Smart Home (ej. 123456)"
         }
       },
+      "reauth_confirm": {
+        "title": "Re-autenticar Evon Smart Home",
+        "description": "Las credenciales de su sistema Evon Smart Home ya no son válidas. Introduzca sus credenciales actualizadas.",
+        "data": {
+          "username": "Nombre de usuario",
+          "password": "Contraseña"
+        }
+      },
       "reconfigure": {
         "title": "Reconfigurar Evon Smart Home",
         "description": "Conexión actual: **{current_connection}**\n\nPuede cambiar entre acceso local y remoto o actualizar sus credenciales.",
@@ -286,6 +298,7 @@
     },
     "abort": {
       "already_configured": "Este sistema Evon ya está configurado",
+      "reauth_successful": "Re-autenticación exitosa",
       "reconfigure_successful": "Configuración actualizada correctamente"
     }
   },
