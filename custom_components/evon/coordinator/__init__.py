@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from homeassistant.components.recorder import get_instance as get_recorder_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
-from homeassistant.const import UnitOfEnergy
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
@@ -87,11 +87,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
         self.api = api
-        self.config_entry = config_entry
         self._instances_cache: list[dict[str, Any]] = []
         self._sync_areas = sync_areas
         self._rooms_cache: dict[str, str] = {}
@@ -242,9 +242,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return result
 
         except EvonAuthError as err:
-            raise ConfigEntryAuthFailed(
-                f"Authentication failed: {err}"
-            ) from err
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except EvonApiError as err:
             return self._handle_api_error(err)
 

@@ -79,6 +79,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
     max_temp = entity_data("max_temp", default=DEFAULT_MAX_TEMP)
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_preset_modes = PRESET_MODES
+    # TURN_ON/TURN_OFF flags intentionally omitted — Evon climate cannot be turned
+    # on/off directly. The system controls heating/cooling automatically based on
+    # target vs current temperature. HVACMode.OFF maps to freeze protection mode
+    # (a low target temp), not a real power off. Without the flags, HA correctly
+    # won't offer climate.turn_on/turn_off/toggle services for this entity.
     _enable_turn_on_off_backwards_compat = False
 
     def __init__(
