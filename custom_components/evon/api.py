@@ -59,12 +59,13 @@ def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
     return {k: "**REDACTED**" if k.lower() in SENSITIVE_HEADERS else v for k, v in headers.items()}
 
 
-def _create_ssl_context() -> ssl.SSLContext:
+async def _create_ssl_context() -> ssl.SSLContext:
     """Create a secure SSL context for HTTPS connections.
 
     Uses the system's certificate store for verification.
+    Runs in executor to avoid blocking the event loop (load_default_certs is sync I/O).
     """
-    return ssl.create_default_context()
+    return await asyncio.get_running_loop().run_in_executor(None, ssl.create_default_context)
 
 
 def _validate_instance_id(instance_id: str) -> None:
@@ -224,8 +225,9 @@ class EvonApi:
             try:
                 # Use explicit SSL context for secure HTTPS connections
                 # Set a reasonable limit on concurrent connections
+                ssl_context = await _create_ssl_context()
                 connector = aiohttp.TCPConnector(
-                    ssl=_create_ssl_context(),
+                    ssl=ssl_context,
                     limit=DEFAULT_CONNECTION_POOL_SIZE,
                     limit_per_host=DEFAULT_CONNECTION_POOL_SIZE // 2,
                 )

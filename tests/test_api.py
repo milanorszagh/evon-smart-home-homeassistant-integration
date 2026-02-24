@@ -924,13 +924,13 @@ class TestIsBlindClass:
 class TestCreateSslContext:
     """Tests for _create_ssl_context function."""
 
-    def test_creates_ssl_context(self):
+    async def test_creates_ssl_context(self):
         """Test that function creates a valid SSL context."""
         import ssl
 
         from custom_components.evon.api import _create_ssl_context
 
-        ctx = _create_ssl_context()
+        ctx = await _create_ssl_context()
 
         assert isinstance(ctx, ssl.SSLContext)
         # Default context should verify certificates
