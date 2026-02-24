@@ -18,7 +18,7 @@ custom_components/evon/
 ├── ws_control.py        # WebSocket control mappings (canonical WS-native names → WS calls, HTTP translation)
 ├── ws_mappings.py       # Property mappings for WebSocket data
 ├── base_entity.py       # Base entity class with common functionality
-├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, repairs)
+├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, reauth, repairs)
 ├── const.py             # Constants, device classes, repair identifiers
 ├── coordinator/         # Data update coordinator package
 │   ├── __init__.py      # Main coordinator with connection failure tracking, WebSocket integration
@@ -1044,11 +1044,14 @@ def _handle_coordinator_update(self) -> None:
 
 | Repair | Trigger | Severity | Auto-clear |
 |--------|---------|----------|------------|
-| Connection failed | 3 consecutive failures | Error | Yes |
+| Connection failed | 3 consecutive failures | Error | Yes (on reconnect) |
+| WebSocket disconnected | WS connection lost | Warning | Yes (on reconnect) |
 | Stale entities | Orphaned entities removed | Warning | Dismissible |
+| Relay migrated to light | Relay switch→light migration | Warning | Dismissible |
+| Re-authentication required | `ConfigEntryAuthFailed` raised | N/A | Yes (on successful reauth) |
 | Config migration | Incompatible version | Error | No |
 
-Key files: `const.py` (constants), `coordinator.py` (connection tracking), `__init__.py` (entity/migration repairs), `config_flow.py` (repair flows)
+Key files: `const.py` (constants), `coordinator/__init__.py` (connection tracking, auth errors), `__init__.py` (entity/migration repairs, cleanup on removal), `config_flow.py` (repair flows, reauth flow)
 
 ---
 

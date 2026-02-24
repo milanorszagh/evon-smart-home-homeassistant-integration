@@ -142,7 +142,10 @@ The integration creates repair issues in **Settings** → **System** → **Repai
 | Issue | Description |
 |-------|-------------|
 | **Connection failed** | Alerts after 3 consecutive API failures. Auto-clears when connection restores. |
+| **WebSocket disconnected** | Warning when the real-time WebSocket connection is lost. Auto-clears on reconnect. |
 | **Stale entities cleaned** | Notice when orphaned entities are removed (dismissible). |
+| **Relay migrated to light** | Notice when relay switch entities are migrated to light entities (dismissible). |
+| **Re-authentication required** | Triggered when credentials become invalid. Guides you through re-entering credentials. |
 | **Config migration failed** | Error if configuration was created with a newer incompatible version. |
 
 ### Translations

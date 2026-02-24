@@ -826,7 +826,8 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
 - **Stale Entity Cleanup**: Automatic removal of orphaned entities on reload
-- **Repairs**: Connection failure alerts, stale entity notifications, config migration warnings
+- **Repairs**: Connection failure alerts, WebSocket disconnect warnings, stale entity notifications, relay migration notices, config migration warnings
+- **Reauth Flow**: Automatic re-authentication prompt when credentials become invalid (`ConfigEntryAuthFailed`)
 - **Diagnostics**: Export diagnostic data for troubleshooting
 - **Entity Attributes**: Extra attributes exposed on all entities
 - **Energy Sensors**: Smart meter power, energy, voltage sensors
