@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Definir Modo de Estação",
-      "description": "Definir o modo de estação (heating or cooling).",
+      "description": "Definir o modo de estação (aquecimento ou arrefecimento).",
       "fields": {
         "mode": {
           "name": "Modo",

@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Ustaw tryb sezonu",
-      "description": "Ustaw tryb sezonu (heating or cooling).",
+      "description": "Ustaw tryb sezonu (ogrzewanie lub chłodzenie).",
       "fields": {
         "mode": {
           "name": "Tryb",

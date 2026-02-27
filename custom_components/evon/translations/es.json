@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Establecer modo de temporada",
-      "description": "Establecer el modo de temporada (heating or cooling).",
+      "description": "Establecer el modo de temporada (calefacción o refrigeración).",
       "fields": {
         "mode": {
           "name": "Modo",

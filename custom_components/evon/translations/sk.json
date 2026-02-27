@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Nastaviť sezónny režim",
-      "description": "Nastaviť sezónny režim (heating or cooling).",
+      "description": "Nastaviť sezónny režim (vykurovanie alebo chladenie).",
       "fields": {
         "mode": {
           "name": "Režim",

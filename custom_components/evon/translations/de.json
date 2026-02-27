@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Jahreszeit-Modus setzen",
-      "description": "Setzt den Jahreszeit-Modus (heating oder cooling).",
+      "description": "Setzt den Jahreszeit-Modus (Heizung oder Kühlung).",
       "fields": {
         "mode": {
           "name": "Modus",

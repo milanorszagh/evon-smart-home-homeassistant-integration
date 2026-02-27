@@ -28,7 +28,7 @@
     },
     "set_season_mode": {
       "name": "Nastavi sezonski način",
-      "description": "Nastavi sezonski način (heating or cooling).",
+      "description": "Nastavi sezonski način (ogrevanje ali hlajenje).",
       "fields": {
         "mode": {
           "name": "Način",
