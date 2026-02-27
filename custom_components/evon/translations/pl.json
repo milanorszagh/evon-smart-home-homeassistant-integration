@@ -113,8 +113,8 @@
       }
     },
     "websocket_disconnected": {
-      "title": "Evon WebSocket disconnected",
-      "description": "The WebSocket connection to your Evon system has been lost. Real-time updates are temporarily unavailable and the integration is using HTTP polling as fallback.\n\nThe connection will automatically reconnect when available. If this persists, try calling the `evon.reconnect_websocket` service."
+      "title": "WebSocket Evon rozłączony",
+      "description": "Połączenie WebSocket z systemem Evon zostało utracone. Aktualizacje w czasie rzeczywistym są tymczasowo niedostępne, a integracja korzysta z odpytywania HTTP jako rozwiązania awaryjnego.\n\nPołączenie zostanie automatycznie przywrócone, gdy będzie dostępne. Jeśli problem się utrzymuje, spróbuj wywołać usługę `evon.reconnect_websocket`."
     },
     "config_migration_failed": {
       "title": "Migracja konfiguracji Evon nie powiodła się",
