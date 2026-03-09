@@ -44,7 +44,9 @@ class TestDomainConstants:
         from custom_components.evon.const import EVON_REMOTE_HOST
 
         assert EVON_REMOTE_HOST.startswith("https://")
-        assert "evon-smarthome.com" in EVON_REMOTE_HOST  # codeql[py/incomplete-url-substring-sanitization] Test assertion, not URL validation
+        assert (
+            "evon-smarthome.com" in EVON_REMOTE_HOST
+        )  # codeql[py/incomplete-url-substring-sanitization] Test assertion, not URL validation
 
 
 class TestDefaultValues:
