@@ -37,6 +37,7 @@ const TIMEOUT_SECONDS = 120;
 
 // Encode password the Evon way: Base64(SHA512(username + password))
 function encodePassword(username, password) {
+  // codeql[js/insufficient-password-hash] Evon API protocol requires Base64(SHA512(user+pass)) — not password storage
   const hash = crypto.createHash('sha512').update(username + password).digest();
   return hash.toString('base64');
 }
@@ -54,7 +55,7 @@ async function getToken() {
     process.exit(1);
   }
 
-  console.log(`Authenticating as ${USERNAME}...`);
+  console.log('Authenticating...');
   const encodedPassword = encodePassword(USERNAME, PASSWORD);
 
   const response = await fetch(`${EVON_HOST}/login`, {

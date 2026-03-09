@@ -100,7 +100,7 @@ def encode_password(username: str, password: str) -> str:
     The x-elocs-password is computed as: Base64(SHA512(username + password))
     """
     combined = username + password
-    sha512_hash = hashlib.sha512(combined.encode("utf-8")).digest()
+    sha512_hash = hashlib.sha512(combined.encode("utf-8")).digest()  # codeql[py/weak-sensitive-data-hashing] Evon API protocol requires Base64(SHA512(user+pass)) — not password storage
     return base64.b64encode(sha512_hash).decode("utf-8")
 
 

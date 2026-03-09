@@ -14,6 +14,7 @@ config();
  */
 export function encodePassword(username: string, password: string): string {
   const combined = username + password;
+  // codeql[js/insufficient-password-hash] Evon API protocol requires Base64(SHA512(user+pass)) — not password storage
   return createHash("sha512").update(combined, "utf8").digest("base64");
 }
 
