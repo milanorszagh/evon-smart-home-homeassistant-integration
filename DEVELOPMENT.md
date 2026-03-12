@@ -403,7 +403,7 @@ coordinator/       # Integrates WebSocket with data updates
 | smart_meters | `P1`, `P2`, `P3`, `IL1-3`, `UL1N-3N`, `Frequency`, `Energy`, `Energy24h`, `EnergyDataDay/Month/Year`, `FeedInEnergy`, `FeedIn24h`, `FeedInDataMonth` | `power` (computed P1+P2+P3), per-phase values, energy totals |
 | air_quality | `Humidity`, `ActualTemperature`, `CO2Value` | `humidity`, `temperature`, `co2` |
 | valves | `ActValue` | `is_open` |
-| security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress`, `SavedPictures`, `CamInstanceName` | `is_open`, `door_is_open`, `call_in_progress`, `saved_pictures` |
+| security_doors | `IsOpen`, `DoorIsOpen`, `CallInProgress`, `SavedPictures`, `CamInstanceName` | `is_open` (both IsOpen and DoorIsOpen map here), `call_in_progress`, `saved_pictures` |
 | intercoms | `DoorBellTriggered`, `DoorOpenTriggered`, `IsDoorOpen`, `ConnectionToIntercomHasBeenLost` | `doorbell_triggered`, `is_door_open`, `connection_lost` |
 | cameras | `Image`, `ImageRequest`, `Error` | `image_path` |
 | button_events | `IsOn` | `is_on` |
@@ -919,7 +919,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 3. Export processor from `coordinator/processors/__init__.py`
 4. Call processor in `coordinator/__init__.py` `_async_update_data()`
 5. Create platform file or extend existing one — set `_entity_type` class attribute on the entity class (data is accessed via `self._get_data()` which calls `coordinator.get_entity_data()`)
-6. Use `entity_data` descriptors for simple properties (see "Entity Data Descriptor" below)
+6. Use `EntityData` descriptors for simple properties (see "Entity Data Descriptor" below)
 7. Register platform in `__init__.py` PLATFORMS list
 8. Add API methods to `api.py` if needed
 9. Add tests in `tests/test_new_device.py`
@@ -928,7 +928,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 - Set `_entity_type` class attribute to the entity type constant (e.g., `ENTITY_TYPE_LIGHTS`)
 - Use `self._get_data()` to access coordinator data (replaces direct `coordinator.get_entity_data()` calls)
-- Use `entity_data` descriptors for simple read-only properties (see below)
+- Use `EntityData` descriptors for simple read-only properties (see below)
 - Use `EntityDescription` for configuration
 - Set appropriate `entity_category`
 - Implement `available` property
@@ -938,20 +938,20 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ### Entity Data Descriptor
 
-The `entity_data` descriptor in `base_entity.py` eliminates boilerplate `@property` methods that simply read a key from coordinator data. Use it for simple properties:
+The `EntityData` descriptor in `base_entity.py` eliminates boilerplate `@property` methods that simply read a key from coordinator data. Use it for simple properties:
 
 ```python
-from .base_entity import EvonEntity, entity_data
+from .base_entity import EntityData, EvonEntity
 from .const import ENTITY_TYPE_VALVES
 
 class EvonValveSensor(EvonEntity, BinarySensorEntity):
     _entity_type = ENTITY_TYPE_VALVES
 
     # Simple descriptor — replaces a 5-line @property method
-    is_on = entity_data("is_open", default=False)
+    is_on = EntityData("is_open", default=False)
 
     # With transform
-    current_humidity = entity_data("humidity", transform=lambda v: int(v))
+    current_humidity = EntityData("humidity", transform=lambda v: int(v))
 ```
 
 When `_get_data()` returns `None` (entity not found), the descriptor returns `None`. When data exists but the key is missing, it returns `default`. For properties with complex logic (optimistic state, computed values), use regular `@property` methods with `self._get_data()`.
