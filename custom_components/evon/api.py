@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from collections.abc import Callable
 import hashlib
 import logging
 import re
 import ssl
 import time
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
