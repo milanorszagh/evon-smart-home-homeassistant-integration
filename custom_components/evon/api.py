@@ -9,6 +9,7 @@ import logging
 import re
 import ssl
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -180,6 +181,7 @@ class EvonApi:
         engine_id: str | None = None,
         session: aiohttp.ClientSession | None = None,
         password_is_encoded: bool = False,
+        get_session: Callable[[], aiohttp.ClientSession] | None = None,
     ) -> None:
         """Initialize the API client.
 
@@ -188,9 +190,12 @@ class EvonApi:
             password: The password (plain text or pre-encoded)
             host: The Evon system URL (for local connections)
             engine_id: The Engine ID (for remote connections via my.evon-smarthome.com)
-            session: Optional aiohttp session
+            session: Optional aiohttp session (deprecated, use get_session)
             password_is_encoded: If True, password is already encoded (x-elocs-password).
                                 If False (default), password will be encoded automatically.
+            get_session: Callback to get a fresh aiohttp session (preferred over session).
+                        When provided, this is called whenever the current session is closed,
+                        avoiding the need to create a custom SSL session.
 
         Note:
             Either host or engine_id must be provided, but not both.
@@ -209,6 +214,7 @@ class EvonApi:
         self._own_session = False
         self._is_remote = engine_id is not None
         self._engine_id = engine_id
+        self._get_session_callback = get_session
 
         # Login rate limiting
         self._login_failure_count: int = 0
@@ -224,9 +230,16 @@ class EvonApi:
         """Get or create aiohttp session with proper SSL configuration."""
         # Check if session is None or closed (e.g., by HA shutdown)
         if self._session is None or self._session.closed:
+            # Prefer the session factory callback (returns HA-managed session, no custom SSL)
+            if self._get_session_callback is not None:
+                session = self._get_session_callback()
+                if session is not None and not session.closed:
+                    self._session = session
+                    self._own_session = False
+                    return session
+
+            # Fallback: create our own session (e.g., config flow without hass)
             try:
-                # Use explicit SSL context for secure HTTPS connections
-                # Set a reasonable limit on concurrent connections
                 ssl_context = await _create_ssl_context()
                 connector = aiohttp.TCPConnector(
                     ssl=ssl_context,

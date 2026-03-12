@@ -179,13 +179,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     connection_type = entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
 
     # Create API client based on connection type
-    session = async_get_clientsession(hass)
+    # Pass get_session callback so the API can always get a fresh HA-managed session
+    # instead of creating its own SSL session (which triggers blocking call warnings)
+    get_session = lambda: async_get_clientsession(hass)  # noqa: E731
     if connection_type == CONNECTION_TYPE_REMOTE:
         api = EvonApi(
             engine_id=entry.data[CONF_ENGINE_ID],
             username=entry.data[CONF_USERNAME],
             password=entry.data[CONF_PASSWORD],
-            session=session,
+            get_session=get_session,
         )
         configuration_url = f"{EVON_REMOTE_HOST}/{entry.data[CONF_ENGINE_ID]}"
     else:
@@ -193,7 +195,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             host=entry.data[CONF_HOST],
             username=entry.data[CONF_USERNAME],
             password=entry.data[CONF_PASSWORD],
-            session=session,
+            get_session=get_session,
         )
         configuration_url = entry.data[CONF_HOST]
 
