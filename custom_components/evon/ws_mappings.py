@@ -214,8 +214,11 @@ PROPERTY_MAPPINGS: dict[str, dict[str, str]] = {
         "ActValue": "is_open",
     },
     ENTITY_TYPE_SECURITY_DOORS: {
+        # Both IsOpen and DoorIsOpen represent the same door state.
+        # IsOpen is used by newer Evon firmware; DoorIsOpen by older firmware.
+        # Both map to the same coordinator key so entity reads a single field.
         "IsOpen": "is_open",
-        "DoorIsOpen": "door_is_open",
+        "DoorIsOpen": "is_open",
         "CallInProgress": "call_in_progress",
         "SavedPictures": "saved_pictures",
         "CamInstanceName": "cam_instance_name",
@@ -335,7 +338,7 @@ def ws_to_coordinator_data(
                 )
                 eco = _coalesce(
                     ws_properties.get("SetValueEnergySavingCooling"),
-                    existing_data.get("energy_saving_temp") if existing_data else None,
+                    existing_data.get("eco_temp") if existing_data else None,
                 )
                 protection = _coalesce(
                     ws_properties.get("SetValueHeatProtection"),
@@ -364,7 +367,7 @@ def ws_to_coordinator_data(
                 )
                 eco = _coalesce(
                     ws_properties.get("SetValueEnergySavingHeating"),
-                    existing_data.get("energy_saving_temp") if existing_data else None,
+                    existing_data.get("eco_temp") if existing_data else None,
                 )
                 protection = _coalesce(
                     ws_properties.get("SetValueFreezeProtection"),
@@ -385,7 +388,7 @@ def ws_to_coordinator_data(
             if comfort is not None:
                 result["comfort_temp"] = comfort
             if eco is not None:
-                result["energy_saving_temp"] = eco
+                result["eco_temp"] = eco
             if protection is not None:
                 result["protection_temp"] = protection
             if min_temp is not None:

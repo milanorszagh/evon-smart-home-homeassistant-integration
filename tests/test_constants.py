@@ -115,40 +115,40 @@ class TestClimateConstants:
     def test_climate_preset_modes(self):
         """Test climate preset mode constants."""
         from custom_components.evon.const import (
-            CLIMATE_MODE_AWAY,
-            CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ECO,
+            CLIMATE_PRESET_AWAY,
+            CLIMATE_PRESET_COMFORT,
+            CLIMATE_PRESET_ECO,
         )
 
-        assert CLIMATE_MODE_COMFORT == "comfort"
-        assert CLIMATE_MODE_ECO == "eco"
-        assert CLIMATE_MODE_AWAY == "away"
+        assert CLIMATE_PRESET_COMFORT == "comfort"
+        assert CLIMATE_PRESET_ECO == "eco"
+        assert CLIMATE_PRESET_AWAY == "away"
 
     def test_evon_preset_heating_mapping(self):
         """Test Evon preset heating mode mapping."""
         from custom_components.evon.const import (
-            CLIMATE_MODE_AWAY,
-            CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ECO,
+            CLIMATE_PRESET_AWAY,
+            CLIMATE_PRESET_COMFORT,
+            CLIMATE_PRESET_ECO,
             EVON_PRESET_HEATING,
         )
 
-        assert EVON_PRESET_HEATING[2] == CLIMATE_MODE_AWAY  # away
-        assert EVON_PRESET_HEATING[3] == CLIMATE_MODE_ECO  # eco
-        assert EVON_PRESET_HEATING[4] == CLIMATE_MODE_COMFORT  # comfort
+        assert EVON_PRESET_HEATING[2] == CLIMATE_PRESET_AWAY  # away
+        assert EVON_PRESET_HEATING[3] == CLIMATE_PRESET_ECO  # eco
+        assert EVON_PRESET_HEATING[4] == CLIMATE_PRESET_COMFORT  # comfort
 
     def test_evon_preset_cooling_mapping(self):
         """Test Evon preset cooling mode mapping."""
         from custom_components.evon.const import (
-            CLIMATE_MODE_AWAY,
-            CLIMATE_MODE_COMFORT,
-            CLIMATE_MODE_ECO,
+            CLIMATE_PRESET_AWAY,
+            CLIMATE_PRESET_COMFORT,
+            CLIMATE_PRESET_ECO,
             EVON_PRESET_COOLING,
         )
 
-        assert EVON_PRESET_COOLING[5] == CLIMATE_MODE_AWAY  # heat protection
-        assert EVON_PRESET_COOLING[6] == CLIMATE_MODE_ECO  # eco
-        assert EVON_PRESET_COOLING[7] == CLIMATE_MODE_COMFORT  # comfort
+        assert EVON_PRESET_COOLING[5] == CLIMATE_PRESET_AWAY  # heat protection
+        assert EVON_PRESET_COOLING[6] == CLIMATE_PRESET_ECO  # eco
+        assert EVON_PRESET_COOLING[7] == CLIMATE_PRESET_COMFORT  # comfort
 
     def test_heating_and_cooling_presets_are_disjoint(self):
         """Test that heating and cooling preset keys don't overlap."""
@@ -307,7 +307,7 @@ class TestRepairConstants:
 
         assert REPAIR_CONNECTION_FAILED == "connection_failed"
         assert REPAIR_STALE_ENTITIES_CLEANED == "stale_entities_cleaned"
-        assert REPAIR_CONFIG_MIGRATION == "config_migration_needed"
+        assert REPAIR_CONFIG_MIGRATION == "config_migration_failed"
 
     def test_connection_failure_threshold(self):
         """Test connection failure threshold."""

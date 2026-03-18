@@ -44,6 +44,7 @@ from ..const import (
     EVON_CLASS_PHYSICAL_BUTTON,
     EVON_CLASS_SCENE,
     REPAIR_CONNECTION_FAILED,
+    REPAIR_WEBSOCKET_DISCONNECTED,
     WS_POLL_INTERVAL,
 )
 from .button_press import ButtonPressDetector
@@ -505,7 +506,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 WS_POLL_INTERVAL,
             )
             # Clear any disconnect repair issue
-            ir.async_delete_issue(self.hass, DOMAIN, "websocket_disconnected")
+            ir.async_delete_issue(self.hass, DOMAIN, REPAIR_WEBSOCKET_DISCONNECTED)
         else:
             # Resume normal polling when WebSocket disconnects
             self.update_interval = timedelta(seconds=self._base_scan_interval)
@@ -517,11 +518,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                "websocket_disconnected",
+                REPAIR_WEBSOCKET_DISCONNECTED,
                 is_fixable=False,
                 is_persistent=False,
                 severity=ir.IssueSeverity.WARNING,
-                translation_key="websocket_disconnected",
+                translation_key=REPAIR_WEBSOCKET_DISCONNECTED,
             )
             # Trigger an immediate refresh to get latest state
             self.hass.async_create_task(
@@ -615,7 +616,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Copy-on-write: create a shallow copy of the entity before applying changes
-        updated_entity = dict(entity)
+        updated_entity: dict[str, Any] = dict(entity)
 
         # Apply all coord_data to the copy
         for key, value in coord_data.items():

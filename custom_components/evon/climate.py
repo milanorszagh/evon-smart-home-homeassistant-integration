@@ -19,11 +19,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
-from .base_entity import EvonEntity, entity_data
+from .base_entity import EntityData, EvonEntity
 from .const import (
-    CLIMATE_MODE_AWAY,
-    CLIMATE_MODE_COMFORT,
-    CLIMATE_MODE_ECO,
+    CLIMATE_PRESET_AWAY,
+    CLIMATE_PRESET_COMFORT,
+    CLIMATE_PRESET_ECO,
     DEFAULT_MAX_TEMP,
     DEFAULT_MIN_TEMP,
     DOMAIN,
@@ -37,7 +37,7 @@ from .coordinator import EvonDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 # Preset modes list
-PRESET_MODES = [CLIMATE_MODE_COMFORT, CLIMATE_MODE_ECO, CLIMATE_MODE_AWAY]
+PRESET_MODES = [CLIMATE_PRESET_COMFORT, CLIMATE_PRESET_ECO, CLIMATE_PRESET_AWAY]
 
 
 async def async_setup_entry(
@@ -74,9 +74,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
     _entity_type = ENTITY_TYPE_CLIMATES
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
-    current_temperature = entity_data("current_temperature")
-    min_temp = entity_data("min_temp", default=DEFAULT_MIN_TEMP)
-    max_temp = entity_data("max_temp", default=DEFAULT_MAX_TEMP)
+    current_temperature = EntityData("current_temperature")
+    min_temp = EntityData("min_temp", default=DEFAULT_MIN_TEMP)
+    max_temp = EntityData("max_temp", default=DEFAULT_MAX_TEMP)
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     _attr_preset_modes = PRESET_MODES
     # TURN_ON/TURN_OFF flags intentionally omitted — Evon climate cannot be turned
@@ -167,7 +167,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         is_cooling = data.get("is_cooling", False)
         return HVACAction.COOLING if is_cooling else HVACAction.HEATING
 
-    current_humidity = entity_data("humidity", transform=lambda v: int(v) if v is not None else None)
+    current_humidity = EntityData("humidity", transform=lambda v: int(v) if v is not None else None)
 
     @property
     def target_temperature(self) -> float | None:
@@ -211,7 +211,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
         data = self._get_data()
         if not data:
-            return CLIMATE_MODE_COMFORT
+            return CLIMATE_PRESET_COMFORT
 
         mode_saved = data.get("mode_saved", 4)
 
@@ -219,8 +219,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # with hvac_mode/hvac_action which also use per-device state
         is_cooling = data.get("is_cooling", False)
         if is_cooling:
-            return EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
-        return EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
+            return EVON_PRESET_COOLING.get(mode_saved, CLIMATE_PRESET_COMFORT)
+        return EVON_PRESET_HEATING.get(mode_saved, CLIMATE_PRESET_COMFORT)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -230,7 +230,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         if data:
             is_cooling = data.get("is_cooling", False)
             attrs["comfort_temperature"] = data.get("comfort_temp")
-            attrs["eco_temperature"] = data.get("energy_saving_temp")
+            attrs["eco_temperature"] = data.get("eco_temp")
             attrs["protection_temperature"] = data.get("protection_temp")
             attrs["evon_mode_saved"] = data.get("mode_saved")
             attrs["season_mode"] = "cooling" if is_cooling else "heating"
@@ -290,11 +290,11 @@ class EvonClimate(EvonEntity, ClimateEntity):
         self.async_write_ha_state()
 
         try:
-            if preset_mode == CLIMATE_MODE_COMFORT:
+            if preset_mode == CLIMATE_PRESET_COMFORT:
                 await self._api.set_climate_comfort_mode(self._instance_id)
-            elif preset_mode == CLIMATE_MODE_ECO:
+            elif preset_mode == CLIMATE_PRESET_ECO:
                 await self._api.set_climate_energy_saving_mode(self._instance_id)
-            elif preset_mode == CLIMATE_MODE_AWAY:
+            elif preset_mode == CLIMATE_PRESET_AWAY:
                 await self._api.set_climate_freeze_protection_mode(self._instance_id)
             else:
                 _LOGGER.warning("Unrecognized preset mode %r for %s", preset_mode, self._instance_id)
@@ -332,9 +332,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
                 # Use per-device is_cooling for consistency
                 is_cooling = data.get("is_cooling", False)
                 if is_cooling:
-                    actual_preset = EVON_PRESET_COOLING.get(mode_saved, CLIMATE_MODE_COMFORT)
+                    actual_preset = EVON_PRESET_COOLING.get(mode_saved, CLIMATE_PRESET_COMFORT)
                 else:
-                    actual_preset = EVON_PRESET_HEATING.get(mode_saved, CLIMATE_MODE_COMFORT)
+                    actual_preset = EVON_PRESET_HEATING.get(mode_saved, CLIMATE_PRESET_COMFORT)
                 if actual_preset == self._optimistic_preset:
                     self._optimistic_preset = None
                 else:

@@ -178,7 +178,7 @@ class EvonLight(EvonEntity, LightEntity):
         return None
 
     @property
-    def min_color_temp_kelvin(self) -> int | None:
+    def min_color_temp_kelvin(self) -> int | None:  # type: ignore[override]
         """Return the minimum color temperature in Kelvin."""
         if not self._supports_color_temp:
             return None
@@ -189,7 +189,7 @@ class EvonLight(EvonEntity, LightEntity):
         return None
 
     @property
-    def max_color_temp_kelvin(self) -> int | None:
+    def max_color_temp_kelvin(self) -> int | None:  # type: ignore[override]
         """Return the maximum color temperature in Kelvin."""
         if not self._supports_color_temp:
             return None

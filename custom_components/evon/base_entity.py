@@ -15,7 +15,7 @@ from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT
 from .coordinator import EvonDataUpdateCoordinator
 
 
-class entity_data:
+class EntityData:
     """Descriptor that reads a field from coordinator entity data.
 
     Eliminates boilerplate ``@property`` methods that fetch a single key
@@ -26,7 +26,7 @@ class entity_data:
 
         class EvonValveSensor(EvonEntity, BinarySensorEntity):
             _entity_type = ENTITY_TYPE_VALVES
-            is_on = entity_data("is_open", default=False)
+            is_on = EntityData("is_open", default=False)
     """
 
     __slots__ = ("key", "default", "transform")
@@ -92,7 +92,7 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes with evon_id and debug info."""
-        attrs = {
+        attrs: dict[str, Any] = {
             "evon_id": self._instance_id,
             "integration": DOMAIN,
         }

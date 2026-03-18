@@ -80,7 +80,7 @@ def process_climates(
                 "min_set_value_cool": details.get("MinSetValueCool"),
                 "max_set_value_cool": details.get("MaxSetValueCool"),
                 "comfort_temp": comfort_temp,
-                "energy_saving_temp": eco_temp,
+                "eco_temp": eco_temp,
                 "protection_temp": protection_temp,
                 # ClimateControlUniversal uses ModeSaved, ClimateControl uses MainState
                 "mode_saved": details.get("ModeSaved", details.get("MainState", 4)),

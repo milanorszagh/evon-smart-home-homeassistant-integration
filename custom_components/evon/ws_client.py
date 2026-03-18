@@ -98,7 +98,7 @@ class EvonWsClient:
             self._ws_host = self._host.replace("http://", "ws://").replace("https://", "wss://")
 
         self._username = username
-        self._password = encode_password(username, password)
+        self._password: str | None = encode_password(username, password)
         self._session = session
         self._get_session = get_session
         self._on_values_changed = on_values_changed

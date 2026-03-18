@@ -64,6 +64,8 @@ from .const import (
     MIN_RECORDING_DURATION,
     RECORDING_OUTPUT_MP4,
     RECORDING_OUTPUT_MP4_AND_FRAMES,
+    REPAIR_RELAY_MIGRATED,
+    REPAIR_STALE_ENTITIES_CLEANED,
 )
 
 # Validation constants
@@ -815,6 +817,6 @@ class EvonStaleEntitiesRepairFlow(RepairsFlow):
 
 async def async_create_fix_flow(hass: HomeAssistant, issue_id: str, data: dict[str, Any] | None) -> RepairsFlow:
     """Create a repair flow for the given issue."""
-    if issue_id.startswith("stale_entities_cleaned") or issue_id.startswith("relay_migrated_to_light"):
+    if issue_id.startswith(REPAIR_STALE_ENTITIES_CLEANED) or issue_id.startswith(REPAIR_RELAY_MIGRATED):
         return EvonStaleEntitiesRepairFlow()
     raise ValueError(f"Unknown issue: {issue_id}")

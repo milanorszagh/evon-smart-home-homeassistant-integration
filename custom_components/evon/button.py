@@ -30,7 +30,7 @@ async def async_setup_entry(
     coordinator: EvonDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     api: EvonApi = hass.data[DOMAIN][entry.entry_id]["api"]
 
-    entities = []
+    entities: list[ButtonEntity] = []
 
     # Scene buttons
     if coordinator.data and ENTITY_TYPE_SCENES in coordinator.data:

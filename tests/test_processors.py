@@ -467,7 +467,7 @@ class TestClimateProcessor:
         assert climate["min_temp"] == 15
         assert climate["max_temp"] == 25
         assert climate["comfort_temp"] == 22
-        assert climate["energy_saving_temp"] == 20
+        assert climate["eco_temp"] == 20
         assert climate["protection_temp"] == 15
         assert climate["is_on"] is True
         assert climate["humidity"] == 45
@@ -1545,7 +1545,7 @@ class TestProcessorEdgeCases:
         result = process_climates({"C1": {}}, instances, self._get_room_name, False)
         assert len(result) == 1
         assert result[0]["comfort_temp"] == 22
-        assert result[0]["energy_saving_temp"] == 20
+        assert result[0]["eco_temp"] == 20
         assert result[0]["protection_temp"] == 15
 
     def test_climate_cooling_defaults(self):
@@ -1555,7 +1555,7 @@ class TestProcessorEdgeCases:
         result = process_climates({"C1": {}}, instances, self._get_room_name, True)
         assert len(result) == 1
         assert result[0]["comfort_temp"] == 25
-        assert result[0]["energy_saving_temp"] == 24
+        assert result[0]["eco_temp"] == 24
         assert result[0]["protection_temp"] == 29
 
     def test_climate_all_none_values_use_fallback_range(self):

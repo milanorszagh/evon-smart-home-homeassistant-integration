@@ -19,7 +19,7 @@ def test_ws_climate_recompute_uses_raw_limits() -> None:
         "min_set_value_heat": 19,
         "max_set_value_heat": 25,
         "comfort_temp": 21,
-        "energy_saving_temp": 20,
+        "eco_temp": 20,
         "protection_temp": 15,
     }
 
@@ -41,7 +41,7 @@ def test_ws_climate_updates_raw_limits_from_ws() -> None:
         "min_set_value_cool": 20,
         "max_set_value_cool": 26,
         "comfort_temp": 22,
-        "energy_saving_temp": 24,
+        "eco_temp": 24,
         "protection_temp": 28,
     }
 
@@ -67,7 +67,7 @@ def test_ws_climate_cooling_max_temp_includes_comfort_and_eco() -> None:
         "min_set_value_cool": 18,
         "max_set_value_cool": 26,
         "comfort_temp": 22,
-        "energy_saving_temp": 24,
+        "eco_temp": 24,
         "protection_temp": 28,
     }
 
@@ -90,7 +90,7 @@ def test_ws_climate_cooling_eco_exceeds_max() -> None:
         "min_set_value_cool": 18,
         "max_set_value_cool": 26,
         "comfort_temp": 22,
-        "energy_saving_temp": 24,
+        "eco_temp": 24,
         "protection_temp": 25,
     }
 

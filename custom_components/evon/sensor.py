@@ -30,7 +30,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .base_entity import EvonEntity, entity_data
+from .base_entity import EntityData, EvonEntity
 from .const import (
     DOMAIN,
     ENTITY_TYPE_AIR_QUALITY,
@@ -269,9 +269,9 @@ async def async_setup_entry(
                     )
 
     # WebSocket diagnostic sensors
-    entities.append(EvonWsStatusSensor(coordinator, entry))
+    entities.append(EvonWebSocketStatusSensor(coordinator, entry))
     if coordinator.ws_client is not None:
-        entities.append(EvonWsLatencySensor(coordinator, entry))
+        entities.append(EvonWebSocketLatencySensor(coordinator, entry))
 
     if entities:
         async_add_entities(entities)
@@ -288,7 +288,7 @@ class EvonTemperatureSensor(EvonEntity, SensorEntity):
     _attr_translation_key = "temperature"
     _entity_type = ENTITY_TYPE_CLIMATES
 
-    native_value = entity_data("current_temperature")
+    native_value = EntityData("current_temperature")
 
     def __init__(
         self,
@@ -410,7 +410,7 @@ class EvonEnergyTodaySensor(EvonEntity, SensorEntity):
     _attr_translation_key = "energy_today"
     _entity_type = ENTITY_TYPE_SMART_METERS
 
-    native_value = entity_data("energy_today_calculated")
+    native_value = EntityData("energy_today_calculated")
 
     def __init__(
         self,
@@ -440,7 +440,7 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
     _attr_translation_key = "energy_this_month"
     _entity_type = ENTITY_TYPE_SMART_METERS
 
-    native_value = entity_data("energy_this_month_calculated")
+    native_value = EntityData("energy_this_month_calculated")
 
     def __init__(
         self,
@@ -460,7 +460,7 @@ class EvonEnergyThisMonthSensor(EvonEntity, SensorEntity):
         return self._build_device_info("Smart Meter")
 
 
-class EvonWsStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+class EvonWebSocketStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
     """Diagnostic sensor for WebSocket connection status."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -475,7 +475,7 @@ class EvonWsStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEnt
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_websocket_status"
+        self._attr_unique_id = f"evon_websocket_status_{entry.entry_id}"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -513,7 +513,7 @@ class EvonWsStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEnt
         }
 
 
-class EvonWsLatencySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
+class EvonWebSocketLatencySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):
     """Diagnostic sensor for WebSocket response latency (long-term statistics)."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -532,7 +532,7 @@ class EvonWsLatencySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEn
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_websocket_latency"
+        self._attr_unique_id = f"evon_websocket_latency_{entry.entry_id}"
 
     @property
     def device_info(self) -> DeviceInfo:

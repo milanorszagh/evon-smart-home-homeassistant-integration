@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .base_entity import EvonEntity, entity_data
+from .base_entity import EntityData, EvonEntity
 from .const import (
     DOMAIN,
     ENTITY_TYPE_INTERCOMS,
@@ -115,7 +115,7 @@ class EvonValveSensor(EvonEntity, BinarySensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _entity_type = ENTITY_TYPE_VALVES
 
-    is_on = entity_data("is_open", default=False)
+    is_on = EntityData("is_open", default=False)
 
     def __init__(
         self,
@@ -152,7 +152,7 @@ class EvonSecurityDoorSensor(EvonEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.DOOR
     _entity_type = ENTITY_TYPE_SECURITY_DOORS
 
-    is_on = entity_data("is_open", default=False)
+    is_on = EntityData("is_open", default=False)
 
     def __init__(
         self,
@@ -177,11 +177,12 @@ class EvonSecurityDoorCallSensor(EvonEntity, BinarySensorEntity):
     """Representation of an Evon security door call in progress sensor."""
 
     _attr_icon = "mdi:phone-ring"
-    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    # No device_class: HA has no class for "call in progress" — OCCUPANCY would show
+    # "Occupied"/"Clear" which is semantically wrong. The translation_key provides the label.
     _attr_translation_key = "call_in_progress"
     _entity_type = ENTITY_TYPE_SECURITY_DOORS
 
-    is_on = entity_data("call_in_progress", default=False)
+    is_on = EntityData("call_in_progress", default=False)
 
     def __init__(
         self,
@@ -208,7 +209,7 @@ class EvonIntercomDoorSensor(EvonEntity, BinarySensorEntity):
     _attr_device_class = BinarySensorDeviceClass.DOOR
     _entity_type = ENTITY_TYPE_INTERCOMS
 
-    is_on = entity_data("is_door_open", default=False)
+    is_on = EntityData("is_door_open", default=False)
 
     def __init__(
         self,

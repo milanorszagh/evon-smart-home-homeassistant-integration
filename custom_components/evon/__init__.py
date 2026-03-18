@@ -56,7 +56,9 @@ from .const import (
     HOME_STATE_MAP,
     REPAIR_CONFIG_MIGRATION,
     REPAIR_CONNECTION_FAILED,
+    REPAIR_RELAY_MIGRATED,
     REPAIR_STALE_ENTITIES_CLEANED,
+    REPAIR_WEBSOCKET_DISCONNECTED,
     SERVICE_ALL_BLINDS_CLOSE,
     SERVICE_ALL_BLINDS_OPEN,
     SERVICE_ALL_CLIMATE_AWAY,
@@ -174,6 +176,28 @@ def _ensure_recordings_dir(recordings_dir: str) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Evon Smart Home from a config entry."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Migrate WebSocket diagnostic sensor unique IDs from old format (no evon_ prefix)
+    # to the consistent format used by all other entities.
+    # Old: "{entry.entry_id}_websocket_status" / "{entry.entry_id}_websocket_latency"
+    # New: "evon_websocket_status_{entry.entry_id}" / "evon_websocket_latency_{entry.entry_id}"
+    entity_registry = er.async_get(hass)
+    for suffix, new_prefix in (
+        ("_websocket_status", "evon_websocket_status_"),
+        ("_websocket_latency", "evon_websocket_latency_"),
+    ):
+        old_unique_id = f"{entry.entry_id}{suffix}"
+        if entity_entry := entity_registry.async_get_entity_id("sensor", DOMAIN, old_unique_id):
+            entity_registry.async_update_entity(
+                entity_entry,
+                new_unique_id=f"{new_prefix}{entry.entry_id}",
+            )
+            _LOGGER.debug(
+                "Migrated WebSocket sensor unique_id: %s -> %s%s",
+                old_unique_id,
+                new_prefix,
+                entry.entry_id,
+            )
 
     # Determine connection type (default to local for backwards compatibility)
     connection_type = entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_LOCAL)
@@ -727,11 +751,11 @@ async def _async_cleanup_stale_entities(
         ir.async_create_issue(
             hass,
             DOMAIN,
-            f"relay_migrated_to_light_{entry.entry_id}",
+            f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}",
             is_fixable=True,
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
-            translation_key="relay_migrated_to_light",
+            translation_key=REPAIR_RELAY_MIGRATED,
             translation_placeholders={
                 "count": str(len(migrated_relay_entities)),
                 "entities": ", ".join(migrated_relay_entities),
@@ -823,9 +847,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     # Clean up any repair issues for this entry
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}")
-    ir.async_delete_issue(hass, DOMAIN, f"relay_migrated_to_light_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, REPAIR_CONNECTION_FAILED)
-    ir.async_delete_issue(hass, DOMAIN, "websocket_disconnected")
+    ir.async_delete_issue(hass, DOMAIN, REPAIR_WEBSOCKET_DISCONNECTED)
 
     _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 
@@ -865,7 +889,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             is_fixable=False,
             is_persistent=True,
             severity=ir.IssueSeverity.ERROR,
-            translation_key="config_migration_failed",
+            translation_key=REPAIR_CONFIG_MIGRATION,
             translation_placeholders={
                 "current_version": str(config_entry.version),
                 "supported_version": "3",

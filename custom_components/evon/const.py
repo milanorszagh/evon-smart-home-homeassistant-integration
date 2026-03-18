@@ -48,23 +48,24 @@ ENGINE_ID_MAX_LENGTH = 12
 SEASON_MODE_HEATING = "heating"
 SEASON_MODE_COOLING = "cooling"
 
-# Climate preset modes (using HA built-in presets for icons)
-CLIMATE_MODE_COMFORT = "comfort"
-CLIMATE_MODE_ECO = "eco"  # HA built-in preset with leaf icon (Evon: "energy saving / night mode")
-CLIMATE_MODE_AWAY = "away"  # HA built-in preset with door icon (Evon: "freeze/heat protection")
+# Climate preset modes (using HA built-in preset names for icons and UI labels)
+# These are HA preset mode values, NOT HVAC modes.
+CLIMATE_PRESET_COMFORT = "comfort"
+CLIMATE_PRESET_ECO = "eco"  # HA built-in preset with leaf icon (Evon: "energy saving / night mode")
+CLIMATE_PRESET_AWAY = "away"  # HA built-in preset with door icon (Evon: "freeze/heat protection")
 
 # Evon ModeSaved values differ based on Season Mode!
 # HEATING mode (winter): 2=away, 3=eco, 4=comfort
 # COOLING mode (summer): 5=away, 6=eco, 7=comfort
 EVON_PRESET_HEATING = {
-    2: CLIMATE_MODE_AWAY,  # away / freeze protection
-    3: CLIMATE_MODE_ECO,  # eco / energy saving
-    4: CLIMATE_MODE_COMFORT,  # comfort
+    2: CLIMATE_PRESET_AWAY,  # away / freeze protection
+    3: CLIMATE_PRESET_ECO,  # eco / energy saving
+    4: CLIMATE_PRESET_COMFORT,  # comfort
 }
 EVON_PRESET_COOLING = {
-    5: CLIMATE_MODE_AWAY,  # away / heat protection in cooling
-    6: CLIMATE_MODE_ECO,  # eco / energy saving
-    7: CLIMATE_MODE_COMFORT,  # comfort
+    5: CLIMATE_PRESET_AWAY,  # away / heat protection in cooling
+    6: CLIMATE_PRESET_ECO,  # eco / energy saving
+    7: CLIMATE_PRESET_COMFORT,  # comfort
 }
 
 # Evon class names
@@ -127,7 +128,9 @@ DEFAULT_DEBUG_COORDINATOR = False
 # Repair issue IDs
 REPAIR_CONNECTION_FAILED = "connection_failed"
 REPAIR_STALE_ENTITIES_CLEANED = "stale_entities_cleaned"
-REPAIR_CONFIG_MIGRATION = "config_migration_needed"
+REPAIR_CONFIG_MIGRATION = "config_migration_failed"
+REPAIR_RELAY_MIGRATED = "relay_migrated_to_light"
+REPAIR_WEBSOCKET_DISCONNECTED = "websocket_disconnected"
 
 # Connection failure threshold before creating repair
 CONNECTION_FAILURE_THRESHOLD = 3

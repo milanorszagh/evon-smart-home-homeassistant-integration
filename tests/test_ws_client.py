@@ -1190,10 +1190,20 @@ class TestNewFeatures:
         assert "Humidity" in props
 
     def test_ws_to_coordinator_data_security_doors(self):
-        """Test security door property conversion."""
+        """Test security door property conversion.
+
+        Both IsOpen and DoorIsOpen map to the same 'is_open' coordinator key.
+        IsOpen is used by newer Evon firmware; DoorIsOpen by older firmware.
+        When both arrive in the same update, the last one wins (dict iteration order).
+        """
+        # Both properties map to 'is_open' — last write wins (DoorIsOpen is processed after IsOpen)
         ws_props = {"IsOpen": True, "DoorIsOpen": False, "CallInProgress": True}
         coord = ws_to_coordinator_data("security_doors", ws_props)
-        assert coord == {"is_open": True, "door_is_open": False, "call_in_progress": True}
+        assert coord == {"is_open": False, "call_in_progress": True}
+
+        # Single-property updates work correctly for each firmware variant
+        assert ws_to_coordinator_data("security_doors", {"IsOpen": True}) == {"is_open": True}
+        assert ws_to_coordinator_data("security_doors", {"DoorIsOpen": True}) == {"is_open": True}
 
     def test_ws_to_coordinator_data_intercoms(self):
         """Test intercom property conversion."""
