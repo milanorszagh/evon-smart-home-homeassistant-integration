@@ -49,6 +49,19 @@ export function filterByClass(instances: EvonInstance[], className: string): Evo
   );
 }
 
+/** Filter all light instances regardless of sub-type (dimmable, relay, RGBW, group). */
+export function filterLightDevices(instances: EvonInstance[]): EvonInstance[] {
+  return instances.filter(
+    (i) =>
+      (i.ClassName === DEVICE_CLASSES.LIGHT_DIM ||
+        i.ClassName === DEVICE_CLASSES.LIGHT_RELAY ||
+        i.ClassName === DEVICE_CLASSES.LIGHT_RGBW ||
+        i.ClassName === DEVICE_CLASSES.LIGHT_GROUP) &&
+      i.Name &&
+      i.Name.length > 0
+  );
+}
+
 export function filterClimateDevices(instances: EvonInstance[]): EvonInstance[] {
   return instances.filter(
     (i) =>
@@ -93,7 +106,7 @@ export async function controlAllDevices(
 
 export async function fetchLightsWithState(): Promise<LightWithState[]> {
   const instances = await getInstances();
-  const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+  const lights = filterLightDevices(instances);
 
   return Promise.all(
     lights.map(async (light) => {

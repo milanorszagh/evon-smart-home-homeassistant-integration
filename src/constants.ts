@@ -4,7 +4,13 @@
 
 // HTTP API device classes (used by api-client.ts)
 export const DEVICE_CLASSES = {
-  LIGHT: "SmartCOM.Light.LightDim",
+  // LIGHT_DIM covers dimmable lights only (SmartCOM.Light.LightDim).
+  // Relay lights (SmartCOM.Light.Light), RGBW (SmartCOM.Light.DynamicRGBWLight),
+  // and light groups (SmartCOM.Light.LightGroup) are handled by filterLightDevices().
+  LIGHT_DIM: "SmartCOM.Light.LightDim",
+  LIGHT_RELAY: "SmartCOM.Light.Light",
+  LIGHT_RGBW: "SmartCOM.Light.DynamicRGBWLight",
+  LIGHT_GROUP: "SmartCOM.Light.LightGroup",
   BLIND: "SmartCOM.Blind.Blind",
   CLIMATE: "SmartCOM.Clima.ClimateControl",
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",

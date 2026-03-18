@@ -5,8 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
-import { DEVICE_CLASSES } from "../constants.js";
-import { getInstances, filterByClass, controlAllDevices, fetchLightsWithState, sanitizeId } from "../helpers.js";
+import { getInstances, filterLightDevices, controlAllDevices, fetchLightsWithState, sanitizeId } from "../helpers.js";
 import type { LightState } from "../types.js";
 
 export function registerLightTools(server: McpServer): void {
@@ -71,7 +70,7 @@ export function registerLightTools(server: McpServer): void {
     },
     async ({ action }) => {
       const instances = await getInstances();
-      const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+      const lights = filterLightDevices(instances);
       const method = action === "off" ? "SwitchOff" : "SwitchOn";
       const results = await controlAllDevices(lights, method);
 

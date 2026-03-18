@@ -8,6 +8,7 @@ import { DEVICE_CLASSES, RESOURCE_URIS } from "../constants.js";
 import {
   getInstances,
   filterByClass,
+  filterLightDevices,
   filterClimateDevices,
   filterHomeStates,
 } from "../helpers.js";
@@ -19,7 +20,7 @@ export function registerSummaryResources(server: McpServer): void {
     "Summary of all Evon devices and their current state",
     async () => {
       const instances = await getInstances();
-      const lights = filterByClass(instances, DEVICE_CLASSES.LIGHT);
+      const lights = filterLightDevices(instances);
       const blinds = filterByClass(instances, DEVICE_CLASSES.BLIND);
       const climates = filterClimateDevices(instances);
       const homeStates = filterHomeStates(instances);
