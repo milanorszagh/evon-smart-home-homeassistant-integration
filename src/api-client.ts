@@ -115,7 +115,7 @@ export async function apiRequest<T>(
     return json as ApiResponse<T>;
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`API request timeout after ${API_TIMEOUT_MS}ms: ${endpoint}`);
+      throw new Error(`API request timeout after ${API_TIMEOUT_MS}ms: ${endpoint}`, { cause: error });
     }
     throw error;
   } finally {
@@ -134,7 +134,7 @@ export async function callMethod(
     return await apiRequest(`/instances/${instanceId}/${httpMethod}`, "POST", params);
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`${methodName} on ${instanceId}: ${error.message}`);
+      throw new Error(`${methodName} on ${instanceId}: ${error.message}`, { cause: error });
     }
     throw error;
   }

@@ -45,7 +45,7 @@ export async function performLogin(
     return token;
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`Login timeout after ${API_TIMEOUT_MS}ms`);
+      throw new Error(`Login timeout after ${API_TIMEOUT_MS}ms`, { cause: error });
     }
     throw error;
   } finally {

@@ -591,7 +591,7 @@ export class EvonWsClient {
         this.connected = false;
         await this.connect();
         if (!this.isConnected()) {
-          throw new Error("WebSocket not connected after reconnect");
+          throw new Error("WebSocket not connected after reconnect", { cause: error });
         }
         return this.callWithReturn<T>(methodName, args);
       }
