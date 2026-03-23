@@ -615,3 +615,169 @@ async def test_options_flow_http_only(
     assert result["data"]["http_only"] is True
     assert result["data"]["scan_interval"] == 30
     assert result["data"]["sync_areas"] is False
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reauth_local_success(hass, mock_evon_api_class):
+    """Test reauth flow succeeds for a local connection entry."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
+            "host": TEST_HOST,
+            "username": TEST_USERNAME,
+            "password": "oldpass",
+        },
+        unique_id=f"local_{TEST_HOST}",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reauth", "entry_id": entry.entry_id},
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "reauth_confirm"
+
+    with patch("custom_components.evon.config_flow.EvonApi") as mock_flow_api_class:
+        mock_flow_api = AsyncMock()
+        mock_flow_api.test_connection = AsyncMock(return_value=True)
+        mock_flow_api_class.return_value = mock_flow_api
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "newuser", "password": "newpass"},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["username"] == "newuser"
+    assert entry.data["password"] == "newpass"
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reauth_remote_success(hass, mock_evon_api_class):
+    """Test reauth flow succeeds for a remote connection entry."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.evon.const import CONNECTION_TYPE_REMOTE, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "connection_type": CONNECTION_TYPE_REMOTE,
+            "engine_id": "ABCD1234",
+            "username": TEST_USERNAME,
+            "password": "oldpass",
+        },
+        unique_id="remote_ABCD1234",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reauth", "entry_id": entry.entry_id},
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "reauth_confirm"
+
+    with patch("custom_components.evon.config_flow.EvonApi") as mock_flow_api_class:
+        mock_flow_api = AsyncMock()
+        mock_flow_api.test_connection = AsyncMock(return_value=True)
+        mock_flow_api_class.return_value = mock_flow_api
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "newuser", "password": "newpass"},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    assert entry.data["username"] == "newuser"
+    assert entry.data["password"] == "newpass"
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reauth_invalid_auth(hass):
+    """Test reauth flow shows invalid_auth error when credentials are rejected."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.evon.api import EvonAuthError
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
+            "host": TEST_HOST,
+            "username": TEST_USERNAME,
+            "password": "oldpass",
+        },
+        unique_id=f"local_{TEST_HOST}",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reauth", "entry_id": entry.entry_id},
+    )
+
+    with patch("custom_components.evon.config_flow.EvonApi") as mock_flow_api_class:
+        mock_flow_api = AsyncMock()
+        mock_flow_api.test_connection = AsyncMock(side_effect=EvonAuthError("Invalid credentials"))
+        mock_flow_api_class.return_value = mock_flow_api
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": TEST_USERNAME, "password": "wrongpass"},
+        )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_auth"}
+    # Entry credentials must not have changed
+    assert entry.data["password"] == "oldpass"
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reauth_cannot_connect(hass):
+    """Test reauth flow shows cannot_connect error on API failure."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.evon.api import EvonApiError
+    from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "connection_type": CONNECTION_TYPE_LOCAL,
+            "host": TEST_HOST,
+            "username": TEST_USERNAME,
+            "password": "oldpass",
+        },
+        unique_id=f"local_{TEST_HOST}",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "reauth", "entry_id": entry.entry_id},
+    )
+
+    with patch("custom_components.evon.config_flow.EvonApi") as mock_flow_api_class:
+        mock_flow_api = AsyncMock()
+        mock_flow_api.test_connection = AsyncMock(side_effect=EvonApiError("Timeout"))
+        mock_flow_api_class.return_value = mock_flow_api
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": TEST_USERNAME, "password": "newpass"},
+        )
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "cannot_connect"}

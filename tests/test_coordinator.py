@@ -520,6 +520,80 @@ class TestCoordinatorApiErrorHandling:
         await coordinator.async_refresh()
         assert coordinator._consecutive_failures == 0
 
+    async def test_auth_error_raises_config_entry_auth_failed(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that EvonAuthError from the API raises ConfigEntryAuthFailed."""
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.evon.api import EvonAuthError
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        mock_evon_api_class.get_instances = AsyncMock(side_effect=EvonAuthError("Token expired"))
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coordinator._async_update_data()
+
+    async def test_ws_disconnect_creates_repair_issue(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that WebSocket disconnect creates a repair issue."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Simulate WebSocket disconnect
+        coordinator._handle_ws_connection_state(False)
+
+        issue_registry = ir.async_get(hass)
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+        issue = issue_registry.async_get_issue(DOMAIN, issue_id)
+        assert issue is not None
+
+    async def test_ws_reconnect_clears_repair_issue(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Test that WebSocket reconnect removes the disconnect repair issue."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+
+        # Disconnect first to create the issue
+        coordinator._handle_ws_connection_state(False)
+        issue_registry = ir.async_get(hass)
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+
+        # Reconnect — issue should be cleared
+        coordinator._handle_ws_connection_state(True)
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
 
 @requires_ha_test_framework
 class TestCoordinatorSeasonMode:

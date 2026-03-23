@@ -95,6 +95,68 @@ class TestEvonApiInit:
         assert api._session == mock_session
         assert api._own_session is False
 
+    def test_init_with_get_session_callback(self):
+        """Test initialization stores the get_session callback."""
+        callback = MagicMock()
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            get_session=callback,
+        )
+        assert api._get_session_callback is callback
+        assert api._session is None
+
+
+class TestGetSession:
+    """Tests for EvonApi._get_session callback path."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_uses_callback_when_session_is_none(self):
+        """Test _get_session uses the callback to get a session when none exists."""
+        mock_session = MagicMock()
+        mock_session.closed = False
+        callback = MagicMock(return_value=mock_session)
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            get_session=callback,
+        )
+        assert api._session is None
+
+        session = await api._get_session()
+
+        callback.assert_called_once()
+        assert session is mock_session
+        assert api._own_session is False
+
+    @pytest.mark.asyncio
+    async def test_get_session_uses_callback_when_existing_session_is_closed(self):
+        """Test _get_session uses the callback to refresh a closed session."""
+        stale_session = MagicMock()
+        stale_session.closed = True
+
+        fresh_session = MagicMock()
+        fresh_session.closed = False
+        callback = MagicMock(return_value=fresh_session)
+
+        api = EvonApi(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            get_session=callback,
+        )
+        api._session = stale_session
+
+        session = await api._get_session()
+
+        callback.assert_called_once()
+        assert session is fresh_session
+        assert api._session is fresh_session
+        assert api._own_session is False
+
 
 class TestEvonApiLogin:
     """Tests for EvonApi login."""

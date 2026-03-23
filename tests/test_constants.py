@@ -302,12 +302,16 @@ class TestRepairConstants:
         from custom_components.evon.const import (
             REPAIR_CONFIG_MIGRATION,
             REPAIR_CONNECTION_FAILED,
+            REPAIR_RELAY_MIGRATED,
             REPAIR_STALE_ENTITIES_CLEANED,
+            REPAIR_WEBSOCKET_DISCONNECTED,
         )
 
         assert REPAIR_CONNECTION_FAILED == "connection_failed"
         assert REPAIR_STALE_ENTITIES_CLEANED == "stale_entities_cleaned"
         assert REPAIR_CONFIG_MIGRATION == "config_migration_failed"
+        assert REPAIR_RELAY_MIGRATED == "relay_migrated_to_light"
+        assert REPAIR_WEBSOCKET_DISCONNECTED == "websocket_disconnected"
 
     def test_connection_failure_threshold(self):
         """Test connection failure threshold."""
