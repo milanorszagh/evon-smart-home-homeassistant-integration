@@ -848,8 +848,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # Clean up any repair issues for this entry
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}")
-    ir.async_delete_issue(hass, DOMAIN, REPAIR_CONNECTION_FAILED)
-    ir.async_delete_issue(hass, DOMAIN, REPAIR_WEBSOCKET_DISCONNECTED)
+    ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_CONNECTION_FAILED}_{entry.entry_id}")
+    ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_WEBSOCKET_DISCONNECTED}_{entry.entry_id}")
 
     _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 

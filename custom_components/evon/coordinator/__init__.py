@@ -204,7 +204,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Success - reset failure counter and clear any connection repair
             self._consecutive_failures = 0
             if self._repair_created:
-                ir.async_delete_issue(self.hass, DOMAIN, REPAIR_CONNECTION_FAILED)
+                ir.async_delete_issue(self.hass, DOMAIN, f"{REPAIR_CONNECTION_FAILED}_{self.config_entry.entry_id}")
                 self._repair_created = False
                 _LOGGER.info("Connection restored, cleared connection failure repair")
 
@@ -262,7 +262,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                REPAIR_CONNECTION_FAILED,
+                f"{REPAIR_CONNECTION_FAILED}_{self.config_entry.entry_id}",
                 is_fixable=False,
                 is_persistent=True,
                 severity=ir.IssueSeverity.ERROR,
@@ -506,7 +506,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 WS_POLL_INTERVAL,
             )
             # Clear any disconnect repair issue
-            ir.async_delete_issue(self.hass, DOMAIN, REPAIR_WEBSOCKET_DISCONNECTED)
+            ir.async_delete_issue(self.hass, DOMAIN, f"{REPAIR_WEBSOCKET_DISCONNECTED}_{self.config_entry.entry_id}")
         else:
             # Resume normal polling when WebSocket disconnects
             self.update_interval = timedelta(seconds=self._base_scan_interval)
@@ -518,7 +518,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                REPAIR_WEBSOCKET_DISCONNECTED,
+                f"{REPAIR_WEBSOCKET_DISCONNECTED}_{self.config_entry.entry_id}",
                 is_fixable=False,
                 is_persistent=False,
                 severity=ir.IssueSeverity.WARNING,
