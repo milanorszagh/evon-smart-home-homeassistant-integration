@@ -156,3 +156,46 @@ class TestStaleEntityCleanup:
 
         # Special entity should be preserved
         assert ent_reg.async_get(special_entry.entity_id) is not None
+
+
+@requires_ha_test_framework
+class TestWsSensorUniqueIdMigration:
+    """Tests for WS diagnostic sensor unique ID migration in async_setup_entry."""
+
+    @pytest.mark.asyncio
+    async def test_ws_sensor_unique_ids_migrated_on_setup(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Test that WS diagnostic sensor unique IDs are migrated to new format on setup."""
+        from homeassistant.helpers import entity_registry as er
+
+        from custom_components.evon.const import DOMAIN
+
+        mock_config_entry_v2.add_to_hass(hass)
+        ent_reg = er.async_get(hass)
+        entry_id = mock_config_entry_v2.entry_id
+
+        # Pre-populate with OLD unique IDs (format: {entry_id}_websocket_status)
+        ent_reg.async_get_or_create(
+            domain="sensor",
+            platform=DOMAIN,
+            unique_id=f"{entry_id}_websocket_status",
+            config_entry=mock_config_entry_v2,
+        )
+        ent_reg.async_get_or_create(
+            domain="sensor",
+            platform=DOMAIN,
+            unique_id=f"{entry_id}_websocket_latency",
+            config_entry=mock_config_entry_v2,
+        )
+
+        # Verify old IDs exist before setup
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_websocket_status") is not None
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_websocket_latency") is not None
+
+        await hass.config_entries.async_setup(entry_id)
+        await hass.async_block_till_done()
+
+        # Old IDs should be gone, new IDs present (format: evon_websocket_status_{entry_id})
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_websocket_status") is None
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"{entry_id}_websocket_latency") is None
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"evon_websocket_status_{entry_id}") is not None
+        assert ent_reg.async_get_entity_id("sensor", DOMAIN, f"evon_websocket_latency_{entry_id}") is not None
