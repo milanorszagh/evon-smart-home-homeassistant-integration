@@ -102,6 +102,26 @@ class TestCopyOnWriteWSUpdates:
 
         return data
 
+    def test_ws_update_calls_async_update_listeners_not_async_set_updated_data(self, coordinator_and_method):
+        """WS updates should call async_update_listeners, NOT async_set_updated_data.
+
+        async_set_updated_data cancels and reschedules the REST poll timer.
+        If WS events for other devices fire frequently (every few seconds), the
+        60-second REST poll timer is continuously reset and never actually fires,
+        leaving stale state indefinitely (e.g., light showing 'on' when it's off).
+
+        Using async_update_listeners notifies entities without touching the timer.
+        """
+        coordinator = coordinator_and_method
+
+        light_entity = {"id": "light_1", "name": "Test Light", "is_on": False, "brightness": 0}
+        self._setup_data(coordinator, "lights", [light_entity])
+
+        coordinator._handle_ws_values_changed("light_1", {"IsOn": True})
+
+        coordinator.async_update_listeners.assert_called_once()
+        coordinator.async_set_updated_data.assert_not_called()
+
     def test_ws_update_creates_new_entity_dict(self, coordinator_and_method):
         """After a WS update, the entity dict should be a different object (copy-on-write)."""
         coordinator = coordinator_and_method

@@ -666,8 +666,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if entity_type == ENTITY_TYPE_SMART_METERS:
             self._maybe_import_energy_statistics(instance_id, updated_entity)
 
-        # Notify listeners
-        self.async_set_updated_data(data_snapshot)
+        # Notify listeners without resetting the REST poll timer.
+        # async_set_updated_data() cancels and reschedules the timer, so frequent
+        # WS events for other devices would continuously push the 60-second poll
+        # forward and it would never fire, leaving stale state indefinitely.
+        self.async_update_listeners()
 
     def _get_button_detector(self) -> ButtonPressDetector:
         """Get or create the ButtonPressDetector instance (lazy init)."""
@@ -711,9 +714,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         detector.timeout(instance_id, entity_data)
 
         # Notify coordinator listeners — needed here because the timeout fires
-        # outside the WS handler (which has its own async_set_updated_data call).
+        # outside the WS handler (which has its own async_update_listeners call).
         if self.data:
-            self.async_set_updated_data(self.data)
+            self.async_update_listeners()
 
     def _fire_button_event(
         self,

@@ -97,7 +97,8 @@ class TestConcurrentWSAndHTTP:
         assert updated["is_on"] is True
         assert updated["brightness"] == 80
 
-        coordinator.async_set_updated_data.assert_called_once_with(data)
+        coordinator.async_update_listeners.assert_called_once()
+        coordinator.async_set_updated_data.assert_not_called()
 
     def test_data_replaced_during_ws_processing(self, coordinator_and_method):
         """Test that WS update re-targets when data is replaced mid-processing."""
