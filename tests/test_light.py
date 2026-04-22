@@ -346,6 +346,39 @@ async def test_light_turn_off_optimistic(hass, mock_config_entry_v2, mock_evon_a
 
 
 @pytest.mark.asyncio
+async def test_dimmable_light_brightness_is_zero_when_off_via_physical_switch(
+    hass, mock_config_entry_v2, mock_evon_api_class
+):
+    """When a dimmable light is turned off via physical switch or evon app, brightness
+    should report 0, not the stale ScaledBrightness value.
+
+    Physical switches and the evon app send IsOn=False via WS but do NOT reset
+    ScaledBrightness. Without this fix the entity returns the stale brightness
+    (e.g. 191 for 75%) while already reporting state=off.
+    """
+    from custom_components.evon.const import DOMAIN
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    # Precondition: light is on with 75% brightness
+    state = hass.states.get("light.living_room_light")
+    assert state.state == "on"
+    assert state.attributes.get("brightness") == 191  # 75% of 255
+
+    # Simulate physical switch turning off: WS sends IsOn=False
+    # ScaledBrightness is NOT sent (physical switches don't reset it)
+    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+    coordinator._handle_ws_values_changed("light_1", {"IsOn": False})
+    await hass.async_block_till_done()
+
+    state = hass.states.get("light.living_room_light")
+    assert state.state == "off"
+    assert state.attributes.get("brightness") == 0
+
+
+@pytest.mark.asyncio
 async def test_light_brightness_pct_attribute(hass, mock_config_entry_v2, mock_evon_api_class):
     """Check the brightness_pct extra attribute matches the Evon native percentage."""
     mock_config_entry_v2.add_to_hass(hass)
