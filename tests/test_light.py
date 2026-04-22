@@ -346,6 +346,55 @@ async def test_light_turn_off_optimistic(hass, mock_config_entry_v2, mock_evon_a
 
 
 @pytest.mark.asyncio
+async def test_turn_on_requests_coordinator_refresh(hass, mock_config_entry_v2, mock_evon_api_class):
+    """turn_on must always request a coordinator refresh (regardless of WS state).
+
+    A missed WS event can leave coordinator data stale; after the optimistic
+    window expires the UI would bounce back to the stale value. Forcing a
+    refresh ensures the post-command state reflects the actual device.
+    """
+    from custom_components.evon.const import DOMAIN
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+    coordinator.async_request_refresh = AsyncMock()
+
+    await hass.services.async_call(
+        "light",
+        "turn_on",
+        {"entity_id": "light.living_room_light"},
+        blocking=True,
+    )
+
+    coordinator.async_request_refresh.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_turn_off_requests_coordinator_refresh(hass, mock_config_entry_v2, mock_evon_api_class):
+    """turn_off must always request a coordinator refresh (regardless of WS state)."""
+    from custom_components.evon.const import DOMAIN
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+    coordinator.async_request_refresh = AsyncMock()
+
+    await hass.services.async_call(
+        "light",
+        "turn_off",
+        {"entity_id": "light.living_room_light"},
+        blocking=True,
+    )
+
+    coordinator.async_request_refresh.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_dimmable_light_brightness_is_zero_when_off_via_physical_switch(
     hass, mock_config_entry_v2, mock_evon_api_class
 ):

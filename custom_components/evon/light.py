@@ -269,10 +269,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""
@@ -288,10 +285,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
