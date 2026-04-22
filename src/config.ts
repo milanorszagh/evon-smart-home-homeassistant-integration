@@ -43,14 +43,15 @@ export const EVON_PASSWORD =
   : encodePassword(EVON_USERNAME, EVON_PASSWORD_RAW);
 
 /**
- * Validate that required environment variables are set.
- * Call this before making API requests rather than at import time.
+ * Return EVON_HOST, throwing if it's unset. Call this before making API
+ * requests rather than validating at import time.
  */
-export function validateConfig(): void {
+export function requireEvonHost(): string {
   if (!EVON_HOST) {
     throw new Error(
       "EVON_HOST environment variable is not set. " +
         "Set it to your Evon system URL (e.g., http://192.168.1.x).",
     );
   }
+  return EVON_HOST;
 }
