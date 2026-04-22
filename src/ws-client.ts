@@ -22,7 +22,7 @@
  */
 
 import { WebSocket } from "ws";
-import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, validateConfig } from "./config.js";
+import { EVON_USERNAME, EVON_PASSWORD, requireEvonHost } from "./config.js";
 import { API_TIMEOUT_MS, WS_DEVICE_CLASSES } from "./constants.js";
 import { performLogin } from "./auth.js";
 
@@ -137,9 +137,7 @@ export class EvonWsClient {
   private wsHost: string;
 
   constructor(host?: string) {
-    if (!host) validateConfig();
-    // validateConfig() above ensures EVON_HOST is set when no host arg
-    this.host = host || EVON_HOST!;
+    this.host = host ?? requireEvonHost();
     this.wsHost = this.host.replace("http://", "ws://").replace("https://", "wss://");
   }
 

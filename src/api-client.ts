@@ -2,7 +2,7 @@
  * API client for Evon Smart Home
  */
 
-import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, validateConfig } from "./config.js";
+import { EVON_HOST, EVON_USERNAME, EVON_PASSWORD, requireEvonHost } from "./config.js";
 import { API_TIMEOUT_MS, CANONICAL_TO_HTTP_METHOD, TOKEN_VALIDITY_DAYS } from "./constants.js";
 import { performLogin } from "./auth.js";
 import type { ApiResponse } from "./types.js";
@@ -30,9 +30,7 @@ export async function login(): Promise<string> {
 }
 
 async function doLogin(): Promise<string> {
-  validateConfig();
-  // validateConfig() above ensures EVON_HOST is set
-  const token = await performLogin(EVON_HOST!, EVON_USERNAME, EVON_PASSWORD);
+  const token = await performLogin(requireEvonHost(), EVON_USERNAME, EVON_PASSWORD);
   currentToken = token;
   tokenExpiry = Date.now() + TOKEN_VALIDITY_DAYS * 24 * 60 * 60 * 1000;
   return token;
