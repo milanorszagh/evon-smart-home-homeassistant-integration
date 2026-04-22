@@ -145,10 +145,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
@@ -163,10 +160,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -295,10 +289,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the radiator.
@@ -351,10 +342,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # Only request refresh if WebSocket is not connected
-        # When WS is connected, we trust optimistic state + WS ValuesChanged events
-        if not self.coordinator.ws_connected:
-            await self.coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
         # Schedule a delayed verification refresh to confirm the toggle
         # actually converged to the expected state (mitigates race condition
