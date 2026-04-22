@@ -38,8 +38,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+SSH_KEY="${HOME}/.ssh/claude_code"
 ssh_cmd() {
-    ssh -o ConnectTimeout=5 "${HA_USER}@${HA_HOST}" "$@"
+    ssh -o ConnectTimeout=5 -i "${SSH_KEY}" "${HA_USER}@${HA_HOST}" "$@"
 }
 
 echo -e "${GREEN}Deploying Evon integration to Home Assistant...${NC}"
@@ -66,7 +67,7 @@ ssh_cmd "rm -rf ${REMOTE_COMPONENT}" 2>/dev/null || true
 
 # Copy new version
 echo "  Copying new version..."
-scp -r -o ConnectTimeout=5 "$LOCAL_COMPONENT" "${HA_USER}@${HA_HOST}:${HA_CONFIG}/custom_components/"
+scp -r -o ConnectTimeout=5 -i "${SSH_KEY}" "$LOCAL_COMPONENT" "${HA_USER}@${HA_HOST}:${HA_CONFIG}/custom_components/"
 
 echo -e "${GREEN}Deployed successfully!${NC}"
 
