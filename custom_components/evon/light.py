@@ -205,7 +205,15 @@ class EvonLight(EvonEntity, LightEntity):
         attrs = super().extra_state_attributes
         data = self._get_data()
         if data:
-            attrs["brightness_pct"] = data.get("brightness", 0)
+            is_on = self.is_on
+            evon_brightness = data.get("brightness", 0)
+            attrs["brightness_pct"] = evon_brightness if is_on else 0
+            # When a dimmable light is off, override HA's brightness=None with 0.
+            # Physical switches and the evon app turn off the relay without resetting
+            # ScaledBrightness, so without this the HA frontend shows the stale
+            # pre-off brightness level until the page is reloaded.
+            if (self._is_dimmable or self._supports_color_temp) and not is_on:
+                attrs[ATTR_BRIGHTNESS] = 0
         return attrs
 
     async def async_turn_on(self, **kwargs: Any) -> None:
