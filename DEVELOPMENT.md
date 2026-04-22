@@ -186,7 +186,7 @@ The MCP server allows AI assistants like Claude to control Evon devices directly
 
 ```bash
 git clone https://github.com/milanorszagh/evon-smart-home-homeassistant-integration.git
-cd evon-ha
+cd evon-smart-home-homeassistant-integration
 npm install
 npm run build
 ```
@@ -1164,7 +1164,7 @@ Test files:
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
 
-Current coverage: 1160 tests total
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count; CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
@@ -1190,7 +1190,7 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 ## Version Compatibility
 
-- Home Assistant: 2024.1.0+
+- Home Assistant: 2026.3.0+ (pinned by `manifest.json`)
 - Python: 3.12+
 - Node.js (MCP): 18+ (CI uses Node.js 22 LTS)
 

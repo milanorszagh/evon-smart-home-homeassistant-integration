@@ -100,7 +100,7 @@ Examples:
 Before releasing:
 - [ ] All tests pass (`python3 -m pytest tests/`)
 - [ ] Version updated in ALL FOUR files: `manifest.json`, `pyproject.toml`, `package.json`, `package-lock.json`
-- [ ] Linting passes (`ruff check custom_components/evon/ && npm run lint`)
+- [ ] Linting passes (`ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint`)
 - [ ] TypeScript builds (`npm run build`)
 - [ ] MCP tests pass (`npm run test:mcp`)
 - [ ] Mypy passes or errors are tracked (`mypy custom_components/evon/ --ignore-missing-imports`)

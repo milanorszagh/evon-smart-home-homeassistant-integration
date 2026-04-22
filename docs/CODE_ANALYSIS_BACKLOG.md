@@ -1,5 +1,11 @@
 # Code Analysis Backlog
 
+> **Note:** This document tracks the 2026-02-13 analysis sweep through v1.21.0.
+> Post-v1.21.0 follow-ups landed on `main` and are not listed here:
+> npm audit fixes (#4), `validateConfig → requireEvonHost` refactor (#5),
+> coordinator WS handler migration to `async_update_listeners`, dimmable
+> brightness=0 when off, and always-refresh on light/switch commands.
+
 Deep code analysis performed on 2026-02-13 identified **74 issues** across the
 Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 

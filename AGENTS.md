@@ -300,6 +300,7 @@ The codebase uses **WS-native method names as canonical names** everywhere. The 
 | `SwitchOff` | `AmznTurnOff` | Lights |
 | `BrightnessSetScaled` | `AmznSetBrightness` | Light brightness |
 | `SetPosition` | `AmznSetPercentage` | Blind position |
+| `SetAngle` | `SetAngle` | Blind tilt |
 
 Relay outputs (`SmartCOM.Light.Light`) are now light entities and use the same `SwitchOn`/`SwitchOff` WS control as dimmable lights.
 
