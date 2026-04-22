@@ -23,6 +23,9 @@ scripts/
 # Worktrees
 .worktrees/
 
+# Superpowers agent-workflow scratch (plans, etc.)
+docs/superpowers/
+
 # Python
 .venv/
 __pycache__/
