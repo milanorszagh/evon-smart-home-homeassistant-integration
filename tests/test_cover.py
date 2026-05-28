@@ -515,3 +515,116 @@ class TestCoverPostCommandRecheck:
         # One recheck scheduled with the correct quiesce delay
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+
+# =============================================================================
+# Cover-specific quiesce + lifecycle regression guards
+# =============================================================================
+
+
+class TestCoverQuiesceBehavior:
+    """Pin cover-specific quiesce invariants:
+    - API position/angle caches must update even when async_write_ha_state is suppressed
+      (the API caches feed WS control's MoveToPosition calls, which would break if stale).
+    - async_stop_cover must reset _optimistic_state_set_at so subsequent updates aren't
+      dropped by a stale quiesce window (Fix #3).
+    """
+
+    def _make_cover(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.cover import EvonCover
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.get_entity_data = MagicMock(
+            return_value={
+                "id": "blind_1",
+                "name": "Test Blind",
+                "position": 50,
+                "angle": 45,
+                "is_moving": False,
+            }
+        )
+        cover = EvonCover(
+            coordinator, "blind_1", "Test Blind", "Living Room", mock_config_entry_v2, mock_evon_api_class
+        )
+        cover.hass = hass
+        cover.async_write_ha_state = MagicMock()
+        return cover
+
+    def test_api_caches_update_even_during_quiesce(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """Cover's API position/angle caches must update on every coordinator event
+        even when the quiesce window is active (otherwise WS-based MoveToPosition
+        calls would issue with stale cached values)."""
+        import time
+        from unittest.mock import MagicMock
+
+        cover = self._make_cover(hass, mock_config_entry_v2, mock_evon_api_class)
+        # Replace the lambda cache-updaters with MagicMocks for assertion.
+        cover._api.update_blind_position = MagicMock()
+        cover._api.update_blind_angle = MagicMock()
+
+        cover._optimistic_position = 100  # User asked to fully open
+        cover._optimistic_state_set_at = time.monotonic()
+
+        # WS event mid-movement: position 30 (still moving), angle 45.
+        cover.coordinator.get_entity_data.return_value = {
+            "id": "blind_1",
+            "name": "Test Blind",
+            "position": 30,
+            "angle": 45,
+            "is_moving": True,
+        }
+
+        cover._handle_coordinator_update()
+
+        # API caches WERE updated despite being in the quiesce window.
+        cover._api.update_blind_position.assert_called_once_with("blind_1", 30)
+        cover._api.update_blind_angle.assert_called_once_with("blind_1", 45)
+        # Optimistic preserved (intermediate value doesn't match target).
+        assert cover._optimistic_position == 100
+        # async_write_ha_state suppressed (quiesce window active).
+        cover.async_write_ha_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_stop_resets_optimistic_timestamp(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """async_stop_cover must clear _optimistic_state_set_at so a stale quiesce
+        window doesn't drop subsequent coordinator updates (Fix #3)."""
+        import time
+
+        cover = self._make_cover(hass, mock_config_entry_v2, mock_evon_api_class)
+        # Simulate that a position command was just sent.
+        cover._optimistic_position = 100
+        cover._optimistic_state_set_at = time.monotonic()
+
+        await cover.async_stop_cover()
+
+        # Position/tilt optimistic flags cleared, AND timestamp reset.
+        assert cover._optimistic_position is None
+        assert cover._optimistic_tilt is None
+        assert cover._optimistic_state_set_at is None
+
+    @pytest.mark.asyncio
+    async def test_remove_cancels_pending_recheck(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """Pin lifecycle: removing the cover cancels its pending recheck timer."""
+        from unittest.mock import MagicMock
+
+        cover = self._make_cover(hass, mock_config_entry_v2, mock_evon_api_class)
+
+        cancel_handle = MagicMock()
+        with patch(
+            "custom_components.evon.base_entity.async_call_later", return_value=cancel_handle
+        ):
+            cover._schedule_post_command_recheck()
+
+        await cover.async_will_remove_from_hass()
+
+        cancel_handle.assert_called_once()
+        assert cover._recheck_cancel is None
