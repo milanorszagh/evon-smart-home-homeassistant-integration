@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -346,55 +346,6 @@ async def test_light_turn_off_optimistic(hass, mock_config_entry_v2, mock_evon_a
 
 
 @pytest.mark.asyncio
-async def test_turn_on_requests_coordinator_refresh(hass, mock_config_entry_v2, mock_evon_api_class):
-    """turn_on must always request a coordinator refresh (regardless of WS state).
-
-    A missed WS event can leave coordinator data stale; after the optimistic
-    window expires the UI would bounce back to the stale value. Forcing a
-    refresh ensures the post-command state reflects the actual device.
-    """
-    from custom_components.evon.const import DOMAIN
-
-    mock_config_entry_v2.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
-    coordinator.async_request_refresh = AsyncMock()
-
-    await hass.services.async_call(
-        "light",
-        "turn_on",
-        {"entity_id": "light.living_room_light"},
-        blocking=True,
-    )
-
-    coordinator.async_request_refresh.assert_awaited()
-
-
-@pytest.mark.asyncio
-async def test_turn_off_requests_coordinator_refresh(hass, mock_config_entry_v2, mock_evon_api_class):
-    """turn_off must always request a coordinator refresh (regardless of WS state)."""
-    from custom_components.evon.const import DOMAIN
-
-    mock_config_entry_v2.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
-    await hass.async_block_till_done()
-
-    coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
-    coordinator.async_request_refresh = AsyncMock()
-
-    await hass.services.async_call(
-        "light",
-        "turn_off",
-        {"entity_id": "light.living_room_light"},
-        blocking=True,
-    )
-
-    coordinator.async_request_refresh.assert_awaited()
-
-
-@pytest.mark.asyncio
 async def test_dimmable_light_brightness_is_zero_when_off_via_physical_switch(
     hass, mock_config_entry_v2, mock_evon_api_class
 ):
@@ -535,3 +486,68 @@ async def test_onoff_light_attributes(hass, mock_config_entry_v2, mock_evon_api_
     state = hass.states.get("light.kitchen_relay")
     assert state is not None
     assert state.attributes.get("evon_id") == "light_2"
+
+
+# =============================================================================
+# Post-Command Recheck Tests
+# =============================================================================
+
+
+class TestLightPostCommandRecheck:
+    """Test that light commands schedule a deferred recheck instead of immediate refresh."""
+
+    @pytest.mark.asyncio
+    async def test_turn_off_schedules_recheck_not_immediate_refresh(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """turn_off schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import DOMAIN, POST_COMMAND_QUIESCE_PERIOD
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+        coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_off",
+                {"entity_id": "light.living_room_light"},
+                blocking=True,
+            )
+
+        # No immediate refresh
+        coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_turn_on_schedules_recheck_not_immediate_refresh(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """turn_on schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import DOMAIN, POST_COMMAND_QUIESCE_PERIOD
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+        coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_on",
+                {"entity_id": "light.living_room_light"},
+                blocking=True,
+            )
+
+        # No immediate refresh
+        coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD

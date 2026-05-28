@@ -23,8 +23,8 @@ from .const import (
     CONF_NON_DIMMABLE_LIGHTS,
     DOMAIN,
     ENTITY_TYPE_LIGHTS,
-    OPTIMISTIC_SETTLING_PERIOD,
     OPTIMISTIC_STATE_TOLERANCE,
+    POST_COMMAND_QUIESCE_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -269,7 +269,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""
@@ -285,18 +285,20 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        # During settling period, completely ignore coordinator updates
-        # This prevents UI flicker from intermediate WebSocket states during
-        # Evon's light animation (0% → target brightness) or relay switching
-        # Note: Don't call super() here - it triggers async_write_ha_state() which
-        # can cause frontend animation glitches even with unchanged optimistic values
+        self._cancel_post_command_recheck_if_data_changed()
+
+        # During quiesce window, drop the update to prevent attribute flicker
+        # from intermediate WS frames during Evon's ~2.3s fade animation.
+        # Don't call super() — it triggers async_write_ha_state() which
+        # re-reads brightness_pct from raw coordinator data, causing visible
+        # flicker even though is_on / brightness properties return optimistic.
         if (
             self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
         ):
             return
 
@@ -311,7 +313,7 @@ class EvonLight(EvonEntity, LightEntity):
             if (
                 data.get("is_on", False)
                 and (self._is_dimmable or self._supports_color_temp)
-                and self._optimistic_state_set_at is None  # No active optimistic state
+                and self._optimistic_state_set_at is None
             ):
                 evon_brightness = data.get("brightness", 0)
                 if evon_brightness > 0:
@@ -327,7 +329,6 @@ class EvonLight(EvonEntity, LightEntity):
             if self._optimistic_brightness is not None:
                 evon_brightness = data.get("brightness", 0)
                 actual_brightness = int(evon_brightness * 255 / 100)
-                # Allow small tolerance for rounding differences
                 if abs(actual_brightness - self._optimistic_brightness) <= OPTIMISTIC_STATE_TOLERANCE:
                     self._optimistic_brightness = None
                 else:
@@ -341,8 +342,12 @@ class EvonLight(EvonEntity, LightEntity):
                     else:
                         all_cleared = False
 
-            # Clear timestamp if all optimistic state has been confirmed
             if all_cleared:
                 self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()
