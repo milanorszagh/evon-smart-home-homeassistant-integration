@@ -247,13 +247,11 @@ class TestOptimisticStateConstants:
         assert OPTIMISTIC_STATE_TIMEOUT == 30.0
         assert 10.0 <= OPTIMISTIC_STATE_TIMEOUT <= 60.0
 
-    def test_optimistic_settling_periods(self):
-        """Test optimistic settling periods are reasonable."""
-        from custom_components.evon.const import OPTIMISTIC_SETTLING_PERIOD, OPTIMISTIC_SETTLING_PERIOD_SHORT
+    def test_post_command_quiesce_period(self):
+        """Test POST_COMMAND_QUIESCE_PERIOD is 5 seconds."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
 
-        assert OPTIMISTIC_SETTLING_PERIOD == 2.5
-        assert OPTIMISTIC_SETTLING_PERIOD_SHORT == 1.0
-        assert OPTIMISTIC_SETTLING_PERIOD_SHORT < OPTIMISTIC_SETTLING_PERIOD
+        assert POST_COMMAND_QUIESCE_PERIOD == 5.0
 
     def test_cover_stop_delay(self):
         """Test cover stop delay is small but non-zero."""

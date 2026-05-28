@@ -9,9 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from custom_components.evon.const import (
-    OPTIMISTIC_SETTLING_PERIOD,
-    OPTIMISTIC_SETTLING_PERIOD_SHORT,
     OPTIMISTIC_STATE_TIMEOUT,
+    POST_COMMAND_QUIESCE_PERIOD,
 )
 
 
@@ -153,15 +152,10 @@ class TestOptimisticStateConstants:
         """Test OPTIMISTIC_STATE_TIMEOUT is 30 seconds."""
         assert OPTIMISTIC_STATE_TIMEOUT == 30.0
 
-    def test_settling_period_is_2_5_seconds(self):
-        """Test OPTIMISTIC_SETTLING_PERIOD is 2.5 seconds."""
-        assert OPTIMISTIC_SETTLING_PERIOD == 2.5
+    def test_quiesce_period_is_5_seconds(self):
+        """Test POST_COMMAND_QUIESCE_PERIOD is 5 seconds."""
+        assert POST_COMMAND_QUIESCE_PERIOD == 5.0
 
-    def test_short_settling_period_is_1_second(self):
-        """Test OPTIMISTIC_SETTLING_PERIOD_SHORT is 1.0 second."""
-        assert OPTIMISTIC_SETTLING_PERIOD_SHORT == 1.0
-
-    def test_settling_less_than_timeout(self):
-        """Test that settling period is less than timeout."""
-        assert OPTIMISTIC_SETTLING_PERIOD < OPTIMISTIC_STATE_TIMEOUT
-        assert OPTIMISTIC_SETTLING_PERIOD_SHORT < OPTIMISTIC_STATE_TIMEOUT
+    def test_quiesce_less_than_timeout(self):
+        """Test that quiesce period is less than timeout backstop."""
+        assert POST_COMMAND_QUIESCE_PERIOD < OPTIMISTIC_STATE_TIMEOUT

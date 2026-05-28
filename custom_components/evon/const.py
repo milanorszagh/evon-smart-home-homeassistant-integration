@@ -157,15 +157,13 @@ LOGIN_BACKOFF_BASE = 2  # Exponential backoff base (2^failures seconds)
 CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0  # seconds to wait for WS image_path update after ImageRequest
 IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server
 
-# Settling period after control actions (seconds)
-# During this time, ignore coordinator updates and trust optimistic state
-# This prevents UI flicker from intermediate WebSocket states during Evon's
-# light animation (0% → target brightness) or relay switching delays
-# Note: Evon fade-out takes ~2.2-2.3 seconds, so 2.5s provides buffer
-OPTIMISTIC_SETTLING_PERIOD = 2.5
-
-# Shorter settling period for bathroom radiators (no animation, just response delay)
-OPTIMISTIC_SETTLING_PERIOD_SHORT = 1.0
+# Quiesce period after a control command (seconds).
+# During this window:
+#   - _handle_coordinator_update drops incoming data updates (no async_write_ha_state)
+#     to prevent attribute flicker from intermediate WS frames during fade animations.
+#   - A scheduled HTTP recheck stands armed; any WS event for the entity cancels it.
+# Covers Evon's ~2.3s light fade animation plus safety margin for slow systems.
+POST_COMMAND_QUIESCE_PERIOD = 5.0
 
 # WebSocket configuration
 CONF_HTTP_ONLY = "http_only"
