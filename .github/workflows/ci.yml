@@ -108,7 +108,7 @@ jobs:
           pytest tests/ -v --cov=custom_components/evon --cov-report=xml --cov-report=term-missing --cov-fail-under=76
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.xml
           fail_ci_if_error: true
