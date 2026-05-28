@@ -551,3 +551,71 @@ class TestLightPostCommandRecheck:
         # One recheck scheduled with the correct quiesce delay
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    def test_matching_ws_during_quiesce_clears_optimistic(self):
+        """If a WS event matches optimistic during the quiesce window, the comparison-clear
+        runs before the early-return so the entity exits quiesce promptly instead of
+        waiting for the next update outside the 5s window."""
+        import time
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+        from custom_components.evon.light import EvonLight
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        # Initial coordinator data: light off
+        data_dict = {"id": "light_1", "is_on": False, "brightness": 0}
+        coordinator.get_entity_data = MagicMock(return_value=data_dict)
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        light = EvonLight(coordinator, "light_1", "Test", "", entry, MagicMock())
+        light.hass = MagicMock()
+        light.async_write_ha_state = MagicMock()
+
+        # Simulate the user turning the light ON: optimistic state set, timestamp recorded.
+        light._optimistic_is_on = True
+        light._optimistic_state_set_at = time.monotonic()  # well within quiesce window
+
+        # Now a WS event arrives during quiesce with matching values (light actually on).
+        coordinator.get_entity_data.return_value = {"id": "light_1", "is_on": True, "brightness": 50}
+
+        light._handle_coordinator_update()
+
+        # Fix #1: comparison-clear runs even during quiesce → optimistic cleared.
+        assert light._optimistic_is_on is None
+        assert light._optimistic_state_set_at is None
+
+    def test_disagreeing_ws_during_quiesce_keeps_optimistic(self):
+        """If a WS event disagrees with optimistic during quiesce, optimistic is preserved
+        and `async_write_ha_state` is suppressed to prevent UI flicker."""
+        import time
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.light import EvonLight
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        data_dict = {"id": "light_1", "is_on": False, "brightness": 0}
+        coordinator.get_entity_data = MagicMock(return_value=data_dict)
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        light = EvonLight(coordinator, "light_1", "Test", "", entry, MagicMock())
+        light.hass = MagicMock()
+        light.async_write_ha_state = MagicMock()
+
+        # User turned light OFF; WS arrives mid-fade reporting still on, brightness=50.
+        light._optimistic_is_on = False
+        timestamp = time.monotonic()
+        light._optimistic_state_set_at = timestamp
+        coordinator.get_entity_data.return_value = {"id": "light_1", "is_on": True, "brightness": 50}
+
+        light._handle_coordinator_update()
+
+        # Optimistic preserved (Evon disagrees with user intent — keep the UI showing OFF).
+        assert light._optimistic_is_on is False
+        assert light._optimistic_state_set_at == timestamp
+        # async_write_ha_state suppressed during quiesce to prevent attribute flicker.
+        light.async_write_ha_state.assert_not_called()

@@ -83,6 +83,19 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         """Clear optimistic option."""
         self._optimistic_option = None
 
+    def _recheck_snapshot(self) -> str | None:
+        """Snapshot the active home state for cancel-on-change detection.
+
+        Overrides the default `_get_data()` snapshot because this entity reads
+        state from `coordinator.get_active_home_state()`, not from the
+        per-entity data dict.
+        """
+        return self.coordinator.get_active_home_state()
+
+    def _recheck_data_changed(self, current: str | None, snapshot: str | None) -> bool:
+        """Compare snapshots by value — `get_active_home_state` returns a string."""
+        return current != snapshot
+
     def _update_options(self) -> None:
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
@@ -200,6 +213,15 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
     def _reset_optimistic_state(self) -> None:
         """Clear optimistic option."""
         self._optimistic_option = None
+
+    def _recheck_snapshot(self) -> str:
+        """Snapshot the season mode for cancel-on-change detection."""
+        is_cooling = self.coordinator.get_season_mode()
+        return SEASON_MODE_COOLING if is_cooling else SEASON_MODE_HEATING
+
+    def _recheck_data_changed(self, current: str, snapshot: str) -> bool:
+        """Compare snapshots by value — season mode is a string."""
+        return current != snapshot
 
     @property
     def device_info(self) -> DeviceInfo:

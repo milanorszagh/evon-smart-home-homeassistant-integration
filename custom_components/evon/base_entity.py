@@ -138,19 +138,43 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         """Record when optimistic state was set."""
         self._optimistic_state_set_at = time.monotonic()
 
+    def _recheck_snapshot(self) -> Any:
+        """Return a value representing "current state" for cancel-on-change detection.
+
+        Default: the entity's data dict from coordinator data, compared by
+        identity (`is not`). The coordinator's WS path atomically replaces
+        the entity's slot, so dict identity is a reliable freshness signal.
+
+        Subclasses whose state lives outside `_get_data()` (e.g. selects
+        reading via `coordinator.get_active_home_state()`) should override
+        this AND `_recheck_data_changed` to provide an appropriate value
+        and comparison.
+        """
+        return self._get_data()
+
+    def _recheck_data_changed(self, current: Any, snapshot: Any) -> bool:
+        """Return True if a fresh coordinator update has arrived for this entity.
+
+        Default compares by identity (`is not`) — appropriate for dict
+        references that get atomically replaced. Subclasses overriding
+        `_recheck_snapshot` to return scalar values should override this
+        to use value-equality (`!=`).
+        """
+        return current is not snapshot
+
     def _schedule_post_command_recheck(self) -> None:
         """Schedule an HTTP recheck for POST_COMMAND_QUIESCE_PERIOD seconds from now.
 
-        Captures the current entity data dict identity so that subsequent
-        coordinator updates touching this entity can cancel the recheck
-        (see _cancel_post_command_recheck_if_data_changed).
+        Captures the current entity state via `_recheck_snapshot()` so that
+        subsequent coordinator updates touching this entity can cancel the
+        recheck (see _cancel_post_command_recheck_if_data_changed).
 
         If a recheck is already pending, the prior one is cancelled first
         (newer command takes precedence).
         """
         if self._recheck_cancel is not None:
             self._recheck_cancel()
-        self._data_snapshot_at_command = self._get_data()
+        self._data_snapshot_at_command = self._recheck_snapshot()
         self._recheck_cancel = async_call_later(
             self.hass,
             POST_COMMAND_QUIESCE_PERIOD,
@@ -158,17 +182,17 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         )
 
     def _cancel_post_command_recheck_if_data_changed(self) -> None:
-        """Cancel the pending recheck if this entity's data dict has been replaced.
+        """Cancel the pending recheck if a fresh update has arrived for this entity.
 
         Coordinator WS updates atomically replace the entity's dict in
         _data_index/entities_list (coordinator/__init__.py). HTTP polls
-        rebuild self.data wholesale. In both cases the dict identity
-        changes, which is our signal that a fresh update arrived for this
-        entity and a manual recheck is no longer needed.
+        rebuild self.data wholesale. In both cases the freshness check
+        (`_recheck_data_changed`) is our signal that a manual recheck is
+        no longer needed.
         """
         if self._recheck_cancel is None:
             return
-        if self._get_data() is not self._data_snapshot_at_command:
+        if self._recheck_data_changed(self._recheck_snapshot(), self._data_snapshot_at_command):
             self._recheck_cancel()
             self._recheck_cancel = None
             self._data_snapshot_at_command = None

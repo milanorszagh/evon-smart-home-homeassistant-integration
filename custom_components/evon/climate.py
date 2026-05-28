@@ -320,16 +320,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._cancel_post_command_recheck_if_data_changed()
-        # During settling period, completely ignore coordinator updates
-        # This prevents UI flicker from stale HTTP safety-net polls or
-        # intermediate WebSocket states overwriting optimistic values
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-        ):
-            return
 
-        # Only clear optimistic state when coordinator data matches expected value
+        # Clear optimistic state when coordinator data matches expected value.
+        # Run BEFORE the quiesce early-return so a confirming WS event lifts
+        # the entity out of quiesce promptly.
         data = self._get_data()
         if data:
             all_cleared = True
@@ -373,6 +367,13 @@ class EvonClimate(EvonEntity, ClimateEntity):
             if all_cleared:
                 self._optimistic_state_set_at = None
 
+        # During quiesce window, skip async_write_ha_state to prevent UI flicker
+        # from stale HTTP polls or intermediate WS states.
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+        ):
+            return
         super()._handle_coordinator_update()
 
     async def async_will_remove_from_hass(self) -> None:

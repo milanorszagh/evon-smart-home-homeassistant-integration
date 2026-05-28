@@ -291,18 +291,10 @@ class EvonLight(EvonEntity, LightEntity):
         """Handle updated data from the coordinator."""
         self._cancel_post_command_recheck_if_data_changed()
 
-        # During quiesce window, drop the update to prevent attribute flicker
-        # from intermediate WS frames during Evon's ~2.3s fade animation.
-        # Don't call super() — it triggers async_write_ha_state() which
-        # re-reads brightness_pct from raw coordinator data, causing visible
-        # flicker even though is_on / brightness properties return optimistic.
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-        ):
-            return
-
-        # Only clear optimistic state when coordinator data matches expected value
+        # Clear optimistic state when coordinator data matches expected value.
+        # Run this BEFORE the quiesce early-return so a WS event that confirms
+        # the command (matching values) lifts the entity out of quiesce promptly
+        # instead of waiting for the next update after the 5s window.
         data = self._get_data()
         if data:
             all_cleared = True
@@ -344,6 +336,15 @@ class EvonLight(EvonEntity, LightEntity):
 
             if all_cleared:
                 self._optimistic_state_set_at = None
+
+        # During quiesce window, skip async_write_ha_state to prevent attribute
+        # flicker from intermediate WS frames during Evon's ~2.3s fade animation
+        # (extra_state_attributes reads raw brightness from coordinator data).
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+        ):
+            return
 
         super()._handle_coordinator_update()
 

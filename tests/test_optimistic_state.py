@@ -292,3 +292,97 @@ class TestPostCommandRecheck:
 
         first_handle.assert_called_once()
         assert entity._recheck_cancel is second_handle
+
+    def test_recheck_fires_after_quiesce_period_when_no_ws_arrives(self):
+        """Full timer flow: schedule → POST_COMMAND_QUIESCE_PERIOD elapses → recheck fires."""
+        import asyncio
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        entity = self._make_entity_with_data({"is_on": False})
+
+        async def refresh():
+            pass
+
+        entity.coordinator.async_request_refresh = MagicMock(return_value=refresh())
+
+        # Capture the callback that async_call_later would schedule.
+        captured = {}
+
+        def fake_async_call_later(hass, delay, callback):
+            captured["delay"] = delay
+            captured["callback"] = callback
+            return MagicMock()
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            side_effect=fake_async_call_later,
+        ):
+            entity._schedule_post_command_recheck()
+
+        assert captured["delay"] == POST_COMMAND_QUIESCE_PERIOD
+        # Simulate the timer firing — no WS event arrived in the meantime.
+        asyncio.run(captured["callback"](None))
+
+        entity.coordinator.async_request_refresh.assert_called_once()
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None
+
+    def test_ws_event_during_quiesce_cancels_recheck(self):
+        """If a fresh WS update arrives during quiesce, the pending recheck is cancelled
+        (the entity treats any fresh data as proof WS is alive and a manual HTTP recheck
+        is unnecessary)."""
+        initial_data = {"is_on": False, "brightness": 0}
+        entity = self._make_entity_with_data(initial_data)
+        cancel_handle = MagicMock()
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=cancel_handle,
+        ):
+            entity._schedule_post_command_recheck()
+
+        # Simulate the coordinator atomically replacing this entity's data dict
+        # (the pattern in coordinator/__init__.py:660 for ValuesChanged events).
+        entity._get_data = lambda: {"is_on": True, "brightness": 50}
+        entity._cancel_post_command_recheck_if_data_changed()
+
+        cancel_handle.assert_called_once()
+        assert entity._recheck_cancel is None
+
+    def test_select_override_uses_value_comparison(self):
+        """Select entities override _recheck_snapshot/_recheck_data_changed to compare
+        coordinator method return values by ==, not dict identity. Verify the override
+        path triggers cancel when the value changes."""
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.async_request_refresh = MagicMock()
+        coordinator.get_active_home_state = MagicMock(return_value="HomeStateAtHome")
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        # Build a minimal entity that overrides snapshot/comparator the same way
+        # EvonHomeStateSelect does in production.
+        entity = EvonEntity(coordinator, "home_state_x", "Home State", "", entry)
+        entity.hass = MagicMock()
+        entity._recheck_snapshot = lambda: entity.coordinator.get_active_home_state()
+        entity._recheck_data_changed = lambda current, snapshot: current != snapshot
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=MagicMock(),
+        ):
+            entity._schedule_post_command_recheck()
+
+        # Snapshot captured the original value.
+        assert entity._data_snapshot_at_command == "HomeStateAtHome"
+
+        # Coordinator now reports a different value (WS event).
+        coordinator.get_active_home_state.return_value = "HomeStateWork"
+        entity._cancel_post_command_recheck_if_data_changed()
+
+        # The override's value comparison detected the change and cancelled.
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None

@@ -165,22 +165,24 @@ class EvonSwitch(EvonEntity, SwitchEntity):
         """Handle updated data from the coordinator."""
         self._cancel_post_command_recheck_if_data_changed()
 
+        # Clear optimistic state when coordinator data matches expected value.
+        # Run BEFORE the quiesce early-return so a confirming WS event lifts the
+        # entity out of quiesce promptly instead of waiting for the next update.
         if self._optimistic_is_on is not None:
-            # During quiesce period, drop the update to avoid attribute flicker.
-            # Don't call super() — it triggers async_write_ha_state() which can
-            # cause frontend animation glitches even with unchanged optimistic values.
-            if (
-                self._optimistic_state_set_at is not None
-                and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-            ):
-                return
-
             data = self._get_data()
             if data:
                 actual_is_on = data.get("is_on", False)
                 if actual_is_on == self._optimistic_is_on:
                     self._optimistic_is_on = None
                     self._optimistic_state_set_at = None
+
+        # During quiesce window, skip async_write_ha_state to prevent flicker
+        # from intermediate WS values that don't yet match the optimistic target.
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+        ):
+            return
         super()._handle_coordinator_update()
 
     async def async_will_remove_from_hass(self) -> None:
@@ -355,25 +357,28 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         """Handle updated data from the coordinator."""
         self._cancel_post_command_recheck_if_data_changed()
 
+        # Clear optimistic state when coordinator data matches expected value.
+        # Run BEFORE the quiesce early-return so a confirming WS event lifts the
+        # entity out of quiesce promptly instead of waiting for the next update.
         if self._optimistic_is_on is not None:
-            # During quiesce period, drop the update to avoid attribute flicker.
-            if (
-                self._optimistic_state_set_at is not None
-                and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-            ):
-                return
-
             data = self._get_data()
             if data:
                 actual_is_on = data.get("is_on", False)
                 actual_time_remaining = data.get("time_remaining", -1)
-                if actual_is_on == self._optimistic_is_on:
-                    if self._optimistic_is_on and actual_time_remaining <= 0:
-                        # Turning on but time_remaining not yet reported - keep optimistic
-                        return
+                if actual_is_on == self._optimistic_is_on and not (
+                    self._optimistic_is_on and actual_time_remaining <= 0
+                ):
+                    # Turning on but time_remaining not yet reported - keep optimistic
                     self._optimistic_is_on = None
                     self._optimistic_time_remaining_mins = None
                     self._optimistic_state_set_at = None
+
+        # During quiesce window, skip async_write_ha_state.
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+        ):
+            return
         super()._handle_coordinator_update()
 
 

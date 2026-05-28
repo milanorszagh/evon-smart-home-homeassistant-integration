@@ -353,6 +353,9 @@ class EvonCover(EvonEntity, CoverEntity):
         # This fixes the issue where group stop actions leave arrows inactive
         self._optimistic_is_moving = False
         self._optimistic_direction = None
+        # Reset timestamp so the quiesce check doesn't drop subsequent updates
+        # (position/tilt optimistic flags are gone — nothing to "protect").
+        self._optimistic_state_set_at = None
         self.async_write_ha_state()
 
         try:
@@ -465,24 +468,18 @@ class EvonCover(EvonEntity, CoverEntity):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._cancel_post_command_recheck_if_data_changed()
-        # Only clear optimistic state when coordinator data matches expected value
+
         data = self._get_data()
         if data:
-            # Always update API caches for WebSocket control, even during settling period
+            # Always update API caches for WebSocket control, even during quiesce
             evon_position = data.get("position", 0)
             evon_angle = data.get("angle", 0)
             self._api.update_blind_position(self._instance_id, evon_position)
             self._api.update_blind_angle(self._instance_id, evon_angle)
 
-        # During settling period, ignore coordinator updates to prevent UI flicker
-        # from intermediate position values during blind movement
-        if (
-            self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-        ):
-            return
-
-        if data:
+            # Clear optimistic state when coordinator data matches expected value.
+            # Run BEFORE the quiesce early-return so a confirming WS event lifts
+            # the entity out of quiesce promptly.
             all_cleared = True
 
             if self._optimistic_position is not None:
@@ -515,6 +512,13 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self._optimistic_direction = None
 
+        # During quiesce window, skip async_write_ha_state to prevent UI flicker
+        # from intermediate position values during blind movement.
+        if (
+            self._optimistic_state_set_at is not None
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+        ):
+            return
         super()._handle_coordinator_update()
 
     async def async_will_remove_from_hass(self) -> None:
