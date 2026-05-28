@@ -559,7 +559,6 @@ class TestLightPostCommandRecheck:
         import time
         from unittest.mock import MagicMock
 
-        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
         from custom_components.evon.light import EvonLight
 
         coordinator = MagicMock()

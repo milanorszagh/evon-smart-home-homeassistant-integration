@@ -432,16 +432,21 @@ BUTTON_LONG_PRESS_THRESHOLD = 1.5         # Hold duration for long press (second
 
 # Optimistic state and animation timing
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0   # Light identification animation timing (seconds)
-OPTIMISTIC_SETTLING_PERIOD = 2.5       # Window to ignore WS updates after control action
-OPTIMISTIC_SETTLING_PERIOD_SHORT = 1.0 # Shorter settling for bathroom radiators (no animation)
-OPTIMISTIC_STATE_TIMEOUT = 30.0        # Clears stale optimistic state on network recovery
+POST_COMMAND_QUIESCE_PERIOD = 5.0      # Quiesce window after a control command (see below)
+OPTIMISTIC_STATE_TIMEOUT = 30.0        # Backstop: clears stale optimistic state on network recovery
 OPTIMISTIC_STATE_TOLERANCE = 2         # Small rounding differences tolerance
 COVER_STOP_DELAY = 0.3                 # Delay after cover stop for UI update (seconds)
 CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0      # Wait for WS image_path update after ImageRequest (seconds)
 IMAGE_FETCH_TIMEOUT = 10               # Timeout for fetching images from Evon server (seconds)
 ```
 
-**Settling period usage:** `OPTIMISTIC_SETTLING_PERIOD` (2.5s) is applied in `_handle_coordinator_update` for lights, switches (relays), climate, and covers. During this window, coordinator updates are completely ignored to prevent UI flicker from intermediate WebSocket states (e.g., Evon's light fade-out animation 0→target, relay switching delays, or stale HTTP safety-net polls). `OPTIMISTIC_SETTLING_PERIOD_SHORT` (1.0s) is used only for bathroom radiators (no animation, just response delay). Entities without optimistic state (binary sensors, event entities, sensors) do not need settling periods.
+**Post-command quiesce (v1.22+):** `POST_COMMAND_QUIESCE_PERIOD` (5s) is applied to entities with optimistic state (lights, switches, bathroom radiators, covers, climate) and serves two complementary roles:
+
+1. **Drop UI writes during animations.** While `_optimistic_state_set_at` is within the window, `_handle_coordinator_update` skips `super()._handle_coordinator_update()` to prevent attribute flicker from intermediate WS frames (e.g., Evon's light fade 87→50→20→0). The comparison-clear logic still runs — so a WS event that matches optimistic clears it immediately and lifts the entity out of quiesce.
+
+2. **Schedule a fallback HTTP recheck.** When a command is issued, `_schedule_post_command_recheck()` arms an `async_call_later(5.0, …)` that triggers `coordinator.async_request_refresh()` if no WS event arrives. Any incoming WS update for the entity cancels this timer via `_cancel_post_command_recheck_if_data_changed()`. This means a single HTTP poll per "WS missed it" event, instead of the v1.21 pattern of immediate poll on every command.
+
+Selects (`EvonHomeStateSelect`, `EvonSeasonModeSelect`) participate in the recheck mechanism (with custom `_recheck_snapshot`/`_recheck_data_changed` overrides since they read state from coordinator methods, not `_get_data()`) but don't apply the quiesce drop — selects have no animation and the comparison-clear is sufficient. Entities without optimistic state (binary sensors, event entities, sensors) don't need any of this.
 
 **Note:** The setting is inverted - `http_only = False` means WebSocket is enabled. This allows users to disable WebSocket (by checking "Use HTTP API only") if they experience connection issues, while keeping WebSocket as the recommended default.
 
@@ -1009,34 +1014,44 @@ Evon dimmable lights use hardware-level animations for smooth transitions. This 
 - **Update frequency**: WebSocket sends brightness updates every ~200ms during animation
 - **Brightness steps**: 1-3% per update
 
-**Problem:** During fade animations, WebSocket sends intermediate brightness values (e.g., 87% → 80% → 60% → 40% → 20% → 0% during fade-out). If these updates are applied to the UI, users see:
+**Problem:** During fade animations, WebSocket sends intermediate brightness values (e.g., 87% → 80% → 60% → 40% → 20% → 0% during fade-out). If these intermediate values reach the UI via `async_write_ha_state()`, users see:
 - Jerky brightness slider animation during turn-on
 - Light appearing "on" momentarily after turn-off command
 - Incorrect brightness level when rapidly toggling
 
-**Solution:** The `OPTIMISTIC_SETTLING_PERIOD` constant (2.5 seconds) defines a window after control actions during which WebSocket/coordinator updates are ignored. The UI trusts the optimistic state instead:
+**Solution (v1.22+):** The `POST_COMMAND_QUIESCE_PERIOD` constant (5 seconds) defines a window after control actions with two distinct effects:
+
+1. **Comparison-clear runs on every update** — even during the quiesce window. If the incoming WS data matches optimistic, optimistic is cleared and the entity exits quiesce immediately. If it doesn't match (intermediate fade frame), optimistic is preserved.
+2. **`async_write_ha_state()` is suppressed during quiesce** — only if optimistic state remains active. This prevents `extra_state_attributes` from re-rendering the intermediate `brightness` value mid-fade.
 
 ```python
 # const.py
-OPTIMISTIC_SETTLING_PERIOD = 2.5  # Covers full fade animation (~2.2-2.3s) plus buffer
+POST_COMMAND_QUIESCE_PERIOD = 5.0  # Covers fade (~2.3s) + safety margin
 
-# light.py - ignore updates during settling
+# light.py
 def _handle_coordinator_update(self) -> None:
+    self._cancel_post_command_recheck_if_data_changed()
+
+    # Comparison-clear ALWAYS runs (so matching WS clears optimistic ASAP)
+    data = self._get_data()
+    if data:
+        # ... compare actual vs optimistic, clear if they match ...
+        if all_cleared:
+            self._optimistic_state_set_at = None
+
+    # Suppress async_write_ha_state during quiesce to prevent attribute flicker
     if (
         self._optimistic_state_set_at is not None
-        and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+        and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
     ):
-        super()._handle_coordinator_update()  # Maintain subscription
-        return  # Don't process data
-
-    # After settling, clear optimistic state when coordinator confirms
-    ...
+        return
+    super()._handle_coordinator_update()
 ```
 
 **Additional Safeguards:**
-- `_last_brightness`: Remembers last known brightness for optimistic turn-on display
-- Only saved when no optimistic state is active (prevents corruption from animation values)
-- `OPTIMISTIC_STATE_TIMEOUT` (30s): Clears stale optimistic state on network recovery
+- `_last_brightness`: Remembers last known brightness for optimistic turn-on display. Only saved when no optimistic state is active (prevents corruption from animation values).
+- `OPTIMISTIC_STATE_TIMEOUT` (30s): Final backstop — clears stale optimistic state if no event ever confirms or contradicts it (e.g., Evon went unreachable mid-fade).
+- **Scheduled HTTP recheck**: Each command also arms a 5s recheck timer (`_schedule_post_command_recheck`). Any WS event for the entity cancels it; if none arrives, the timer fires `async_request_refresh()` as a self-healing fallback. See `base_entity.py` for the helpers.
 
 ---
 

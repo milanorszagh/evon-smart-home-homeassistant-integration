@@ -678,17 +678,19 @@ The API client implements several security measures:
 
 All controllable entities implement optimistic updates to prevent UI flicker when changing state. When a user triggers an action (turn on light, change preset, etc.), the UI immediately shows the expected state without waiting for the coordinator to poll Evon.
 
-**How it works:**
+**How it works (v1.22+):**
 1. User triggers action (e.g., turn on light)
-2. Entity sets optimistic state and calls `async_write_ha_state()`
-3. API call is made to Evon
-4. Coordinator refreshes data from Evon
-5. In `_handle_coordinator_update()`, optimistic state is cleared only when actual state matches expected
+2. Entity sets optimistic state, records `_optimistic_state_set_at`, calls `async_write_ha_state()`
+3. API call is made to Evon (WS preferred, HTTP fallback)
+4. Entity calls `self._schedule_post_command_recheck()` — arms a 5s `async_call_later` that will call `coordinator.async_request_refresh()` if no WS event arrives. Replaces the v1.21 pattern of an immediate refresh after every command.
+5. WS event for this entity arrives: `_cancel_post_command_recheck_if_data_changed()` cancels the pending recheck (WS is alive — no manual poll needed).
+6. In `_handle_coordinator_update()`: the comparison-clear logic runs ALWAYS (even during quiesce) — optimistic is cleared when actual matches expected. The `POST_COMMAND_QUIESCE_PERIOD` (5s) only gates whether `super().async_write_ha_state()` runs, suppressing attribute flicker during fade animations.
+7. Backstop: `OPTIMISTIC_STATE_TIMEOUT` (30s) clears stuck optimistic state if neither a confirming WS event nor the recheck ever resolves it.
 
 **Entities with optimistic updates:**
 | Entity | Optimistic Properties |
 |--------|----------------------|
-| Light | `is_on`, `brightness` |
+| Light | `is_on`, `brightness`, `color_temp` |
 | Cover | `position`, `tilt_position`, `is_moving` |
 | Climate | `preset_mode`, `target_temperature`, `hvac_mode` |
 | Switch | `is_on` |
@@ -711,18 +713,38 @@ def is_on(self) -> bool:
 # In action method
 async def async_turn_on(self, **kwargs):
     self._optimistic_is_on = True
+    self._set_optimistic_timestamp()
     self.async_write_ha_state()
     await self._api.turn_on(...)
-    await self.coordinator.async_request_refresh()
+    self._schedule_post_command_recheck()  # 5s self-healing fallback
 
 # In coordinator update handler
 def _handle_coordinator_update(self):
+    self._cancel_post_command_recheck_if_data_changed()
+
+    # Comparison-clear ALWAYS runs (so matching WS clears optimistic ASAP)
     if self._optimistic_is_on is not None:
         actual = self.coordinator.get_entity_data(...)
         if actual == self._optimistic_is_on:
             self._optimistic_is_on = None
+            self._optimistic_state_set_at = None
+
+    # Suppress async_write_ha_state only while optimistic is still active
+    # (prevents attribute flicker during Evon's fade animation).
+    if (
+        self._optimistic_state_set_at is not None
+        and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+    ):
+        return
     super()._handle_coordinator_update()
+
+# In async_will_remove_from_hass
+async def async_will_remove_from_hass(self):
+    self._cleanup_post_command_recheck()
+    await super().async_will_remove_from_hass()
 ```
+
+**Select entity override:** `EvonHomeStateSelect` and `EvonSeasonModeSelect` read state from `coordinator.get_active_home_state()` / `get_season_mode()` rather than `_get_data()`. They override `_recheck_snapshot()` and `_recheck_data_changed()` on `EvonEntity` so the cancel-on-WS mechanism uses value equality against the right coordinator method. Selects don't apply the quiesce drop — they have no animation.
 
 ## Common Pitfalls
 
@@ -747,7 +769,7 @@ These are intentional design choices. Do NOT flag them as bugs or attempt to "fi
 
 6. **`_sequence_id` growing unbounded (ws_client.py)**: Safe. Python handles arbitrary-precision integers. The counter resets to 1 on every reconnect. Only relevant for connections lasting months without a single reconnect — unrealistic.
 
-7. **Settling period not on all entity types**: Settling periods (`OPTIMISTIC_SETTLING_PERIOD`) are applied to lights, switches, climate, and covers — entities where intermediate WebSocket states cause visible UI flicker. Entities like binary sensors and event entities don't need them because they have no optimistic state.
+7. **Quiesce drop not on all entity types**: The `POST_COMMAND_QUIESCE_PERIOD` early-return that suppresses `async_write_ha_state` is applied to lights, switches, climate, and covers — entities where intermediate WebSocket states cause visible UI flicker. Selects participate in the scheduled-recheck mechanism (via their `_recheck_snapshot` override) but skip the drop — they have no animation. Binary sensors and event entities don't need either because they have no optimistic state.
 
 8. **`cover.py` uses `asyncio.sleep(COVER_STOP_DELAY)` inline**: Intentional 0.3s anti-flicker delay for toggle-style blind control. The `if self.hass is not None` guard after sleep is sufficient — the sleep is too short for CancelledError to be a practical concern.
 
