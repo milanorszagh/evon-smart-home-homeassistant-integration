@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from tests.conftest import requires_ha_test_framework
@@ -146,3 +148,85 @@ async def test_season_mode_optimistic_update(hass, mock_config_entry_v2, mock_ev
     # State should reflect the optimistic update
     state = hass.states.get("select.evon_season_mode_season_mode")
     assert state.state == "cooling"
+
+
+class TestSelectPostCommandRecheck:
+    """Test that EvonHomeStateSelect and EvonSeasonModeSelect schedule a deferred recheck."""
+
+    @pytest.fixture
+    def home_state_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonHomeStateSelect with a wired-up mock coordinator."""
+        from custom_components.evon.select import EvonHomeStateSelect
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.get_home_states = MagicMock(
+            return_value=[
+                {"id": "HomeStateAtHome"},
+                {"id": "HomeStateNight"},
+                {"id": "HomeStateWork"},
+                {"id": "HomeStateHoliday"},
+            ]
+        )
+        coordinator.get_active_home_state = MagicMock(return_value="HomeStateAtHome")
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        entity = EvonHomeStateSelect(coordinator, entry, api)
+        entity.hass = hass
+        entity.entity_id = "select.evon_home_state"
+        entity.async_write_ha_state = MagicMock()
+        return entity
+
+    @pytest.fixture
+    def season_mode_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonSeasonModeSelect with a wired-up mock coordinator."""
+        from custom_components.evon.select import EvonSeasonModeSelect
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.get_season_mode = MagicMock(return_value=False)
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        entity = EvonSeasonModeSelect(coordinator, entry, api)
+        entity.hass = hass
+        entity.entity_id = "select.evon_season_mode"
+        entity.async_write_ha_state = MagicMock()
+        return entity
+
+    @pytest.mark.asyncio
+    async def test_home_state_select_schedules_recheck(self, home_state_entity, mock_evon_api_class):
+        """async_select_option schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        entity = home_state_entity
+        entity.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await entity.async_select_option("HomeStateNight")
+
+        # No immediate refresh
+        entity.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_season_mode_select_schedules_recheck(self, season_mode_entity, mock_evon_api_class):
+        """async_select_option schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        entity = season_mode_entity
+        entity.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await entity.async_select_option("cooling")
+
+        # No immediate refresh
+        entity.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD

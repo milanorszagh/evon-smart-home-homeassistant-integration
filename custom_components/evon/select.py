@@ -142,13 +142,14 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
         else:
             _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._cancel_post_command_recheck_if_data_changed()
         self._update_options()
 
         # Only clear optimistic state when coordinator data matches expected value
@@ -159,6 +160,11 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()
 
 
 class EvonSeasonModeSelect(EvonEntity, SelectEntity):
@@ -244,13 +250,14 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
         else:
             _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._cancel_post_command_recheck_if_data_changed()
         # Only clear optimistic state when coordinator data matches expected value
         if self._optimistic_option is not None:
             is_cooling = self.coordinator.get_season_mode()
@@ -260,3 +267,8 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()
