@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
+from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import EvonApi
-from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT
+from .const import DOMAIN, OPTIMISTIC_STATE_TIMEOUT, POST_COMMAND_QUIESCE_PERIOD
 from .coordinator import EvonDataUpdateCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class EntityData:
@@ -83,6 +87,9 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         self._room_name = room_name
         self._entry = entry
         self._optimistic_state_set_at: float | None = None
+        # Post-command recheck state — see _schedule_post_command_recheck.
+        self._data_snapshot_at_command: dict[str, Any] | None = None
+        self._recheck_cancel: CALLBACK_TYPE | None = None
 
     @property
     def available(self) -> bool:
@@ -96,10 +103,8 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
             "evon_id": self._instance_id,
             "integration": DOMAIN,
         }
-        # Add room name if available
         if self._room_name:
             attrs["room"] = self._room_name
-        # Add WebSocket connection status
         if hasattr(self.coordinator, "ws_connected"):
             attrs["websocket_connected"] = self.coordinator.ws_connected
         return attrs
@@ -118,13 +123,7 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         return info
 
     def _clear_optimistic_state_if_expired(self) -> None:
-        """Clear optimistic state if timeout has expired.
-
-        Subclasses that use optimistic state should initialize
-        ``_optimistic_state_set_at`` to ``None`` and call
-        ``_set_optimistic_timestamp()`` when setting optimistic values.
-        Override ``_reset_optimistic_state()`` to clear entity-specific fields.
-        """
+        """Clear optimistic state if the 30s backstop timeout has expired."""
         if (
             self._optimistic_state_set_at is not None
             and time.monotonic() - self._optimistic_state_set_at > OPTIMISTIC_STATE_TIMEOUT
@@ -138,6 +137,59 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
     def _set_optimistic_timestamp(self) -> None:
         """Record when optimistic state was set."""
         self._optimistic_state_set_at = time.monotonic()
+
+    def _schedule_post_command_recheck(self) -> None:
+        """Schedule an HTTP recheck for POST_COMMAND_QUIESCE_PERIOD seconds from now.
+
+        Captures the current entity data dict identity so that subsequent
+        coordinator updates touching this entity can cancel the recheck
+        (see _cancel_post_command_recheck_if_data_changed).
+
+        If a recheck is already pending, the prior one is cancelled first
+        (newer command takes precedence).
+        """
+        if self._recheck_cancel is not None:
+            self._recheck_cancel()
+        self._data_snapshot_at_command = self._get_data()
+        self._recheck_cancel = async_call_later(
+            self.hass,
+            POST_COMMAND_QUIESCE_PERIOD,
+            self._do_post_command_recheck,
+        )
+
+    def _cancel_post_command_recheck_if_data_changed(self) -> None:
+        """Cancel the pending recheck if this entity's data dict has been replaced.
+
+        Coordinator WS updates atomically replace the entity's dict in
+        _data_index/entities_list (coordinator/__init__.py). HTTP polls
+        rebuild self.data wholesale. In both cases the dict identity
+        changes, which is our signal that a fresh update arrived for this
+        entity and a manual recheck is no longer needed.
+        """
+        if self._recheck_cancel is None:
+            return
+        if self._get_data() is not self._data_snapshot_at_command:
+            self._recheck_cancel()
+            self._recheck_cancel = None
+            self._data_snapshot_at_command = None
+
+    def _cleanup_post_command_recheck(self) -> None:
+        """Cancel any pending recheck (call from async_will_remove_from_hass)."""
+        if self._recheck_cancel is not None:
+            self._recheck_cancel()
+            self._recheck_cancel = None
+        self._data_snapshot_at_command = None
+
+    async def _do_post_command_recheck(self, _now: Any) -> None:
+        """Fire the HTTP recheck — only reached if no WS event arrived in time."""
+        self._recheck_cancel = None
+        self._data_snapshot_at_command = None
+        _LOGGER.info(
+            "Post-command recheck firing for %s — no WS update arrived within %.1fs",
+            self._instance_id,
+            POST_COMMAND_QUIESCE_PERIOD,
+        )
+        await self.coordinator.async_request_refresh()
 
     @callback
     def _handle_coordinator_update(self) -> None:

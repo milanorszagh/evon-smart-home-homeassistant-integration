@@ -159,3 +159,177 @@ class TestOptimisticStateConstants:
     def test_quiesce_less_than_timeout(self):
         """Test that quiesce period is less than timeout backstop."""
         assert POST_COMMAND_QUIESCE_PERIOD < OPTIMISTIC_STATE_TIMEOUT
+
+
+class TestPostCommandRecheck:
+    """Test scheduled HTTP recheck after device commands."""
+
+    @pytest.fixture(autouse=True)
+    def setup_mocks(self):
+        """Set up mocks for Home Assistant modules."""
+        modules_to_mock = {
+            "homeassistant": MagicMock(),
+            "homeassistant.config_entries": MagicMock(),
+            "homeassistant.core": MagicMock(),
+            "homeassistant.helpers": MagicMock(),
+            "homeassistant.helpers.device_registry": MagicMock(),
+            "homeassistant.helpers.update_coordinator": MagicMock(),
+            "homeassistant.helpers.event": MagicMock(),
+        }
+
+        class MockCoordinatorEntity:
+            def __init__(self, coordinator):
+                self.coordinator = coordinator
+
+            def __class_getitem__(cls, item):
+                return cls
+
+        modules_to_mock["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
+        modules_to_mock["homeassistant.helpers.device_registry"].DeviceInfo = dict
+        modules_to_mock["homeassistant.core"].callback = lambda f: f
+
+        with patch.dict(sys.modules, modules_to_mock):
+            yield
+
+        for mod_name in list(sys.modules.keys()):
+            if mod_name in (
+                "custom_components.evon.base_entity",
+                "custom_components.evon.const",
+            ):
+                del sys.modules[mod_name]
+
+    def _make_entity_with_data(self, data_dict):
+        """Build a minimal EvonEntity whose _get_data returns data_dict."""
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.async_request_refresh = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        entity = EvonEntity(coordinator, "light_1", "Test Light", "", entry)
+        entity._entity_type = "lights"
+        entity.hass = MagicMock()
+        entity._get_data = lambda: data_dict
+        return entity
+
+    def test_schedule_recheck_captures_data_snapshot(self):
+        """Scheduling stores the current data dict reference for later comparison."""
+        from homeassistant.helpers.event import async_call_later
+
+        data = {"id": "light_1", "is_on": False}
+        entity = self._make_entity_with_data(data)
+        async_call_later.return_value = MagicMock()
+
+        entity._schedule_post_command_recheck()
+
+        assert entity._data_snapshot_at_command is data
+        assert entity._recheck_cancel is not None
+
+    def test_schedule_recheck_calls_async_call_later_with_quiesce_period(self):
+        """Scheduling uses POST_COMMAND_QUIESCE_PERIOD as the delay."""
+        from homeassistant.helpers.event import async_call_later
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        entity = self._make_entity_with_data({"is_on": True})
+        async_call_later.return_value = MagicMock()
+
+        entity._schedule_post_command_recheck()
+
+        async_call_later.assert_called_once()
+        args = async_call_later.call_args[0]
+        assert args[0] is entity.hass
+        assert args[1] == POST_COMMAND_QUIESCE_PERIOD
+
+    def test_cancel_recheck_if_data_changed_cancels_when_dict_replaced(self):
+        """When entity's data dict ref changes, the pending recheck is cancelled."""
+        from homeassistant.helpers.event import async_call_later
+
+        initial_data = {"is_on": False}
+        entity = self._make_entity_with_data(initial_data)
+        cancel_handle = MagicMock()
+        async_call_later.return_value = cancel_handle
+
+        entity._schedule_post_command_recheck()
+        new_data = {"is_on": True}
+        entity._get_data = lambda: new_data
+
+        entity._cancel_post_command_recheck_if_data_changed()
+
+        cancel_handle.assert_called_once()
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None
+
+    def test_cancel_recheck_if_data_changed_does_nothing_when_dict_same(self):
+        """When entity's data dict ref is unchanged, recheck is preserved."""
+        from homeassistant.helpers.event import async_call_later
+
+        data = {"is_on": False}
+        entity = self._make_entity_with_data(data)
+        cancel_handle = MagicMock()
+        async_call_later.return_value = cancel_handle
+
+        entity._schedule_post_command_recheck()
+        entity._cancel_post_command_recheck_if_data_changed()
+
+        cancel_handle.assert_not_called()
+        assert entity._recheck_cancel is not None
+
+    def test_cancel_recheck_if_data_changed_safe_when_no_pending(self):
+        """Calling with no pending recheck is a safe no-op."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity._cancel_post_command_recheck_if_data_changed()
+
+    def test_cleanup_cancels_pending_recheck(self):
+        """Cleanup helper cancels any pending recheck (for entity removal)."""
+        from homeassistant.helpers.event import async_call_later
+
+        entity = self._make_entity_with_data({"is_on": False})
+        cancel_handle = MagicMock()
+        async_call_later.return_value = cancel_handle
+
+        entity._schedule_post_command_recheck()
+        entity._cleanup_post_command_recheck()
+
+        cancel_handle.assert_called_once()
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None
+
+    def test_cleanup_safe_when_no_pending(self):
+        """Cleanup is a safe no-op when nothing is scheduled."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity._cleanup_post_command_recheck()
+
+    def test_do_recheck_calls_coordinator_refresh(self):
+        """The timer callback triggers coordinator.async_request_refresh."""
+        import asyncio
+
+        entity = self._make_entity_with_data({"is_on": False})
+
+        async def refresh():
+            pass
+
+        entity.coordinator.async_request_refresh = MagicMock(return_value=refresh())
+
+        asyncio.run(entity._do_post_command_recheck(None))
+
+        entity.coordinator.async_request_refresh.assert_called_once()
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None
+
+    def test_scheduling_twice_cancels_first(self):
+        """Issuing a second command before the first recheck fires cancels the first."""
+        from homeassistant.helpers.event import async_call_later
+
+        entity = self._make_entity_with_data({"is_on": False})
+        first_handle = MagicMock()
+        second_handle = MagicMock()
+        async_call_later.side_effect = [first_handle, second_handle]
+
+        entity._schedule_post_command_recheck()
+        entity._schedule_post_command_recheck()
+
+        first_handle.assert_called_once()
+        assert entity._recheck_cancel is second_handle
