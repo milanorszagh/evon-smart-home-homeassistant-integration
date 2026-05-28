@@ -165,10 +165,6 @@ IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server
 # Covers Evon's ~2.3s light fade animation plus safety margin for slow systems.
 POST_COMMAND_QUIESCE_PERIOD = 5.0
 
-# Temporary backward-compat alias — removed when switch is updated in Task 8.
-# Do not use in new code.
-OPTIMISTIC_SETTLING_PERIOD_SHORT = POST_COMMAND_QUIESCE_PERIOD
-
 # WebSocket configuration
 CONF_HTTP_ONLY = "http_only"
 DEFAULT_HTTP_ONLY = False  # WebSocket is enabled by default (recommended)

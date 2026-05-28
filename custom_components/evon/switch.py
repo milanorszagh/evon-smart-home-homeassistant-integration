@@ -8,11 +8,10 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
 
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
@@ -23,7 +22,6 @@ from .const import (
     ENTITY_TYPE_BATHROOM_RADIATORS,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_SWITCHES,
-    OPTIMISTIC_SETTLING_PERIOD_SHORT,
     POST_COMMAND_QUIESCE_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -214,8 +212,6 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_is_on: bool | None = None
         # Optimistic time remaining for immediate UI feedback when turning on
         self._optimistic_time_remaining_mins: float | None = None
-        # Cancel handle for delayed post-toggle verification refresh
-        self._cancel_post_toggle_verify: CALLBACK_TYPE | None = None
 
     def _reset_optimistic_state(self) -> None:
         """Reset radiator-specific optimistic state fields."""
@@ -295,7 +291,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the radiator.
@@ -348,39 +344,22 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
-
-        # Schedule a delayed verification refresh to confirm the toggle
-        # actually converged to the expected state (mitigates race condition
-        # where the radiator turned off between our state check and the toggle).
-        if self._cancel_post_toggle_verify:
-            self._cancel_post_toggle_verify()
-        self._cancel_post_toggle_verify = async_call_later(self.hass, 3, self._async_post_toggle_verify)
-
-    async def _async_post_toggle_verify(self, _now: Any) -> None:
-        """Verify state converged after toggle by requesting a coordinator refresh."""
-        self._cancel_post_toggle_verify = None
-        _LOGGER.debug("Radiator %s: post-toggle verification refresh", self._instance_id)
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_will_remove_from_hass(self) -> None:
-        """Cancel pending verification when entity is removed."""
-        if self._cancel_post_toggle_verify:
-            self._cancel_post_toggle_verify()
-            self._cancel_post_toggle_verify = None
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
         await super().async_will_remove_from_hass()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        # Only clear optimistic state when coordinator data matches expected value
-        # AND settling period has passed (prevents UI flicker from intermediate states)
+        self._cancel_post_command_recheck_if_data_changed()
+
         if self._optimistic_is_on is not None:
-            # During settling period, keep optimistic state to avoid intermediate state flicker
-            # Note: Don't call super() - it triggers async_write_ha_state() which can cause
-            # frontend animation glitches even with unchanged optimistic values
+            # During quiesce period, drop the update to avoid attribute flicker.
             if (
                 self._optimistic_state_set_at is not None
-                and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD_SHORT
+                and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
             ):
                 return
 
@@ -388,15 +367,11 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             if data:
                 actual_is_on = data.get("is_on", False)
                 actual_time_remaining = data.get("time_remaining", -1)
-                # Only clear optimistic state when:
-                # - is_on matches AND
-                # - time_remaining is valid (> 0) when turning on
                 if actual_is_on == self._optimistic_is_on:
                     if self._optimistic_is_on and actual_time_remaining <= 0:
                         # Turning on but time_remaining not yet reported - keep optimistic
                         return
                     self._optimistic_is_on = None
-                    # Clear optimistic time once real data is available
                     self._optimistic_time_remaining_mins = None
                     self._optimistic_state_set_at = None
         super()._handle_coordinator_update()

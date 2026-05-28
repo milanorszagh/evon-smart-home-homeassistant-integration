@@ -298,3 +298,105 @@ class TestSwitchPostCommandRecheck:
         # One recheck scheduled with the correct quiesce delay
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+
+# =============================================================================
+# Post-Command Recheck Tests (EvonBathroomRadiatorSwitch)
+# =============================================================================
+
+
+class TestRadiatorPostCommandRecheck:
+    """Test that EvonBathroomRadiatorSwitch commands schedule a deferred recheck.
+
+    These tests directly instantiate EvonBathroomRadiatorSwitch to verify that
+    both turn_on and turn_off call _schedule_post_command_recheck (via
+    async_call_later) instead of triggering an immediate coordinator refresh.
+    """
+
+    @pytest.fixture
+    def radiator_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonBathroomRadiatorSwitch with a wired-up mock coordinator."""
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.switch import EvonBathroomRadiatorSwitch
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.data = {
+            "bathroom_radiators": [
+                {
+                    "id": "radiator_1",
+                    "name": "Test Radiator",
+                    "is_on": False,
+                    "duration_mins": 30,
+                    "time_remaining": -1,
+                }
+            ]
+        }
+        coordinator.get_entity_data = MagicMock(
+            return_value={
+                "id": "radiator_1",
+                "name": "Test Radiator",
+                "is_on": False,
+                "duration_mins": 30,
+                "time_remaining": -1,
+            }
+        )
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        radiator = EvonBathroomRadiatorSwitch(
+            coordinator, "radiator_1", "Test Radiator", "Bathroom", entry, api
+        )
+        radiator.hass = hass
+        radiator.entity_id = "switch.test_radiator"
+        # Bypass state writing: entity is not registered in the state machine
+        radiator.async_write_ha_state = MagicMock()
+        return radiator
+
+    @pytest.mark.asyncio
+    async def test_turn_on_schedules_recheck(self, radiator_entity, mock_evon_api_class):
+        """turn_on schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        radiator = radiator_entity
+        radiator.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await radiator.async_turn_on()
+
+        # No immediate refresh
+        radiator.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_turn_off_schedules_single_recheck(self, radiator_entity, mock_evon_api_class):
+        """turn_off schedules exactly one recheck (not an immediate refresh + 3s verify)."""
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        # Radiator must be on so turn_off doesn't exit early
+        radiator = radiator_entity
+        radiator.coordinator.get_entity_data = MagicMock(
+            return_value={
+                "id": "radiator_1",
+                "name": "Test Radiator",
+                "is_on": True,
+                "duration_mins": 30,
+                "time_remaining": 25.0,
+            }
+        )
+        radiator.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await radiator.async_turn_off()
+
+        # No immediate refresh
+        radiator.coordinator.async_request_refresh.assert_not_called()
+        # Exactly one recheck scheduled (old code also had 3s verify = two calls total)
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
