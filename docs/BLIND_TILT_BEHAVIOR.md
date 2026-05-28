@@ -125,15 +125,31 @@ async def async_open_cover_tilt(self, **kwargs):
     """Open the cover tilt (slats horizontal, letting light through)."""
     # HA tilt 100 = open, Evon angle 0 = open
     self._optimistic_tilt = 100
+    self._set_optimistic_timestamp()
     self.async_write_ha_state()
-    await self._api.set_blind_tilt(self._instance_id, 0)
+    try:
+        await self._api.set_blind_tilt(self._instance_id, 0)
+    except EvonApiError:
+        self._optimistic_tilt = None
+        self._optimistic_state_set_at = None
+        self.async_write_ha_state()
+        raise
+    self._schedule_post_command_recheck()
 
 async def async_close_cover_tilt(self, **kwargs):
     """Close the cover tilt (slats angled to block light)."""
     # HA tilt 0 = closed, Evon angle 100 = closed
     self._optimistic_tilt = 0
+    self._set_optimistic_timestamp()
     self.async_write_ha_state()
-    await self._api.set_blind_tilt(self._instance_id, 100)
+    try:
+        await self._api.set_blind_tilt(self._instance_id, 100)
+    except EvonApiError:
+        self._optimistic_tilt = None
+        self._optimistic_state_set_at = None
+        self.async_write_ha_state()
+        raise
+    self._schedule_post_command_recheck()
 
 async def async_set_cover_tilt_position(self, **kwargs):
     """Set the cover tilt position.
@@ -143,8 +159,16 @@ async def async_set_cover_tilt_position(self, **kwargs):
     ha_tilt = kwargs[ATTR_TILT_POSITION]
     evon_angle = 100 - ha_tilt  # Invert for Evon
     self._optimistic_tilt = ha_tilt
+    self._set_optimistic_timestamp()
     self.async_write_ha_state()
-    await self._api.set_blind_tilt(self._instance_id, evon_angle)
+    try:
+        await self._api.set_blind_tilt(self._instance_id, evon_angle)
+    except EvonApiError:
+        self._optimistic_tilt = None
+        self._optimistic_state_set_at = None
+        self.async_write_ha_state()
+        raise
+    self._schedule_post_command_recheck()
 ```
 
 ## User Impact

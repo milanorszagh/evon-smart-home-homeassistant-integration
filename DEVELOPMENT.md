@@ -990,10 +990,14 @@ async def async_turn_on(self, **kwargs):
         self._optimistic_state_set_at = None
         self.async_write_ha_state()
         raise
-    await self.coordinator.async_request_refresh()
+    # v1.22+: arm a 5s fallback HTTP recheck; any WS event for this entity cancels it.
+    self._schedule_post_command_recheck()
 
 # In coordinator update
 def _handle_coordinator_update(self):
+    self._cancel_post_command_recheck_if_data_changed()
+    # Comparison-clear runs BEFORE the quiesce early-return so a confirming
+    # WS event lifts the entity out of quiesce promptly.
     if self._optimistic_is_on is not None:
         data = self._get_data()
         if data:
@@ -1001,7 +1005,19 @@ def _handle_coordinator_update(self):
             if actual_is_on == self._optimistic_is_on:
                 self._optimistic_is_on = None
                 self._optimistic_state_set_at = None
+    # Suppress async_write_ha_state during the 5s quiesce window to prevent
+    # attribute flicker from intermediate WS values.
+    if (
+        self._optimistic_state_set_at is not None
+        and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
+    ):
+        return
     super()._handle_coordinator_update()
+
+# On entity removal — cancel any pending recheck timer
+async def async_will_remove_from_hass(self):
+    self._cleanup_post_command_recheck()
+    await super().async_will_remove_from_hass()
 ```
 
 ### Light Animation Timing

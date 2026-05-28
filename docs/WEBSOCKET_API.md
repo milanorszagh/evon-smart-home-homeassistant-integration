@@ -39,7 +39,7 @@ const token = response.headers.get('x-elocs-token');
 const ws = new WebSocket('ws://<evon-host>/', 'echo-protocol', {
   headers: {
     'Origin': 'http://<evon-host>',
-    'Cookie': `token=${token}; x-elocs-isrelay=false`,
+    'Cookie': `token=${token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0`,
   }
 });
 ```
@@ -1171,7 +1171,7 @@ import { WebSocket } from 'ws';
 const ws = new WebSocket('ws://192.168.1.4/', 'echo-protocol', {
   headers: {
     'Origin': 'http://192.168.1.4',
-    'Cookie': `token=${token}`,
+    'Cookie': `token=${token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0`,
   }
 });
 
