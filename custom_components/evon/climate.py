@@ -30,7 +30,7 @@ from .const import (
     ENTITY_TYPE_CLIMATES,
     EVON_PRESET_COOLING,
     EVON_PRESET_HEATING,
-    OPTIMISTIC_SETTLING_PERIOD,
+    POST_COMMAND_QUIESCE_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -257,7 +257,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # WebSocket will push the actual state change - no HTTP refresh needed
+        # WS normally pushes the state change within ~0.8s.
+        # Schedule a fallback recheck — if WS doesn't push, the recheck fires
+        # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
+        self._schedule_post_command_recheck()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -277,8 +280,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            # WebSocket will push the actual state change - no HTTP refresh needed
-            # (HTTP refresh can return stale data and overwrite correct WS state)
+            # WS normally pushes the state change within ~0.8s.
+            # Schedule a fallback recheck — if WS doesn't push, the recheck fires
+            # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
+            self._schedule_post_command_recheck()
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
@@ -307,18 +312,20 @@ class EvonClimate(EvonEntity, ClimateEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        # WebSocket will push the actual state change (~0.8s) - no HTTP refresh needed
-        # IMPORTANT: Do NOT trigger HTTP refresh here - it causes a race condition where
-        # stale HTTP data overwrites the correct WebSocket state, causing preset flapping
+        # WS normally pushes the state change within ~0.8s.
+        # Schedule a fallback recheck — if WS doesn't push, the recheck fires
+        # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
+        self._schedule_post_command_recheck()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._cancel_post_command_recheck_if_data_changed()
         # During settling period, completely ignore coordinator updates
         # This prevents UI flicker from stale HTTP safety-net polls or
         # intermediate WebSocket states overwriting optimistic values
         if (
             self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
         ):
             return
 
@@ -367,3 +374,8 @@ class EvonClimate(EvonEntity, ClimateEntity):
                 self._optimistic_state_set_at = None
 
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()

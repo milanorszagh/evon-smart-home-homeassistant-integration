@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from tests.conftest import requires_ha_test_framework
@@ -471,3 +473,113 @@ async def test_climate_unrecognized_preset_mode(hass, mock_config_entry_v2, mock
     # State should still be "comfort" (HA rejected the call before it reached our code)
     state = hass.states.get("climate.living_room_climate")
     assert state.attributes.get("preset_mode") == "comfort"
+
+
+class TestClimatePostCommandRecheck:
+    """Test that EvonClimate commands schedule a deferred recheck instead of immediate refresh."""
+
+    @pytest.fixture
+    def climate_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonClimate with a wired-up mock coordinator."""
+        from custom_components.evon.climate import EvonClimate
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.data = {
+            "climates": [
+                {
+                    "id": "climate_1",
+                    "name": "Test Climate",
+                    "current_temperature": 21.5,
+                    "target_temperature": 22.0,
+                    "min_temp": 15.0,
+                    "max_temp": 25.0,
+                    "is_on": True,
+                    "is_cooling": False,
+                    "mode_saved": 4,
+                    "cooling_enabled": False,
+                }
+            ]
+        }
+        coordinator.get_entity_data = MagicMock(
+            return_value={
+                "id": "climate_1",
+                "name": "Test Climate",
+                "current_temperature": 21.5,
+                "target_temperature": 22.0,
+                "min_temp": 15.0,
+                "max_temp": 25.0,
+                "is_on": True,
+                "is_cooling": False,
+                "mode_saved": 4,
+                "cooling_enabled": False,
+            }
+        )
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        climate = EvonClimate(coordinator, "climate_1", "Test Climate", "Living Room", entry, api)
+        climate.hass = hass
+        climate.entity_id = "climate.test_climate"
+        # Bypass state writing: entity is not registered in the state machine
+        climate.async_write_ha_state = MagicMock()
+        return climate
+
+    @pytest.mark.asyncio
+    async def test_set_hvac_mode_schedules_recheck(self, climate_entity, mock_evon_api_class):
+        """set_hvac_mode schedules a recheck; does not fire immediate HTTP poll."""
+        from homeassistant.components.climate import HVACMode
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        climate = climate_entity
+        climate.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await climate.async_set_hvac_mode(HVACMode.HEAT)
+
+        # No immediate refresh
+        climate.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_set_temperature_schedules_recheck(self, climate_entity, mock_evon_api_class):
+        """set_temperature schedules a recheck; does not fire immediate HTTP poll."""
+        from homeassistant.const import ATTR_TEMPERATURE
+
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        climate = climate_entity
+        climate.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await climate.async_set_temperature(**{ATTR_TEMPERATURE: 23.0})
+
+        # No immediate refresh
+        climate.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_set_preset_mode_schedules_recheck(self, climate_entity, mock_evon_api_class):
+        """set_preset_mode schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import (
+            CLIMATE_PRESET_ECO,
+            POST_COMMAND_QUIESCE_PERIOD,
+        )
+
+        climate = climate_entity
+        climate.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await climate.async_set_preset_mode(CLIMATE_PRESET_ECO)
+
+        # No immediate refresh
+        climate.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
