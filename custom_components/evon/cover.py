@@ -68,7 +68,7 @@ from .const import (
     COVER_STOP_DELAY,
     DOMAIN,
     ENTITY_TYPE_BLINDS,
-    OPTIMISTIC_SETTLING_PERIOD,
+    POST_COMMAND_QUIESCE_PERIOD,
     OPTIMISTIC_STATE_TOLERANCE,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -288,7 +288,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
@@ -342,7 +342,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
@@ -392,7 +392,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
         """Open the cover tilt (slats horizontal, letting light through).
@@ -412,7 +412,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
         """Close the cover tilt (slats angled to block light).
@@ -432,7 +432,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         """Set the cover tilt position.
@@ -460,10 +460,11 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            await self.coordinator.async_request_refresh()
+            self._schedule_post_command_recheck()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self._cancel_post_command_recheck_if_data_changed()
         # Only clear optimistic state when coordinator data matches expected value
         data = self._get_data()
         if data:
@@ -477,7 +478,7 @@ class EvonCover(EvonEntity, CoverEntity):
         # from intermediate position values during blind movement
         if (
             self._optimistic_state_set_at is not None
-            and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD
+            and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
         ):
             return
 
@@ -515,3 +516,8 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_direction = None
 
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()

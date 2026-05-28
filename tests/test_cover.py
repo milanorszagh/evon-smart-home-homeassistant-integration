@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from tests.conftest import requires_ha_test_framework
@@ -410,3 +412,106 @@ async def test_cover_is_opening_is_closing(hass, mock_config_entry_v2, mock_evon
 
     state = hass.states.get("cover.living_room_blind")
     assert state.state == "closing"
+
+
+# =============================================================================
+# Post-Command Recheck Tests (EvonCover)
+# =============================================================================
+
+
+class TestCoverPostCommandRecheck:
+    """Test that EvonCover commands schedule a deferred recheck instead of immediate refresh."""
+
+    @pytest.fixture
+    def cover_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonCover with a wired-up mock coordinator."""
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.cover import EvonCover
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.data = {
+            "blinds": [{"id": "blind_1", "name": "Test Blind", "position": 50, "angle": 45, "is_moving": False}]
+        }
+        coordinator.get_entity_data = MagicMock(
+            return_value={"id": "blind_1", "name": "Test Blind", "position": 50, "angle": 45, "is_moving": False}
+        )
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        cover = EvonCover(coordinator, "blind_1", "Test Blind", "Living Room", entry, api)
+        cover.hass = hass
+        cover.entity_id = "cover.test_blind"
+        # Bypass state writing: entity is not registered in the state machine
+        cover.async_write_ha_state = MagicMock()
+        return cover
+
+    @pytest.mark.asyncio
+    async def test_open_schedules_recheck(self, cover_entity, mock_evon_api_class):
+        """open_cover schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await cover.async_open_cover()
+
+        # No immediate refresh
+        cover.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_close_schedules_recheck(self, cover_entity, mock_evon_api_class):
+        """close_cover schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await cover.async_close_cover()
+
+        # No immediate refresh
+        cover.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_set_position_schedules_recheck(self, cover_entity, mock_evon_api_class):
+        """set_cover_position schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await cover.async_set_cover_position(position=75)
+
+        # No immediate refresh
+        cover.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_set_tilt_schedules_recheck(self, cover_entity, mock_evon_api_class):
+        """set_cover_tilt_position schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await cover.async_set_cover_tilt_position(tilt_position=60)
+
+        # No immediate refresh
+        cover.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
