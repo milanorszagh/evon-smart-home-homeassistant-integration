@@ -68,8 +68,8 @@ from .const import (
     COVER_STOP_DELAY,
     DOMAIN,
     ENTITY_TYPE_BLINDS,
-    POST_COMMAND_QUIESCE_PERIOD,
     OPTIMISTIC_STATE_TOLERANCE,
+    POST_COMMAND_QUIESCE_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
