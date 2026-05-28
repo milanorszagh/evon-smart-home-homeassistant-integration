@@ -24,6 +24,7 @@ from .const import (
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_SWITCHES,
     OPTIMISTIC_SETTLING_PERIOD_SHORT,
+    POST_COMMAND_QUIESCE_PERIOD,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -145,7 +146,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
@@ -160,19 +161,19 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        await self.coordinator.async_request_refresh()
+        self._schedule_post_command_recheck()
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
-        # Only clear optimistic state when coordinator data matches expected value
-        # AND settling period has passed (prevents UI flicker from intermediate states)
+        self._cancel_post_command_recheck_if_data_changed()
+
         if self._optimistic_is_on is not None:
-            # During settling period, keep optimistic state to avoid intermediate state flicker
-            # Note: Don't call super() - it triggers async_write_ha_state() which can cause
-            # frontend animation glitches even with unchanged optimistic values
+            # During quiesce period, drop the update to avoid attribute flicker.
+            # Don't call super() — it triggers async_write_ha_state() which can
+            # cause frontend animation glitches even with unchanged optimistic values.
             if (
                 self._optimistic_state_set_at is not None
-                and time.monotonic() - self._optimistic_state_set_at < OPTIMISTIC_SETTLING_PERIOD_SHORT
+                and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
             ):
                 return
 
@@ -183,6 +184,11 @@ class EvonSwitch(EvonEntity, SwitchEntity):
                     self._optimistic_is_on = None
                     self._optimistic_state_set_at = None
         super()._handle_coordinator_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending recheck when entity is removed."""
+        self._cleanup_post_command_recheck()
+        await super().async_will_remove_from_hass()
 
 
 class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):

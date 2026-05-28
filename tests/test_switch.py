@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -219,3 +219,82 @@ async def test_bathroom_radiator_api_error_resets_state(hass, mock_config_entry_
     # After error, state should revert to original "off" (optimistic cleared)
     state = hass.states.get("switch.bathroom_radiator")
     assert state.state == "off"
+
+
+# =============================================================================
+# Post-Command Recheck Tests (EvonSwitch)
+# =============================================================================
+
+
+class TestSwitchPostCommandRecheck:
+    """Test that EvonSwitch commands schedule a deferred recheck instead of immediate refresh.
+
+    These tests directly instantiate EvonSwitch because process_switches() returns []
+    (no real Evon switch class exists yet) so no switch entities appear in the HA
+    integration setup.  Direct instantiation lets us test the entity logic without
+    needing the full HA service layer.
+    """
+
+    @pytest.fixture
+    def switch_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonSwitch with a wired-up mock coordinator."""
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.switch import EvonSwitch
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.data = {
+            "switches": [{"id": "switch_1", "name": "Test Switch", "is_on": False}]
+        }
+        coordinator.get_entity_data = MagicMock(
+            return_value={"id": "switch_1", "name": "Test Switch", "is_on": False}
+        )
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        switch = EvonSwitch(coordinator, "switch_1", "Test Switch", "Living Room", entry, api)
+        switch.hass = hass
+        switch.entity_id = "switch.test_switch"
+        # Bypass state writing: entity is not registered in the state machine
+        switch.async_write_ha_state = MagicMock()
+        return switch
+
+    @pytest.mark.asyncio
+    async def test_turn_on_schedules_recheck_not_immediate_refresh(
+        self, switch_entity, mock_evon_api_class
+    ):
+        """turn_on schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        switch = switch_entity
+        switch.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await switch.async_turn_on()
+
+        # No immediate refresh
+        switch.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    async def test_turn_off_schedules_recheck_not_immediate_refresh(
+        self, switch_entity, mock_evon_api_class
+    ):
+        """turn_off schedules a recheck; does not fire immediate HTTP poll."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        switch = switch_entity
+        switch.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await switch.async_turn_off()
+
+        # No immediate refresh
+        switch.coordinator.async_request_refresh.assert_not_called()
+        # One recheck scheduled with the correct quiesce delay
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
