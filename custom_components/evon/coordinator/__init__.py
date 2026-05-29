@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 from datetime import timedelta
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -107,6 +108,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Entity data index for O(1) lookup by (entity_type, instance_id)
         self._data_index: dict[tuple[str, str], dict[str, Any]] = {}
 
+        # Per-entity timestamp (time.monotonic()) of the most recent WS update.
+        # Used to detect entities that were updated via WS during an in-flight
+        # poll, so the poll's stale snapshot doesn't overwrite confirmed state.
+        self._ws_update_timestamps: dict[tuple[str, str], float] = {}
+
         # WebSocket support
         self._use_websocket = use_websocket
         self._ws_client: EvonWsClient | None = None
@@ -133,6 +139,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Evon API."""
+        # Capture the poll's start time so the merge step at the end can tell
+        # which WS updates arrived during the poll (and must be preserved
+        # against the poll's stale snapshot).
+        poll_start_time = time.monotonic()
         try:
             # Get all instances
             instances = await self.api.get_instances()
@@ -227,8 +237,22 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "season_mode": season_mode,
             }
 
+            # Preserve any WS updates that arrived during this poll.
+            # The poll's REST snapshot was taken at poll_start_time; entities
+            # that received a WS update after that have fresher state than the
+            # poll's result and must not be overwritten by it (see
+            # _merge_ws_updates_into_poll_result for the rationale).
+            self._merge_ws_updates_into_poll_result(result, poll_start_time)
+
             # Build O(1) lookup index
             self._build_data_index(result)
+
+            # Prune timestamps for entities that no longer exist (entity removed,
+            # renamed, or otherwise absent from this poll's result).
+            self._ws_update_timestamps = {
+                k: v for k, v in self._ws_update_timestamps.items()
+                if k in self._data_index
+            }
 
             # Calculate energy_today and energy_this_month for smart meters
             await self._calculate_energy_today_and_month(smart_meters)
@@ -356,6 +380,53 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if entity and "id" in entity:
                         index[(entity_type, entity["id"])] = entity
         self._data_index = index
+
+    def _merge_ws_updates_into_poll_result(
+        self, result: dict[str, Any], poll_start_time: float
+    ) -> None:
+        """Preserve WS updates that arrived during the in-flight poll.
+
+        The HTTP poll's REST snapshot was taken near ``poll_start_time`` and
+        completes ~10-25s later. Any entity updated via WebSocket since the
+        poll started has fresher state than the poll's snapshot. Without this
+        merge, the poll's stale result would overwrite confirmed state changes
+        (e.g. a light turned on via HA service: WS confirms is_on=True at
+        T+1s, then the poll completes at T+22s and reverts the cached state to
+        is_on=False because its REST snapshot predates the WS event).
+
+        Smart meters are excluded because the poll computes
+        ``energy_today_calculated`` and ``energy_this_month_calculated`` from
+        HA statistics. Letting the poll win for smart meters keeps those
+        derived values accurate; the next WS event for power/voltage/current
+        will refresh the real-time fields immediately afterwards.
+        """
+        if not self._ws_update_timestamps:
+            return
+
+        for index_key, ws_ts in self._ws_update_timestamps.items():
+            if ws_ts < poll_start_time:
+                continue
+            entity_type, instance_id = index_key
+            if entity_type == ENTITY_TYPE_SMART_METERS:
+                continue
+            ws_entity = self._data_index.get(index_key)
+            if ws_entity is None:
+                continue
+            entities_list = result.get(entity_type)
+            if not isinstance(entities_list, list):
+                continue
+            for idx, e in enumerate(entities_list):
+                if e.get("id") == instance_id:
+                    entities_list[idx] = ws_entity
+                    _LOGGER.debug(
+                        "Poll-WS merge: preserved WS update for %s/%s "
+                        "(WS at %.3fs, poll started %.3fs ago)",
+                        entity_type,
+                        instance_id,
+                        ws_ts - poll_start_time,
+                        time.monotonic() - poll_start_time,
+                    )
+                    break
 
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity via O(1) index lookup.
@@ -661,6 +732,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     break
 
         self._data_index[index_key] = updated_entity
+        # Mark this entity as WS-updated so a concurrent poll's stale snapshot
+        # doesn't overwrite our confirmed change when it completes.
+        self._ws_update_timestamps[index_key] = time.monotonic()
 
         # Import energy statistics when smart meter data is received
         if entity_type == ENTITY_TYPE_SMART_METERS:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 import textwrap
+import time
 import types
 from unittest.mock import MagicMock
 
@@ -56,6 +57,7 @@ def coordinator_and_method():
         "DOMAIN": DOMAIN,
         "_CLASS_TO_TYPE": CLASS_TO_TYPE,
         "_ws_to_coordinator_data": ws_to_coordinator_data,
+        "time": time,
     }
 
     exec(compile(func_source, "<test>", "exec"), ns)
@@ -63,6 +65,7 @@ def coordinator_and_method():
 
     obj = MagicMock()
     obj._data_index = {}
+    obj._ws_update_timestamps = {}
     obj.async_set_updated_data = MagicMock()
     obj.async_request_refresh = MagicMock(return_value=MagicMock())
     obj.hass = MagicMock()
@@ -192,6 +195,7 @@ class TestConcurrentWSAndHTTP:
             "DOMAIN": "evon",
             "_CLASS_TO_TYPE": CLASS_TO_TYPE,
             "_ws_to_coordinator_data": bad_converter,
+            "time": time,
         }
 
         exec(compile(func_source, "<test>", "exec"), ns)

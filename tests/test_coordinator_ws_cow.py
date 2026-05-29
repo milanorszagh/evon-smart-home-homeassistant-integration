@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 import textwrap
+import time
 import types
 from unittest.mock import MagicMock
 
@@ -70,6 +71,7 @@ class TestCopyOnWriteWSUpdates:
             "DOMAIN": DOMAIN,
             "_CLASS_TO_TYPE": CLASS_TO_TYPE,
             "_ws_to_coordinator_data": ws_to_coordinator_data,
+            "time": time,
         }
 
         exec(compile(func_source, "<test>", "exec"), ns)
@@ -78,6 +80,7 @@ class TestCopyOnWriteWSUpdates:
         # Create coordinator-like object
         obj = MagicMock()
         obj._data_index = {}
+        obj._ws_update_timestamps = {}
         obj.async_set_updated_data = MagicMock()
         obj.async_request_refresh = MagicMock(return_value=MagicMock())
         obj.hass = MagicMock()
@@ -253,3 +256,124 @@ class TestCopyOnWriteWSUpdates:
         # Entity should not have been replaced (no changes to apply)
         assert id(coordinator._data_index[("lights", "light_1")]) == original_id
         coordinator.async_set_updated_data.assert_not_called()
+
+    def test_ws_update_records_timestamp(self, coordinator_and_method):
+        """Each WS update records a per-entity timestamp used by the poll-merge step."""
+        coordinator = coordinator_and_method
+
+        light_entity = {"id": "light_1", "name": "Test Light", "is_on": False}
+        self._setup_data(coordinator, "lights", [light_entity])
+
+        before = time.monotonic()
+        coordinator._handle_ws_values_changed("light_1", {"IsOn": True})
+        after = time.monotonic()
+
+        ts = coordinator._ws_update_timestamps.get(("lights", "light_1"))
+        assert ts is not None
+        assert before <= ts <= after
+
+
+class TestPollWsMerge:
+    """Test that the periodic HTTP poll preserves WS updates that arrived during it."""
+
+    def _make_coordinator(self):
+        """Build a real EvonDataUpdateCoordinator-like object with the merge method bound."""
+        from custom_components.evon.coordinator import EvonDataUpdateCoordinator
+
+        obj = MagicMock(spec=EvonDataUpdateCoordinator)
+        obj._data_index = {}
+        obj._ws_update_timestamps = {}
+        # Bind the real method we want to test
+        obj._merge_ws_updates_into_poll_result = types.MethodType(
+            EvonDataUpdateCoordinator._merge_ws_updates_into_poll_result, obj
+        )
+        return obj
+
+    def test_merge_preserves_ws_update_after_poll_start(self):
+        """A WS update with timestamp > poll_start_time replaces the poll's entity."""
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        # Poll's stale result for this light
+        result = {"lights": [{"id": "light_1", "name": "Test Light", "is_on": False, "brightness": 0}]}
+        # WS-updated version in _data_index (different dict object)
+        ws_entity = {"id": "light_1", "name": "Test Light", "is_on": True, "brightness": 75}
+        coord._data_index[("lights", "light_1")] = ws_entity
+        coord._ws_update_timestamps[("lights", "light_1")] = poll_start + 5.0  # arrived 5s into poll
+
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+
+        # Poll's stale entity replaced with WS-updated one
+        assert result["lights"][0] is ws_entity
+        assert result["lights"][0]["is_on"] is True
+        assert result["lights"][0]["brightness"] == 75
+
+    def test_merge_ignores_ws_update_from_before_poll(self):
+        """A WS update with timestamp < poll_start_time is older than poll data — poll wins."""
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        result = {"lights": [{"id": "light_1", "name": "Fresh Poll", "is_on": True}]}
+        coord._data_index[("lights", "light_1")] = {"id": "light_1", "name": "Old WS", "is_on": False}
+        coord._ws_update_timestamps[("lights", "light_1")] = poll_start - 10.0  # older than poll
+
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+
+        # Poll's entity untouched
+        assert result["lights"][0]["name"] == "Fresh Poll"
+        assert result["lights"][0]["is_on"] is True
+
+    def test_merge_excludes_smart_meters(self):
+        """Smart meters skip the merge so the poll's energy_today_calculated stays accurate."""
+        from custom_components.evon.const import ENTITY_TYPE_SMART_METERS
+
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        # Poll calculated fresh energy_today
+        result = {ENTITY_TYPE_SMART_METERS: [{"id": "m1", "power": 200, "energy_today_calculated": 5.5}]}
+        # WS-updated meter has fresh power but stale energy_today_calculated
+        coord._data_index[(ENTITY_TYPE_SMART_METERS, "m1")] = {
+            "id": "m1",
+            "power": 195,
+            "energy_today_calculated": 4.0,
+        }
+        coord._ws_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = poll_start + 3.0
+
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+
+        # Poll wins for smart meters — energy_today_calculated stays fresh
+        assert result[ENTITY_TYPE_SMART_METERS][0]["energy_today_calculated"] == 5.5
+        assert result[ENTITY_TYPE_SMART_METERS][0]["power"] == 200
+
+    def test_merge_handles_missing_entity_in_index(self):
+        """If a tracked timestamp points to an entity no longer in _data_index, skip it."""
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        result = {"lights": [{"id": "light_1", "is_on": False}]}
+        # Timestamp recorded but entity gone from index (e.g. removed)
+        coord._ws_update_timestamps[("lights", "ghost")] = poll_start + 5.0
+
+        # Must not raise
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+        assert result["lights"][0]["is_on"] is False
+
+    def test_merge_handles_missing_entity_in_result(self):
+        """If a WS-tracked entity isn't in this poll's result, skip it (no crash)."""
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        result = {"lights": []}  # poll returned no lights at all
+        coord._data_index[("lights", "light_1")] = {"id": "light_1", "is_on": True}
+        coord._ws_update_timestamps[("lights", "light_1")] = poll_start + 5.0
+
+        # Must not raise
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+        assert result["lights"] == []
+
+    def test_merge_noop_when_no_timestamps(self):
+        """No WS timestamps recorded → merge is a no-op."""
+        coord = self._make_coordinator()
+        original_result = {"lights": [{"id": "light_1", "is_on": False}]}
+        result = original_result
+
+        coord._merge_ws_updates_into_poll_result(result, 100.0)
+
+        assert result is original_result
+        assert result["lights"][0]["is_on"] is False
