@@ -99,6 +99,43 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 |----|----------|------|------|-------------|--------|
 | C-H7 | CI | `.github/workflows/ci.yml` | 42 | **mypy runs with `continue-on-error: true`.** Type errors never fail CI. This was partially addressed (requirements now install correctly) but the flag remains because type errors still exist. Track resolution of those errors to eventually remove the flag. | Tracked separately as standalone effort |
 
+#### v1.22.0 Pre-Release Review (2026-07)
+
+A deep review of the `fix/post-command-quiesce` branch fixed 2 security issues
+and 7 correctness bugs, plus a cleanup pass — see commits `da74d6b`
+(blockers) and `5691416` (cleanup) and the README v1.22.0 changelog. The items
+below were surfaced by the same review but deliberately deferred; they are
+tracked here rather than lost.
+
+Bugs — to address next:
+
+| ID | Category | File | Description | Status |
+|----|----------|------|-------------|--------|
+| RV-B1 | Lifecycle | `__init__.py` (`async_unload_entry`) | API/WS are torn down (credentials blanked) **before** `async_unload_platforms`. If platform unload returns False the entry stays "loaded" but is a zombie: no WS, blank credentials, `unloading=True` never reset. Tear down WS/API only after a successful platform unload. | Open |
+| RV-B2 | Auth | `__init__.py` (`async_setup_entry`) | Setup-time `EvonAuthError` from `test_connection()` propagates as a generic setup error instead of `ConfigEntryAuthFailed`, so a password change while HA is down yields a dead entry with no reauth prompt. Login rate-limiting also raises `EvonAuthError`, surfacing a spurious reauth dialog for a transient throttle. | Open |
+| RV-B3 | Cleanup | `__init__.py` (stale-entity cleanup) | Fallback unique-id extractor returns from the first dot-containing part, truncating IDs with underscores (`SC1_M01.AirQ1` → `M01.AirQ1` → falsely "stale" → removed). `evon_doorbell_`, `evon_energy_today_`, `evon_energy_this_month_` prefixes fall into this path. Also runs on every setup with no guard against partial-poll data (one failed instance fetch marks its entities stale). | Open |
+
+Design decisions — need owner input (may be intentional):
+
+| ID | Category | File | Description | Status |
+|----|----------|------|-------------|--------|
+| RV-D1 | Quiesce | `base_entity.py` | `_cancel_post_command_recheck_if_data_changed` treats *any* completing poll as fresh data (identity churn), so a poll whose snapshot predates the command cancels the recheck safety net when it's most needed. Consider cancelling only when the comparison-clear confirmed the optimistic value. | Open (design) |
+| RV-D2 | Climate | `climate.py` | `hvac_mode` is derived from `is_on` (actively heating). Setting HEAT while already at setpoint (device reports off) can never comparison-match, so optimistic sticks 30s then flips to OFF despite success; the 5s recheck refetches the same non-matching truth. | Open (design) |
+| RV-D3 | Cover | `cover.py` | `async_stop_cover` and the toggle-stop branches end with `sleep + write` and schedule no recheck, contradicting commit `ebd7265` ("scheduled recheck for all blind commands"). If WS is dead after a stop, resting position stays stale until the 60s poll. | Open (design) |
+| RV-D4 | Statistics | `statistics.py` | Sliding baseline overwrites the outgoing day's row with `sum=0`, permanently zeroing days older than the 31-day window. Consistent within the dashboard window but silent long-term data loss. | Open (design) |
+| RV-D5 | Coordinator | `base_entity.py` + HA core | Recheck-triggered refresh can start a second concurrent `_async_update_data` while a poll is in flight (HA core doesn't serialize). Same exposure as v1.21; a "skip if refresh in flight" guard would be cheap. | Open (design) |
+
+Low-severity hardening:
+
+| ID | Category | File | Description | Status |
+|----|----------|------|-------------|--------|
+| RV-L1 | Input validation | `api.py` | `INSTANCE_ID_PATTERN` (`^[a-zA-Z0-9._-]+$`) matches `..`, so the "prevents path traversal" docstring is overstated (no slash possible, so same-origin only). Require ≥1 alphanumeric. | Open |
+| RV-L2 | SSRF-ish | `api.py` (`fetch_image`) | Builds `f"{host}{image_path}"` from an unvalidated server-supplied path; a value like `@evil/x` could send the auth cookie off-host. Requires a compromised controller or MITM on the plaintext local link. Require a single leading `/`. | Open |
+| RV-L3 | WebSocket | `ws_client.py` (`unsubscribe_instances`) | Early return when disconnected happens before the subscription list is filtered, so an unsubscribe issued while disconnected is forgotten and re-subscribed on reconnect. | Open |
+| RV-L4 | WebSocket | `ws_client.py` (`_do_subscribe`) | Post-reconnect resubscribe failure only logs; client stays "connected" (poll drops to 60s) but receives no push updates until the next disconnect. | Open |
+| RV-L5 | Logging | `ws_client.py` | `msg.data[:n]` / `len(msg.data)` on ERROR (exception) / CLOSE (int) frames raise `TypeError` inside the log call, so the real close code is masked by a generic error. | Open |
+| RV-L6 | Camera | `camera_recorder.py` | `async_stop()` during the auto-stop finalize can start a second `_finalize_recording` while the encoder still runs; narrow window, possible corrupt/duplicate output. | Open |
+
 ---
 
 ## Won't Fix (with reasoning)
