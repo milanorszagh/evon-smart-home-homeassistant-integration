@@ -17,6 +17,7 @@ from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
     CONF_MAX_RECORDING_DURATION,
+    DEFAULT_BATHROOM_RADIATOR_DURATION,
     DEFAULT_MAX_RECORDING_DURATION,
     DOMAIN,
     ENTITY_TYPE_BATHROOM_RADIATORS,
@@ -246,7 +247,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         attrs = super().extra_state_attributes
         data = self._get_data()
         if data:
-            duration_mins = data.get("duration_mins", 30)
+            duration_mins = data.get("duration_mins", DEFAULT_BATHROOM_RADIATOR_DURATION)
             attrs["duration_mins"] = duration_mins
 
             # Use optimistic time if set (for immediate UI feedback when turning on)
@@ -281,7 +282,9 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_is_on = True
         # Set optimistic time to full duration for immediate progress bar display
         if data:
-            self._optimistic_time_remaining_mins = float(data.get("duration_mins", 30))
+            self._optimistic_time_remaining_mins = float(
+                data.get("duration_mins", DEFAULT_BATHROOM_RADIATOR_DURATION)
+            )
         self._set_optimistic_timestamp()
         self.async_write_ha_state()
 

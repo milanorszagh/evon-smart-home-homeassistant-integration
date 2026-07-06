@@ -995,7 +995,7 @@ class TestPyAVImportError:
         try:
             from homeassistant.exceptions import HomeAssistantError
 
-            with pytest.raises(HomeAssistantError, match="PyAV package not installed"):
+            with pytest.raises(HomeAssistantError, match="PyAV/Pillow packages are not available"):
                 recorder._encode_mp4(Path("/tmp/test.mp4"))
         finally:
             if had_av:

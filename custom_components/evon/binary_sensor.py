@@ -280,6 +280,9 @@ class EvonIntercomConnectionSensor(EvonEntity, BinarySensorEntity):
 class EvonWebSocketStatusSensor(BinarySensorEntity):
     """Sensor showing WebSocket connection status."""
 
+    # Push-only: state is driven by the coordinator listener below, not polling.
+    # Not a CoordinatorEntity, so should_poll must be set explicitly (defaults True).
+    _attr_should_poll = False
     _attr_icon = "mdi:websocket"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC

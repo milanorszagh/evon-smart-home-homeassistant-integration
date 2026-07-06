@@ -19,7 +19,7 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 | Fix # | Area | Issue |
 |-------|------|-------|
 | 1 | CI | mypy CI step: install `requirements-test.txt` before mypy |
-| 2 | TS | Add `EVON_HOST` check at MCP server startup (`src/index.ts:29`) |
+| 2 | TS | Add `EVON_HOST` check at MCP server startup (`src/index.ts:43`) |
 | 3 | Tests | Fix tautological test assertions; move constants to `const.py` |
 | 4 | CI | Add `--cov-fail-under=76` threshold to CI |
 | 5 | Python | Fix `recording_finished` event frame count (capture before finalize) |
@@ -97,7 +97,7 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
 | ID | Category | File | Line | Description | Status |
 |----|----------|------|------|-------------|--------|
-| C-H7 | CI | `.github/workflows/ci.yml` | 37 | **mypy runs with `continue-on-error: true`.** Type errors never fail CI. This was partially addressed (requirements now install correctly) but the flag remains because 83 type errors still exist. Track resolution of those errors to eventually remove the flag. | Tracked separately as standalone effort |
+| C-H7 | CI | `.github/workflows/ci.yml` | 42 | **mypy runs with `continue-on-error: true`.** Type errors never fail CI. This was partially addressed (requirements now install correctly) but the flag remains because type errors still exist. Track resolution of those errors to eventually remove the flag. | Tracked separately as standalone effort |
 
 ---
 
@@ -107,10 +107,10 @@ The following issues were analyzed and determined to be either framework limitat
 
 | ID | Category | File | Line | Description | Reason |
 |----|----------|------|------|-------------|--------|
-| P-L3 | Resource Leak | `__init__.py` | 499 | **Static paths not cleaned up on unload.** The `StaticPathConfig` for `/evon/recordings` and the camera card JS file are registered once but never unregistered on `async_unload_entry`. The paths remain accessible after the integration is removed. | HA framework limitation: Home Assistant does not provide an API to unregister static paths. This is a known limitation affecting all integrations that register static content. |
+| P-L3 | Resource Leak | `__init__.py` | 503 | **Static path / view not cleaned up on unload.** The `StaticPathConfig` for the camera card JS and the `EvonRecordingsView` (recordings are served via an authenticated view as of v1.22.0, not a static path) are registered once but never unregistered on `async_unload_entry`. They remain accessible after the integration is removed. | HA framework limitation: Home Assistant does not provide an API to unregister static paths or views. This is a known limitation affecting all integrations that register static content. |
 | P-L7 | Security | `config_flow.py` | varies | **Config entry password stored plain text on disk.** `ConfigEntry.data[CONF_PASSWORD]` stores the user's plaintext password in `.storage/core.config_entries`. This is readable by any process with filesystem access. | HA-wide pattern: All Home Assistant integrations store credentials this way in the config entry. This is the standard practice across the entire HA ecosystem. Changing this would require framework-level support. |
 | P-L9 | HA Practices | `climate.py` | varies | **HVAC OFF maps to freeze protection, not actual off.** Setting `HVACMode.OFF` sends the freeze protection mode to the Evon controller rather than actually turning off heating. This may surprise users. | Intentional design: Freeze protection mode prevents pipe damage in cold weather. This is a safety feature that protects the user's home. The behavior is consistent with the Evon controller's intended operation. |
-| T-L9 | Maintenance | `src/ws-client.ts` | 126 | **Subscription cleanup on disconnect clears local map but not server-side.** `disconnect()` calls `this.subscriptions.clear()` (line 230) which removes local callbacks but does not send `RegisterValuesChanged(false, ...)` to the server. The server may continue processing subscriptions for the closed connection until it detects the disconnect. | Benign behavior: The server automatically detects closed connections and cleans up its own state. The local subscription map now persists across reconnects (per T-H3 fix) to enable `resubscribeAll()` functionality, making explicit unsubscribe unnecessary. |
+| T-L9 | Maintenance | `src/ws-client.ts` | 252 | **No server-side subscription cleanup on disconnect.** `disconnect()` does not send `RegisterValuesChanged(false, ...)` to the server. The server may continue processing subscriptions for the closed connection until it detects the disconnect. (The local subscription map is intentionally retained — not cleared — so `resubscribeAll()` can restore subscriptions after reconnect.) | Benign behavior: The server automatically detects closed connections and cleans up its own state. The local subscription map now persists across reconnects (per T-H3 fix) to enable `resubscribeAll()` functionality, making explicit unsubscribe unnecessary. |
 
 ---
 

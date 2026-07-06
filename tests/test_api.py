@@ -408,12 +408,6 @@ class TestEvonApiMethods:
         await mock_api.activate_home_state("HomeStateAtHome")
         mock_api._request.assert_called_with("POST", "/instances/HomeStateAtHome/Activate", [])
 
-    @pytest.mark.asyncio
-    async def test_toggle_bathroom_radiator(self, mock_api):
-        """Test toggling bathroom radiator."""
-        await mock_api.toggle_bathroom_radiator("radiator_1")
-        mock_api._request.assert_called_with("POST", "/instances/radiator_1/Switch", [])
-
 
 class TestEvonApiExceptions:
     """Tests for API exception handling.

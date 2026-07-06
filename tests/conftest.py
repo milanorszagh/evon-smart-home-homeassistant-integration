@@ -343,7 +343,6 @@ if HAS_HA_TEST_FRAMEWORK:
         # Home state methods
         mock_api.activate_home_state = AsyncMock()
         # Season mode methods
-        mock_api.get_season_mode = AsyncMock(return_value=False)  # False = heating mode
         mock_api.set_season_mode = AsyncMock()
         # Rooms for sync_areas
         mock_api.get_rooms = AsyncMock(
@@ -355,7 +354,6 @@ if HAS_HA_TEST_FRAMEWORK:
             }
         )
         # Bathroom radiator methods
-        mock_api.toggle_bathroom_radiator = AsyncMock()
         mock_api.turn_on_bathroom_radiator = AsyncMock()
         mock_api.turn_off_bathroom_radiator = AsyncMock()
         # Scene methods

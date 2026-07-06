@@ -279,7 +279,9 @@ class EvonCameraRecorder:
         except ImportError as err:
             _LOGGER.error("Camera recording requires PyAV and Pillow packages. Install with: pip install PyAV Pillow")
             raise HomeAssistantError(
-                "Recording failed: PyAV package not installed. Try reinstalling the Evon integration."
+                "Recording failed: the PyAV/Pillow packages are not available in this "
+                "Home Assistant environment. They normally ship with HA Core; install "
+                "them with 'pip install PyAV Pillow' in the HA Python environment."
             ) from err
 
         mp4_path.parent.mkdir(parents=True, exist_ok=True)

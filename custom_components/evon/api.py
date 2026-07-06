@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from .ws_client import EvonWsClient
 
 from .const import (
-    DEFAULT_BATHROOM_RADIATOR_DURATION,
     DEFAULT_CONNECTION_POOL_SIZE,
     DEFAULT_LOGIN_TIMEOUT,
     DEFAULT_REQUEST_TIMEOUT,
@@ -813,55 +812,11 @@ class EvonApi:
         await self.call_method(instance_id, "SwitchOff")
 
     # Home state methods
-    async def get_home_states(self, home_state_class: str = "System.HomeState") -> list[dict[str, Any]]:
-        """Get all home states.
-
-        Args:
-            home_state_class: The class name for home state instances
-
-        Returns:
-            List of home state dictionaries with id, name, and active status
-        """
-        instances = await self.get_instances()
-        home_states = []
-        for instance in instances:
-            class_name = instance.get("ClassName", "")
-            instance_id = instance.get("ID", "")
-            # Skip template instances
-            if class_name == home_state_class and not instance_id.startswith("System."):
-                # Get detailed info to check active status
-                details = await self.get_instance(instance_id)
-                home_states.append(
-                    {
-                        "id": instance_id,
-                        "name": instance.get("Name", instance_id),
-                        "active": details.get("Active", False),
-                    }
-                )
-        return home_states
-
-    async def get_active_home_state(self) -> str | None:
-        """Get the currently active home state ID."""
-        home_states = await self.get_home_states()
-        for state in home_states:
-            if state.get("active"):
-                return state.get("id")
-        return None
-
     async def activate_home_state(self, instance_id: str) -> None:
         """Activate a home state."""
         await self.call_method(instance_id, "Activate")
 
     # Bathroom radiator methods
-    async def toggle_bathroom_radiator(self, instance_id: str) -> None:
-        """Toggle a bathroom radiator (electric heater) on/off.
-
-        This uses the Switch method which toggles the current state.
-        If off, turns on for the configured duration (default 30 min).
-        If on, turns off immediately.
-        """
-        await self.call_method(instance_id, "Switch")
-
     async def turn_on_bathroom_radiator(self, instance_id: str) -> None:
         """Turn on a bathroom radiator for one heating cycle.
 
@@ -883,67 +838,12 @@ class EvonApi:
         """
         await self.call_method(instance_id, "Switch")
 
-    async def get_bathroom_radiators(self, radiator_class: str = "Heating.BathroomRadiator") -> list[dict[str, Any]]:
-        """Get all bathroom radiators with their current state.
-
-        Returns:
-            List of radiator dictionaries with id, name, is_on, time_remaining, etc.
-        """
-        instances = await self.get_instances()
-        radiators = []
-        for instance in instances:
-            class_name = instance.get("ClassName", "")
-            if class_name == radiator_class:
-                instance_id = instance.get("ID", "")
-                details = await self.get_instance(instance_id)
-                radiators.append(
-                    {
-                        "id": instance_id,
-                        "name": instance.get("Name", instance_id),
-                        "is_on": details.get("Output", False),
-                        "time_remaining": details.get("NextSwitchPoint", -1),
-                        "duration_mins": details.get("EnableForMins", DEFAULT_BATHROOM_RADIATOR_DURATION),
-                    }
-                )
-        return radiators
-
     # Scene methods
     async def execute_scene(self, instance_id: str) -> None:
         """Execute an Evon scene."""
         await self.call_method(instance_id, "Execute")
 
     # Season mode methods (global heating/cooling)
-    async def get_season_mode(self) -> bool:
-        """Get the current season mode.
-
-        Returns:
-            True if cooling (summer), False if heating (winter)
-        """
-        details = await self.get_instance("Base.ehThermostat")
-        is_cool = details.get("IsCool")
-
-        # Validate the response - IsCool should be a boolean
-        if is_cool is None:
-            _LOGGER.warning("Season mode response missing 'IsCool' field, defaulting to heating mode")
-            return False
-
-        if not isinstance(is_cool, bool):
-            _LOGGER.warning(
-                "Season mode 'IsCool' has unexpected type %s (value: %s), attempting to interpret as boolean",
-                type(is_cool).__name__,
-                is_cool,
-            )
-            # Try to interpret common values as boolean
-            if is_cool in (0, "0", "false", "False", "no", "No"):
-                return False
-            if is_cool in (1, "1", "true", "True", "yes", "Yes"):
-                return True
-            # Unknown value, default to heating
-            _LOGGER.warning("Could not interpret season mode value, defaulting to heating mode")
-            return False
-
-        return is_cool
-
     async def set_season_mode(self, is_cooling: bool) -> None:
         """Set the global season mode.
 

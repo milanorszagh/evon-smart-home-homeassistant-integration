@@ -6,7 +6,7 @@ from collections.abc import Callable
 import logging
 from typing import Any
 
-from ...const import EVON_CLASS_BATHROOM_RADIATOR
+from ...const import DEFAULT_BATHROOM_RADIATOR_DURATION, EVON_CLASS_BATHROOM_RADIATOR
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def process_bathroom_radiators(
                 "room_name": get_room_name(instance.get("Group", "")),
                 "is_on": details.get("Output", False),
                 "time_remaining": details.get("NextSwitchPoint", -1),
-                "duration_mins": details.get("EnableForMins", 30),
+                "duration_mins": details.get("EnableForMins", DEFAULT_BATHROOM_RADIATOR_DURATION),
                 "permanently_on": details.get("PermanentlyOn", False),
                 "permanently_off": details.get("PermanentlyOff", False),
                 "deactivated": details.get("Deactivated", False),
