@@ -88,7 +88,9 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         self._entry = entry
         self._optimistic_state_set_at: float | None = None
         # Post-command recheck state — see _schedule_post_command_recheck.
-        self._data_snapshot_at_command: dict[str, Any] | None = None
+        # Holds whatever _recheck_snapshot() returns (default: a WS-update
+        # timestamp; select overrides return a state string).
+        self._data_snapshot_at_command: Any = None
         self._recheck_cancel: CALLBACK_TYPE | None = None
 
     @property
@@ -139,28 +141,31 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         self._optimistic_state_set_at = time.monotonic()
 
     def _recheck_snapshot(self) -> Any:
-        """Return a value representing "current state" for cancel-on-change detection.
+        """Return a value representing WS liveness for this entity at command time.
 
-        Default: the entity's data dict from coordinator data, compared by
-        identity (`is not`). The coordinator's WS path atomically replaces
-        the entity's slot, so dict identity is a reliable freshness signal.
+        Default: the coordinator's per-entity WS-update timestamp. A genuine WS
+        update advances it; an HTTP poll rebuild does NOT. Comparing timestamps
+        (see `_recheck_data_changed`) means only real WS liveness cancels the
+        recheck — a stale in-flight poll completing during the quiesce window
+        cannot defeat the safety net (RV-D1).
 
-        Subclasses whose state lives outside `_get_data()` (e.g. selects
-        reading via `coordinator.get_active_home_state()`) should override
-        this AND `_recheck_data_changed` to provide an appropriate value
-        and comparison.
+        Subclasses whose state/liveness lives outside the WS-timestamp map (e.g.
+        selects reading `coordinator.get_active_home_state()`) override this AND
+        `_recheck_data_changed`.
         """
-        return self._get_data()
+        if self._entity_type is None:
+            return None
+        return self.coordinator.get_ws_update_timestamp(self._entity_type, self._instance_id)
 
     def _recheck_data_changed(self, current: Any, snapshot: Any) -> bool:
-        """Return True if a fresh coordinator update has arrived for this entity.
+        """Return True if a genuine WS update for this entity arrived since the command.
 
-        Default compares by identity (`is not`) — appropriate for dict
-        references that get atomically replaced. Subclasses overriding
-        `_recheck_snapshot` to return scalar values should override this
-        to use value-equality (`!=`).
+        Default compares WS-update timestamps: True only when a newer timestamp
+        exists. ``None == None`` (the entity never received a WS update) is False,
+        so the recheck stays armed and fires the fallback HTTP poll. Subclasses
+        overriding `_recheck_snapshot` to return scalar values compare by `!=`.
         """
-        return current is not snapshot
+        return current is not None and current != snapshot
 
     def _schedule_post_command_recheck(self) -> None:
         """Schedule an HTTP recheck for POST_COMMAND_QUIESCE_PERIOD seconds from now.
@@ -182,13 +187,14 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         )
 
     def _cancel_post_command_recheck_if_data_changed(self) -> None:
-        """Cancel the pending recheck if a fresh update has arrived for this entity.
+        """Cancel the pending recheck if a genuine WS update arrived for this entity.
 
-        Coordinator WS updates atomically replace the entity's dict in
-        _data_index/entities_list (coordinator/__init__.py). HTTP polls
-        rebuild self.data wholesale. In both cases the freshness check
-        (`_recheck_data_changed`) is our signal that a manual recheck is
-        no longer needed.
+        The default `_recheck_data_changed` compares the coordinator's per-entity
+        WS-update timestamp: only a real WebSocket update (proving WS is alive)
+        cancels the recheck. An HTTP poll rebuild does NOT — otherwise a stale
+        in-flight poll completing during the quiesce window would defeat the
+        safety net exactly when it's needed (RV-D1). Selects override the
+        snapshot/compare to use their coordinator state value instead.
         """
         if self._recheck_cancel is None:
             return

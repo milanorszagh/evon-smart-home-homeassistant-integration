@@ -461,6 +461,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         return self._data_index.get((entity_type, instance_id))
 
+    def get_ws_update_timestamp(self, entity_type: str, instance_id: str) -> float | None:
+        """Return the monotonic time of the most recent WS update for an entity.
+
+        Used by the post-command recheck to tell a genuine WS confirmation (this
+        timestamp advances) apart from an HTTP poll rebuild (it does not), so a
+        stale in-flight poll completing during the quiesce window can't cancel
+        the recheck safety net. Returns None if the entity has had no WS update.
+        """
+        return self._ws_update_timestamps.get((entity_type, instance_id))
+
     def get_active_home_state(self) -> str | None:
         """Get the currently active home state ID."""
         if not self.data:

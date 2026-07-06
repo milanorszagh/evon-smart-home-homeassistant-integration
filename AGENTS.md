@@ -689,7 +689,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 2. Entity sets optimistic state, records `_optimistic_state_set_at`, calls `async_write_ha_state()`
 3. API call is made to Evon (WS preferred, HTTP fallback)
 4. Entity calls `self._schedule_post_command_recheck()` — arms a 5s `async_call_later` that will call `coordinator.async_request_refresh()` if no WS event arrives. Replaces the v1.21 pattern of an immediate refresh after every command.
-5. WS event for this entity arrives: `_cancel_post_command_recheck_if_data_changed()` cancels the pending recheck (WS is alive — no manual poll needed).
+5. WS event for this entity arrives: `_cancel_post_command_recheck_if_data_changed()` cancels the pending recheck (WS is alive — no manual poll needed). Cancellation keys off the coordinator's per-entity WS-update timestamp advancing, **not** dict identity — so a stale in-flight HTTP poll rebuilding the entity dict during the quiesce window does not defeat the recheck safety net (RV-D1). Selects override the snapshot/compare to use their coordinator state value.
 6. In `_handle_coordinator_update()`: the comparison-clear logic runs ALWAYS (even during quiesce) — optimistic is cleared when actual matches expected. The `POST_COMMAND_QUIESCE_PERIOD` (5s) only gates whether `super().async_write_ha_state()` runs, suppressing attribute flicker during fade animations.
 7. Backstop: `OPTIMISTIC_STATE_TIMEOUT` (30s) clears stuck optimistic state if neither a confirming WS event nor the recheck ever resolves it.
 

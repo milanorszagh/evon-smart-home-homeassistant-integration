@@ -178,17 +178,19 @@ class TestPostCommandRecheck:
         entity._entity_type = "lights"
         entity.hass = MagicMock()
         entity._get_data = lambda: data_dict
+        # Default: no WS update recorded for this entity yet.
+        coordinator.get_ws_update_timestamp = MagicMock(return_value=None)
         return entity
 
-    def test_schedule_recheck_captures_data_snapshot(self):
-        """Scheduling stores the current data dict reference for later comparison."""
-        data = {"id": "light_1", "is_on": False}
-        entity = self._make_entity_with_data(data)
+    def test_schedule_recheck_captures_snapshot(self):
+        """Scheduling stores the current WS-liveness snapshot for later comparison."""
+        entity = self._make_entity_with_data({"id": "light_1", "is_on": False})
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=42.0)
 
         with patch("custom_components.evon.base_entity.async_call_later", return_value=MagicMock()):
             entity._schedule_post_command_recheck()
 
-        assert entity._data_snapshot_at_command is data
+        assert entity._data_snapshot_at_command == 42.0
         assert entity._recheck_cancel is not None
 
     def test_schedule_recheck_calls_async_call_later_with_quiesce_period(self):
@@ -206,31 +208,34 @@ class TestPostCommandRecheck:
         assert args[0] is entity.hass
         assert args[1] == POST_COMMAND_QUIESCE_PERIOD
 
-    def test_cancel_recheck_if_data_changed_cancels_when_dict_replaced(self):
-        """When entity's data dict ref changes, the pending recheck is cancelled."""
-        initial_data = {"is_on": False}
-        entity = self._make_entity_with_data(initial_data)
+    def test_cancel_recheck_does_nothing_when_no_ws_update(self):
+        """With no WS update recorded for the entity, the recheck is preserved."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=None)
         cancel_handle = MagicMock()
 
         with patch("custom_components.evon.base_entity.async_call_later", return_value=cancel_handle):
             entity._schedule_post_command_recheck()
 
-        entity._get_data = lambda: {"is_on": True}
         entity._cancel_post_command_recheck_if_data_changed()
 
-        cancel_handle.assert_called_once()
-        assert entity._recheck_cancel is None
-        assert entity._data_snapshot_at_command is None
+        cancel_handle.assert_not_called()
+        assert entity._recheck_cancel is not None
 
-    def test_cancel_recheck_if_data_changed_does_nothing_when_dict_same(self):
-        """When entity's data dict ref is unchanged, recheck is preserved."""
-        data = {"is_on": False}
-        entity = self._make_entity_with_data(data)
+    def test_stale_poll_rebuild_does_not_cancel_recheck(self):
+        """RV-D1: a completed HTTP poll (no WS update for this entity) must NOT cancel
+        the recheck. A stale in-flight poll rebuilds the entity dict (new identity)
+        but does not advance the per-entity WS timestamp, so the safety net stays
+        armed and fires the fallback refresh."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=None)
         cancel_handle = MagicMock()
 
         with patch("custom_components.evon.base_entity.async_call_later", return_value=cancel_handle):
             entity._schedule_post_command_recheck()
 
+        # Poll rebuild: a brand-new dict (different identity) with no WS update.
+        entity._get_data = lambda: {"is_on": False}
         entity._cancel_post_command_recheck_if_data_changed()
 
         cancel_handle.assert_not_called()
@@ -329,11 +334,12 @@ class TestPostCommandRecheck:
         assert entity._data_snapshot_at_command is None
 
     def test_ws_event_during_quiesce_cancels_recheck(self):
-        """If a fresh WS update arrives during quiesce, the pending recheck is cancelled
-        (the entity treats any fresh data as proof WS is alive and a manual HTTP recheck
-        is unnecessary)."""
-        initial_data = {"is_on": False, "brightness": 0}
-        entity = self._make_entity_with_data(initial_data)
+        """If a genuine WS update arrives during quiesce, the pending recheck is
+        cancelled (a real WS update proves WS is alive, so a manual HTTP recheck is
+        unnecessary). The coordinator records a fresh WS timestamp on each
+        ValuesChanged event (coordinator/__init__.py)."""
+        entity = self._make_entity_with_data({"is_on": False, "brightness": 0})
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=10.0)
         cancel_handle = MagicMock()
 
         with patch(
@@ -342,9 +348,8 @@ class TestPostCommandRecheck:
         ):
             entity._schedule_post_command_recheck()
 
-        # Simulate the coordinator atomically replacing this entity's data dict
-        # (the pattern in coordinator/__init__.py:660 for ValuesChanged events).
-        entity._get_data = lambda: {"is_on": True, "brightness": 50}
+        # WS ValuesChanged for this entity advances the recorded WS timestamp.
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=11.0)
         entity._cancel_post_command_recheck_if_data_changed()
 
         cancel_handle.assert_called_once()
