@@ -112,6 +112,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Used to detect entities that were updated via WS during an in-flight
         # poll, so the poll's stale snapshot doesn't overwrite confirmed state.
         self._ws_update_timestamps: dict[tuple[str, str], float] = {}
+        # Guards against a re-entrant concurrent poll (HA core does not serialize
+        # _async_refresh — a recheck-triggered refresh can fire while a scheduled
+        # poll is mid-flight).
+        self._update_in_progress = False
 
         # WebSocket support
         self._use_websocket = use_websocket
@@ -139,6 +143,16 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Evon API."""
+        # Skip a re-entrant concurrent fetch. HA core does not serialize
+        # _async_refresh, so a recheck-triggered async_request_refresh can start a
+        # second ~930-instance poll while a scheduled one is mid-flight — the two
+        # would race on _instances_cache / _rooms_cache / _ws_update_timestamps.
+        # If a poll is already running, return current data; the in-flight poll
+        # delivers fresh state when it completes.
+        if self._update_in_progress and self.data is not None:
+            _LOGGER.debug("Coordinator poll already in progress; skipping re-entrant refresh")
+            return self.data
+        self._update_in_progress = True
         # Capture the poll's start time so the merge step at the end can tell
         # which WS updates arrived during the poll (and must be preserved
         # against the poll's stale snapshot).
@@ -290,6 +304,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except EvonApiError as err:
             return self._handle_api_error(err)
+        finally:
+            self._update_in_progress = False
 
     def _handle_api_error(self, err: EvonApiError) -> dict[str, Any]:
         """Handle API errors with failure tracking and repair issue management."""

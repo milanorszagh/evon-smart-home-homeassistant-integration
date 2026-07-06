@@ -542,6 +542,33 @@ class TestCoordinatorApiErrorHandling:
         with pytest.raises(ConfigEntryAuthFailed):
             await coordinator._async_update_data()
 
+    async def test_reentrant_refresh_skipped_while_poll_in_progress(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """RV-D5: a re-entrant refresh while a poll is in flight must not start a
+        second concurrent fetch — HA core doesn't serialize _async_refresh, so the
+        guard returns current data instead of racing a second ~930-instance poll."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Simulate a poll already running.
+        coordinator._update_in_progress = True
+        mock_evon_api_class.get_instances.reset_mock()
+
+        result = await coordinator._async_update_data()
+
+        # Guard returned current data without fetching, and left the flag alone
+        # (it belongs to the in-flight poll).
+        assert result is coordinator.data
+        mock_evon_api_class.get_instances.assert_not_called()
+        assert coordinator._update_in_progress is True
+
     async def test_ws_disconnect_creates_repair_issue(
         self,
         hass: HomeAssistant,
