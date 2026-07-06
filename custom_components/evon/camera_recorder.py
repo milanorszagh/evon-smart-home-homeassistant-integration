@@ -199,12 +199,25 @@ class EvonCameraRecorder:
 
     async def _finalize_recording(self) -> str | None:
         """Encode captured frames to MP4 and optionally save JPEGs."""
+        # Atomically claim the finalize: only the RECORDING->PROCESSING transition
+        # proceeds. The auto-stop path and a user async_stop() can otherwise both
+        # reach here (state stays RECORDING until mid-method), running the encoder
+        # twice and clearing _frames out from under the first still-running encode.
+        # Single-threaded event loop: there is no await between this check and the
+        # state set, so exactly one caller wins.
+        if self._state != RecordingState.RECORDING:
+            _LOGGER.debug(
+                "Finalize skipped for %s (state=%s, already finalizing or idle)",
+                self._camera.entity_id,
+                self._state,
+            )
+            return None
+        self._state = RecordingState.PROCESSING
+
         if not self._frames:
             _LOGGER.warning("No frames captured for %s", self._camera.entity_id)
             self._state = RecordingState.IDLE
             return None
-
-        self._state = RecordingState.PROCESSING
 
         _LOGGER.info(
             "Processing %d frames for %s",

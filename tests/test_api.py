@@ -792,6 +792,69 @@ class TestValidateInstanceId:
         with pytest.raises(ValueError, match="Invalid instance ID"):
             _validate_instance_id("light\n1")  # Newline
 
+    def test_invalid_dot_only_ids(self):
+        """Dot-only IDs must be rejected — they form path-traversal segments.
+
+        The charset pattern alone matched '.', '..', '...', so an instance_id of
+        '..' produced /instances/../{method} -> /instances/{method} on the same
+        host. Require at least one alphanumeric character.
+        """
+        from custom_components.evon.api import _validate_instance_id
+
+        for bad in ("..", ".", "...", "._-", "-.-"):
+            with pytest.raises(ValueError, match="Invalid instance ID"):
+                _validate_instance_id(bad)
+
+
+class TestFetchImagePathValidation:
+    """fetch_image must not build an off-host URL from a server-supplied path."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_path_that_would_leave_host(self):
+        """A path not starting with '/' could send the auth cookie off-host."""
+        import time
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "test_token"
+        api._token_timestamp = time.monotonic()
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock()
+        api._session = mock_session
+
+        # "@evil.example/x" -> "http://192.168.1.100@evil.example/x" parses the LAN
+        # IP as userinfo and sends the request (with the token cookie) off-host.
+        for bad_path in ("@evil.example/x", "evil.example/x", "//evil.example/x", ""):
+            result = await api.fetch_image(bad_path)
+            assert result is None
+
+        mock_session.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_accepts_normal_path(self):
+        """A well-formed '/temp/...' path is fetched normally."""
+        import time
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "test_token"
+        api._token_timestamp = time.monotonic()
+
+        resp = AsyncMock()
+        resp.status = 200
+        resp.read = AsyncMock(return_value=b"jpegdata")
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(return_value=cm)
+        api._session = mock_session
+
+        result = await api.fetch_image("/temp/snapshot.jpg")
+        assert result == b"jpegdata"
+        mock_session.get.assert_called_once()
+        assert mock_session.get.call_args[0][0] == "http://192.168.1.100/temp/snapshot.jpg"
+
 
 class TestValidateMethodName:
     """Tests for _validate_method_name function."""

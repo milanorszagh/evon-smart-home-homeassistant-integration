@@ -181,6 +181,8 @@ WS_RECEIVE_TIMEOUT = (
 )  # 180s — detect silent connection death (relaxed to avoid false disconnects on low-traffic systems)
 WS_LOG_MESSAGE_TRUNCATE = 500  # Max characters to log from WebSocket messages
 WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejecting new ones
+WS_RESUBSCRIBE_MAX_ATTEMPTS = 3  # Retries for a post-reconnect resubscribe before giving up
+WS_RESUBSCRIBE_RETRY_DELAY = 2.0  # Delay between resubscribe attempts (seconds)
 
 # Light identification animation timing (seconds)
 # Evon lights fade in/out over ~2.5s, so 3s provides buffer for visual effect

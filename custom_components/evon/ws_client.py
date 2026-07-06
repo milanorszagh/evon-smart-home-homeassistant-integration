@@ -26,6 +26,8 @@ from .const import (
     WS_RECEIVE_TIMEOUT,
     WS_RECONNECT_JITTER,
     WS_RECONNECT_MAX_DELAY,
+    WS_RESUBSCRIBE_MAX_ATTEMPTS,
+    WS_RESUBSCRIBE_RETRY_DELAY,
     WS_SUBSCRIBE_REQUEST_TIMEOUT,
 )
 
@@ -500,10 +502,16 @@ class EvonWsClient:
             async with asyncio.timeout(10):
                 msg = await self._ws.receive()
 
+            # Only str/bytes payloads are sliceable. CLOSE frames carry an int
+            # close code and ERROR frames carry an exception; slicing those would
+            # raise inside the log call and mask the real close reason.
+            data_preview = (
+                msg.data[:WS_LOG_MESSAGE_TRUNCATE] if isinstance(msg.data, (str, bytes)) else msg.data
+            )
             _LOGGER.debug(
                 "WebSocket received message: type=%s, data=%s",
                 msg.type,
-                msg.data[:WS_LOG_MESSAGE_TRUNCATE] if msg.data else None,
+                data_preview,
             )
 
             if msg.type == aiohttp.WSMsgType.TEXT:
@@ -545,7 +553,11 @@ class EvonWsClient:
         try:
             async with asyncio.timeout(WS_RECEIVE_TIMEOUT):
                 msg = await self._ws.receive()
-            _LOGGER.debug("WS msg received: type=%s, len=%s", msg.type, len(msg.data) if msg.data else 0)
+            # len() only applies to str/bytes payloads; CLOSE (int) / ERROR
+            # (exception) frames would raise here and be misreported as an
+            # "unexpected error" instead of the actual close reason below.
+            data_len = len(msg.data) if isinstance(msg.data, (str, bytes)) else msg.data
+            _LOGGER.debug("WS msg received: type=%s, data=%s", msg.type, data_len)
 
             if msg.type == aiohttp.WSMsgType.TEXT:
                 self._messages_received += 1
@@ -831,11 +843,14 @@ class EvonWsClient:
 
         await self._do_subscribe(subscriptions)
 
-    async def _do_subscribe(self, subscriptions: list[dict[str, Any]]) -> None:
+    async def _do_subscribe(self, subscriptions: list[dict[str, Any]]) -> bool:
         """Actually perform the subscription request.
 
         Args:
             subscriptions: List of subscription dicts.
+
+        Returns:
+            True if the subscription request succeeded, False otherwise.
         """
         try:
             # RegisterValuesChanged(subscribe, subscriptions, getInitialValues, unknownFlag)
@@ -849,14 +864,31 @@ class EvonWsClient:
                 "Subscribed to %d instances for real-time updates",
                 len(subscriptions),
             )
+            return True
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Failed to subscribe to instances: %s", err)
+            return False
 
     async def _resubscribe(self) -> None:
-        """Re-subscribe to all stored subscriptions after reconnection."""
-        if self._subscriptions:
-            _LOGGER.debug("Re-subscribing to %d instances", len(self._subscriptions))
-            await self._do_subscribe(list(self._subscriptions))
+        """Re-subscribe to all stored subscriptions after reconnection.
+
+        Retries on failure: a single failed RegisterValuesChanged (e.g. a
+        transient timeout right after reconnect) would otherwise leave the
+        client connected but deaf — no push updates until the next disconnect.
+        """
+        if not self._subscriptions:
+            return
+        _LOGGER.debug("Re-subscribing to %d instances", len(self._subscriptions))
+        for attempt in range(WS_RESUBSCRIBE_MAX_ATTEMPTS):
+            if await self._do_subscribe(list(self._subscriptions)):
+                return
+            if attempt + 1 < WS_RESUBSCRIBE_MAX_ATTEMPTS:
+                await asyncio.sleep(WS_RESUBSCRIBE_RETRY_DELAY)
+        _LOGGER.warning(
+            "Resubscription failed after %d attempts; real-time updates may be "
+            "unavailable until the next reconnect",
+            WS_RESUBSCRIBE_MAX_ATTEMPTS,
+        )
 
     async def unsubscribe_instances(self, instance_ids: list[str]) -> None:
         """Unsubscribe from property changes for instances.
@@ -864,11 +896,16 @@ class EvonWsClient:
         Args:
             instance_ids: List of instance IDs to unsubscribe from.
         """
-        if not instance_ids or not self.is_connected:
+        if not instance_ids:
             return
 
-        # Remove from stored subscriptions
+        # Prune the stored subscriptions FIRST, even when disconnected — otherwise
+        # an unsubscribe issued while offline is forgotten and the instance is
+        # re-subscribed on the next reconnect.
         self._subscriptions = [sub for sub in self._subscriptions if sub.get("Instanceid") not in instance_ids]
+
+        if not self.is_connected:
+            return
 
         subscriptions = [{"Instanceid": instance_id, "Properties": []} for instance_id in instance_ids]
 

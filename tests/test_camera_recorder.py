@@ -106,6 +106,29 @@ class TestRecorderState:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_finalize_guards_against_double_finalize(self, recorder):
+        """A second _finalize_recording while one is already underway must no-op.
+
+        Regression: the auto-stop path and a user async_stop() could both enter
+        _finalize_recording (state stayed RECORDING until mid-method), so the
+        encoder ran twice and the second finally cleared _frames out from under
+        the first still-encoding call. Finalize now atomically claims the
+        RECORDING->PROCESSING transition; a caller that finds any other state
+        bails without touching the frames.
+        """
+        from custom_components.evon.camera_recorder import RecordingState
+
+        recorder._frames = [(b"\xff\xd8\xff\xe0", datetime.now())]
+        recorder._state = RecordingState.PROCESSING  # another finalize already claimed it
+
+        with patch.object(recorder, "_encode_mp4") as mock_encode:
+            result = await recorder._finalize_recording()
+
+        assert result is None
+        mock_encode.assert_not_called()
+        assert recorder._frames  # not cleared by the skipped call
+
+    @pytest.mark.asyncio
     async def test_double_start_prevented(self, recorder, mock_camera):
         """Test starting recording twice is prevented."""
         from custom_components.evon.camera_recorder import RecordingState

@@ -77,7 +77,10 @@ def _validate_instance_id(instance_id: str) -> None:
     Raises:
         ValueError: If the instance ID contains invalid characters
     """
-    if not instance_id or not INSTANCE_ID_PATTERN.match(instance_id):
+    # Require the charset AND at least one alphanumeric char. The charset alone
+    # matched dot-only ids ('.', '..', '...'), and '..' forms a path-traversal
+    # segment (/instances/../{method} -> /instances/{method}).
+    if not instance_id or not INSTANCE_ID_PATTERN.match(instance_id) or not any(c.isalnum() for c in instance_id):
         raise ValueError(f"Invalid instance ID format: {instance_id!r}")
 
 
@@ -911,6 +914,14 @@ class EvonApi:
         Returns:
             The image bytes, or None if fetch failed
         """
+        # The path comes from Evon-supplied data and is concatenated onto the
+        # host. Require a single leading slash so it stays on this host: a value
+        # like "@evil/x" or "//evil/x" would otherwise send the request — and the
+        # auth cookie below — to an attacker-controlled host.
+        if not image_path.startswith("/") or image_path.startswith("//"):
+            _LOGGER.warning("Refusing to fetch image from a non-absolute path")
+            return None
+
         for attempt in range(2):
             try:
                 url = f"{self._host}{image_path}"

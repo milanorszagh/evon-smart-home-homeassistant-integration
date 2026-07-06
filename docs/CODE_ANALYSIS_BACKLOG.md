@@ -126,16 +126,16 @@ Design decisions — need owner input (may be intentional):
 | RV-D5 | Coordinator | `base_entity.py` + HA core | Recheck-triggered refresh can start a second concurrent `_async_update_data` while a poll is in flight (HA core doesn't serialize). Same exposure as v1.21; a "skip if refresh in flight" guard would be cheap. | Open (design) |
 | RV-D6 | Cleanup | `__init__.py` (`_async_cleanup_stale_entities`) | Cleanup runs on every setup gated only on `last_update_success`, which stays True even when `_safe_get_instance` silently drops individual instances on a transient fetch error. Those entities are then absent from `coordinator.data` and removed as "stale" (losing user customizations). Needs the coordinator to expose whether the poll had partial failures and skip cleanup if so. | Open (design) |
 
-Low-severity hardening:
+Low-severity hardening (all fixed):
 
 | ID | Category | File | Description | Status |
 |----|----------|------|-------------|--------|
-| RV-L1 | Input validation | `api.py` | `INSTANCE_ID_PATTERN` (`^[a-zA-Z0-9._-]+$`) matches `..`, so the "prevents path traversal" docstring is overstated (no slash possible, so same-origin only). Require ≥1 alphanumeric. | Open |
-| RV-L2 | SSRF-ish | `api.py` (`fetch_image`) | Builds `f"{host}{image_path}"` from an unvalidated server-supplied path; a value like `@evil/x` could send the auth cookie off-host. Requires a compromised controller or MITM on the plaintext local link. Require a single leading `/`. | Open |
-| RV-L3 | WebSocket | `ws_client.py` (`unsubscribe_instances`) | Early return when disconnected happens before the subscription list is filtered, so an unsubscribe issued while disconnected is forgotten and re-subscribed on reconnect. | Open |
-| RV-L4 | WebSocket | `ws_client.py` (`_do_subscribe`) | Post-reconnect resubscribe failure only logs; client stays "connected" (poll drops to 60s) but receives no push updates until the next disconnect. | Open |
-| RV-L5 | Logging | `ws_client.py` | `msg.data[:n]` / `len(msg.data)` on ERROR (exception) / CLOSE (int) frames raise `TypeError` inside the log call, so the real close code is masked by a generic error. | Open |
-| RV-L6 | Camera | `camera_recorder.py` | `async_stop()` during the auto-stop finalize can start a second `_finalize_recording` while the encoder still runs; narrow window, possible corrupt/duplicate output. | Open |
+| RV-L1 | Input validation | `api.py` | `INSTANCE_ID_PATTERN` (`^[a-zA-Z0-9._-]+$`) matched `..`, so the "prevents path traversal" docstring was overstated. **Fixed:** `_validate_instance_id` now also requires ≥1 alphanumeric, rejecting dot-only ids. | Fixed |
+| RV-L2 | SSRF-ish | `api.py` (`fetch_image`) | Built `f"{host}{image_path}"` from an unvalidated server-supplied path; a value like `@evil/x` could send the auth cookie off-host. **Fixed:** `fetch_image` now requires a single leading `/` (rejects `@…`, bare host, `//…`, empty). | Fixed |
+| RV-L3 | WebSocket | `ws_client.py` (`unsubscribe_instances`) | Not-connected early return happened before the subscription list was filtered, so an unsubscribe issued while disconnected was forgotten and re-subscribed on reconnect. **Fixed:** the stored list is pruned before the connectivity check. | Fixed |
+| RV-L4 | WebSocket | `ws_client.py` (`_do_subscribe`) | Post-reconnect resubscribe failure only logged; client stayed "connected" but received no push updates until the next disconnect. **Fixed:** `_do_subscribe` returns success; `_resubscribe` retries up to `WS_RESUBSCRIBE_MAX_ATTEMPTS` (with `WS_RESUBSCRIBE_RETRY_DELAY`) and warns if it ultimately fails. | Fixed |
+| RV-L5 | Logging | `ws_client.py` | `msg.data[:n]` / `len(msg.data)` on ERROR (exception) / CLOSE (int) frames raised `TypeError` inside the log call, masking the real close code. **Fixed:** slice/len only for `str`/`bytes`; other payloads logged as-is. | Fixed |
+| RV-L6 | Camera | `camera_recorder.py` | `async_stop()` during the auto-stop finalize could start a second `_finalize_recording` while the encoder ran; possible corrupt/duplicate output. **Fixed:** `_finalize_recording` atomically claims the `RECORDING`→`PROCESSING` transition and bails if the state is anything else. | Fixed |
 
 ---
 

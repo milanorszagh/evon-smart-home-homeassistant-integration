@@ -3,8 +3,10 @@
 import asyncio
 import contextlib
 import json
-from unittest.mock import AsyncMock, MagicMock
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 
 from custom_components.evon.api import EvonWsError, EvonWsNotConnectedError
@@ -472,6 +474,114 @@ class TestWsClientProperties:
         assert client._ws_host == "ws://192.168.1.100"
         assert client._is_remote is False
         assert client._engine_id is None
+
+
+class TestWsClientSubscriptionResilience:
+    """Regression tests for subscription/resubscription resilience (RV-L3/L4)."""
+
+    def _make_client(self):
+        return EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+    async def test_unsubscribe_while_disconnected_prunes_stored_subs(self):
+        """Unsubscribe issued while offline must still drop the stored subscription.
+
+        Regression: the not-connected early return happened before pruning
+        self._subscriptions, so the instance was silently re-subscribed on the
+        next reconnect.
+        """
+        client = self._make_client()
+        client._subscriptions = [
+            {"Instanceid": "Light1", "Properties": ["IsOn"]},
+            {"Instanceid": "Light2", "Properties": ["IsOn"]},
+        ]
+        assert client.is_connected is False
+
+        await client.unsubscribe_instances(["Light1"])
+
+        ids = [s["Instanceid"] for s in client._subscriptions]
+        assert "Light1" not in ids
+        assert "Light2" in ids
+
+    async def test_do_subscribe_returns_success_bool(self):
+        """_do_subscribe reports success/failure so callers can react."""
+        client = self._make_client()
+
+        client._send_request = AsyncMock(return_value=None)
+        assert await client._do_subscribe([{"Instanceid": "L", "Properties": []}]) is True
+
+        client._send_request = AsyncMock(side_effect=Exception("timeout"))
+        assert await client._do_subscribe([{"Instanceid": "L", "Properties": []}]) is False
+
+    async def test_resubscribe_retries_after_failure(self):
+        """A failed resubscribe is retried rather than leaving the client deaf."""
+        client = self._make_client()
+        client._subscriptions = [{"Instanceid": "Light1", "Properties": ["IsOn"]}]
+
+        results = [False, True]
+        calls = []
+
+        async def fake_do_subscribe(subs):
+            calls.append(subs)
+            return results[len(calls) - 1]
+
+        client._do_subscribe = fake_do_subscribe
+
+        with patch("asyncio.sleep", new=AsyncMock()):
+            await client._resubscribe()
+
+        assert len(calls) == 2  # retried once after the first failure
+
+
+class TestWsClientNonTextFrameLogging:
+    """Non-TEXT frames (CLOSE=int, ERROR=exception) must not raise inside the
+    log call and mask the real close reason (RV-L5)."""
+
+    def _make_client(self):
+        return EvonWsClient(
+            host="http://192.168.1.100",
+            username="test",
+            password="test",
+            session=MagicMock(),
+        )
+
+    async def test_wait_for_connected_close_frame_logs_clean_reason(self, caplog):
+        client = self._make_client()
+        close_msg = MagicMock()
+        close_msg.type = aiohttp.WSMsgType.CLOSE
+        close_msg.data = 1006  # close code — an int, not sliceable
+        ws = MagicMock()
+        ws.closed = False
+        ws.receive = AsyncMock(return_value=close_msg)
+        client._ws = ws
+        client.disconnect = AsyncMock()
+
+        with caplog.at_level(logging.ERROR):
+            await client._wait_for_connected()
+
+        assert "closed before Connected" in caplog.text
+        assert "Error waiting for Connected message" not in caplog.text
+
+    async def test_handle_messages_close_frame_no_typeerror(self, caplog):
+        client = self._make_client()
+        close_msg = MagicMock()
+        close_msg.type = aiohttp.WSMsgType.CLOSED
+        close_msg.data = 1000  # close code — an int, not len()-able
+        ws = MagicMock()
+        ws.closed = False
+        ws.receive = AsyncMock(return_value=close_msg)
+        client._ws = ws
+        client.disconnect = AsyncMock()
+
+        with caplog.at_level(logging.ERROR):
+            await client._handle_messages()
+
+        assert "Unexpected error handling WebSocket message" not in caplog.text
+        client.disconnect.assert_awaited()
 
 
 class TestWsClientSetValue:
