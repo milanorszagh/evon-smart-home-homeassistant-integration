@@ -155,6 +155,39 @@ class TestSpecialEntities:
         assert _extract_instance_id_from_unique_id(f"evon_websocket_{ENTRY_ID}", ENTRY_ID) is None
 
 
+class TestMissingPrefixesRegression:
+    """Regression: prefixes that were absent from type_prefixes fell through to the
+    dot-seeking fallback, which truncated instance IDs containing underscores
+    (e.g. SC1_M01.X -> M01.X) and got those entities falsely flagged as stale."""
+
+    def test_doorbell_underscored_instance_id(self):
+        assert (
+            _extract_instance_id_from_unique_id("evon_doorbell_SC1_M01.Intercom2N", ENTRY_ID)
+            == "SC1_M01.Intercom2N"
+        )
+
+    def test_doorbell_simple_instance_id(self):
+        assert _extract_instance_id_from_unique_id("evon_doorbell_Security.Intercom", ENTRY_ID) == "Security.Intercom"
+
+    def test_energy_today_underscored_instance_id(self):
+        assert (
+            _extract_instance_id_from_unique_id("evon_energy_today_SC1_M01.SmartMeter", ENTRY_ID)
+            == "SC1_M01.SmartMeter"
+        )
+
+    def test_energy_this_month_underscored_instance_id(self):
+        assert (
+            _extract_instance_id_from_unique_id("evon_energy_this_month_SC1_M01.SmartMeter", ENTRY_ID)
+            == "SC1_M01.SmartMeter"
+        )
+
+    def test_websocket_status_is_special_returns_none(self):
+        assert _extract_instance_id_from_unique_id(f"evon_websocket_status_{ENTRY_ID}", ENTRY_ID) is None
+
+    def test_websocket_latency_is_special_returns_none(self):
+        assert _extract_instance_id_from_unique_id(f"evon_websocket_latency_{ENTRY_ID}", ENTRY_ID) is None
+
+
 class TestAirQualityFallback:
     """Test air quality fallback for evon_{key}_{instance_id}."""
 

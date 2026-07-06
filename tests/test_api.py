@@ -12,6 +12,7 @@ from custom_components.evon.api import (
     EvonApiError,
     EvonAuthError,
     EvonConnectionError,
+    EvonRateLimitError,
     encode_password,
 )
 
@@ -1977,6 +1978,24 @@ class TestLoginBackoff:
 
         # Second attempt should hit backoff
         with pytest.raises(EvonAuthError, match="Login rate limited"):
+            await api.login()
+
+    @pytest.mark.asyncio
+    async def test_login_backoff_raises_rate_limit_error(self):
+        """A login blocked by active backoff raises EvonRateLimitError specifically.
+
+        This lets setup/coordinator treat a transient throttle as retryable
+        (ConfigEntryNotReady) instead of a credentials problem (reauth). The
+        error remains an EvonAuthError subclass for backward compatibility.
+        """
+        import time
+
+        assert issubclass(EvonRateLimitError, EvonAuthError)
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._login_backoff_until = time.monotonic() + 100  # active backoff window
+
+        with pytest.raises(EvonRateLimitError):
             await api.login()
 
 

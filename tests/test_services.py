@@ -339,3 +339,91 @@ class TestServiceIntegration:
         # Services should be removed after last entry unloaded
         assert not hass.services.has_service("evon", SERVICE_REFRESH)
         assert not hass.services.has_service("evon", SERVICE_SET_HOME_STATE)
+
+    @pytest.mark.asyncio
+    async def test_failed_platform_unload_does_not_leave_zombie(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """If platform unload fails, the entry must not be left half-torn-down.
+
+        Regression: the API/WS were shut down (credentials blanked) and
+        unloading=True was set BEFORE async_unload_platforms. A failed unload
+        then left a zombie entry: dead WS, wiped credentials, unloading flag
+        stuck True so all services skip it permanently. Teardown must only
+        happen after a successful platform unload.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from custom_components.evon import async_unload_entry
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        entry_data = hass.data["evon"][mock_config_entry_v2.entry_id]
+
+        with patch.object(
+            hass.config_entries, "async_unload_platforms", AsyncMock(return_value=False)
+        ):
+            result = await async_unload_entry(hass, mock_config_entry_v2)
+
+        assert result is False
+        # Entry must still be present and usable.
+        assert mock_config_entry_v2.entry_id in hass.data["evon"]
+        # API/WS must NOT have been torn down (credentials intact for continued use).
+        mock_evon_api_class.close.assert_not_called()
+        # unloading flag must be reset so services don't skip the entry forever.
+        assert entry_data.get("unloading") is False
+
+    @pytest.mark.asyncio
+    async def test_setup_bad_credentials_triggers_reauth(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """Setup-time auth failure must raise ConfigEntryAuthFailed (start reauth).
+
+        Regression: test_connection() re-raises EvonAuthError which propagated
+        as a generic setup error, so a password change while HA was down left a
+        dead entry with no reauth prompt.
+        """
+        from unittest.mock import AsyncMock
+
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+
+        from custom_components.evon import async_setup_entry
+        from custom_components.evon.api import EvonAuthError
+
+        mock_config_entry_v2.add_to_hass(hass)
+        mock_evon_api_class.test_connection = AsyncMock(
+            side_effect=EvonAuthError("Login failed: Invalid credentials")
+        )
+
+        with pytest.raises(ConfigEntryAuthFailed):
+            await async_setup_entry(hass, mock_config_entry_v2)
+
+    @pytest.mark.asyncio
+    async def test_setup_rate_limit_is_retryable_not_reauth(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """A transient login rate-limit at setup must be retryable, not reauth.
+
+        EvonRateLimitError (a subclass of EvonAuthError) must map to
+        ConfigEntryNotReady so HA retries, rather than prompting the user to
+        re-enter credentials that are actually fine.
+        """
+        from unittest.mock import AsyncMock
+
+        from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+
+        from custom_components.evon import async_setup_entry
+        from custom_components.evon.api import EvonRateLimitError
+
+        mock_config_entry_v2.add_to_hass(hass)
+        mock_evon_api_class.test_connection = AsyncMock(
+            side_effect=EvonRateLimitError("Login rate limited: retry in 30s")
+        )
+
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, mock_config_entry_v2)
+        # Must NOT be treated as an auth failure (ConfigEntryNotReady is a sibling,
+        # not a subclass, of ConfigEntryAuthFailed).
+        assert not issubclass(ConfigEntryNotReady, ConfigEntryAuthFailed)

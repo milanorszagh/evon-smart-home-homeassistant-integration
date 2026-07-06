@@ -21,7 +21,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from ..api import EvonApi, EvonApiError, EvonAuthError
+from ..api import EvonApi, EvonApiError, EvonAuthError, EvonRateLimitError
 from ..const import (
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
@@ -281,6 +281,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             return result
 
+        except EvonRateLimitError as err:
+            # Transient login throttle — treat as a normal transient failure
+            # (keep cached data), not an auth failure that would pop a spurious
+            # reauth dialog. Must be caught before EvonAuthError (it subclasses it).
+            return self._handle_api_error(err)
         except EvonAuthError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except EvonApiError as err:

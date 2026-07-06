@@ -153,6 +153,16 @@ class EvonAuthError(EvonApiError):
     """Exception for authentication errors."""
 
 
+class EvonRateLimitError(EvonAuthError):
+    """Login blocked by the local rate-limit backoff.
+
+    Subclass of EvonAuthError (so existing ``except EvonAuthError`` handlers
+    still catch it) but distinguishable so callers can treat it as a transient
+    condition to retry (ConfigEntryNotReady) rather than a credentials problem
+    that warrants the reauth flow (ConfigEntryAuthFailed).
+    """
+
+
 class EvonConnectionError(EvonApiError):
     """Exception for connection errors."""
 
@@ -331,7 +341,7 @@ class EvonApi:
         now = time.monotonic()
         if now < self._login_backoff_until:
             wait = self._login_backoff_until - now
-            raise EvonAuthError(f"Login rate limited: too many failures, retry in {wait:.0f}s")
+            raise EvonRateLimitError(f"Login rate limited: too many failures, retry in {wait:.0f}s")
 
         session = await self._get_session()
 

@@ -11,11 +11,11 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import INSTANCE_ID_PATTERN, EvonApi
+from .api import INSTANCE_ID_PATTERN, EvonApi, EvonAuthError, EvonRateLimitError
 from .const import (
     CONF_BUTTON_DOUBLE_CLICK_DELAY,
     CONF_CONNECTION_TYPE,
@@ -223,8 +223,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         configuration_url = entry.data[CONF_HOST]
 
-    # Test connection
-    if not await api.test_connection():
+    # Test connection. test_connection() returns False for transient
+    # connection/API errors and re-raises EvonAuthError for auth problems.
+    try:
+        connected = await api.test_connection()
+    except EvonRateLimitError as err:
+        # Transient login throttle — retry later rather than prompting for
+        # credentials the user hasn't necessarily changed.
+        raise ConfigEntryNotReady(f"Evon login rate limited: {err}") from err
+    except EvonAuthError as err:
+        # Real credentials problem (e.g. password changed while HA was down):
+        # start the reauth flow instead of leaving a dead entry.
+        raise ConfigEntryAuthFailed(f"Evon authentication failed: {err}") from err
+    if not connected:
         raise ConfigEntryNotReady("Failed to connect to Evon Smart Home")
 
     # Get options
@@ -555,15 +566,27 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
     if not unique_id or not unique_id.startswith("evon_"):
         return None
 
-    # Special entities that use entry_id instead of instance_id - skip these
-    special_prefixes = (f"evon_home_state_{entry_id}", f"evon_season_mode_{entry_id}", f"evon_websocket_{entry_id}")
+    # Special entities that use entry_id instead of instance_id - skip these.
+    # websocket_status / websocket_latency are diagnostic entities keyed on the
+    # entry_id (not an Evon instance); list them explicitly so they are never
+    # treated as stale rather than relying on the entry_id happening to lack a dot.
+    special_prefixes = (
+        f"evon_home_state_{entry_id}",
+        f"evon_season_mode_{entry_id}",
+        f"evon_websocket_status_{entry_id}",
+        f"evon_websocket_latency_{entry_id}",
+        f"evon_websocket_{entry_id}",
+    )
     if unique_id in special_prefixes or unique_id.startswith(special_prefixes):
         return None
 
     # Known type prefixes - order matters (longer prefixes first to avoid partial matches)
     type_prefixes = [
+        "evon_energy_this_month_",
+        "evon_energy_today_",
         "evon_security_door_",
         "evon_camera_recording_",
+        "evon_doorbell_",
         "evon_intercom_",
         "evon_snapshot_",
         "evon_radiator_",
@@ -796,23 +819,34 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Shut down WebSocket client and API first
-    if entry.entry_id in hass.data.get(DOMAIN, {}):
-        entry_data = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
 
-        # Mark entry as unloading so services won't access partially-unloaded data
+    # Mark entry as unloading so services won't access partially-unloaded data
+    # while platforms tear down. The WS/API stay up during this window so
+    # entities keep a valid data source until they are removed.
+    if entry_data is not None:
         entry_data["unloading"] = True
-
-        coordinator: EvonDataUpdateCoordinator = entry_data.get("coordinator")
-        if coordinator:
-            await coordinator.async_shutdown_websocket()
-        api: EvonApi = entry_data.get("api")
-        if api:
-            await api.close()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    if unload_ok:
+    if not unload_ok:
+        # Platform unload failed — the entry stays loaded. Do NOT tear down the
+        # WS/API or blank credentials; restore the unloading flag so services
+        # keep working. Otherwise the entry becomes a permanent zombie (dead WS,
+        # wiped credentials, unloading stuck True) until an HA restart.
+        if entry_data is not None:
+            entry_data["unloading"] = False
+        return False
+
+    # Platform unload succeeded — now it's safe to tear down the connection.
+    if entry_data is not None:
+        coordinator: EvonDataUpdateCoordinator | None = entry_data.get("coordinator")
+        if coordinator:
+            await coordinator.async_shutdown_websocket()
+        api: EvonApi | None = entry_data.get("api")
+        if api:
+            await api.close()
+
         hass.data[DOMAIN].pop(entry.entry_id)
 
         # Unregister services when the last config entry is unloaded

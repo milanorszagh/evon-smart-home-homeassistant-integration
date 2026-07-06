@@ -107,13 +107,13 @@ and 7 correctness bugs, plus a cleanup pass — see commits `da74d6b`
 below were surfaced by the same review but deliberately deferred; they are
 tracked here rather than lost.
 
-Bugs — to address next:
+Bugs:
 
 | ID | Category | File | Description | Status |
 |----|----------|------|-------------|--------|
-| RV-B1 | Lifecycle | `__init__.py` (`async_unload_entry`) | API/WS are torn down (credentials blanked) **before** `async_unload_platforms`. If platform unload returns False the entry stays "loaded" but is a zombie: no WS, blank credentials, `unloading=True` never reset. Tear down WS/API only after a successful platform unload. | Open |
-| RV-B2 | Auth | `__init__.py` (`async_setup_entry`) | Setup-time `EvonAuthError` from `test_connection()` propagates as a generic setup error instead of `ConfigEntryAuthFailed`, so a password change while HA is down yields a dead entry with no reauth prompt. Login rate-limiting also raises `EvonAuthError`, surfacing a spurious reauth dialog for a transient throttle. | Open |
-| RV-B3 | Cleanup | `__init__.py` (stale-entity cleanup) | Fallback unique-id extractor returns from the first dot-containing part, truncating IDs with underscores (`SC1_M01.AirQ1` → `M01.AirQ1` → falsely "stale" → removed). `evon_doorbell_`, `evon_energy_today_`, `evon_energy_this_month_` prefixes fall into this path. Also runs on every setup with no guard against partial-poll data (one failed instance fetch marks its entities stale). | Open |
+| RV-B1 | Lifecycle | `__init__.py` (`async_unload_entry`) | API/WS were torn down (credentials blanked) **before** `async_unload_platforms`. If platform unload returned False the entry stayed "loaded" but was a zombie: no WS, blank credentials, `unloading=True` never reset. **Fixed:** teardown now happens only after a successful platform unload; on failure the `unloading` flag is reset. | Fixed |
+| RV-B2 | Auth | `__init__.py` (`async_setup_entry`) | Setup-time `EvonAuthError` from `test_connection()` propagated as a generic setup error instead of `ConfigEntryAuthFailed`, so a password change while HA was down yielded a dead entry with no reauth prompt; login rate-limiting (also `EvonAuthError`) risked a spurious reauth dialog. **Fixed:** added `EvonRateLimitError(EvonAuthError)`; setup maps a real auth error to `ConfigEntryAuthFailed` (reauth) and a rate-limit to `ConfigEntryNotReady` (retry); the coordinator treats a poll-time rate-limit as transient rather than reauth. | Fixed |
+| RV-B3 | Cleanup | `__init__.py` (stale-entity cleanup) | Fallback unique-id extractor returned from the first dot-containing part, truncating IDs with underscores (`SC1_M01.AirQ1` → `M01.AirQ1` → falsely "stale" → removed) for the `evon_doorbell_`, `evon_energy_today_`, `evon_energy_this_month_` prefixes missing from `type_prefixes`. **Fixed:** added those prefixes (and made the `websocket_status`/`websocket_latency` diagnostic entities explicitly special). Note: the separate concern that cleanup runs on partial-poll data (a single failed instance fetch marking its entities stale) is **still open** — see RV-D6 below. | Fixed (partial-poll guard deferred) |
 
 Design decisions — need owner input (may be intentional):
 
@@ -124,6 +124,7 @@ Design decisions — need owner input (may be intentional):
 | RV-D3 | Cover | `cover.py` | `async_stop_cover` and the toggle-stop branches end with `sleep + write` and schedule no recheck, contradicting commit `ebd7265` ("scheduled recheck for all blind commands"). If WS is dead after a stop, resting position stays stale until the 60s poll. | Open (design) |
 | RV-D4 | Statistics | `statistics.py` | Sliding baseline overwrites the outgoing day's row with `sum=0`, permanently zeroing days older than the 31-day window. Consistent within the dashboard window but silent long-term data loss. | Open (design) |
 | RV-D5 | Coordinator | `base_entity.py` + HA core | Recheck-triggered refresh can start a second concurrent `_async_update_data` while a poll is in flight (HA core doesn't serialize). Same exposure as v1.21; a "skip if refresh in flight" guard would be cheap. | Open (design) |
+| RV-D6 | Cleanup | `__init__.py` (`_async_cleanup_stale_entities`) | Cleanup runs on every setup gated only on `last_update_success`, which stays True even when `_safe_get_instance` silently drops individual instances on a transient fetch error. Those entities are then absent from `coordinator.data` and removed as "stale" (losing user customizations). Needs the coordinator to expose whether the poll had partial failures and skip cleanup if so. | Open (design) |
 
 Low-severity hardening:
 
