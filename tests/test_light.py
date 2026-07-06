@@ -618,3 +618,49 @@ class TestLightPostCommandRecheck:
         assert light._optimistic_state_set_at == timestamp
         # async_write_ha_state suppressed during quiesce to prevent attribute flicker.
         light.async_write_ha_state.assert_not_called()
+
+    def test_color_temp_missing_reading_keeps_backstop_armed(self):
+        """A coordinator update with color_temp missing (None/0) must NOT clear the
+        optimistic timestamp while _optimistic_color_temp_kelvin is still pending.
+
+        Regression: the color-temp comparison-clear had no `else: all_cleared=False`,
+        so a poll rebuild lacking the ColorTemp detail cleared _optimistic_state_set_at
+        while _optimistic_color_temp_kelvin stayed set — disabling the 30s backstop
+        (which needs a non-None timestamp) and sticking the UI on the commanded
+        kelvin indefinitely."""
+        import time
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.light import EvonLight
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.get_entity_data = MagicMock(
+            return_value={"id": "light_1", "is_on": True, "brightness": 50}
+        )
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        light = EvonLight(coordinator, "light_1", "Test", "", entry, MagicMock())
+        light.hass = MagicMock()
+        light.async_write_ha_state = MagicMock()
+
+        # User set a color temp; only the color_temp clause guards the clear.
+        light._optimistic_color_temp_kelvin = 3000
+        ts = time.monotonic()
+        light._optimistic_state_set_at = ts
+
+        # Coordinator update where color_temp is missing (poll rebuild w/o detail).
+        coordinator.get_entity_data.return_value = {
+            "id": "light_1",
+            "is_on": True,
+            "brightness": 50,
+            "color_temp": None,
+        }
+
+        light._handle_coordinator_update()
+
+        # Optimistic color temp still pending AND timestamp preserved so the
+        # backstop can eventually fire.
+        assert light._optimistic_color_temp_kelvin == 3000
+        assert light._optimistic_state_set_at == ts

@@ -251,6 +251,14 @@ class EvonCover(EvonEntity, CoverEntity):
             # Optimistically set is_moving to False (same as stop)
             self._optimistic_is_moving = False
             self._optimistic_direction = None
+            # Reset timestamp so the quiesce check doesn't drop subsequent updates
+            # (position/tilt optimistic flags are gone — nothing to "protect").
+            # Same as async_stop_cover (Fix #3): this toggle-stop is functionally
+            # a stop, so leaving a stale timestamp would keep quiesce suppressing
+            # updates for state that no longer exists, and a wall-switch-initiated
+            # move stopped this way would set is_moving=False with no timestamp at
+            # all — the 30s backstop could never clear it.
+            self._optimistic_state_set_at = None
             self.async_write_ha_state()
 
             try:
@@ -305,6 +313,14 @@ class EvonCover(EvonEntity, CoverEntity):
             # Optimistically set is_moving to False (same as stop)
             self._optimistic_is_moving = False
             self._optimistic_direction = None
+            # Reset timestamp so the quiesce check doesn't drop subsequent updates
+            # (position/tilt optimistic flags are gone — nothing to "protect").
+            # Same as async_stop_cover (Fix #3): this toggle-stop is functionally
+            # a stop, so leaving a stale timestamp would keep quiesce suppressing
+            # updates for state that no longer exists, and a wall-switch-initiated
+            # move stopped this way would set is_moving=False with no timestamp at
+            # all — the 30s backstop could never clear it.
+            self._optimistic_state_set_at = None
             self.async_write_ha_state()
 
             try:

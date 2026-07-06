@@ -237,11 +237,24 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "season_mode": season_mode,
             }
 
+            # Calculate energy_today and energy_this_month for smart meters.
+            # This MUST run before the merge/index-build tail below: it is the
+            # only remaining `await` in this method, and the coordinator assigns
+            # self.data only after _async_update_data returns. If it ran after
+            # _build_data_index, a WS event arriving during this await would find
+            # _data_index already pointing at the new result dicts while self.data
+            # still held the old lists — the WS handler's identity-based list
+            # replacement (`e is entity`) could never match, so the update would
+            # land only in the index and the poll dict (chattiest for meters)
+            # would be orphaned without its calculated fields.
+            await self._calculate_energy_today_and_month(smart_meters)
+
             # Preserve any WS updates that arrived during this poll.
             # The poll's REST snapshot was taken at poll_start_time; entities
             # that received a WS update after that have fresher state than the
             # poll's result and must not be overwritten by it (see
             # _merge_ws_updates_into_poll_result for the rationale).
+            # INVARIANT: no `await` between here and `return result` — see above.
             self._merge_ws_updates_into_poll_result(result, poll_start_time)
 
             # Build O(1) lookup index
@@ -254,15 +267,17 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if k in self._data_index
             }
 
-            # Calculate energy_today and energy_this_month for smart meters
-            await self._calculate_energy_today_and_month(smart_meters)
-
             # Cache successful data for use during transient failures
             self._last_successful_data = result
 
-            # Import energy statistics for smart meters (backfill historical data)
+            # Import energy statistics for smart meters (backfill historical data).
+            # force=False so the MIN_IMPORT_INTERVAL (1h) rate limit applies: the
+            # first poll after startup still backfills (no prior import recorded),
+            # then imports at most hourly. Forcing here reran a full ~44-row
+            # rewrite per meter on every poll (30-60s), which the WS path already
+            # avoids by using force=False.
             for meter in smart_meters:
-                self._maybe_import_energy_statistics(meter["id"], meter, force=True)
+                self._maybe_import_energy_statistics(meter["id"], meter)
 
             return result
 

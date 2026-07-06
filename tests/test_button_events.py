@@ -296,6 +296,38 @@ class TestButtonEventEntity:
             entity._handle_coordinator_update()
             mock_trigger.assert_not_called()
 
+    def test_press_after_poll_counter_reset_still_fires(self):
+        """Regression: a press after the safety-net poll resets the counter must fire.
+
+        The coordinator rebuilds button dicts with last_event_id=0/type=None on
+        every HTTP poll. Previously the entity kept its stored id (e.g. 1), so the
+        next press — which re-increments 0->1 — collided (1 != 1 is False) and was
+        silently dropped. The entity must resync to the reset counter.
+        """
+        button = {"id": "btn1", "name": "Test Button", "is_on": False, "last_event_type": None, "last_event_id": 0}
+        coordinator = self._make_coordinator([button])
+        entity = self._make_entity(coordinator, button)
+
+        with patch.object(entity, "_trigger_event") as mock_trigger:
+            # First press: id 0 -> 1, fires.
+            button["last_event_type"] = "single_press"
+            button["last_event_id"] = 1
+            entity._handle_coordinator_update()
+            assert mock_trigger.call_count == 1
+
+            # Quiet safety-net poll rebuilds the dict: counter reset to 0/None.
+            button["last_event_type"] = None
+            button["last_event_id"] = 0
+            entity._handle_coordinator_update()
+            assert mock_trigger.call_count == 1  # no fire on reset
+
+            # Second press re-increments 0 -> 1; must fire despite matching the
+            # first press's id.
+            button["last_event_type"] = "single_press"
+            button["last_event_id"] = 1
+            entity._handle_coordinator_update()
+            assert mock_trigger.call_count == 2
+
 
 # --- Press Detection Tests ---
 

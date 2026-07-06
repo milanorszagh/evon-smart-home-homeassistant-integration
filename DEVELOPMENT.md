@@ -1221,7 +1221,7 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 ## Version Compatibility
 
-- Home Assistant: 2026.3.0+ (pinned by `manifest.json`)
+- Home Assistant: 2026.5.0+ (pinned by `manifest.json`)
 - Python: 3.12+
 - Node.js (MCP): 18+ (CI uses Node.js 22 LTS)
 

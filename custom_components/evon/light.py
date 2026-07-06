@@ -328,11 +328,20 @@ class EvonLight(EvonEntity, LightEntity):
 
             if self._optimistic_color_temp_kelvin is not None:
                 actual_kelvin = data.get("color_temp")
-                if actual_kelvin and actual_kelvin > 0:
-                    if abs(actual_kelvin - self._optimistic_color_temp_kelvin) <= OPTIMISTIC_STATE_TOLERANCE:
-                        self._optimistic_color_temp_kelvin = None
-                    else:
-                        all_cleared = False
+                if (
+                    actual_kelvin
+                    and actual_kelvin > 0
+                    and abs(actual_kelvin - self._optimistic_color_temp_kelvin) <= OPTIMISTIC_STATE_TOLERANCE
+                ):
+                    self._optimistic_color_temp_kelvin = None
+                else:
+                    # No usable reading yet (color_temp None/0, e.g. a poll rebuild
+                    # with the detail missing) or still mismatched: keep the
+                    # optimistic value protected. Without this else the timestamp
+                    # would be cleared while _optimistic_color_temp_kelvin stayed
+                    # set, disabling the 30s backstop and sticking the UI on the
+                    # commanded kelvin indefinitely.
+                    all_cleared = False
 
             if all_cleared:
                 self._optimistic_state_set_at = None

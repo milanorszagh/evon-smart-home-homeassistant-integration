@@ -406,19 +406,43 @@ class EvonWsClient:
                 # Connect if not connected
                 if not self.is_connected:
                     if await self.connect():
-                        if self._has_connected_once:
-                            self._reconnect_count += 1
-                        self._has_connected_once = True
-                        self._reconnect_delay = DEFAULT_WS_RECONNECT_DELAY
                         # Start message handler and wait for Connected message
                         _LOGGER.debug("WS connect OK, waiting for Connected message")
                         await self._wait_for_connected()
                         _LOGGER.debug("WS _wait_for_connected done, _connected=%s", self._connected)
+
+                        if not self._connected:
+                            # Transport connected but the Connected handshake did not
+                            # complete (timeout, early close, or unexpected first frame).
+                            # _wait_for_connected() already called disconnect(). Apply
+                            # backoff here and retry: without it the loop would fall through
+                            # to _handle_messages() (an instant no-op with _ws=None) and
+                            # re-enter connect() with no delay, hammering the controller
+                            # with login + ws_connect at network speed.
+                            delay = _calculate_reconnect_delay(self._reconnect_delay, WS_RECONNECT_MAX_DELAY)
+                            _LOGGER.warning(
+                                "WebSocket handshake failed; reconnecting in %.1f seconds (base: %d)",
+                                delay,
+                                self._reconnect_delay,
+                            )
+                            await asyncio.sleep(delay)
+                            self._reconnect_delay = min(
+                                self._reconnect_delay * 2,
+                                WS_RECONNECT_MAX_DELAY,
+                            )
+                            continue
+
+                        # Handshake confirmed — only now is it safe to count this as a
+                        # successful (re)connection and reset the backoff to default.
+                        if self._has_connected_once:
+                            self._reconnect_count += 1
+                        self._has_connected_once = True
+                        self._reconnect_delay = DEFAULT_WS_RECONNECT_DELAY
                         # Start periodic stale request cleanup
                         if not self._cleanup_task or self._cleanup_task.done():
                             self._cleanup_task = asyncio.create_task(self._periodic_stale_cleanup())
                         # Resubscribe after connection is established and message loop can process responses
-                        if self._connected and self._subscriptions:
+                        if self._subscriptions:
                             _LOGGER.debug("WS scheduling resubscription for %d instances", len(self._subscriptions))
                             self._resubscribe_task = asyncio.create_task(self._resubscribe())
                     else:

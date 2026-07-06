@@ -610,6 +610,41 @@ class TestCoverQuiesceBehavior:
         assert cover._optimistic_state_set_at is None
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("command", ["open", "close"])
+    async def test_toggle_stop_resets_optimistic_timestamp(
+        self, hass, mock_config_entry_v2, mock_evon_api_class, command
+    ):
+        """open/close while already moving acts as a stop toggle and must reset
+        _optimistic_state_set_at, same as async_stop_cover (Fix #3). Otherwise a
+        stale timestamp keeps quiesce suppressing updates for state that no longer
+        exists, and a wall-switch move stopped this way gets is_moving=False with
+        no timestamp for the 30s backstop to clear."""
+        import time
+
+        cover = self._make_cover(hass, mock_config_entry_v2, mock_evon_api_class)
+        # Blind is currently moving (as if started by a wall switch).
+        cover.coordinator.get_entity_data.return_value = {
+            "id": "blind_1",
+            "name": "Test Blind",
+            "position": 50,
+            "angle": 45,
+            "is_moving": True,
+        }
+        # A recent move command left a timestamp behind.
+        cover._optimistic_state_set_at = time.monotonic()
+
+        if command == "open":
+            await cover.async_open_cover()
+        else:
+            await cover.async_close_cover()
+
+        # Toggle-stop path: is_moving optimistically False, timestamp reset.
+        assert cover._optimistic_is_moving is False
+        assert cover._optimistic_position is None
+        assert cover._optimistic_tilt is None
+        assert cover._optimistic_state_set_at is None
+
+    @pytest.mark.asyncio
     async def test_remove_cancels_pending_recheck(
         self, hass, mock_config_entry_v2, mock_evon_api_class
     ):

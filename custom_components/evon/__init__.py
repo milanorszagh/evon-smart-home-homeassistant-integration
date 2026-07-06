@@ -488,14 +488,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, SERVICE_START_RECORDING, handle_start_recording)
         hass.services.async_register(DOMAIN, SERVICE_STOP_RECORDING, handle_stop_recording)
 
-    # Register frontend card and recordings static paths (once per HA instance)
+    # Register frontend card static path + authenticated recordings view
+    # (once per HA instance).
     frontend_key = f"{DOMAIN}_frontend_registered"
     if frontend_key not in hass.data:
         from homeassistant.components.http import StaticPathConfig
 
+        from .recordings_view import EvonRecordingsView
+
         recordings_dir = hass.config.path("media/evon_recordings")
         await hass.async_add_executor_job(_ensure_recordings_dir, recordings_dir)
 
+        # The card JS is public (no secrets); a static path is fine for it.
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
@@ -503,13 +507,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     hass.config.path("custom_components/evon/www/evon-camera-recording-card.js"),
                     cache_headers=False,
                 ),
-                StaticPathConfig(
-                    "/evon/recordings",
-                    recordings_dir,
-                    cache_headers=False,
-                ),
             ]
         )
+        # Recordings are served through an authenticated view rather than a
+        # static path: static paths bypass HA auth, which would expose camera
+        # footage to anyone who can reach the HA port. The view accepts a bearer
+        # token or an auth/sign_path signed URL (used by the card for inline
+        # playback); footage also stays browsable via media_source (auth-gated).
+        hass.http.register_view(EvonRecordingsView(recordings_dir))
         hass.data[frontend_key] = True
 
     # Clean up stale entities only on initial setup with successful data

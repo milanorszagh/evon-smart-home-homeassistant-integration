@@ -126,7 +126,11 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
             "entry_id": entry.entry_id,
             "version": entry.version,
             "domain": entry.domain,
-            "title": entry.title,
+            # entry.title is "Evon (<host>)" / "Evon (Remote: <engine_id>)", so it
+            # embeds the host / Engine ID that TO_REDACT strips from data/options.
+            # Redact it too, otherwise the redaction is undone one line down. The
+            # connection type is still available (unredacted) in the data below.
+            "title": "**REDACTED**",
             "data": config_data,
             "options": options_data,
         },

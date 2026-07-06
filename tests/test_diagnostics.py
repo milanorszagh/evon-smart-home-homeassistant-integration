@@ -68,6 +68,8 @@ class TestDiagnostics:
         assert result["entry"]["data"]["host"] == "**REDACTED**"
         assert result["entry"]["data"]["username"] == "**REDACTED**"
         assert result["entry"]["data"]["password"] == "**REDACTED**"
+        # Title embeds host / Engine ID, so it must be redacted too.
+        assert result["entry"]["title"] == "**REDACTED**"
 
         # Verify coordinator info
         assert "last_update_success" in result["coordinator"]

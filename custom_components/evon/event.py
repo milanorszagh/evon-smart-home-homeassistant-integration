@@ -132,9 +132,16 @@ class EvonButtonEvent(EvonEntity, EventEntity):
         current_event_type = data.get("last_event_type")
         current_event_id = data.get("last_event_id", 0)
 
-        # Fire event when a new event occurs (tracked by monotonic counter)
+        # Fire the event when the coordinator's monotonic counter advances.
         if current_event_type and current_event_id != self._last_event_id:
             self._trigger_event(current_event_type)
-            self._last_event_id = current_event_id
+
+        # Always resync to the coordinator's counter — including the reset to 0
+        # that every HTTP safety-net poll performs when it rebuilds the button
+        # dict (last_event_id=0, last_event_type=None). Without resyncing on the
+        # reset, a stored id of 1 collides with the next press — which
+        # re-increments 0->1 — so `1 != 1` is False and the press is silently
+        # dropped. This is the common "one press, pause, one press" pattern.
+        self._last_event_id = current_event_id
 
         super()._handle_coordinator_update()

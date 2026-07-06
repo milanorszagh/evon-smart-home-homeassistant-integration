@@ -139,6 +139,61 @@ class TestRunLoopReconnection:
         assert client._reconnect_delay == DEFAULT_WS_RECONNECT_DELAY
 
     @pytest.mark.asyncio
+    async def test_handshake_failure_backs_off_and_does_not_hot_loop(self):
+        """connect() OK but Connected handshake fails → backoff, no tight retry loop.
+
+        Regression: previously a successful transport connect reset the backoff
+        and then fell through to _handle_messages() (instant no-op with _ws=None),
+        re-entering connect() with zero delay and hammering the controller.
+        """
+        client = self._make_client()
+
+        # Start with an elevated backoff to prove it is NOT reset on a failed handshake.
+        client._reconnect_delay = 40
+
+        connect_attempts = 0
+        max_attempts = 3
+
+        async def mock_connect():
+            nonlocal connect_attempts
+            connect_attempts += 1
+            if connect_attempts >= max_attempts:
+                client._running = False
+            return True  # transport connects...
+
+        async def mock_wait_for_connected():
+            # ...but the Connected handshake never completes.
+            client._connected = False
+
+        handle_messages_called = False
+
+        async def mock_handle_messages():
+            nonlocal handle_messages_called
+            handle_messages_called = True
+            client._running = False
+
+        sleep_delays = []
+
+        async def mock_sleep(delay):
+            sleep_delays.append(delay)
+
+        client.connect = mock_connect
+        client._wait_for_connected = mock_wait_for_connected
+        client._handle_messages = mock_handle_messages
+
+        with patch("asyncio.sleep", side_effect=mock_sleep):
+            client._running = True
+            await client._run_loop()
+        await self._cleanup_client(client)
+
+        # Every failed handshake must sleep before retrying (no hot-loop).
+        assert len(sleep_delays) >= 2
+        # Backoff must NOT have been reset to default by the transport connect.
+        assert client._reconnect_delay > 40
+        # We must never enter the message loop without a confirmed handshake.
+        assert handle_messages_called is False
+
+    @pytest.mark.asyncio
     async def test_resubscription_after_reconnect(self):
         """Test that subscriptions are re-sent after reconnection."""
         on_values_changed = MagicMock()
