@@ -72,6 +72,30 @@ The integration imports `EnergyDataMonth` into Home Assistant's **external stati
    - Each day: Previous sum + daily consumption
 4. **Statistics Type**: `sum` with `change` stat_type for daily consumption display
 
+### Retention limitation (daily granularity ≤ 31 days)
+
+`EnergyDataMonth` is a **31-day rolling window**, so the integration can only ever
+source the last 31 days of *daily* values. Each import re-anchors the `sum=0`
+baseline just before the current window and rebuilds the cumulative sums across
+it. Because that baseline slides forward one day per import, a day's daily
+`change` is reset to `0` once it falls out of the trailing edge of the 31-day
+window. In practice:
+
+- **Last 31 days (daily):** correct — this is the supported view.
+- **Older than 31 days (daily):** consumption reads `0` (not retained). Evon does
+  not expose daily values beyond 31 days, so there is no correct value to show
+  after the fact.
+- **Older periods (monthly):** preserved separately via the 12-month
+  `EnergyDataYear` → `_import_monthly_statistics` path (see below).
+
+If you need long-term **daily** history, record the native
+`sensor.*_energy` meter entity (state-based long-term statistics) or an HA
+utility-meter helper instead — those accumulate independently of Evon's 31-day
+window. Retaining daily history beyond 31 days in the imported `evon:energy_*`
+statistic would require continuing the cumulative sum from the recorder's last
+stored value rather than re-zeroing the sliding baseline (deliberately not done,
+to avoid the risk of corrupting accumulated energy statistics).
+
 ### Code Flow
 
 ```
