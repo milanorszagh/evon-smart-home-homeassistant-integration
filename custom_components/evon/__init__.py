@@ -528,9 +528,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.http.register_view(EvonRecordingsView(recordings_dir))
         hass.data[frontend_key] = True
 
-    # Clean up stale entities only on initial setup with successful data
+    # Clean up stale entities only on initial setup with successful, complete data.
+    # Skip when the poll dropped instances via a transient fetch error, otherwise
+    # those entities look "stale" and get deleted (losing their registry
+    # customizations); cleanup runs on the next clean setup instead.
     if coordinator.last_update_success and coordinator.data is not None:
-        await _async_cleanup_stale_entities(hass, entry, coordinator)
+        if coordinator._last_poll_had_partial_failures:
+            _LOGGER.info(
+                "Skipping stale-entity cleanup: the setup poll had partial "
+                "instance-fetch failures (entities could be transiently missing)"
+            )
+        else:
+            await _async_cleanup_stale_entities(hass, entry, coordinator)
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

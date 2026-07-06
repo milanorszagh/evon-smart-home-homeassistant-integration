@@ -116,6 +116,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # _async_refresh — a recheck-triggered refresh can fire while a scheduled
         # poll is mid-flight).
         self._update_in_progress = False
+        # True when the most recent poll dropped one or more instances due to a
+        # transient per-instance fetch error (_safe_get_instance returned None).
+        # Setup uses this to avoid deleting entities that are only transiently
+        # missing (see _async_cleanup_stale_entities).
+        self._last_poll_had_partial_failures = False
 
         # WebSocket support
         self._use_websocket = use_websocket
@@ -195,6 +200,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             instance_details: dict[str, dict[str, Any]] = {
                 iid: details for iid, details in results if details is not None
             }
+            # Record whether any instance was dropped by a transient fetch error.
+            # Setup uses this to avoid removing entities that are only transiently
+            # missing (see _async_cleanup_stale_entities).
+            self._last_poll_had_partial_failures = any(details is None for _, details in results)
 
             # Extract season mode from prefetched data
             thermostat_details = instance_details.get("Base.ehThermostat", {})

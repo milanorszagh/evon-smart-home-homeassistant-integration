@@ -569,6 +569,79 @@ class TestCoordinatorApiErrorHandling:
         mock_evon_api_class.get_instances.assert_not_called()
         assert coordinator._update_in_progress is True
 
+    async def test_partial_instance_failure_sets_flag(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """RV-D6: a transient per-instance fetch error marks the poll as having
+        partial failures (so setup can skip stale-entity cleanup)."""
+        from custom_components.evon.api import EvonApiError
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        # Clean initial poll: no partial failures.
+        assert coordinator._last_poll_had_partial_failures is False
+
+        # One instance now fails transiently; the rest succeed.
+        def _get_instance(instance_id):
+            if instance_id == "light_1":
+                raise EvonApiError("transient fetch error")
+            return MOCK_INSTANCE_DETAILS.get(instance_id, {})
+
+        mock_evon_api_class.get_instance = AsyncMock(side_effect=_get_instance)
+        await coordinator.async_refresh()
+
+        assert coordinator._last_poll_had_partial_failures is True
+
+    async def test_setup_skips_cleanup_on_partial_failure(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """RV-D6: setup must not run stale-entity cleanup when the setup poll had
+        partial instance-fetch failures (else transiently-missing entities are
+        deleted along with their registry customizations)."""
+        from unittest.mock import patch
+
+        from custom_components.evon.api import EvonApiError
+
+        def _get_instance(instance_id):
+            if instance_id == "light_1":
+                raise EvonApiError("transient fetch error")
+            return MOCK_INSTANCE_DETAILS.get(instance_id, {})
+
+        mock_evon_api_class.get_instance = AsyncMock(side_effect=_get_instance)
+        mock_config_entry.add_to_hass(hass)
+
+        with patch("custom_components.evon._async_cleanup_stale_entities") as mock_cleanup:
+            await hass.config_entries.async_setup(mock_config_entry.entry_id)
+            await hass.async_block_till_done()
+
+        mock_cleanup.assert_not_called()
+
+    async def test_setup_runs_cleanup_on_clean_poll(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """RV-D6: a clean setup poll (no partial failures) still runs cleanup."""
+        from unittest.mock import patch
+
+        mock_config_entry.add_to_hass(hass)
+
+        with patch("custom_components.evon._async_cleanup_stale_entities") as mock_cleanup:
+            await hass.config_entries.async_setup(mock_config_entry.entry_id)
+            await hass.async_block_till_done()
+
+        mock_cleanup.assert_called_once()
+
     async def test_ws_disconnect_creates_repair_issue(
         self,
         hass: HomeAssistant,
