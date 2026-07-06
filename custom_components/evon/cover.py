@@ -277,6 +277,10 @@ class EvonCover(EvonEntity, CoverEntity):
             # Check entity is still available before updating state
             if self.hass is not None:
                 self.async_write_ha_state()
+                # RV-D3: this toggle acted as a stop — schedule a recheck so the
+                # resting position is fetched within the quiesce window if no WS
+                # event arrives (cancelled by the WS position update when WS is live).
+                self._schedule_post_command_recheck()
         else:
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
@@ -339,6 +343,10 @@ class EvonCover(EvonEntity, CoverEntity):
             # Check entity is still available before updating state
             if self.hass is not None:
                 self.async_write_ha_state()
+                # RV-D3: this toggle acted as a stop — schedule a recheck so the
+                # resting position is fetched within the quiesce window if no WS
+                # event arrives (cancelled by the WS position update when WS is live).
+                self._schedule_post_command_recheck()
         else:
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
@@ -391,6 +399,10 @@ class EvonCover(EvonEntity, CoverEntity):
         # Check entity is still available before updating state
         if self.hass is not None:
             self.async_write_ha_state()
+            # RV-D3: stop has no target position to verify, but the resting
+            # position is unknown — schedule a recheck so it is fetched within the
+            # quiesce window if no WS event arrives (cancelled if WS pushes it).
+            self._schedule_post_command_recheck()
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""

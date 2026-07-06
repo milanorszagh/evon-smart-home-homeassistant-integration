@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -516,6 +516,46 @@ class TestCoverPostCommandRecheck:
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
 
+    @pytest.mark.asyncio
+    async def test_stop_schedules_recheck(self, cover_entity, mock_evon_api_class):
+        """RV-D3: async_stop_cover schedules a recheck so the resting position is
+        fetched within the quiesce window (up to 60s otherwise in HTTP-only mode)."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await cover.async_stop_cover()
+
+        cover.coordinator.async_request_refresh.assert_not_called()
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("command", ["open", "close"])
+    async def test_toggle_stop_schedules_recheck(self, cover_entity, mock_evon_api_class, command):
+        """RV-D3: open/close while already moving acts as a stop toggle and must also
+        schedule a recheck to fetch the resting position."""
+        from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
+
+        cover = cover_entity
+        cover.coordinator.async_request_refresh = AsyncMock()
+        # Blind is currently moving -> the command becomes a stop toggle.
+        cover.coordinator.get_entity_data = MagicMock(
+            return_value={"id": "blind_1", "name": "Test Blind", "position": 50, "angle": 45, "is_moving": True}
+        )
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            if command == "open":
+                await cover.async_open_cover()
+            else:
+                await cover.async_close_cover()
+
+        cover.coordinator.async_request_refresh.assert_not_called()
+        mock_schedule.assert_called_once()
+        assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
 
 # =============================================================================
 # Cover-specific quiesce + lifecycle regression guards
@@ -602,7 +642,9 @@ class TestCoverQuiesceBehavior:
         cover._optimistic_position = 100
         cover._optimistic_state_set_at = time.monotonic()
 
-        await cover.async_stop_cover()
+        # Patch the recheck scheduler (RV-D3) so no real timer lingers.
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=MagicMock()):
+            await cover.async_stop_cover()
 
         # Position/tilt optimistic flags cleared, AND timestamp reset.
         assert cover._optimistic_position is None
@@ -633,10 +675,12 @@ class TestCoverQuiesceBehavior:
         # A recent move command left a timestamp behind.
         cover._optimistic_state_set_at = time.monotonic()
 
-        if command == "open":
-            await cover.async_open_cover()
-        else:
-            await cover.async_close_cover()
+        # Patch the recheck scheduler (RV-D3) so no real timer lingers.
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=MagicMock()):
+            if command == "open":
+                await cover.async_open_cover()
+            else:
+                await cover.async_close_cover()
 
         # Toggle-stop path: is_moving optimistically False, timestamp reset.
         assert cover._optimistic_is_moving is False
