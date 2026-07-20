@@ -23,7 +23,6 @@ from .const import (
     WS_LOG_MESSAGE_TRUNCATE,
     WS_MAX_PENDING_REQUESTS,
     WS_PROTOCOL,
-    WS_RECEIVE_TIMEOUT,
     WS_RECONNECT_JITTER,
     WS_RECONNECT_MAX_DELAY,
     WS_RESUBSCRIBE_MAX_ATTEMPTS,
@@ -549,8 +548,7 @@ class EvonWsClient:
             return
 
         try:
-            async with asyncio.timeout(WS_RECEIVE_TIMEOUT):
-                msg = await self._ws.receive()
+            msg = await self._ws.receive()
             # len() only applies to str/bytes payloads; CLOSE (int) / ERROR
             # (exception) frames would raise here and be misreported as an
             # "unexpected error" instead of the actual close reason below.
