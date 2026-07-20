@@ -23,7 +23,6 @@ from .const import (
     WS_LOG_MESSAGE_TRUNCATE,
     WS_MAX_PENDING_REQUESTS,
     WS_PROTOCOL,
-    WS_RECEIVE_TIMEOUT,
     WS_RECONNECT_JITTER,
     WS_RECONNECT_MAX_DELAY,
     WS_SUBSCRIBE_REQUEST_TIMEOUT,
@@ -519,8 +518,7 @@ class EvonWsClient:
             return
 
         try:
-            async with asyncio.timeout(WS_RECEIVE_TIMEOUT):
-                msg = await self._ws.receive()
+            msg = await self._ws.receive()
             _LOGGER.debug("WS msg received: type=%s, len=%s", msg.type, len(msg.data) if msg.data else 0)
 
             if msg.type == aiohttp.WSMsgType.TEXT:
