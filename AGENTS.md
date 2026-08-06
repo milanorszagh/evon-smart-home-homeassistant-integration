@@ -444,7 +444,8 @@ npm run build
 
 ### Home Assistant Integration
 ```bash
-# Run unit tests
+# Run unit tests — Python 3.14 required (the HA 2026.x test harness needs it)
+python3.14 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-test.txt
 pytest
 ```
@@ -1002,7 +1003,8 @@ Tests are split by dependency:
 ### Running Tests
 
 ```bash
-# Install test dependencies
+# Install test dependencies (Python 3.14 required — an older interpreter fails with
+# "No matching distribution found for pytest-homeassistant-custom-component")
 pip install -r requirements-test.txt
 
 # Run all tests (HA-dependent tests will be skipped if HA not installed)
@@ -1021,9 +1023,11 @@ The CI workflow (`.github/workflows/ci.yml`) runs:
 4. `npm run lint` - TypeScript linting
 5. `npm run build` - TypeScript compilation
 6. `npm run test:mcp` - MCP server tests
-7. `npm audit` - npm security audit
-8. `pytest` - Python tests (matrix: Python 3.14) with Codecov upload
-9. HACS validation - Custom component structure check
+7. `npm audit` - npm security audit (fails the build at `--audit-level=high`)
+8. `pip-audit` - Python dependency audit (advisory-only; HA hard-pins its deps, so
+   findings there are usually not fixable downstream)
+9. `pytest` - Python tests (matrix: Python 3.14, Ubuntu + macOS) with Codecov upload
+10. HACS validation - Custom component structure check
 
 Additional workflows:
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security scanning for Python and JavaScript/TypeScript on push, PRs, and weekly schedule. Results in the repo's Security tab.

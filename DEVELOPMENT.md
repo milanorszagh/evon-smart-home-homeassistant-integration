@@ -909,7 +909,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
 | **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
 
@@ -1129,7 +1129,15 @@ node ws-switch-listener.mjs [mode]
 
 ### Unit Tests
 
+**Python 3.14 is required.** `pytest-homeassistant-custom-component` pins the exact
+Home Assistant version it tests against, and the release matching HA 2026.x needs
+3.14. On an older interpreter the install fails outright with
+`No matching distribution found for pytest-homeassistant-custom-component>=0.13.354`
+— that is the version floor doing its job, not a broken requirements file.
+
 ```bash
+python3.14 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-test.txt
 pytest -v
 ```
@@ -1222,9 +1230,11 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 ## Version Compatibility
 
 - Home Assistant: 2026.5.0+ (pinned by `manifest.json`)
-- Python: 3.14+ (HA 2026.x requires >=3.14.2; the test harness
-  `pytest-homeassistant-custom-component` will silently resolve to an ancient
-  HA release on older interpreters)
+- Python: 3.14+ (HA 2026.x requires >=3.14.2). The `>=0.13.354` floor on
+  `pytest-homeassistant-custom-component` makes an older interpreter fail the
+  install outright rather than silently resolving to an ancient HA release —
+  which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
+  lower that floor.
 - Node.js (MCP): 24+ (CI uses Node.js 24 LTS; `@types/node` is kept in step so
   the type-checker cannot green-light APIs the runtime does not have)
 

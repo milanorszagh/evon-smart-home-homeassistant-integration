@@ -98,13 +98,17 @@ Examples:
 ## Checklist
 
 Before releasing:
-- [ ] All tests pass (`python3 -m pytest tests/`)
+- [ ] All tests pass (`python3.14 -m pytest tests/` — 3.14 is required, see DEVELOPMENT.md)
 - [ ] Version updated in ALL FOUR files: `manifest.json`, `pyproject.toml`, `package.json`, `package-lock.json`
 - [ ] Linting passes (`ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint`)
 - [ ] TypeScript builds (`npm run build`)
 - [ ] MCP tests pass (`npm run test:mcp`)
 - [ ] Mypy passes or errors are tracked (`mypy custom_components/evon/ --ignore-missing-imports`)
-- [ ] Security audit clean (`pip-audit -r requirements-test.txt && npm audit --audit-level=moderate`)
+- [ ] `npm audit --audit-level=moderate` clean (must be — CI fails the build on high)
+- [ ] `pip-audit -r requirements-test.txt` reviewed. Advisory only, like the CI step:
+      Home Assistant hard-pins its dependencies (e.g. `cryptography==48.0.1`), so
+      findings there usually cannot be fixed downstream and clear when HA bumps them.
+      Check that each finding is HA-pinned rather than something we actually control.
 - [ ] Changes tested on real hardware (if applicable)
 - [ ] Documentation updated (README.md, DEVELOPMENT.md, AGENTS.md as needed)
 

@@ -264,7 +264,10 @@ The backlog sweep addressed all actionable issues across eight major tasks:
 
 The only remaining work is:
 
-1. **C-H7** (Deferred): Resolving 83 mypy type errors - tracked as a standalone effort
+1. **C-H7** (Deferred): Resolving 85 mypy type errors - tracked as a standalone effort.
+   Was 83 under mypy 1.x; re-measured at 85 after the v1.22.0 bump to mypy 2.3.0 /
+   HA 2026.8.0. Dominant categories: 43 `union-attr` (mostly `EvonApi | None` not
+   narrowed before use) and 22 `no-any-return`.
 2. **4 Won't Fix items**: Documented above with clear reasoning for each
 
 The backlog sweep successfully addressed **68 of 69** issues (98.6% completion rate).
