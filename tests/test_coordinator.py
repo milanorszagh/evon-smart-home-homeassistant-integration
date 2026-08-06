@@ -1074,3 +1074,324 @@ class TestDoorbellEventTransition:
         )
         await hass.async_block_till_done()
         assert len(events) == 2
+
+
+@requires_ha_test_framework
+class TestShutdownSuppression:
+    """Intentional WS shutdown must not masquerade as a connection failure.
+
+    `EvonWsClient.stop()` fires `_on_connection_state(False)` when the socket
+    was connected. Without a shutdown guard, every unload/reload (= every
+    non-debug options save) pops a spurious 'WebSocket disconnected' repair
+    issue and schedules a full poll against a session that is about to close.
+    """
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+                "http_only": True,
+            },
+            entry_id="test_shutdown_entry",
+        )
+
+    async def test_shutdown_websocket_suppresses_repair_and_refresh(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """The disconnect callback fired from stop() during shutdown must not
+        create a repair issue nor schedule a refresh."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Fake WS client that mimics the real one: stop() notifies the
+        # connection-state callback with False (see EvonWsClient.disconnect).
+        class _FakeWsClient:
+            def __init__(self, callback):
+                self._callback = callback
+
+            async def stop(self):
+                self._callback(False)
+
+        from unittest.mock import patch
+
+        coordinator._ws_client = _FakeWsClient(coordinator._handle_ws_connection_state)
+        coordinator._ws_connected = True
+
+        with patch.object(coordinator, "async_request_refresh", new_callable=AsyncMock) as mock_refresh:
+            await coordinator.async_shutdown_websocket()
+            await hass.async_block_till_done()
+
+        issue_registry = ir.async_get(hass)
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+        mock_refresh.assert_not_called()
+        assert coordinator.ws_connected is False
+
+    async def test_unexpected_disconnect_still_creates_repair(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """A real (non-shutdown) disconnect keeps the repair behavior — the
+        guard must apply ONLY during intentional shutdown."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # First, run a full shutdown cycle (flag must not stick afterwards).
+        class _FakeWsClient:
+            def __init__(self, callback):
+                self._callback = callback
+
+            async def stop(self):
+                self._callback(False)
+
+        coordinator._ws_client = _FakeWsClient(coordinator._handle_ws_connection_state)
+        coordinator._ws_connected = True
+        await coordinator.async_shutdown_websocket()
+        await hass.async_block_till_done()
+
+        # Now a genuine disconnect arrives — repair must be created.
+        coordinator._handle_ws_connection_state(False)
+
+        issue_registry = ir.async_get(hass)
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+
+
+@requires_ha_test_framework
+class TestCoordinatorConcurrency:
+    """Concurrent-refresh hardening beyond the RV-D5 fast-path skip."""
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+                "http_only": True,
+            },
+            entry_id="test_concurrency_entry",
+        )
+
+    async def test_concurrent_first_refresh_serialized(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """With no data yet (first refresh), the RV-D5 skip cannot return cached
+        data — two concurrent refreshes must serialize instead of racing on
+        _instances_cache / _rooms_cache / _ws_update_timestamps."""
+        import asyncio
+
+        from tests.conftest import MOCK_INSTANCES
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Simulate the first-refresh state: no data yet.
+        coordinator.data = None
+
+        in_flight = 0
+        max_in_flight = 0
+
+        async def slow_get_instances():
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            # Yield so a concurrent caller can interleave if unserialized.
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            in_flight -= 1
+            return MOCK_INSTANCES
+
+        mock_evon_api_class.get_instances = AsyncMock(side_effect=slow_get_instances)
+
+        await asyncio.gather(
+            coordinator._async_update_data(),
+            coordinator._async_update_data(),
+        )
+
+        assert max_in_flight == 1, "two polls ran concurrently over shared caches"
+
+    async def test_partial_failures_exposed_as_property(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Setup code reads the partial-failure flag via a public property."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        assert coordinator.last_poll_had_partial_failures is False
+        coordinator._last_poll_had_partial_failures = True
+        assert coordinator.last_poll_had_partial_failures is True
+
+
+@requires_ha_test_framework
+class TestEnergyImportRateLimitPreCheck:
+    """The WS path must not spawn a task per meter event only to rate-limit it.
+
+    Smart meters push every few seconds; creating an asyncio task each time —
+    whose body immediately returns on the 1h rate limit — is constant churn.
+    The rate-limit check must happen BEFORE task creation.
+    """
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+                "http_only": True,
+            },
+            entry_id="test_ratelimit_entry",
+        )
+
+    async def test_rate_limited_meter_creates_no_task(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        from homeassistant.util import dt as dt_util
+
+        from custom_components.evon.statistics import _HASS_DATA_KEY
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        # Meter imported moments ago — well inside the 1h rate limit.
+        hass.data[_HASS_DATA_KEY] = {"SmartMeter1": dt_util.now()}
+
+        from unittest.mock import patch
+
+        entity_data = {"name": "Meter", "energy_data_month": [1.0, 2.0]}
+        with patch.object(hass, "async_create_task") as mock_create_task:
+            coordinator._maybe_import_energy_statistics("SmartMeter1", entity_data)
+
+        mock_create_task.assert_not_called()
+
+    async def test_fresh_meter_still_creates_task(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        from custom_components.evon.statistics import _HASS_DATA_KEY
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.data[_HASS_DATA_KEY] = {}
+
+        entity_data = {"name": "Meter", "energy_data_month": [1.0, 2.0]}
+        from unittest.mock import MagicMock, patch
+
+        created = []
+
+        def _capture(coro, *args, **kwargs):
+            created.append(coro)
+            # Close instead of running: the import itself needs the recorder,
+            # which isn't set up here — this test only asserts task creation.
+            coro.close()
+            return MagicMock()
+
+        with patch.object(hass, "async_create_task", side_effect=_capture):
+            coordinator._maybe_import_energy_statistics("SmartMeter1", entity_data)
+        await hass.async_block_till_done()
+
+        assert len(created) == 1
+
+    async def test_force_bypasses_pre_check(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        from homeassistant.util import dt as dt_util
+
+        from custom_components.evon.statistics import _HASS_DATA_KEY
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+
+        hass.data[_HASS_DATA_KEY] = {"SmartMeter1": dt_util.now()}
+
+        entity_data = {"name": "Meter", "energy_data_month": [1.0, 2.0]}
+        from unittest.mock import MagicMock, patch
+
+        created = []
+
+        def _capture(coro, *args, **kwargs):
+            created.append(coro)
+            # Close instead of running: the import itself needs the recorder,
+            # which isn't set up here — this test only asserts task creation.
+            coro.close()
+            return MagicMock()
+
+        with patch.object(hass, "async_create_task", side_effect=_capture):
+            coordinator._maybe_import_energy_statistics("SmartMeter1", entity_data, force=True)
+        await hass.async_block_till_done()
+
+        assert len(created) == 1

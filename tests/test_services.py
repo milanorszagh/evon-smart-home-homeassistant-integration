@@ -417,3 +417,35 @@ class TestServiceIntegration:
         # Must NOT be treated as an auth failure (ConfigEntryNotReady is a sibling,
         # not a subclass, of ConfigEntryAuthFailed).
         assert not issubclass(ConfigEntryNotReady, ConfigEntryAuthFailed)
+
+
+@requires_ha_test_framework
+class TestBulkServiceIdValidation:
+    """Bulk services must apply the same instance-id validation as the API layer.
+
+    The charset pattern alone admits dot-only ids ('..'), which form a path
+    traversal segment at the HTTP layer. The API's _validate_instance_id
+    rejects them; the bulk pre-check must agree with it instead of relying on
+    the downstream layer to throw.
+    """
+
+    @pytest.mark.asyncio
+    async def test_dot_only_id_skipped_in_bulk_call(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        from custom_components.evon.const import ENTITY_TYPE_LIGHTS
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data["evon"][mock_config_entry_v2.entry_id]["coordinator"]
+
+        # Inject a malicious/corrupt entity alongside the legit ones.
+        coordinator.data[ENTITY_TYPE_LIGHTS].append({"id": "..", "name": "Evil", "is_on": True})
+
+        mock_evon_api_class.turn_off_light.reset_mock()
+        await hass.services.async_call("evon", "all_lights_off", {}, blocking=True)
+
+        called_ids = [c.args[0] for c in mock_evon_api_class.turn_off_light.call_args_list]
+        assert ".." not in called_ids
+        # Legit lights were still processed (the filter didn't nuke everything).
+        assert called_ids, "expected at least one legitimate light to be turned off"

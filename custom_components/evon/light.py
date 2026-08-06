@@ -218,6 +218,10 @@ class EvonLight(EvonEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the light."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Check actual state from coordinator (before setting optimistic state)
         data = self._get_data()
         actual_is_on = data.get("is_on", False) if data else False
@@ -269,10 +273,14 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_is_on = False
         self._set_optimistic_timestamp()
@@ -285,7 +293,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

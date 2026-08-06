@@ -142,6 +142,10 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option (option is the Evon ID)."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if option in self._attr_options:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
@@ -155,7 +159,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
         else:
             _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 
@@ -258,6 +262,10 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if option in SEASON_MODE_OPTIONS:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
@@ -272,7 +280,7 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
         else:
             _LOGGER.warning("Ignoring invalid option %r for %s", option, self.entity_id)
 

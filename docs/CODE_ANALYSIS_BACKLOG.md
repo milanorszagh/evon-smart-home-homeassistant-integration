@@ -271,3 +271,22 @@ The only remaining work is:
 2. **4 Won't Fix items**: Documented above with clear reasoning for each
 
 The backlog sweep successfully addressed **68 of 69** issues (98.6% completion rate).
+
+## Second Pre-Release Review Pass (2026-08-06)
+
+A second deep review of `fix/post-command-quiesce` (post RV-fix commits) found one
+Important issue and six minor ones; all fixed the same day. IDs continue the RV scheme.
+
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| RV2-1 | Important | `EvonWsClient.stop()` fires the disconnect callback, so every unload/reload (= every non-debug options save) created a spurious `websocket_disconnected` repair and scheduled a full poll against a closing session | `_shutting_down` flag set around `stop()` in `async_shutdown_websocket`; `_handle_ws_connection_state` skips repair + refresh during intentional teardown |
+| RV2-2 | Minor | Recheck snapshot captured after the command await — a WS confirmation racing the CallMethod response never cancelled the recheck, so single-event devices (relays) fired a redundant full poll 5s after every toggle | Command methods capture `_recheck_snapshot()` before the await; `_schedule_post_command_recheck(snapshot)` skips arming when the snapshot advanced mid-flight |
+| RV2-3 | Minor | Recheck-fired log line at INFO spams in HTTP-only mode (fires after every command by design there) | DEBUG when `use_websocket` is False, INFO otherwise |
+| RV2-4 | Minor | A no-op asyncio task per smart-meter WS event (body immediately returned on the 1h rate limit) | `is_import_rate_limited()` exposed from `statistics.py`; coordinator checks before task creation |
+| RV2-5 | Minor | Bulk services validated ids with the bare charset pattern (admits dot-only ids like `..`); real guard only downstream | Public `validate_instance_id` alias in `api.py`; bulk pre-check uses it, so the layers cannot drift |
+| RV2-6 | Minor | `__init__.py` read the private `coordinator._last_poll_had_partial_failures` | `last_poll_had_partial_failures` property |
+| RV2-7 | Minor | RV-D5 fast-path skip can't help before the first successful poll (no data to return) — two concurrent first refreshes could race shared caches | `_update_lock` serializes `_async_update_data`; fast path unchanged |
+
+All covered by 16 new tests (suite 1261 → 1277). A pre-existing behavior noted but NOT
+changed: radiator `turn_off` maps to Evon's `Switch` (a toggle) — a stale-on UI state
+turns the device on instead. Tracked here for a future decision.

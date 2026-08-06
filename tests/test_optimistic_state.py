@@ -391,3 +391,161 @@ class TestPostCommandRecheck:
         # The override's value comparison detected the change and cancelled.
         assert entity._recheck_cancel is None
         assert entity._data_snapshot_at_command is None
+
+
+class TestPreCommandSnapshot:
+    """The recheck snapshot must be captured BEFORE the command await.
+
+    A WS confirmation can land while `await self._api...` is in flight (WS-mode
+    control races the CallMethod response). If the snapshot were captured after
+    the await, it would already include that confirmation and — with no further
+    WS event coming for single-event devices like relays — the recheck would
+    fire a redundant full poll 5s after every command. Passing the pre-await
+    snapshot into `_schedule_post_command_recheck` lets it detect the mid-flight
+    confirmation and skip arming the safety net entirely.
+    """
+
+    def _make_entity(self):
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.async_request_refresh = MagicMock()
+        coordinator.get_ws_update_timestamp = MagicMock(return_value=None)
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        entity = EvonEntity(coordinator, "switch_1", "Test Switch", "", entry)
+        entity._entity_type = "switches"
+        entity.hass = MagicMock()
+        return entity
+
+    def test_ws_event_during_command_skips_scheduling(self):
+        """A WS event arriving between snapshot capture and scheduling proves WS
+        liveness — no recheck is armed, so no redundant poll fires later."""
+        entity = self._make_entity()
+
+        # Before the command: no WS update ever recorded.
+        snapshot_before = entity._recheck_snapshot()
+        assert snapshot_before is None
+
+        # During the command await, a WS confirmation arrives.
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=123.45)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_call_later:
+            entity._schedule_post_command_recheck(snapshot_before)
+
+        mock_call_later.assert_not_called()
+        assert entity._recheck_cancel is None
+        assert entity._data_snapshot_at_command is None
+
+    def test_no_ws_event_during_command_still_schedules(self):
+        """With no WS event during the await, the safety net arms as before."""
+        entity = self._make_entity()
+
+        snapshot_before = entity._recheck_snapshot()
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=MagicMock(),
+        ) as mock_call_later:
+            entity._schedule_post_command_recheck(snapshot_before)
+
+        mock_call_later.assert_called_once()
+        assert entity._recheck_cancel is not None
+
+    def test_pre_await_snapshot_stored_so_later_ws_event_cancels(self):
+        """The stored snapshot is the pre-command one: a WS event arriving after
+        scheduling still cancels through the normal coordinator-update path."""
+        entity = self._make_entity()
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=100.0)
+
+        snapshot_before = entity._recheck_snapshot()  # 100.0
+
+        cancel_handle = MagicMock()
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=cancel_handle,
+        ):
+            entity._schedule_post_command_recheck(snapshot_before)
+
+        assert entity._data_snapshot_at_command == 100.0
+
+        # WS confirmation arrives after scheduling.
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=101.0)
+        entity._cancel_post_command_recheck_if_data_changed()
+
+        cancel_handle.assert_called_once()
+        assert entity._recheck_cancel is None
+
+    def test_no_arg_call_keeps_current_behavior(self):
+        """Calling without a snapshot captures at schedule time (back-compat)."""
+        entity = self._make_entity()
+        entity.coordinator.get_ws_update_timestamp = MagicMock(return_value=55.0)
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=MagicMock(),
+        ):
+            entity._schedule_post_command_recheck()
+
+        assert entity._data_snapshot_at_command == 55.0
+        assert entity._recheck_cancel is not None
+
+
+class TestRecheckFireLogLevel:
+    """The recheck-fired log line must not spam INFO in HTTP-only mode.
+
+    With WebSocket disabled the recheck fires after EVERY command by design —
+    it IS the state-confirmation mechanism there, not an anomaly worth INFO.
+    """
+
+    def _make_entity(self, use_websocket):
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.last_update_success = True
+        coordinator.use_websocket = use_websocket
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        entity = EvonEntity(coordinator, "light_1", "Test Light", "", entry)
+        entity._entity_type = "lights"
+        entity.hass = MagicMock()
+        return entity
+
+    def test_http_only_mode_logs_debug(self, caplog):
+        import asyncio
+        import logging
+
+        entity = self._make_entity(use_websocket=False)
+
+        async def refresh():
+            pass
+
+        entity.coordinator.async_request_refresh = MagicMock(return_value=refresh())
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.evon.base_entity"):
+            asyncio.run(entity._do_post_command_recheck(None))
+
+        recheck_records = [r for r in caplog.records if "Post-command recheck firing" in r.message]
+        assert len(recheck_records) == 1
+        assert recheck_records[0].levelno == logging.DEBUG
+
+    def test_websocket_mode_logs_info(self, caplog):
+        import asyncio
+        import logging
+
+        entity = self._make_entity(use_websocket=True)
+
+        async def refresh():
+            pass
+
+        entity.coordinator.async_request_refresh = MagicMock(return_value=refresh())
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.evon.base_entity"):
+            asyncio.run(entity._do_post_command_recheck(None))
+
+        recheck_records = [r for r in caplog.records if "Post-command recheck firing" in r.message]
+        assert len(recheck_records) == 1
+        assert recheck_records[0].levelno == logging.INFO

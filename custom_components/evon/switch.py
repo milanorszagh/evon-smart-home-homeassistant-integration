@@ -134,6 +134,10 @@ class EvonSwitch(EvonEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the switch."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         self._optimistic_is_on = True
         self._set_optimistic_timestamp()
         self.async_write_ha_state()
@@ -145,10 +149,14 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the switch."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         self._optimistic_is_on = False
         self._set_optimistic_timestamp()
         self.async_write_ha_state()
@@ -160,7 +168,7 @@ class EvonSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
@@ -278,6 +286,10 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
 
         Uses SwitchOneTime for explicit turn on (no state check needed).
         """
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         data = self._get_data()
         self._optimistic_is_on = True
         # Set optimistic time to full duration for immediate progress bar display
@@ -294,7 +306,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the radiator.
@@ -308,6 +320,10 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         the toggle command, the toggle will turn it back on. The double-tap
         guard and optimistic state mitigate this for rapid user interactions.
         """
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Guard against double-tap: if we already sent a turn-off, don't toggle again
         if self._optimistic_is_on is False:
             _LOGGER.debug(
@@ -347,7 +363,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel any pending recheck when entity is removed."""

@@ -114,8 +114,17 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._ws_update_timestamps: dict[tuple[str, str], float] = {}
         # Guards against a re-entrant concurrent poll (HA core does not serialize
         # _async_refresh — a recheck-triggered refresh can fire while a scheduled
-        # poll is mid-flight).
+        # poll is mid-flight). The flag drives the fast-path skip; the lock covers
+        # the case the flag can't (no data yet, so nothing cached to return): two
+        # concurrent FIRST refreshes serialize instead of racing on
+        # _instances_cache / _rooms_cache / _ws_update_timestamps.
         self._update_in_progress = False
+        self._update_lock = asyncio.Lock()
+        # True while async_shutdown_websocket is stopping the WS client, so the
+        # disconnect callback fired from stop() is not mistaken for a connection
+        # failure (which would pop a spurious repair issue and schedule a full
+        # poll against a session that is about to close).
+        self._shutting_down = False
         # True when the most recent poll dropped one or more instances due to a
         # transient per-instance fetch error (_safe_get_instance returned None).
         # Setup uses this to avoid deleting entities that are only transiently
@@ -157,6 +166,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._update_in_progress and self.data is not None:
             _LOGGER.debug("Coordinator poll already in progress; skipping re-entrant refresh")
             return self.data
+        # The fast path above can't help before the first successful poll (no
+        # data to return), so serialize via the lock instead — duplicate work in
+        # that rare startup window is fine, interleaved cache mutation is not.
+        await self._update_lock.acquire()
         self._update_in_progress = True
         # Capture the poll's start time so the merge step at the end can tell
         # which WS updates arrived during the poll (and must be preserved
@@ -312,6 +325,17 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._handle_api_error(err)
         finally:
             self._update_in_progress = False
+            self._update_lock.release()
+
+    @property
+    def last_poll_had_partial_failures(self) -> bool:
+        """True when the most recent poll dropped instances via transient fetch errors.
+
+        Setup uses this to skip stale-entity cleanup after a partial poll
+        (RV-D6): a transiently missing instance must not get its entity — and
+        registry customizations — deleted.
+        """
+        return self._last_poll_had_partial_failures
 
     def _handle_api_error(self, err: EvonApiError) -> dict[str, Any]:
         """Handle API errors with failure tracking and repair issue management."""
@@ -594,7 +618,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("Shutting down WebSocket client")
             # Disconnect WS from API before stopping
             self.api.set_ws_client(None)
-            await self._ws_client.stop()
+            # stop() fires the disconnect callback when the socket was connected;
+            # flag the shutdown so _handle_ws_connection_state doesn't treat our
+            # own teardown as a connection failure.
+            self._shutting_down = True
+            try:
+                await self._ws_client.stop()
+            finally:
+                self._shutting_down = False
             self._ws_client = None
             self._ws_connected = False
             # Cancel pending button press timers
@@ -617,6 +648,12 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             connected: Whether the WebSocket is now connected.
         """
         self._ws_connected = connected
+
+        if not connected and self._shutting_down:
+            # Intentional teardown (unload/reload/options save), not a failure:
+            # no repair issue, no refresh against a session that is closing.
+            _LOGGER.debug("WebSocket stopped as part of shutdown; skipping disconnect repair and refresh")
+            return
 
         if connected:
             # Reduce polling frequency when WebSocket is connected
@@ -895,7 +932,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         # Import the statistics module and trigger import
-        from ..statistics import import_energy_statistics
+        from ..statistics import import_energy_statistics, is_import_rate_limited
+
+        # Rate-limit BEFORE creating the task: smart meters push WS updates
+        # every few seconds, and spawning a task per event just for its body to
+        # return on the 1h limit is pointless churn. import_energy_statistics
+        # keeps its own check as a safety net for other callers.
+        if not force and is_import_rate_limited(self.hass, instance_id):
+            return
 
         self.hass.async_create_task(
             import_energy_statistics(

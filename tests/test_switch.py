@@ -539,3 +539,73 @@ class TestSwitchWillRemoveFromHass:
 
         cancel_handle.assert_called_once()
         assert switch._recheck_cancel is None
+
+
+class TestWsConfirmationDuringCommand:
+    """A WS confirmation racing the command response must not arm a redundant recheck.
+
+    In WS-control mode the confirming ValuesChanged often lands while
+    `await self._api.turn_on_switch(...)` is still in flight. The pre-await
+    snapshot lets _schedule_post_command_recheck detect that and skip arming —
+    otherwise single-event devices (relays) would fire a full HTTP poll 5s
+    after every toggle despite a perfectly healthy WebSocket.
+    """
+
+    @pytest.fixture
+    def switch_entity(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Create an EvonSwitch with a wired-up mock coordinator."""
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.switch import EvonSwitch
+
+        coordinator = MagicMock()
+        coordinator.async_request_refresh = AsyncMock()
+        coordinator.data = {"switches": [{"id": "switch_1", "name": "Test Switch", "is_on": False}]}
+        coordinator.get_entity_data = MagicMock(return_value={"id": "switch_1", "name": "Test Switch", "is_on": False})
+        # No WS update recorded before the command.
+        coordinator.get_ws_update_timestamp = MagicMock(return_value=None)
+
+        entry = mock_config_entry_v2
+        api = mock_evon_api_class
+
+        switch = EvonSwitch(coordinator, "switch_1", "Test Switch", "Living Room", entry, api)
+        switch.hass = hass
+        switch.entity_id = "switch.test_switch"
+        switch.async_write_ha_state = MagicMock()
+        return switch
+
+    @pytest.mark.asyncio
+    async def test_ws_confirmation_during_command_skips_recheck(self, switch_entity, mock_evon_api_class):
+        """WS timestamp advances during the API await → no recheck armed."""
+        from unittest.mock import MagicMock
+
+        switch = switch_entity
+
+        async def _confirm_via_ws(instance_id):
+            # Simulate the WS confirmation arriving mid-command.
+            switch.coordinator.get_ws_update_timestamp = MagicMock(return_value=123.45)
+
+        mock_evon_api_class.turn_on_switch = AsyncMock(side_effect=_confirm_via_ws)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await switch.async_turn_on()
+
+        mock_schedule.assert_not_called()
+        assert switch._recheck_cancel is None
+
+    @pytest.mark.asyncio
+    async def test_no_ws_confirmation_during_command_arms_recheck(self, switch_entity, mock_evon_api_class):
+        """Timestamp unchanged during the await → safety net arms as before."""
+        from unittest.mock import MagicMock
+
+        switch = switch_entity
+        mock_evon_api_class.turn_on_switch = AsyncMock()
+
+        with patch(
+            "custom_components.evon.base_entity.async_call_later",
+            return_value=MagicMock(),
+        ) as mock_schedule:
+            await switch.async_turn_on()
+
+        mock_schedule.assert_called_once()
+        assert switch._recheck_cancel is not None

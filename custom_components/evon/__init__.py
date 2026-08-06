@@ -15,7 +15,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import INSTANCE_ID_PATTERN, EvonApi, EvonAuthError, EvonRateLimitError
+from .api import EvonApi, EvonAuthError, EvonRateLimitError, validate_instance_id
 from .const import (
     CONF_BUTTON_DOUBLE_CLICK_DELAY,
     CONF_CONNECTION_TYPE,
@@ -414,7 +414,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                             entity_id = entity.get("id")
                             if not entity_id:
                                 continue
-                            if not INSTANCE_ID_PATTERN.match(entity_id):
+                            try:
+                                validate_instance_id(entity_id)
+                            except ValueError:
                                 _LOGGER.warning("Invalid instance ID in bulk call: %r", entity_id)
                                 continue
                             if filter_fn and not filter_fn(entity):
@@ -533,7 +535,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # those entities look "stale" and get deleted (losing their registry
     # customizations); cleanup runs on the next clean setup instead.
     if coordinator.last_update_success and coordinator.data is not None:
-        if coordinator._last_poll_had_partial_failures:
+        if coordinator.last_poll_had_partial_failures:
             _LOGGER.info(
                 "Skipping stale-entity cleanup: the setup poll had partial "
                 "instance-fetch failures (entities could be transiently missing)"

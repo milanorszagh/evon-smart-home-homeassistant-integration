@@ -69,6 +69,17 @@ def _get_last_import_times(hass: HomeAssistant) -> dict[str, datetime]:
     return hass.data[_HASS_DATA_KEY]
 
 
+def is_import_rate_limited(hass: HomeAssistant, meter_id: str) -> bool:
+    """Return True if a meter's statistics import is inside MIN_IMPORT_INTERVAL.
+
+    Exposed so the coordinator can check BEFORE spawning an import task —
+    smart meters push WS updates every few seconds, and per-event task churn
+    is pointless when the task body would immediately return here anyway.
+    """
+    last_import = _get_last_import_times(hass).get(meter_id)
+    return bool(last_import and (dt_util.now() - last_import) < MIN_IMPORT_INTERVAL)
+
+
 async def import_energy_statistics(
     hass: HomeAssistant,
     meter_id: str,
@@ -98,10 +109,7 @@ async def import_energy_statistics(
         return
 
     # Rate limiting: avoid importing too frequently (unless forced)
-    now = dt_util.now()
-    last_import_times = _get_last_import_times(hass)
-    last_import = last_import_times.get(meter_id)
-    if not force and last_import and (now - last_import) < MIN_IMPORT_INTERVAL:
+    if not force and is_import_rate_limited(hass, meter_id):
         return
 
     _LOGGER.debug(

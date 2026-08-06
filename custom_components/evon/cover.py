@@ -238,6 +238,10 @@ class EvonCover(EvonEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         data = self._get_data()
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
@@ -280,7 +284,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 # RV-D3: this toggle acted as a stop — schedule a recheck so the
                 # resting position is fetched within the quiesce window if no WS
                 # event arrives (cancelled by the WS position update when WS is live).
-                self._schedule_post_command_recheck()
+                self._schedule_post_command_recheck(recheck_snapshot)
         else:
             # Blind is stopped - this will start opening
             self._optimistic_position = 100
@@ -300,10 +304,14 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         data = self._get_data()
         coordinator_is_moving = data.get("is_moving", False) if data else False
         # Check both coordinator data AND optimistic state (in case coordinator hasn't refreshed yet)
@@ -346,7 +354,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 # RV-D3: this toggle acted as a stop — schedule a recheck so the
                 # resting position is fetched within the quiesce window if no WS
                 # event arrives (cancelled by the WS position update when WS is live).
-                self._schedule_post_command_recheck()
+                self._schedule_post_command_recheck(recheck_snapshot)
         else:
             # Blind is stopped - this will start closing
             self._optimistic_position = 0
@@ -366,10 +374,14 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Clear optimistic values since we don't know where it will stop
         self._optimistic_position = None
         self._optimistic_tilt = None
@@ -402,10 +414,14 @@ class EvonCover(EvonEntity, CoverEntity):
             # RV-D3: stop has no target position to verify, but the resting
             # position is unknown — schedule a recheck so it is fetched within the
             # quiesce window if no WS event arrives (cancelled if WS pushes it).
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_set_cover_position(self, **kwargs: Any) -> None:
         """Set the cover position."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if ATTR_POSITION in kwargs:
             # Clamp to valid range 0-100
             ha_position = max(0, min(100, int(kwargs[ATTR_POSITION])))
@@ -423,7 +439,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
         """Open the cover tilt (slats horizontal, letting light through).
@@ -431,6 +447,10 @@ class EvonCover(EvonEntity, CoverEntity):
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # HA tilt 100 = open (horizontal), Evon angle 0 = open
         self._optimistic_tilt = 100
         self._set_optimistic_timestamp()
@@ -443,7 +463,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
         """Close the cover tilt (slats angled to block light).
@@ -451,6 +471,10 @@ class EvonCover(EvonEntity, CoverEntity):
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # HA tilt 0 = closed (blocking), Evon angle 100 = closed
         self._optimistic_tilt = 0
         self._set_optimistic_timestamp()
@@ -463,7 +487,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         """Set the cover tilt position.
@@ -475,6 +499,10 @@ class EvonCover(EvonEntity, CoverEntity):
         Note: Due to Evon hardware behavior, tilt orientation depends on the
         blind's last movement direction. See module docstring for details.
         """
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if ATTR_TILT_POSITION in kwargs:
             # Clamp to valid range 0-100
             ha_tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
@@ -491,7 +519,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

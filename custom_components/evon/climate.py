@@ -239,6 +239,10 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set new target HVAC mode."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_hvac_mode = hvac_mode
         self._set_optimistic_timestamp()
@@ -260,10 +264,14 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # WS normally pushes the state change within ~0.8s.
         # Schedule a fallback recheck — if WS doesn't push, the recheck fires
         # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if ATTR_TEMPERATURE in kwargs:
             temperature = kwargs[ATTR_TEMPERATURE]
             # Clamp temperature to device min/max range
@@ -283,10 +291,14 @@ class EvonClimate(EvonEntity, ClimateEntity):
             # WS normally pushes the state change within ~0.8s.
             # Schedule a fallback recheck — if WS doesn't push, the recheck fires
             # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
-            self._schedule_post_command_recheck()
+            self._schedule_post_command_recheck(recheck_snapshot)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         # Set optimistic preset immediately to prevent UI flicker
         # Don't set optimistic target temp - let WebSocket push the actual value
         # (Evon may clamp the temp to device min/max limits)
@@ -315,7 +327,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # WS normally pushes the state change within ~0.8s.
         # Schedule a fallback recheck — if WS doesn't push, the recheck fires
         # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
-        self._schedule_post_command_recheck()
+        self._schedule_post_command_recheck(recheck_snapshot)
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

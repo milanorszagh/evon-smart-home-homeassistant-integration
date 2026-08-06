@@ -84,6 +84,12 @@ def _validate_instance_id(instance_id: str) -> None:
         raise ValueError(f"Invalid instance ID format: {instance_id!r}")
 
 
+# Public alias: the bulk services in __init__.py pre-validate ids with the same
+# rule this layer enforces, so the two checks cannot drift apart (the charset
+# pattern alone admits dot-only ids like '..').
+validate_instance_id = _validate_instance_id
+
+
 def _validate_method_name(method: str) -> None:
     """Validate method name format.
 

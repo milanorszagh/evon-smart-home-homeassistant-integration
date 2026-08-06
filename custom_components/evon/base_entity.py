@@ -18,6 +18,10 @@ from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Sentinel distinguishing "no snapshot passed" from a legitimate None snapshot
+# (None means "no WS update ever recorded for this entity").
+_SNAPSHOT_UNSET: Any = object()
+
 
 class EntityData:
     """Descriptor that reads a field from coordinator entity data.
@@ -167,19 +171,37 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         """
         return current is not None and current != snapshot
 
-    def _schedule_post_command_recheck(self) -> None:
+    def _schedule_post_command_recheck(self, snapshot_before_command: Any = _SNAPSHOT_UNSET) -> None:
         """Schedule an HTTP recheck for POST_COMMAND_QUIESCE_PERIOD seconds from now.
 
-        Captures the current entity state via `_recheck_snapshot()` so that
-        subsequent coordinator updates touching this entity can cancel the
-        recheck (see _cancel_post_command_recheck_if_data_changed).
+        Command methods should capture ``self._recheck_snapshot()`` BEFORE
+        awaiting the API call and pass it here. A WS confirmation often lands
+        while the command await is still in flight (WS-control mode races the
+        CallMethod response); comparing against the pre-await snapshot detects
+        that and skips arming the safety net — WS is proven alive, so the push
+        path is trusted. Without this, single-event devices (relays) would
+        fire a redundant full poll 5s after every toggle, since their one
+        confirmation always precedes scheduling and nothing arrives later to
+        cancel the recheck.
+
+        Called without an argument, the snapshot is captured at schedule time.
 
         If a recheck is already pending, the prior one is cancelled first
         (newer command takes precedence).
         """
         if self._recheck_cancel is not None:
             self._recheck_cancel()
-        self._data_snapshot_at_command = self._recheck_snapshot()
+            self._recheck_cancel = None
+        if snapshot_before_command is not _SNAPSHOT_UNSET and self._recheck_data_changed(
+            self._recheck_snapshot(), snapshot_before_command
+        ):
+            # A WS event for this entity arrived while the command was in
+            # flight — same liveness criterion as the cancel-on-update path.
+            self._data_snapshot_at_command = None
+            return
+        self._data_snapshot_at_command = (
+            self._recheck_snapshot() if snapshot_before_command is _SNAPSHOT_UNSET else snapshot_before_command
+        )
         self._recheck_cancel = async_call_later(
             self.hass,
             POST_COMMAND_QUIESCE_PERIOD,
@@ -214,7 +236,12 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         """Fire the HTTP recheck — only reached if no WS event arrived in time."""
         self._recheck_cancel = None
         self._data_snapshot_at_command = None
-        _LOGGER.info(
+        # In HTTP-only mode the recheck IS the confirmation mechanism and fires
+        # after every command by design — that's DEBUG. With WS enabled, firing
+        # means the push path went quiet, which is worth an INFO.
+        level = logging.INFO if getattr(self.coordinator, "use_websocket", False) else logging.DEBUG
+        _LOGGER.log(
+            level,
             "Post-command recheck firing for %s — no WS update arrived within %.1fs",
             self._instance_id,
             POST_COMMAND_QUIESCE_PERIOD,
