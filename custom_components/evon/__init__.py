@@ -457,7 +457,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     duration = int(duration)
                     if duration <= 0:
                         raise ValueError("duration must be positive")
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     _LOGGER.error("Invalid recording duration: %r", duration)
                     return
             if not entity_id:

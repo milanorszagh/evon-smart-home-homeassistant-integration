@@ -244,12 +244,8 @@ class TestSwitchPostCommandRecheck:
 
         coordinator = MagicMock()
         coordinator.async_request_refresh = AsyncMock()
-        coordinator.data = {
-            "switches": [{"id": "switch_1", "name": "Test Switch", "is_on": False}]
-        }
-        coordinator.get_entity_data = MagicMock(
-            return_value={"id": "switch_1", "name": "Test Switch", "is_on": False}
-        )
+        coordinator.data = {"switches": [{"id": "switch_1", "name": "Test Switch", "is_on": False}]}
+        coordinator.get_entity_data = MagicMock(return_value={"id": "switch_1", "name": "Test Switch", "is_on": False})
 
         entry = mock_config_entry_v2
         api = mock_evon_api_class
@@ -262,9 +258,7 @@ class TestSwitchPostCommandRecheck:
         return switch
 
     @pytest.mark.asyncio
-    async def test_turn_on_schedules_recheck_not_immediate_refresh(
-        self, switch_entity, mock_evon_api_class
-    ):
+    async def test_turn_on_schedules_recheck_not_immediate_refresh(self, switch_entity, mock_evon_api_class):
         """turn_on schedules a recheck; does not fire immediate HTTP poll."""
         from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
 
@@ -281,9 +275,7 @@ class TestSwitchPostCommandRecheck:
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
 
     @pytest.mark.asyncio
-    async def test_turn_off_schedules_recheck_not_immediate_refresh(
-        self, switch_entity, mock_evon_api_class
-    ):
+    async def test_turn_off_schedules_recheck_not_immediate_refresh(self, switch_entity, mock_evon_api_class):
         """turn_off schedules a recheck; does not fire immediate HTTP poll."""
         from custom_components.evon.const import POST_COMMAND_QUIESCE_PERIOD
 
@@ -346,9 +338,7 @@ class TestRadiatorPostCommandRecheck:
         entry = mock_config_entry_v2
         api = mock_evon_api_class
 
-        radiator = EvonBathroomRadiatorSwitch(
-            coordinator, "radiator_1", "Test Radiator", "Bathroom", entry, api
-        )
+        radiator = EvonBathroomRadiatorSwitch(coordinator, "radiator_1", "Test Radiator", "Bathroom", entry, api)
         radiator.hass = hass
         radiator.entity_id = "switch.test_radiator"
         # Bypass state writing: entity is not registered in the state machine
@@ -417,25 +407,17 @@ class TestSwitchQuiesceComparisonClear:
 
         coordinator = MagicMock()
         coordinator.last_update_success = True
-        coordinator.get_entity_data = MagicMock(
-            return_value={"id": "switch_1", "name": "Test", "is_on": is_on_in_data}
-        )
-        switch = EvonSwitch(
-            coordinator, "switch_1", "Test", "Living Room", mock_config_entry_v2, mock_evon_api_class
-        )
+        coordinator.get_entity_data = MagicMock(return_value={"id": "switch_1", "name": "Test", "is_on": is_on_in_data})
+        switch = EvonSwitch(coordinator, "switch_1", "Test", "Living Room", mock_config_entry_v2, mock_evon_api_class)
         switch.hass = hass
         switch.async_write_ha_state = MagicMock()
         return switch
 
-    def test_matching_ws_during_quiesce_clears_optimistic(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    def test_matching_ws_during_quiesce_clears_optimistic(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """A WS event that matches optimistic during the quiesce window clears it."""
         import time
 
-        switch = self._make_switch(
-            hass, mock_config_entry_v2, mock_evon_api_class, is_on_in_data=True
-        )
+        switch = self._make_switch(hass, mock_config_entry_v2, mock_evon_api_class, is_on_in_data=True)
         # User asked to turn on; coordinator now also says is_on=True (WS confirmed).
         switch._optimistic_is_on = True
         switch._optimistic_state_set_at = time.monotonic()
@@ -451,9 +433,7 @@ class TestSwitchQuiesceComparisonClear:
         """A WS event that disagrees during quiesce preserves optimistic and skips super()."""
         import time
 
-        switch = self._make_switch(
-            hass, mock_config_entry_v2, mock_evon_api_class, is_on_in_data=True
-        )
+        switch = self._make_switch(hass, mock_config_entry_v2, mock_evon_api_class, is_on_in_data=True)
         # User asked to turn off; Evon still reports is_on=True.
         switch._optimistic_is_on = False
         timestamp = time.monotonic()
@@ -472,9 +452,7 @@ class TestRadiatorQuiesceComparisonClear:
     """Pin Fix #1 behavior on EvonBathroomRadiatorSwitch, including the
     'turning on but time_remaining not yet reported' edge case."""
 
-    def _make_radiator(
-        self, hass, mock_config_entry_v2, mock_evon_api_class, *, is_on, time_remaining
-    ):
+    def _make_radiator(self, hass, mock_config_entry_v2, mock_evon_api_class, *, is_on, time_remaining):
         from unittest.mock import MagicMock
 
         from custom_components.evon.switch import EvonBathroomRadiatorSwitch
@@ -497,17 +475,13 @@ class TestRadiatorQuiesceComparisonClear:
         radiator.async_write_ha_state = MagicMock()
         return radiator
 
-    def test_turn_on_with_time_remaining_zero_keeps_optimistic(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    def test_turn_on_with_time_remaining_zero_keeps_optimistic(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """When turning on, a WS event reporting is_on=True but time_remaining<=0 must NOT clear
         optimistic — Evon hasn't reported the duration yet, so we keep the optimistic value
         (which holds the configured duration_mins) until the real time_remaining lands."""
         import time
 
-        radiator = self._make_radiator(
-            hass, mock_config_entry_v2, mock_evon_api_class, is_on=True, time_remaining=0
-        )
+        radiator = self._make_radiator(hass, mock_config_entry_v2, mock_evon_api_class, is_on=True, time_remaining=0)
         radiator._optimistic_is_on = True
         radiator._optimistic_time_remaining_mins = 30.0
         radiator._optimistic_state_set_at = time.monotonic()
@@ -525,9 +499,7 @@ class TestRadiatorQuiesceComparisonClear:
         """Once Evon reports a positive time_remaining, the matching turn-on confirmation clears."""
         import time
 
-        radiator = self._make_radiator(
-            hass, mock_config_entry_v2, mock_evon_api_class, is_on=True, time_remaining=29.5
-        )
+        radiator = self._make_radiator(hass, mock_config_entry_v2, mock_evon_api_class, is_on=True, time_remaining=29.5)
         radiator._optimistic_is_on = True
         radiator._optimistic_time_remaining_mins = 30.0
         radiator._optimistic_state_set_at = time.monotonic()
@@ -548,27 +520,19 @@ class TestSwitchWillRemoveFromHass:
     """Pin lifecycle: removing an entity cancels its pending recheck timer."""
 
     @pytest.mark.asyncio
-    async def test_remove_cancels_pending_recheck(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_remove_cancels_pending_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
         from unittest.mock import MagicMock
 
         from custom_components.evon.switch import EvonSwitch
 
         coordinator = MagicMock()
-        coordinator.get_entity_data = MagicMock(
-            return_value={"id": "switch_1", "name": "Test", "is_on": False}
-        )
-        switch = EvonSwitch(
-            coordinator, "switch_1", "Test", "Living Room", mock_config_entry_v2, mock_evon_api_class
-        )
+        coordinator.get_entity_data = MagicMock(return_value={"id": "switch_1", "name": "Test", "is_on": False})
+        switch = EvonSwitch(coordinator, "switch_1", "Test", "Living Room", mock_config_entry_v2, mock_evon_api_class)
         switch.hass = hass
         switch.async_write_ha_state = MagicMock()
 
         cancel_handle = MagicMock()
-        with patch(
-            "custom_components.evon.base_entity.async_call_later", return_value=cancel_handle
-        ):
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=cancel_handle):
             switch._schedule_post_command_recheck()
 
         await switch.async_will_remove_from_hass()

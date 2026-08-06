@@ -282,9 +282,7 @@ class EvonBathroomRadiatorSwitch(EvonEntity, SwitchEntity):
         self._optimistic_is_on = True
         # Set optimistic time to full duration for immediate progress bar display
         if data:
-            self._optimistic_time_remaining_mins = float(
-                data.get("duration_mins", DEFAULT_BATHROOM_RADIATOR_DURATION)
-            )
+            self._optimistic_time_remaining_mins = float(data.get("duration_mins", DEFAULT_BATHROOM_RADIATOR_DURATION))
         self._set_optimistic_timestamp()
         self.async_write_ha_state()
 

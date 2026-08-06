@@ -285,10 +285,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Prune timestamps for entities that no longer exist (entity removed,
             # renamed, or otherwise absent from this poll's result).
-            self._ws_update_timestamps = {
-                k: v for k, v in self._ws_update_timestamps.items()
-                if k in self._data_index
-            }
+            self._ws_update_timestamps = {k: v for k, v in self._ws_update_timestamps.items() if k in self._data_index}
 
             # Cache successful data for use during transient failures
             self._last_successful_data = result
@@ -426,9 +423,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         index[(entity_type, entity["id"])] = entity
         self._data_index = index
 
-    def _merge_ws_updates_into_poll_result(
-        self, result: dict[str, Any], poll_start_time: float
-    ) -> None:
+    def _merge_ws_updates_into_poll_result(self, result: dict[str, Any], poll_start_time: float) -> None:
         """Preserve WS updates that arrived during the in-flight poll.
 
         The HTTP poll's REST snapshot was taken near ``poll_start_time`` and
@@ -464,8 +459,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if e.get("id") == instance_id:
                     entities_list[idx] = ws_entity
                     _LOGGER.debug(
-                        "Poll-WS merge: preserved WS update for %s/%s "
-                        "(WS at %.3fs, poll started %.3fs ago)",
+                        "Poll-WS merge: preserved WS update for %s/%s (WS at %.3fs, poll started %.3fs ago)",
                         entity_type,
                         instance_id,
                         ws_ts - poll_start_time,

@@ -593,9 +593,7 @@ class TestCoverQuiesceBehavior:
         cover.async_write_ha_state = MagicMock()
         return cover
 
-    def test_api_caches_update_even_during_quiesce(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    def test_api_caches_update_even_during_quiesce(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """Cover's API position/angle caches must update on every coordinator event
         even when the quiesce window is active (otherwise WS-based MoveToPosition
         calls would issue with stale cached values)."""
@@ -630,9 +628,7 @@ class TestCoverQuiesceBehavior:
         cover.async_write_ha_state.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_stop_resets_optimistic_timestamp(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_stop_resets_optimistic_timestamp(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """async_stop_cover must clear _optimistic_state_set_at so a stale quiesce
         window doesn't drop subsequent coordinator updates (Fix #3)."""
         import time
@@ -689,18 +685,14 @@ class TestCoverQuiesceBehavior:
         assert cover._optimistic_state_set_at is None
 
     @pytest.mark.asyncio
-    async def test_remove_cancels_pending_recheck(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_remove_cancels_pending_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """Pin lifecycle: removing the cover cancels its pending recheck timer."""
         from unittest.mock import MagicMock
 
         cover = self._make_cover(hass, mock_config_entry_v2, mock_evon_api_class)
 
         cancel_handle = MagicMock()
-        with patch(
-            "custom_components.evon.base_entity.async_call_later", return_value=cancel_handle
-        ):
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=cancel_handle):
             cover._schedule_post_command_recheck()
 
         await cover.async_will_remove_from_hass()
