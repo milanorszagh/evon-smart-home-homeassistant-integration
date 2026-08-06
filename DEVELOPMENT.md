@@ -909,7 +909,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.12/3.13 on Ubuntu + Python 3.13 on macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS, run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
 | **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
 
@@ -1222,7 +1222,9 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 ## Version Compatibility
 
 - Home Assistant: 2026.5.0+ (pinned by `manifest.json`)
-- Python: 3.12+
+- Python: 3.14+ (HA 2026.x requires >=3.14.2; the test harness
+  `pytest-homeassistant-custom-component` will silently resolve to an ancient
+  HA release on older interpreters)
 - Node.js (MCP): 18+ (CI uses Node.js 22 LTS)
 
 ---

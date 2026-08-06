@@ -635,9 +635,7 @@ class TestLightPostCommandRecheck:
 
         coordinator = MagicMock()
         coordinator.last_update_success = True
-        coordinator.get_entity_data = MagicMock(
-            return_value={"id": "light_1", "is_on": True, "brightness": 50}
-        )
+        coordinator.get_entity_data = MagicMock(return_value={"id": "light_1", "is_on": True, "brightness": 50})
         entry = MagicMock()
         entry.entry_id = "test_entry"
 

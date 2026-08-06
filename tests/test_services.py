@@ -341,9 +341,7 @@ class TestServiceIntegration:
         assert not hass.services.has_service("evon", SERVICE_SET_HOME_STATE)
 
     @pytest.mark.asyncio
-    async def test_failed_platform_unload_does_not_leave_zombie(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_failed_platform_unload_does_not_leave_zombie(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """If platform unload fails, the entry must not be left half-torn-down.
 
         Regression: the API/WS were shut down (credentials blanked) and
@@ -362,9 +360,7 @@ class TestServiceIntegration:
 
         entry_data = hass.data["evon"][mock_config_entry_v2.entry_id]
 
-        with patch.object(
-            hass.config_entries, "async_unload_platforms", AsyncMock(return_value=False)
-        ):
+        with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=False)):
             result = await async_unload_entry(hass, mock_config_entry_v2)
 
         assert result is False
@@ -376,9 +372,7 @@ class TestServiceIntegration:
         assert entry_data.get("unloading") is False
 
     @pytest.mark.asyncio
-    async def test_setup_bad_credentials_triggers_reauth(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_setup_bad_credentials_triggers_reauth(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """Setup-time auth failure must raise ConfigEntryAuthFailed (start reauth).
 
         Regression: test_connection() re-raises EvonAuthError which propagated
@@ -393,17 +387,13 @@ class TestServiceIntegration:
         from custom_components.evon.api import EvonAuthError
 
         mock_config_entry_v2.add_to_hass(hass)
-        mock_evon_api_class.test_connection = AsyncMock(
-            side_effect=EvonAuthError("Login failed: Invalid credentials")
-        )
+        mock_evon_api_class.test_connection = AsyncMock(side_effect=EvonAuthError("Login failed: Invalid credentials"))
 
         with pytest.raises(ConfigEntryAuthFailed):
             await async_setup_entry(hass, mock_config_entry_v2)
 
     @pytest.mark.asyncio
-    async def test_setup_rate_limit_is_retryable_not_reauth(
-        self, hass, mock_config_entry_v2, mock_evon_api_class
-    ):
+    async def test_setup_rate_limit_is_retryable_not_reauth(self, hass, mock_config_entry_v2, mock_evon_api_class):
         """A transient login rate-limit at setup must be retryable, not reauth.
 
         EvonRateLimitError (a subclass of EvonAuthError) must map to

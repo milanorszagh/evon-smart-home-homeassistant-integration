@@ -1,7 +1,11 @@
 pytest>=8.3.4
 pytest-asyncio>=0.24.0
 pytest-cov>=6.0.0
-pytest-homeassistant-custom-component>=0.13.200
+# Pins homeassistant==2026.8.0 and requires Python >=3.14. Keep this floor at or
+# above the HA version declared in custom_components/evon/manifest.json — a lower
+# floor lets pip silently backtrack to an ancient harness (see: 0.13.205 resolved
+# HA 2025.1.4 under Python 3.12, so tests never exercised the supported HA).
+pytest-homeassistant-custom-component>=0.13.354
 ruff>=0.14.0
 mypy>=1.19.0
 # Required by homeassistant.components.camera.img_util (imported at module level).

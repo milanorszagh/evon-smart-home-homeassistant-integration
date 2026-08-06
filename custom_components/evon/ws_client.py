@@ -505,9 +505,7 @@ class EvonWsClient:
             # Only str/bytes payloads are sliceable. CLOSE frames carry an int
             # close code and ERROR frames carry an exception; slicing those would
             # raise inside the log call and mask the real close reason.
-            data_preview = (
-                msg.data[:WS_LOG_MESSAGE_TRUNCATE] if isinstance(msg.data, (str, bytes)) else msg.data
-            )
+            data_preview = msg.data[:WS_LOG_MESSAGE_TRUNCATE] if isinstance(msg.data, (str, bytes)) else msg.data
             _LOGGER.debug(
                 "WebSocket received message: type=%s, data=%s",
                 msg.type,
@@ -885,8 +883,7 @@ class EvonWsClient:
             if attempt + 1 < WS_RESUBSCRIBE_MAX_ATTEMPTS:
                 await asyncio.sleep(WS_RESUBSCRIBE_RETRY_DELAY)
         _LOGGER.warning(
-            "Resubscription failed after %d attempts; real-time updates may be "
-            "unavailable until the next reconnect",
+            "Resubscription failed after %d attempts; real-time updates may be unavailable until the next reconnect",
             WS_RESUBSCRIBE_MAX_ATTEMPTS,
         )
 

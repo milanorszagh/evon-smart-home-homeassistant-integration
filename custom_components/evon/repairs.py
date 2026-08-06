@@ -34,9 +34,7 @@ class EvonStaleEntitiesRepairFlow(RepairsFlow):
         return self.async_show_form(step_id="confirm")
 
 
-async def async_create_fix_flow(
-    hass: HomeAssistant, issue_id: str, data: dict[str, Any] | None
-) -> RepairsFlow:
+async def async_create_fix_flow(hass: HomeAssistant, issue_id: str, data: dict[str, Any] | None) -> RepairsFlow:
     """Create a repair flow for the given issue."""
     if issue_id.startswith(REPAIR_STALE_ENTITIES_CLEANED) or issue_id.startswith(REPAIR_RELAY_MIGRATED):
         return EvonStaleEntitiesRepairFlow()

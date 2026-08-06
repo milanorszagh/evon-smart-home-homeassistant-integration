@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install ruff
         run: pip install ruff
@@ -39,7 +39,7 @@ jobs:
 
       - name: Run mypy
         run: mypy custom_components/evon/ --ignore-missing-imports
-        continue-on-error: true  # 83 errors remain; tracked in docs/CODE_ANALYSIS_BACKLOG.md
+        continue-on-error: true  # 85 errors remain under mypy 2.x; tracked in docs/CODE_ANALYSIS_BACKLOG.md
 
   lint-typescript:
     name: Lint TypeScript
@@ -82,11 +82,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        # HA 2026.x requires Python >=3.14.2, so 3.14 is the only supported runtime.
+        python-version: ["3.14"]
         os: [ubuntu-latest]
         include:
           - os: macos-latest
-            python-version: "3.13"
+            python-version: "3.14"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6

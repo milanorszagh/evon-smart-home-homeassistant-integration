@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![IoT Class](https://img.shields.io/badge/IoT_Class-local_push-blue.svg)](https://developers.home-assistant.io/docs/creating_integration_manifest#iot-class)
 [![HA Version](https://img.shields.io/badge/Home_Assistant-2026.5+-blue.svg)](https://www.home-assistant.io/)
-[![Python](https://img.shields.io/badge/Python-3.12%20|%203.13-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
 
 Home Assistant custom integration for [Evon Smart Home](https://www.evon-smarthome.com/) systems.
 

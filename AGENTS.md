@@ -1022,7 +1022,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs:
 5. `npm run build` - TypeScript compilation
 6. `npm run test:mcp` - MCP server tests
 7. `npm audit` - npm security audit
-8. `pytest` - Python tests (matrix: Python 3.12, 3.13) with Codecov upload
+8. `pytest` - Python tests (matrix: Python 3.14) with Codecov upload
 9. HACS validation - Custom component structure check
 
 Additional workflows:

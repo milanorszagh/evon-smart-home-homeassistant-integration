@@ -161,10 +161,7 @@ class TestMissingPrefixesRegression:
     (e.g. SC1_M01.X -> M01.X) and got those entities falsely flagged as stale."""
 
     def test_doorbell_underscored_instance_id(self):
-        assert (
-            _extract_instance_id_from_unique_id("evon_doorbell_SC1_M01.Intercom2N", ENTRY_ID)
-            == "SC1_M01.Intercom2N"
-        )
+        assert _extract_instance_id_from_unique_id("evon_doorbell_SC1_M01.Intercom2N", ENTRY_ID) == "SC1_M01.Intercom2N"
 
     def test_doorbell_simple_instance_id(self):
         assert _extract_instance_id_from_unique_id("evon_doorbell_Security.Intercom", ENTRY_ID) == "Security.Intercom"
