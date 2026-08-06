@@ -1225,7 +1225,8 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 - Python: 3.14+ (HA 2026.x requires >=3.14.2; the test harness
   `pytest-homeassistant-custom-component` will silently resolve to an ancient
   HA release on older interpreters)
-- Node.js (MCP): 18+ (CI uses Node.js 22 LTS)
+- Node.js (MCP): 24+ (CI uses Node.js 24 LTS; `@types/node` is kept in step so
+  the type-checker cannot green-light APIs the runtime does not have)
 
 ---
 
