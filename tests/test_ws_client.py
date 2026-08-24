@@ -583,6 +583,31 @@ class TestWsClientNonTextFrameLogging:
         assert "Unexpected error handling WebSocket message" not in caplog.text
         client.disconnect.assert_awaited()
 
+    @pytest.mark.parametrize(
+        "frame_type",
+        [aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING],
+    )
+    async def test_handle_messages_close_type_frames_disconnect(self, frame_type):
+        """Server-initiated CLOSE/CLOSING frames must trigger a disconnect.
+
+        aiohttp's autoclose path hands CLOSE to the caller; without a
+        disconnect, pending requests hang until their own timeouts and the
+        status sensor never observes the drop (#11).
+        """
+        client = self._make_client()
+        close_msg = MagicMock()
+        close_msg.type = frame_type
+        close_msg.data = 1000  # close code
+        ws = MagicMock()
+        ws.closed = False
+        ws.receive = AsyncMock(return_value=close_msg)
+        client._ws = ws
+        client.disconnect = AsyncMock()
+
+        await client._handle_messages()
+
+        client.disconnect.assert_awaited()
+
 
 class TestWsClientSetValue:
     """Tests for WebSocket client set_value method."""

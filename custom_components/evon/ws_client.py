@@ -558,8 +558,12 @@ class EvonWsClient:
             if msg.type == aiohttp.WSMsgType.TEXT:
                 self._messages_received += 1
                 self._handle_message(msg.data)
-            elif msg.type == aiohttp.WSMsgType.CLOSED:
-                _LOGGER.debug("WebSocket closed by server")
+            elif msg.type in (
+                aiohttp.WSMsgType.CLOSED,
+                aiohttp.WSMsgType.CLOSE,
+                aiohttp.WSMsgType.CLOSING,
+            ):
+                _LOGGER.debug("WebSocket closed by server (frame=%s)", msg.type)
                 await self.disconnect()
             elif msg.type == aiohttp.WSMsgType.ERROR:
                 _LOGGER.error("WebSocket error: %s", self._ws.exception())
