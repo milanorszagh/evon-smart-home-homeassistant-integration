@@ -2119,20 +2119,15 @@ class TestWsPendingRequestsLimit:
 
 
 class TestWsReceiveTimeout:
-    """Tests for WebSocket receive timeout (silent connection death detection)."""
+    """Tests locking in the removal of the WS receive timeout.
+
+    aiohttp's heartbeat (WS_HEARTBEAT_INTERVAL) is the connection watchdog;
+    a timeout around receive() would tear down healthy-but-quiet systems.
+    """
 
     @pytest.mark.asyncio
-    async def test_handle_messages_uses_receive_timeout(self):
-        """Test that _handle_messages wraps receive in asyncio.timeout.
-
-        If the remote server silently dies, receive() would block indefinitely.
-        The timeout ensures disconnect is called so _run_loop can reconnect.
-
-        Requires Python 3.11+ for asyncio.timeout (used in production code).
-        """
-        if not hasattr(asyncio, "timeout"):
-            pytest.skip("Requires Python 3.11+ for asyncio.timeout")
-
+    async def test_handle_messages_timeout_error_disconnects(self):
+        """TimeoutError raised by receive() is handled with a disconnect."""
         client = EvonWsClient(
             host="http://192.168.1.100",
             username="user",
@@ -2140,7 +2135,7 @@ class TestWsReceiveTimeout:
         )
 
         # Mock WebSocket whose receive() raises TimeoutError
-        # (simulates asyncio.timeout firing when the remote server silently dies)
+        # (e.g. an aiohttp-internal timeout surfacing from the transport)
         mock_ws = AsyncMock()
         mock_ws.closed = False
         mock_ws.receive = AsyncMock(side_effect=TimeoutError())
@@ -2162,19 +2157,18 @@ class TestWsReceiveTimeout:
 
         assert disconnect_called
 
-    def test_ws_receive_timeout_constant(self):
-        """Test WS_RECEIVE_TIMEOUT is 6x heartbeat interval."""
-        from custom_components.evon.const import WS_HEARTBEAT_INTERVAL, WS_RECEIVE_TIMEOUT
+    def test_handle_messages_receive_is_not_wrapped_in_timeout(self):
+        """receive() must not be wrapped in asyncio.timeout.
 
-        assert WS_RECEIVE_TIMEOUT == WS_HEARTBEAT_INTERVAL * 6
-        assert WS_RECEIVE_TIMEOUT == 180
-
-    def test_handle_messages_uses_asyncio_timeout(self):
-        """Test that _handle_messages wraps receive in asyncio.timeout."""
+        Pong frames never surface through receive(), so on a healthy but
+        quiet system receive() legitimately stays silent indefinitely; a
+        receive timeout would tear down and reconnect such systems every
+        few minutes. Dead peers are detected by the aiohttp heartbeat.
+        """
         import inspect
 
         source = inspect.getsource(EvonWsClient._handle_messages)
-        assert "asyncio.timeout(WS_RECEIVE_TIMEOUT)" in source
+        assert "asyncio.timeout" not in source
 
 
 class TestStaleRequestCleanup:
