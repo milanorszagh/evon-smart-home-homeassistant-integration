@@ -22,8 +22,10 @@ edit pyproject.toml                         # Change version = "X.Y.Z"
 edit package.json                           # Change "version": "X.Y.Z"
 npm install --package-lock-only             # Sync package-lock.json
 
-# 2. Commit the version bump
-git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json
+# 2. Commit the version bump AND the changelog entries
+#    (README.md + AGENTS.md version history are part of every release — see AGENTS.md;
+#     the release tag must contain the changelog, HACS renders README from the tag)
+git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json README.md AGENTS.md
 git commit -m "Release vX.Y.Z"
 git push origin main
 

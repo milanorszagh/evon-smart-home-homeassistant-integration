@@ -2127,15 +2127,21 @@ class TestWsReceiveTimeout:
 
     @pytest.mark.asyncio
     async def test_handle_messages_timeout_error_disconnects(self):
-        """TimeoutError raised by receive() is handled with a disconnect."""
+        """TimeoutError raised by receive() is handled with a disconnect.
+
+        Defensive-only coverage: with the receive timeout removed, no live
+        aiohttp configuration raises TimeoutError out of this try block
+        (pong failure surfaces as a WSMsgType.ERROR frame instead). The
+        except branch is kept as a safety net, so pin its behavior.
+        """
         client = EvonWsClient(
             host="http://192.168.1.100",
             username="user",
             password="pass",
         )
 
-        # Mock WebSocket whose receive() raises TimeoutError
-        # (e.g. an aiohttp-internal timeout surfacing from the transport)
+        # Mock WebSocket whose receive() raises TimeoutError (cannot occur
+        # with the current aiohttp configuration — defensive branch only)
         mock_ws = AsyncMock()
         mock_ws.closed = False
         mock_ws.receive = AsyncMock(side_effect=TimeoutError())
@@ -2169,6 +2175,31 @@ class TestWsReceiveTimeout:
 
         source = inspect.getsource(EvonWsClient._handle_messages)
         assert "asyncio.timeout" not in source
+
+    @pytest.mark.asyncio
+    async def test_connect_passes_heartbeat_to_ws_connect(self):
+        """connect() must arm the aiohttp heartbeat.
+
+        With the receive timeout removed, the heartbeat is the sole
+        dead-connection detector; dropping the kwarg would leave a
+        half-open connection blocking receive() forever.
+        """
+        from custom_components.evon.const import WS_HEARTBEAT_INTERVAL
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+        )
+        mock_session = MagicMock()
+        mock_session.ws_connect = AsyncMock(return_value=AsyncMock())
+        with (
+            patch.object(client, "_login", AsyncMock(return_value="token")),
+            patch.object(client, "_get_valid_session", return_value=mock_session),
+        ):
+            assert await client.connect()
+
+        assert mock_session.ws_connect.call_args.kwargs["heartbeat"] == WS_HEARTBEAT_INTERVAL
 
 
 class TestStaleRequestCleanup:

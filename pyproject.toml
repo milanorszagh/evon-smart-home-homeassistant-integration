@@ -1,6 +1,6 @@
 [project]
 name = "evon-smart-home"
-version = "1.22.0"
+version = "1.22.1"
 description = "Home Assistant custom integration for Evon Smart Home"
 readme = "README.md"
 license = {text = "MIT"}
@@ -52,7 +52,3 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 check_untyped_defs = false
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
