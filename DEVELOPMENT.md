@@ -424,7 +424,6 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (se
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
-WS_RECEIVE_TIMEOUT = WS_HEARTBEAT_INTERVAL * 6  # 180s
 
 # Button press detection
 DEFAULT_BUTTON_DOUBLE_CLICK_DELAY = 0.8   # Configurable via options (0.2-1.4s)
@@ -469,7 +468,7 @@ async def _wait_for_connected(self):
     await self._resubscribe()  # Will timeout! No message loop running yet
 ```
 
-**Stale Request Cleanup:** A periodic cleanup task runs every 15 seconds to cancel stale pending requests, independent of the message loop. This prevents request accumulation if the server goes silent before the receive timeout triggers disconnect.
+**Stale Request Cleanup:** A periodic cleanup task runs every 15 seconds to cancel stale pending requests, independent of the message loop. This prevents request accumulation if the server goes silent. There is deliberately no timeout around `receive()` — pong frames never surface through it, so a healthy-but-quiet system legitimately stays silent indefinitely; dead connections are detected by the aiohttp heartbeat (`WS_HEARTBEAT_INTERVAL`) instead.
 
 **Fire-and-Forget Error Handling:** The `_send_fire_and_forget()` method wraps `send_str()` in try/except and raises `EvonWsNotConnectedError` on failure, preventing unhandled exceptions from propagating to entity state update methods.
 
