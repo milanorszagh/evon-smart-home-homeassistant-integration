@@ -928,7 +928,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1276 tests):
+Tests are in the `tests/` directory (1278 tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
