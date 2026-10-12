@@ -2704,3 +2704,43 @@ class TestWsClientMetrics:
         )
         client._response_times.extend([10.0, 20.0, 30.0])
         assert client.avg_response_time_ms == pytest.approx(20.0)
+
+
+class TestRemoteRelayHostDerivedFromConstant:
+    """Remote relay URLs must come from EVON_REMOTE_HOST (const.py), not literals.
+
+    evon Smart Home is now Schrack Smart Building; if the relay ever moves off
+    my.evon-smarthome.com it must be a one-line change in const.py.
+    """
+
+    def test_remote_urls_follow_evon_remote_host(self, monkeypatch):
+        from custom_components.evon import ws_client as ws_module
+
+        monkeypatch.setattr(ws_module, "EVON_REMOTE_HOST", "https://relay.example.test")
+        client = EvonWsClient(
+            host="",
+            username="test@example.com",
+            password="testpass",
+            session=MagicMock(),
+            is_remote=True,
+            engine_id="ABC123",
+        )
+        assert client._host == "https://relay.example.test"
+        assert client._ws_host == "wss://relay.example.test/"
+
+    def test_no_relay_url_literals_in_ws_client(self):
+        import ast
+        import inspect
+
+        from custom_components.evon import ws_client as ws_module
+
+        tree = ast.parse(inspect.getsource(ws_module))
+        url_literals = [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and "my.evon-smarthome.com" in node.value
+            and node.value.startswith(("http", "ws"))
+        ]
+        assert url_literals == []
