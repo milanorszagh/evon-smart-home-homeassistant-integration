@@ -2731,16 +2731,20 @@ class TestRemoteRelayHostDerivedFromConstant:
     def test_no_relay_url_literals_in_ws_client(self):
         import ast
         import inspect
+        from urllib.parse import urlsplit
 
         from custom_components.evon import ws_client as ws_module
+        from custom_components.evon.const import EVON_REMOTE_HOST
 
+        relay_host = urlsplit(EVON_REMOTE_HOST).hostname
+        assert relay_host
         tree = ast.parse(inspect.getsource(ws_module))
         url_literals = [
             node.value
             for node in ast.walk(tree)
             if isinstance(node, ast.Constant)
             and isinstance(node.value, str)
-            and "my.evon-smarthome.com" in node.value
-            and node.value.startswith(("http", "ws"))
+            and node.value.startswith(("http://", "https://", "ws://", "wss://"))
+            and urlsplit(node.value).hostname == relay_host
         ]
         assert url_literals == []
