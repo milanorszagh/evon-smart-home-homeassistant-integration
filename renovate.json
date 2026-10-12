@@ -4,35 +4,80 @@
     "config:recommended",
     ":semanticCommitTypeAll(chore)"
   ],
-  "schedule": ["before 8am on monday"],
+  "schedule": [
+    "every weekend"
+  ],
   "timezone": "Europe/Vienna",
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "packageRules": [
     {
+      "description": "Hold the TypeScript 7 major: typescript-eslint refuses the native TS 7 compiler (revisit when it supports >= 7.1); minors/patches still flow",
+      "matchPackageNames": [
+        "typescript"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "@types/node tracks the Node 24 runtime floor declared in package.json engines and CI",
+      "matchPackageNames": [
+        "@types/node"
+      ],
+      "allowedVersions": "<25"
+    },
+    {
+      "description": "CI's Python version follows what the pinned HA release supports (3.14 for HA 2026.x); bump it by hand together with the HA floor",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "python"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Group all npm production dependency updates",
-      "matchManagers": ["npm"],
-      "matchDepTypes": ["dependencies"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "dependencies"
+      ],
       "groupName": "npm dependencies"
     },
     {
       "description": "Group all npm dev dependency updates",
-      "matchManagers": ["npm"],
-      "matchDepTypes": ["devDependencies"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
       "groupName": "npm dev dependencies"
     },
     {
       "description": "Group all pip dependency updates",
-      "matchManagers": ["pip_requirements"],
+      "matchManagers": [
+        "pip_requirements"
+      ],
       "groupName": "pip dependencies"
     },
     {
       "description": "Group all GitHub Actions updates",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github actions"
     },
     {
       "description": "Automerge patch updates that pass CI",
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "automerge": true
     }
   ]
