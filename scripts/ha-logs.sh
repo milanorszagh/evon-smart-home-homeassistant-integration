@@ -33,14 +33,19 @@ fi
 # Configuration
 LINES="${1:-100}"
 FILTER="${2:-}"
+# `ha core logs` only returns its last 100 journal lines unless told otherwise.
+# With debug logging enabled that is a few seconds of history, so ask for the
+# whole journal of the current boot before filtering for evon.
+JOURNAL_LINES="${HA_LOG_JOURNAL_LINES:-300000}"
 
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+SSH_KEY="${HOME}/.ssh/claude_code"
 ssh_cmd() {
-    ssh -o ConnectTimeout=5 "${HA_USER}@${HA_HOST}" "$@"
+    ssh -o ConnectTimeout=5 -i "${SSH_KEY}" "${HA_USER}@${HA_HOST}" "$@"
 }
 
 echo -e "${GREEN}Fetching Evon-related logs from Home Assistant...${NC}"
@@ -51,9 +56,9 @@ echo ""
 if [[ -n "$FILTER" ]]; then
     echo -e "${YELLOW}Filter: evon AND ${FILTER}${NC}"
     echo ""
-    ssh_cmd "ha core logs 2>/dev/null | grep -i evon | grep -i '${FILTER}' | tail -${LINES}" || \
+    ssh_cmd "ha core logs -n ${JOURNAL_LINES} 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -i evon | grep -i '${FILTER}' | tail -${LINES}" || \
     echo "No matching log entries found."
 else
-    ssh_cmd "ha core logs 2>/dev/null | grep -i evon | tail -${LINES}" || \
+    ssh_cmd "ha core logs -n ${JOURNAL_LINES} 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -i evon | tail -${LINES}" || \
     echo "No evon-related log entries found."
 fi
