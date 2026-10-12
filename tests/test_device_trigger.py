@@ -77,12 +77,70 @@ class TestFindInstanceInData:
         device_of_other_entry = self._device("SC1_M01.Switch1", config_entry_id="entry_2")
         assert _find_instance_in_data(hass, device_of_other_entry, "button_events") is None
 
+    def test_returns_none_without_evon_identifier(self):
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.device_trigger import _find_instance_in_data
+
+        device = MagicMock()
+        device.identifiers = {("other_domain", "SC1_M01.Switch1")}
+        device.config_entry_id = "entry_1"
+        assert _find_instance_in_data(self._hass("button_events", "SC1_M01.Switch1"), device, "button_events") is None
+
+    def test_returns_none_without_config_entry_id(self):
+        from custom_components.evon.device_trigger import _find_instance_in_data
+
+        device = self._device("SC1_M01.Switch1", config_entry_id=None)
+        assert _find_instance_in_data(self._hass("button_events", "SC1_M01.Switch1"), device, "button_events") is None
+
     def test_returns_none_when_entry_not_loaded(self):
         from custom_components.evon.device_trigger import _find_instance_in_data
 
         hass = self._hass("button_events", "SC1_M01.Switch1")
         hass.data["evon"]["entry_1"]["coordinator"].data = None
         assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "button_events") is None
+
+
+class TestGetTriggersForDevice:
+    """async_get_triggers assembles doorbell + button triggers from coordinator data."""
+
+    @pytest.mark.asyncio
+    async def test_intercom_and_button_device_gets_all_four_triggers(self):
+        from unittest.mock import MagicMock, patch
+
+        from custom_components.evon.device_trigger import async_get_triggers
+
+        device = MagicMock()
+        device.identifiers = {("evon", "Intercom1")}
+        device.config_entry_id = "entry_1"
+        coordinator = MagicMock()
+        coordinator.data = {"intercoms": [{"id": "Intercom1"}], "button_events": [{"id": "Intercom1"}]}
+        hass = MagicMock()
+        hass.data = {"evon": {"entry_1": {"coordinator": coordinator}}}
+        registry = MagicMock()
+        registry.async_get = MagicMock(return_value=device)
+
+        with patch("custom_components.evon.device_trigger.dr.async_get", return_value=registry):
+            triggers = await async_get_triggers(hass, "device-123")
+
+        assert [t["type"] for t in triggers] == [
+            TRIGGER_TYPE_DOORBELL,
+            TRIGGER_TYPE_BUTTON_SINGLE,
+            TRIGGER_TYPE_BUTTON_DOUBLE,
+            TRIGGER_TYPE_BUTTON_LONG,
+        ]
+        assert all(t["domain"] == "evon" and t["device_id"] == "device-123" for t in triggers)
+
+    @pytest.mark.asyncio
+    async def test_unknown_device_has_no_triggers(self):
+        from unittest.mock import MagicMock, patch
+
+        from custom_components.evon.device_trigger import async_get_triggers
+
+        registry = MagicMock()
+        registry.async_get = MagicMock(return_value=None)
+        with patch("custom_components.evon.device_trigger.dr.async_get", return_value=registry):
+            assert await async_get_triggers(MagicMock(), "missing") == []
 
 
 @requires_ha_test_framework

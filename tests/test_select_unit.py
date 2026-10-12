@@ -160,6 +160,10 @@ class TestHomeStateSelectCurrentOption:
         select = _make_home_state_select(home_states=states, active_state="HomeStateAtHome")
         assert select.current_option == "at_home"
 
+    def test_returns_none_without_active_state(self):
+        select = _make_home_state_select(home_states=[{"id": "HomeStateAtHome"}], active_state=None)
+        assert select.current_option is None
+
     def test_returns_none_when_not_in_options(self):
         states = [{"id": "HomeStateAtHome"}]
         select = _make_home_state_select(home_states=states, active_state="HomeStateUnknown")

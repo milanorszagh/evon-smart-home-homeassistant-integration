@@ -757,7 +757,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1330 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1337 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
