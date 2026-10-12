@@ -43,6 +43,14 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   disconnect and reconnect instead of being ignored (#11).
 - Energy statistics import returns early when the recorder integration is not loaded
   instead of raising inside a background task.
+- **Camera recordings are saved inside Home Assistant's local media folder** (`/media`
+  on Home Assistant OS and Docker, `<config>/media` on venv installs), which is where the
+  media browser and the card's "All Recordings" link look. Earlier versions always wrote
+  to `<config>/media/evon_recordings`, a folder the media browser does not show on HAOS.
+  Existing recordings are moved to the new location once at startup.
+- **MCP server:** the WebSocket light helpers now send the `SwitchOn` / `SwitchOff` /
+  `BrightnessSetScaled` commands the controller acts on instead of property writes that
+  were acknowledged but ignored.
 - **MCP server:** dead WebSocket connections are detected with a ping/pong heartbeat
   (30 s interval, 10 s grace) and reconnected, instead of hanging until restart (#12).
 - **MCP server:** dotenv's "injected env" startup message no longer goes to stdout when a
@@ -58,6 +66,8 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   are unaffected.
 - All remote-access URLs derive from one constant, so a future move of the relay host
   (`my.evon-smarthome.com`) is a one-line change.
+- The deploy and log helper scripts honour `HA_SSH_KEY` from `.env` (default
+  `~/.ssh/claude_code`).
 - README links to Schrack Technik, the new home of evon Smart Home (the product is being
   renamed *Schrack Smart Building*). Nothing changes for the integration.
 

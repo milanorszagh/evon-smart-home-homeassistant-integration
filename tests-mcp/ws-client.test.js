@@ -169,3 +169,35 @@ test("T-L6: no reconnect after a heartbeat failure when disconnect() was request
   assert.equal(reconnects, 0, "no reconnect when disconnect was requested");
   client["stopHeartbeat"]();
 });
+
+// ---------------------------------------------------------------------------
+// Light helpers must use the CallMethods the controller actually acts on
+// (SwitchOn / SwitchOff / BrightnessSetScaled), not SetValue property writes,
+// which are acknowledged but do not drive the hardware (see docs/WEBSOCKET_API.md).
+// ---------------------------------------------------------------------------
+
+async function lightFixture() {
+  const { EvonWsClient } = await importFresh(WS_CLIENT_URL);
+  const client = new EvonWsClient("http://localhost:9999");
+  const calls = [];
+  client["callMethod"] = async (instanceId, method, params) => { calls.push({ instanceId, method, params }); return null; };
+  client["setValue"] = async () => { throw new Error("setValue must not be used for light control"); };
+  return { client, calls };
+}
+
+test("T-L7: setLightOn uses CallMethod SwitchOn / SwitchOff", async () => {
+  const { client, calls } = await lightFixture();
+  await client.setLightOn("SC1_M01.Light1", true);
+  await client.setLightOn("SC1_M01.Light1", false);
+  assert.deepEqual(calls.map((c) => c.method), ["SwitchOn", "SwitchOff"]);
+  assert.deepEqual(calls[0].params ?? [], []);
+});
+
+test("T-L8: setLightBrightness uses CallMethod BrightnessSetScaled [level, 0] and clamps 0-100", async () => {
+  const { client, calls } = await lightFixture();
+  await client.setLightBrightness("SC1_M01.Light1", 75);
+  await client.setLightBrightness("SC1_M01.Light1", 250);
+  await client.setLightBrightness("SC1_M01.Light1", -5);
+  assert.deepEqual(calls.map((c) => c.method), ["BrightnessSetScaled", "BrightnessSetScaled", "BrightnessSetScaled"]);
+  assert.deepEqual(calls.map((c) => c.params), [[75, 0], [100, 0], [0, 0]]);
+});

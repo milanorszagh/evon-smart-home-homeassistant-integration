@@ -43,7 +43,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-SSH_KEY="${HOME}/.ssh/claude_code"
+# SSH key: HA_SSH_KEY from .env (a leading ~ is expanded), default ~/.ssh/claude_code
+SSH_KEY="${HA_SSH_KEY:-${HOME}/.ssh/claude_code}"
+SSH_KEY="${SSH_KEY/#\~/${HOME}}"
 ssh_cmd() {
     ssh -o ConnectTimeout=5 -i "${SSH_KEY}" "${HA_USER}@${HA_HOST}" "$@"
 }

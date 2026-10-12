@@ -523,14 +523,16 @@ export class EvonWsClient {
    * Turn a light on or off.
    */
   async setLightOn(instanceId: string, on: boolean): Promise<void> {
-    await this.setValue(instanceId, "IsOn", on);
+    // SwitchOn/SwitchOff are the CallMethods the controller acts on; SetValue IsOn
+    // is acknowledged but does not drive the hardware (docs/WEBSOCKET_API.md).
+    await this.callMethod(instanceId, on ? "SwitchOn" : "SwitchOff", []);
   }
 
   /**
-   * Set light brightness (0-100).
+   * Set light brightness (0-100). Second argument is the transition time (0 = instant).
    */
   async setLightBrightness(instanceId: string, brightness: number): Promise<void> {
-    await this.setValue(instanceId, "ScaledBrightness", Math.max(0, Math.min(100, brightness)));
+    await this.callMethod(instanceId, "BrightnessSetScaled", [Math.max(0, Math.min(100, brightness)), 0]);
   }
 
   /**
