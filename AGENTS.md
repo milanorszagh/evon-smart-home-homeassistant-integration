@@ -487,6 +487,8 @@ SSH access to Home Assistant enables quick deployment and log checking.
 | `./scripts/ha-logs.sh 50` | Fetch last 50 lines |
 | `./scripts/ha-logs.sh 100 error` | Fetch lines containing "error" |
 
+**Log gotchas (HAOS):** `ha core logs` returns only its last 100 journal lines unless you pass `-n`; with `custom_components.evon: debug` enabled that is seconds of history, so always pass `-n 300000` (the script does). The journal is one stream per *host* boot, not per HA core restart, so `-b` does not separate core restarts — split by timestamp instead. Lines carry ANSI colour codes; strip them before grepping. When comparing before/after a deploy, note the exact restart time first: the previous process's shutdown noise (e.g. `Session is closed and no session factory available`, `cannot schedule new futures after shutdown`) lands right next to the new process's startup lines.
+
 ### Typical Development Session
 
 ```bash
