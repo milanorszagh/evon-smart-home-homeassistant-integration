@@ -122,8 +122,10 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
             name=self._device_name,
             manufacturer="Evon",
             model=model,
-            via_device_id=self.coordinator.hub_device_id,
         )
+        # Omit rather than pass None: an explicit None would unlink the device from the hub.
+        if (hub_device_id := self.coordinator.hub_device_id) is not None:
+            info["via_device_id"] = hub_device_id
         if self._room_name:
             info["suggested_area"] = self._room_name
         return info

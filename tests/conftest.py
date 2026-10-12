@@ -379,6 +379,22 @@ if HAS_HA_TEST_FRAMEWORK:
         return mock_api
 
     @pytest.fixture(autouse=True)
+    def fail_on_ha_deprecation_report(caplog):
+        """Fail any test during which HA reports deprecated API usage by this integration.
+
+        HA's `report_usage` logs "Detected that custom integration 'evon' ..." for
+        every deprecated call; these are warnings today and hard breaks on a dated
+        HA release, so treat them as failures the moment they appear.
+        """
+        yield
+        detected = [
+            record.getMessage()
+            for record in caplog.get_records("call")
+            if "Detected that custom integration 'evon'" in record.getMessage()
+        ]
+        assert not detected, "HA deprecation report(s) during test:\n" + "\n".join(detected)
+
+    @pytest.fixture(autouse=True)
     async def auto_enable_custom_integrations(hass, enable_custom_integrations):
         """Enable custom integrations for all tests automatically.
 

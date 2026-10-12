@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlowResult
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, section
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -401,6 +401,25 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    @callback
+    def _async_update_entry_and_abort(
+        self, entry: ConfigEntry, *, data: dict[str, Any], reason: str
+    ) -> ConfigFlowResult:
+        """Persist new entry data and finish the flow, leaving the reload to the update listener.
+
+        `async_update_reload_and_abort` reloads the entry itself, which HA reports
+        as deprecated for integrations that register an update listener ("has an
+        update listener and should use it for scheduling a reload", breaks in HA
+        2026.12). `_async_update_listener` reloads on any data change; when nothing
+        changed (same credentials re-entered) or the entry is not loaded (no
+        listener yet, e.g. after an auth failure) schedule the reload here so the
+        entry still retries with the confirmed credentials.
+        """
+        changed = self.hass.config_entries.async_update_entry(entry, data=data)
+        if not changed or not entry.update_listeners:
+            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return self.async_abort(reason=reason)
+
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Handle reauth when credentials become invalid."""
         return await self.async_step_reauth_confirm()
@@ -447,13 +466,14 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 try:
                     if await api.test_connection():
-                        return self.async_update_reload_and_abort(
+                        return self._async_update_entry_and_abort(
                             reauth_entry,
                             data={
                                 **current_data,
                                 CONF_USERNAME: username,
                                 CONF_PASSWORD: user_input[CONF_PASSWORD],
                             },
+                            reason="reauth_successful",
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -557,9 +577,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_USERNAME: username,
                             CONF_PASSWORD: user_input[CONF_PASSWORD],
                         }
-                        return self.async_update_reload_and_abort(
-                            reconfigure_entry,
-                            data=new_data,  # Replace all data
+                        return self._async_update_entry_and_abort(
+                            reconfigure_entry, data=new_data, reason="reconfigure_successful"
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -633,9 +652,8 @@ class EvonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             CONF_USERNAME: username,
                             CONF_PASSWORD: user_input[CONF_PASSWORD],
                         }
-                        return self.async_update_reload_and_abort(
-                            reconfigure_entry,
-                            data=new_data,  # Replace all data
+                        return self._async_update_entry_and_abort(
+                            reconfigure_entry, data=new_data, reason="reconfigure_successful"
                         )
                     else:
                         errors["base"] = "cannot_connect"

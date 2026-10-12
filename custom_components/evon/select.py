@@ -93,6 +93,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         # Option key -> Evon instance ID and the reverse; HA translations handle display names
         self._option_to_id: dict[str, str] = {}
         self._id_to_option: dict[str, str] = {}
+        self._reported_collisions: set[str] = set()
         self._update_options()
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
@@ -120,8 +121,22 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         option_to_id: dict[str, str] = {}
         for state in home_states:
             state_id = state.get("id")
-            if state_id:
-                option_to_id[home_state_option_for_id(state_id)] = state_id
+            if not state_id:
+                continue
+            option = home_state_option_for_id(state_id)
+            if option in option_to_id:
+                # Two Evon IDs derive the same key (e.g. HomeStateAt_Home vs HomeStateAtHome).
+                # Keep the first; report the dropped one once rather than on every poll.
+                if state_id not in self._reported_collisions:
+                    self._reported_collisions.add(state_id)
+                    _LOGGER.warning(
+                        "Home state %r maps to option %r which is already used by %r; ignoring it",
+                        state_id,
+                        option,
+                        option_to_id[option],
+                    )
+                continue
+            option_to_id[option] = state_id
         self._option_to_id = option_to_id
         self._id_to_option = {evon_id: option for option, evon_id in option_to_id.items()}
         # Sort by preferred order, unknown states go to the end
@@ -132,13 +147,15 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for home state."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_home_state")},
             name="Evon Home State",
             manufacturer="Evon",
             model="Home State",
-            via_device_id=self.coordinator.hub_device_id,
         )
+        if (hub_device_id := self.coordinator.hub_device_id) is not None:
+            info["via_device_id"] = hub_device_id
+        return info
 
     @property
     def current_option(self) -> str | None:
@@ -163,15 +180,15 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         attrs["evon_id"] = active_id
         return attrs
 
-    async def async_select_option(self, option: str) -> None:
-        """Change the selected option (option key such as "night")."""
-        # Capture WS-liveness BEFORE the command await: a confirmation can
-        # land mid-flight, and the snapshot comparison in
-        # _schedule_post_command_recheck must not mistake it for silence.
-        recheck_snapshot = self._recheck_snapshot()
+    async def async_handle_select_option(self, option: str) -> None:
+        """Service entry point for `select.select_option`.
+
+        HA validates `option` against `options` in this method, BEFORE
+        `async_select_option` is ever called, so the pre-v1.23.0 compatibility
+        shim has to live here: raw Evon IDs ("HomeStateNight") are translated to
+        their option key first. Planned removal: v1.25.0.
+        """
         if option not in self._option_to_id and option in self._id_to_option:
-            # Before v1.23.0 the options were the raw Evon IDs ("HomeStateNight").
-            # Keep accepting them so existing automations don't break outright.
             legacy_option, option = option, self._id_to_option[option]
             _LOGGER.warning(
                 "Option %r for %s is deprecated; use %r instead and update your automations/dashboards",
@@ -179,6 +196,14 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
                 self.entity_id,
                 option,
             )
+        await super().async_handle_select_option(option)
+
+    async def async_select_option(self, option: str) -> None:
+        """Change the selected option (option key such as "night")."""
+        # Capture WS-liveness BEFORE the command await: a confirmation can
+        # land mid-flight, and the snapshot comparison in
+        # _schedule_post_command_recheck must not mistake it for silence.
+        recheck_snapshot = self._recheck_snapshot()
         if option in self._option_to_id:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
@@ -205,7 +230,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         # Only clear optimistic state when coordinator data matches expected value
         if self._optimistic_option is not None:
             active_id = self.coordinator.get_active_home_state()
-            if self._id_to_option.get(active_id) == self._optimistic_option:
+            if active_id and self._id_to_option.get(active_id) == self._optimistic_option:
                 self._optimistic_option = None
                 self._optimistic_state_set_at = None
 
@@ -263,13 +288,15 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for season mode."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_season_mode")},
             name="Evon Season Mode",
             manufacturer="Evon",
             model="Season Mode",
-            via_device_id=self.coordinator.hub_device_id,
         )
+        if (hub_device_id := self.coordinator.hub_device_id) is not None:
+            info["via_device_id"] = hub_device_id
+        return info
 
     @property
     def current_option(self) -> str | None:

@@ -49,22 +49,24 @@ def _find_instance_in_data(
 ) -> str | None:
     """Find instance_id for a device in coordinator data of given entity_type.
 
-    Looks through every loaded Evon config entry rather than reading
-    ``device.config_entries`` (deprecated in HA 2026.10, removed 2027.10).
+    Uses ``device.config_entry_id`` (HA 2026.8+) rather than the deprecated
+    ``device.config_entries`` (deprecated 2026.10, removed 2027.10), so two
+    controllers sharing an instance id never answer for each other.
     """
     instance_ids = {identifier[1] for identifier in device.identifiers if identifier[0] == DOMAIN}
-    if not instance_ids:
+    entry_id = getattr(device, "config_entry_id", None)
+    if not instance_ids or not entry_id:
         return None
-    for entry_data in hass.data.get(DOMAIN, {}).values():
-        if not isinstance(entry_data, dict):
-            continue
-        coordinator = entry_data.get("coordinator")
-        if coordinator is None or not coordinator.data:
-            continue
-        for entity in coordinator.data.get(entity_type, []):
-            entity_id = entity.get("id")
-            if entity_id in instance_ids:
-                return entity_id
+    entry_data = hass.data.get(DOMAIN, {}).get(entry_id)
+    if not isinstance(entry_data, dict):
+        return None
+    coordinator = entry_data.get("coordinator")
+    if coordinator is None or not coordinator.data:
+        return None
+    for entity in coordinator.data.get(entity_type, []):
+        entity_id = entity.get("id")
+        if entity_id in instance_ids:
+            return entity_id
     return None
 
 

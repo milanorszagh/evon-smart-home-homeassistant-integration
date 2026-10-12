@@ -221,6 +221,14 @@ class TestEvonDoorbellSnapshot:
         assert info["via_device_id"] == "hub-device-registry-id"
         assert "via_device" not in info
 
+    def test_device_info_omits_via_device_id_when_hub_unknown(self):
+        coord = _make_coordinator(doors=[SAMPLE_DOOR])
+        coord.hub_device_id = None
+        snap = EvonDoorbellSnapshot(coord, "Security.Door1", "Front Door", 0, _make_entry())
+        info = snap.device_info
+        assert "via_device_id" not in info
+        assert "via_device" not in info
+
     def test_max_snapshots_constant(self):
         assert MAX_SNAPSHOTS == 10
 

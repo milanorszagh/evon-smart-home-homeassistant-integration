@@ -98,13 +98,15 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info - create a dedicated snapshots device."""
-        return DeviceInfo(
+        info = DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_snapshots_{self._door_id}")},
             name=f"{self._door_name} Snapshots",
             manufacturer="Evon",
             model="Doorbell Snapshots",
-            via_device_id=self.coordinator.hub_device_id,
         )
+        if (hub_device_id := self.coordinator.hub_device_id) is not None:
+            info["via_device_id"] = hub_device_id
+        return info
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

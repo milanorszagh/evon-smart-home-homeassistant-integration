@@ -46,6 +46,49 @@ async def test_home_state_select_option(hass, mock_config_entry_v2, mock_evon_ap
 
 
 @pytest.mark.asyncio
+async def test_home_state_select_legacy_evon_id_via_service(hass, mock_config_entry_v2, mock_evon_api_class, caplog):
+    """Pre-v1.23 option values (raw Evon IDs) still work through select.select_option, with a warning.
+
+    HA validates the option against `options` in `async_handle_select_option` BEFORE
+    calling `async_select_option`, so the compatibility shim must live in the service
+    handler — this test goes through the real service to prove it is reachable.
+    """
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": "select.evon_home_state_home_state", "option": "HomeStateNight"},
+        blocking=True,
+    )
+
+    mock_evon_api_class.activate_home_state.assert_called_once_with("HomeStateNight")
+    assert hass.states.get("select.evon_home_state_home_state").state == "night"
+    assert "HomeStateNight" in caplog.text and "deprecated" in caplog.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_home_state_select_unknown_option_rejected(hass, mock_config_entry_v2, mock_evon_api_class):
+    """Values that are neither an option key nor a known Evon ID are rejected by HA."""
+    from homeassistant.exceptions import ServiceValidationError
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "select",
+            "select_option",
+            {"entity_id": "select.evon_home_state_home_state", "option": "party"},
+            blocking=True,
+        )
+    mock_evon_api_class.activate_home_state.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_home_state_optimistic_update(hass, mock_config_entry_v2, mock_evon_api_class):
     """Test home state optimistic update."""
     mock_config_entry_v2.add_to_hass(hass)

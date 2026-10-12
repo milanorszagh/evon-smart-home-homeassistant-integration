@@ -781,3 +781,84 @@ async def test_config_flow_reauth_cannot_connect(hass):
 
     assert result["type"] == "form"
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reconfigure_loaded_entry_reloads_via_listener(
+    hass, mock_config_entry_v2, mock_evon_api_class, caplog
+):
+    """Reconfiguring a LOADED entry reloads it through the update listener.
+
+    `async_update_reload_and_abort` on an entry that has an update listener makes HA
+    log "has an update listener and should use it for scheduling a reload" (breaks in
+    HA 2026.12). The flow must therefore only update the entry and let the listener
+    reload — and the listener must react to `data` changes, not just options.
+    """
+    import logging
+
+    from homeassistant.config_entries import ConfigEntryState
+
+    from custom_components.evon.const import DOMAIN
+
+    caplog.set_level(logging.WARNING)
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+    assert mock_config_entry_v2.update_listeners
+    coordinator_before = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reconfigure", "entry_id": mock_config_entry_v2.entry_id}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"connection_type": "local"})
+    assert result["step_id"] == "reconfigure_local"
+    with patch("custom_components.evon.config_flow.EvonApi") as api_cls:
+        api_cls.return_value = AsyncMock(test_connection=AsyncMock(return_value=True))
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"host": mock_config_entry_v2.data["host"], "username": "newuser", "password": "newpass"},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert mock_config_entry_v2.data["username"] == "newuser"
+    detected = [r.getMessage() for r in caplog.records if "Detected that custom integration 'evon'" in r.getMessage()]
+    assert detected == []
+    # The entry was actually reloaded with the new data
+    assert mock_config_entry_v2.state is ConfigEntryState.LOADED
+    assert hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"] is not coordinator_before
+
+
+@pytest.mark.asyncio
+async def test_config_flow_reauth_loaded_entry_unchanged_data_still_reloads(
+    hass, mock_config_entry_v2, mock_evon_api_class, caplog
+):
+    """Re-entering identical credentials must still reload the entry (listener won't fire)."""
+    import logging
+
+    from custom_components.evon.const import DOMAIN
+
+    caplog.set_level(logging.WARNING)
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+    coordinator_before = hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"]
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": "reauth", "entry_id": mock_config_entry_v2.entry_id}
+    )
+    assert result["step_id"] == "reauth_confirm"
+    with patch("custom_components.evon.config_flow.EvonApi") as api_cls:
+        api_cls.return_value = AsyncMock(test_connection=AsyncMock(return_value=True))
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": mock_config_entry_v2.data["username"], "password": mock_config_entry_v2.data["password"]},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reauth_successful"
+    detected = [r.getMessage() for r in caplog.records if "Detected that custom integration 'evon'" in r.getMessage()]
+    assert detected == []
+    assert hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"] is not coordinator_before
