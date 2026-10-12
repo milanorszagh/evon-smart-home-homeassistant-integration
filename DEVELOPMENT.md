@@ -908,7 +908,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
 | **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
 
@@ -1228,8 +1228,10 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 ## Version Compatibility
 
-- Home Assistant: 2026.5.0+ (pinned by `manifest.json`)
-- Python: 3.14+ (HA 2026.x requires >=3.14.2). The `>=0.13.354` floor on
+- Home Assistant: 2026.8.0+ (pinned by `hacs.json`; hassfest does not allow the
+  key in `manifest.json`). 2026.8 is the first release whose `DeviceInfo`
+  accepts `via_device_id`, which replaced the deprecated `via_device` tuple.
+- Python: 3.14+ (HA 2026.x requires >=3.14.2). The `>=0.13.372` floor on
   `pytest-homeassistant-custom-component` makes an older interpreter fail the
   install outright rather than silently resolving to an ancient HA release —
   which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
