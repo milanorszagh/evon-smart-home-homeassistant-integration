@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.components.select import SelectEntity
@@ -13,7 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
-from .const import DOMAIN, SEASON_MODE_COOLING, SEASON_MODE_HEATING
+from .const import DOMAIN, HOME_STATE_MAP, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,13 +22,28 @@ _LOGGER = logging.getLogger(__name__)
 # Season mode options
 SEASON_MODE_OPTIONS = [SEASON_MODE_HEATING, SEASON_MODE_COOLING]
 
-# Preferred order for home states (Evon IDs)
-HOME_STATE_ORDER = [
-    "HomeStateAtHome",
-    "HomeStateNight",
-    "HomeStateWork",
-    "HomeStateHoliday",
-]
+# Preferred order for home states (select option keys)
+HOME_STATE_ORDER = ["at_home", "night", "work", "holiday"]
+
+# Evon instance ID -> select option key (the service-level names from HOME_STATE_MAP).
+# HA translation keys must match [a-z0-9-_]+, so the select cannot expose the raw
+# Evon IDs ("HomeStateAtHome") as options.
+_HOME_STATE_ID_TO_OPTION = {evon_id: option for option, evon_id in HOME_STATE_MAP.items()}
+_HOME_STATE_ID_PREFIX = "HomeState"
+
+
+def home_state_option_for_id(state_id: str) -> str:
+    """Map an Evon home-state instance ID to the select option key.
+
+    Known IDs use the names from HOME_STATE_MAP; anything else is derived from
+    the ID ("HomeStateMyParty" -> "my_party") so custom states still get a
+    valid option value.
+    """
+    if state_id in _HOME_STATE_ID_TO_OPTION:
+        return _HOME_STATE_ID_TO_OPTION[state_id]
+    name = state_id.removeprefix(_HOME_STATE_ID_PREFIX) or state_id
+    snake = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
+    return re.sub(r"[^a-z0-9_-]+", "_", snake).strip("_-") or state_id.lower()
 
 
 async def async_setup_entry(
@@ -74,7 +90,9 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
             api=api,
         )
         self._attr_unique_id = f"evon_home_state_{entry.entry_id}"
-        # Use Evon IDs as options - HA translation system handles display names
+        # Option key -> Evon instance ID and the reverse; HA translations handle display names
+        self._option_to_id: dict[str, str] = {}
+        self._id_to_option: dict[str, str] = {}
         self._update_options()
         # Optimistic state to prevent UI flicker during updates
         self._optimistic_option: str | None = None
@@ -99,11 +117,16 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
     def _update_options(self) -> None:
         """Update options from coordinator data."""
         home_states = self.coordinator.get_home_states()
-        # Use Evon IDs directly as options - translations handle display
-        options = [state.get("id") for state in home_states if state.get("id")]
+        option_to_id: dict[str, str] = {}
+        for state in home_states:
+            state_id = state.get("id")
+            if state_id:
+                option_to_id[home_state_option_for_id(state_id)] = state_id
+        self._option_to_id = option_to_id
+        self._id_to_option = {evon_id: option for option, evon_id in option_to_id.items()}
         # Sort by preferred order, unknown states go to the end
         self._attr_options = sorted(
-            options, key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)
+            option_to_id, key=lambda x: HOME_STATE_ORDER.index(x) if x in HOME_STATE_ORDER else len(HOME_STATE_ORDER)
         )
 
     @property
@@ -119,7 +142,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        """Return the current selected option (Evon ID)."""
+        """Return the current selected option key (e.g. "at_home")."""
         # Clear expired optimistic state to prevent stale UI on network recovery
         self._clear_optimistic_state_if_expired()
 
@@ -128,9 +151,9 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
             return self._optimistic_option
 
         active_id = self.coordinator.get_active_home_state()
-        if active_id and active_id in self._attr_options:
-            return active_id
-        return None
+        if not active_id:
+            return None
+        return self._id_to_option.get(active_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -141,19 +164,29 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         return attrs
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option (option is the Evon ID)."""
+        """Change the selected option (option key such as "night")."""
         # Capture WS-liveness BEFORE the command await: a confirmation can
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
-        if option in self._attr_options:
+        if option not in self._option_to_id and option in self._id_to_option:
+            # Before v1.23.0 the options were the raw Evon IDs ("HomeStateNight").
+            # Keep accepting them so existing automations don't break outright.
+            legacy_option, option = option, self._id_to_option[option]
+            _LOGGER.warning(
+                "Option %r for %s is deprecated; use %r instead and update your automations/dashboards",
+                legacy_option,
+                self.entity_id,
+                option,
+            )
+        if option in self._option_to_id:
             # Set optimistic value immediately to prevent UI flicker
             self._optimistic_option = option
             self._set_optimistic_timestamp()
             self.async_write_ha_state()
 
             try:
-                await self._api.activate_home_state(option)
+                await self._api.activate_home_state(self._option_to_id[option])
             except EvonApiError:
                 self._optimistic_option = None
                 self._optimistic_state_set_at = None
@@ -172,7 +205,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         # Only clear optimistic state when coordinator data matches expected value
         if self._optimistic_option is not None:
             active_id = self.coordinator.get_active_home_state()
-            if active_id == self._optimistic_option:
+            if self._id_to_option.get(active_id) == self._optimistic_option:
                 self._optimistic_option = None
                 self._optimistic_state_set_at = None
 

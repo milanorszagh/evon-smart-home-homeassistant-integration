@@ -195,10 +195,10 @@
       "home_state": {
         "name": "Stav domácnosti",
         "state": {
-          "HomeStateAtHome": "Doma",
-          "HomeStateHoliday": "Dovolená",
-          "HomeStateNight": "Noc",
-          "HomeStateWork": "Práce"
+          "at_home": "Doma",
+          "holiday": "Dovolená",
+          "night": "Noc",
+          "work": "Práce"
         }
       }
     }

@@ -259,6 +259,7 @@ The `System.HomeState` class controls home-wide modes. Key points:
 2. **Reading active state**: Check the `Active` property on each state instance
 3. **Changing state**: Call `Activate` method on the desired state instance
 4. **State IDs are fixed**: `HomeStateAtHome`, `HomeStateHoliday`, `HomeStateNight`, `HomeStateWork`
+5. **HA select options are lowercase keys, not the Evon IDs** (since v1.23.0): the `home_state` select exposes `at_home`, `night`, `work`, `holiday` — the keys of `HOME_STATE_MAP` in `const.py` — because hassfest requires translation keys to match `[a-z0-9-_]+`. `select.py` maps keys ↔ Evon IDs (`home_state_option_for_id()` derives a key for unknown IDs, e.g. `HomeStateMyParty` → `my_party`). The raw Evon IDs are still accepted by `async_select_option` with a deprecation warning. Do not "fix" the select back to raw IDs.
 
 ```javascript
 // Example: Switch to night mode
@@ -928,7 +929,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1278 tests):
+Tests are in the `tests/` directory (1286 tests):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

@@ -195,10 +195,10 @@
       "home_state": {
         "name": "Stan domu",
         "state": {
-          "HomeStateAtHome": "W domu",
-          "HomeStateHoliday": "Wakacje",
-          "HomeStateNight": "Noc",
-          "HomeStateWork": "Praca"
+          "at_home": "W domu",
+          "holiday": "Wakacje",
+          "night": "Noc",
+          "work": "Praca"
         }
       }
     }
