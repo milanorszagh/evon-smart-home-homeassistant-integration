@@ -23,7 +23,13 @@
 
 import { WebSocket } from "ws";
 import { EVON_USERNAME, EVON_PASSWORD, requireEvonHost } from "./config.js";
-import { API_TIMEOUT_MS, WS_DEVICE_CLASSES } from "./constants.js";
+import {
+  API_TIMEOUT_MS,
+  WS_DEVICE_CLASSES,
+  WS_HEARTBEAT_INTERVAL_MS,
+  WS_HEARTBEAT_RECONNECT_DELAY_MS,
+  WS_PONG_TIMEOUT_MS,
+} from "./constants.js";
 import { performLogin } from "./auth.js";
 
 // Re-export for convenience
@@ -132,6 +138,8 @@ export class EvonWsClient {
   private connected = false;
   private userData: WsUserData | null = null;
   private disconnectRequested = false;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private pongTimer: NodeJS.Timeout | null = null;
 
   private host: string;
   private wsHost: string;
@@ -226,6 +234,7 @@ export class EvonWsClient {
           }
 
           resolve();
+          this.startHeartbeat();
 
           // Restore server-side subscriptions after reconnect
           this.resubscribeAll().catch((err) => {
@@ -240,6 +249,7 @@ export class EvonWsClient {
       });
 
       this.ws.on("close", () => {
+        this.stopHeartbeat();
         this.connected = false;
         this.rejectAllPending(new Error("WebSocket closed"));
       });
@@ -251,12 +261,77 @@ export class EvonWsClient {
    */
   disconnect(): void {
     this.disconnectRequested = true;
+    this.stopHeartbeat();
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
     this.connected = false;
     this.token = null;
+  }
+
+  // --------------------------------------------------------------------------
+  // Liveness (issue #12)
+  //
+  // A half-open socket (network blip, controller reboot behind NAT) never emits
+  // "close" by itself. Ping on an interval; if the pong does not arrive within
+  // the grace period, terminate the socket so pending calls fail fast, and try
+  // one reconnect. Later calls reconnect lazily via call() as before.
+  // --------------------------------------------------------------------------
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    const ws = this.ws;
+    if (!ws) {
+      return;
+    }
+    ws.on("pong", () => this.clearPongTimer());
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
+        this.stopHeartbeat();
+        return;
+      }
+      ws.ping();
+      this.clearPongTimer();
+      this.pongTimer = setTimeout(() => this.onHeartbeatTimeout(ws), WS_PONG_TIMEOUT_MS);
+      this.pongTimer.unref?.();
+    }, WS_HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref?.();
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.clearPongTimer();
+  }
+
+  private clearPongTimer(): void {
+    if (this.pongTimer) {
+      clearTimeout(this.pongTimer);
+      this.pongTimer = null;
+    }
+  }
+
+  private onHeartbeatTimeout(ws: WebSocket): void {
+    console.warn(`WebSocket heartbeat: no pong within ${WS_PONG_TIMEOUT_MS}ms, terminating connection`);
+    this.stopHeartbeat();
+    this.connected = false;
+    ws.terminate();
+    this.rejectAllPending(new Error("WebSocket heartbeat timeout"));
+    if (this.disconnectRequested) {
+      return;
+    }
+    const reconnectTimer = setTimeout(() => {
+      if (this.disconnectRequested) {
+        return;
+      }
+      this.connect().catch((error) => {
+        console.warn("Reconnect after heartbeat timeout failed:", error);
+      });
+    }, WS_HEARTBEAT_RECONNECT_DELAY_MS);
+    reconnectTimer.unref?.();
   }
 
   /**
