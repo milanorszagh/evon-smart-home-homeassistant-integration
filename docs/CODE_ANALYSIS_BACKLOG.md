@@ -8,7 +8,7 @@
 > brightness=0 when off, and the 5 s post-command quiesce/recheck
 > (`POST_COMMAND_QUIESCE_PERIOD`, v1.22.0) that replaced the earlier always-refresh
 > on light/switch commands. Release-level history is in `CHANGELOG.md`.
-> Suite size when this file was last updated (v1.23.0): 1330 Python tests, 23 MCP tests.
+> Suite size when this file was last updated (v1.23.0): 1337 Python tests, 23 MCP tests.
 
 Deep code analysis performed on 2026-02-13 identified **74 issues** across the
 Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).

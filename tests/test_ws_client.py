@@ -2748,3 +2748,60 @@ class TestRemoteRelayHostDerivedFromConstant:
             and urlsplit(node.value).hostname == relay_host
         ]
         assert url_literals == []
+
+
+class TestRemoteConnectionPaths:
+    """The relay (remote) branches of connect() and _login()."""
+
+    def _remote_client(self):
+        return EvonWsClient(
+            host="",
+            username="user@example.com",
+            password="pass",
+            session=MagicMock(),
+            is_remote=True,
+            engine_id="ABC123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_connect_remote_uses_relay_url_origin_and_relay_cookie(self):
+        from custom_components.evon.const import EVON_REMOTE_HOST
+
+        client = self._remote_client()
+        mock_session = MagicMock()
+        mock_session.ws_connect = AsyncMock(return_value=AsyncMock())
+        with (
+            patch.object(client, "_login", AsyncMock(return_value="tok")),
+            patch.object(client, "_get_valid_session", return_value=mock_session),
+        ):
+            assert await client.connect()
+
+        args, kwargs = mock_session.ws_connect.call_args
+        assert args[0] == EVON_REMOTE_HOST.replace("https://", "wss://") + "/"
+        assert kwargs["headers"]["Origin"] == EVON_REMOTE_HOST
+        assert "x-elocs-isrelay=true" in kwargs["headers"]["Cookie"]
+        assert "token=tok" in kwargs["headers"]["Cookie"]
+
+    @pytest.mark.asyncio
+    async def test_login_remote_posts_to_relay_root_with_relay_headers(self):
+        from custom_components.evon.const import EVON_REMOTE_HOST
+
+        client = self._remote_client()
+        response = MagicMock()
+        response.status = 200
+        response.headers = {"x-elocs-token": "tok"}
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=response)
+        context.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.post = MagicMock(return_value=context)
+
+        with patch.object(client, "_get_valid_session", return_value=mock_session):
+            assert await client._login() == "tok"
+
+        args, kwargs = mock_session.post.call_args
+        assert args[0] == f"{EVON_REMOTE_HOST}/login"  # root login, not /{engine_id}/login
+        assert kwargs["headers"]["x-elocs-relayid"] == "ABC123"
+        assert kwargs["headers"]["x-elocs-sessionlogin"] == "true"
+        assert kwargs["headers"]["X-Requested-With"] == "XMLHttpRequest"
+        assert kwargs["allow_redirects"] is False

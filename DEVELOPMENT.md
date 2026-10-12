@@ -1194,7 +1194,7 @@ Test files:
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout)
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1330 Python + 23 MCP tests at v1.23.0); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1337 Python + 23 MCP tests at v1.23.0); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
