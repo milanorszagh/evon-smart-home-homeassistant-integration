@@ -10,7 +10,7 @@ installed. The README keeps a one-line summary per version.
 
 Issue and PR numbers refer to this repository unless stated otherwise.
 
-## [1.23.0] - Unreleased
+## [1.23.0] - 2026-10-12
 
 ### Breaking changes
 
@@ -673,7 +673,7 @@ No GitHub release was published for this tag.
 
 - Initial release with lights, blinds and climate support.
 
-[1.23.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.1...main
+[1.23.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.1...v1.23.0
 [1.22.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.21.0...v1.22.0
 [1.21.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.20.0...v1.21.0

@@ -682,7 +682,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **1.23.0** | unreleased | HA 2026.10 compatibility, recordings in the media folder, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select options are now `at_home` / `night` / `work` / `holiday` |
+| **1.23.0** | 2026-10-12 | HA 2026.10 compatibility, recordings in the media folder, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select options are now `at_home` / `night` / `work` / `holiday` |
 | **1.22.1** | 2026-08-24 | Quiet systems no longer disconnect every 3 minutes |
 | **1.22.0** | 2026-08-07 | Post-command bounce-back fixed, camera recordings served through an authenticated endpoint, many review fixes. **Breaking:** minimum HA 2026.5.0 (Python 3.14), Node 24 for the MCP server |
 | **1.21.0** | 2026-03-24 | HA 2026.3 compatibility, HACS hardening, security fixes |
