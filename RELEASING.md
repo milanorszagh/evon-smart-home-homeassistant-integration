@@ -23,9 +23,11 @@ edit package.json                           # Change "version": "X.Y.Z"
 npm install --package-lock-only             # Sync package-lock.json
 
 # 2. Commit the version bump AND the changelog entries
-#    (README.md + AGENTS.md version history are part of every release — see AGENTS.md;
-#     the release tag must contain the changelog, HACS renders README from the tag)
-git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json README.md AGENTS.md
+#    - CHANGELOG.md: the version's section must exist; replace "Unreleased" in its
+#      heading with today's date and point its compare link at the tag
+#    - README.md: one row in the Version History table (version, date, highlights)
+#    (the release tag must contain both — HACS renders README from the tag)
+git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json CHANGELOG.md README.md
 git commit -m "Release vX.Y.Z"
 git push origin main
 
@@ -33,8 +35,9 @@ git push origin main
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 
-# 4. Create GitHub release
-gh release create vX.Y.Z --title "Descriptive title here" --notes "Release notes here"
+# 4. Create GitHub release — notes are the version's CHANGELOG.md section
+awk '/^## \[X.Y.Z\]/{flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > /tmp/release-notes.md
+gh release create vX.Y.Z --title "Descriptive title here" --notes-file /tmp/release-notes.md
 # NOTE: Do NOT include the version in the title — HACS auto-prepends the tag.
 ```
 
@@ -112,7 +115,7 @@ Before releasing:
       findings there usually cannot be fixed downstream and clear when HA bumps them.
       Check that each finding is HA-pinned rather than something we actually control.
 - [ ] Changes tested on real hardware (if applicable)
-- [ ] Documentation updated (README.md, DEVELOPMENT.md, AGENTS.md as needed)
+- [ ] Documentation updated (CHANGELOG.md section with date, README.md version row, DEVELOPMENT.md / AGENTS.md as needed)
 
 After releasing:
 - [ ] GitHub release created with release notes
