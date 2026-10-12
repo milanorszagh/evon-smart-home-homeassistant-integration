@@ -5,8 +5,10 @@
 import { config } from "dotenv";
 import { createHash } from "crypto";
 
-// Load environment variables from .env file
-config();
+// Load environment variables from .env file. quiet: true is mandatory — this is
+// a stdio MCP server, and dotenv's "injected env ..." message would otherwise be
+// the first bytes on stdout, corrupting the JSON-RPC stream (tests-mcp/stdio.test.js).
+config({ quiet: true });
 
 /**
  * Encode password for Evon API.

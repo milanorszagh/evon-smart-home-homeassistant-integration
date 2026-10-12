@@ -92,6 +92,13 @@ export const RESOURCE_URIS = {
 } as const;
 
 export const API_TIMEOUT_MS = 10000;
+// WebSocket liveness (issue #12): ping every WS_HEARTBEAT_INTERVAL_MS, terminate
+// the socket when no pong arrives within WS_PONG_TIMEOUT_MS, then try a single
+// reconnect after WS_HEARTBEAT_RECONNECT_DELAY_MS. Matches the HA integration's
+// 30s aiohttp heartbeat.
+export const WS_HEARTBEAT_INTERVAL_MS = 30000;
+export const WS_PONG_TIMEOUT_MS = 10000;
+export const WS_HEARTBEAT_RECONNECT_DELAY_MS = 1000;
 // MCP server uses a longer TTL (27 days) since it starts fresh each session.
 // The HA integration uses 1 hour (see api.py TOKEN_TTL_SECONDS) because it
 // maintains a persistent connection and can re-login cheaply.
