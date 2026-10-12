@@ -296,6 +296,7 @@ src/
 | **Lower latency** | Faster than HTTP API for device control |
 | **Batch queries** | Request multiple device properties in a single call |
 | **Automatic reconnection** | Handles connection drops gracefully |
+| **Liveness heartbeat** | Pings every 30 s (`WS_HEARTBEAT_INTERVAL_MS`); no pong within 10 s (`WS_PONG_TIMEOUT_MS`) terminates the half-open socket, fails pending calls fast and attempts one reconnect after 1 s (`WS_HEARTBEAT_RECONNECT_DELAY_MS`). Matches the HA integration's 30 s aiohttp heartbeat (issue #12) |
 | **Connection deduplication** | Concurrent connect/login calls are coalesced into a single request |
 | **Parallel bulk control** | `controlAllDevices` helper sends commands in parallel via `Promise.all` |
 
