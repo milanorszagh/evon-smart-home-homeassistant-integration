@@ -26,9 +26,9 @@ from .const import (
     DEFAULT_MAX_RECORDING_DURATION,
     DOMAIN,
     MAX_RECORDING_FRAMES,
-    RECORDING_MEDIA_DIR,
     RECORDING_OUTPUT_MP4_AND_FRAMES,
 )
+from .recordings import recordings_dir
 
 if TYPE_CHECKING:
     from .camera import EvonCamera
@@ -227,7 +227,7 @@ class EvonCameraRecorder:
 
         try:
             # Build output directory
-            media_dir = Path(self._hass.config.path("media")) / RECORDING_MEDIA_DIR
+            media_dir = recordings_dir(self._hass)
             timestamp_str = self._recording_start.strftime("%Y%m%d_%H%M%S") if self._recording_start else "unknown"
             camera_name = self._camera.name or "camera"
             # Sanitize camera name for filesystem
@@ -385,7 +385,7 @@ class EvonCameraRecorder:
 
     def _scan_recordings(self) -> list[dict[str, str]]:
         """Scan filesystem for recordings (runs in executor)."""
-        media_dir = Path(self._hass.config.path("media")) / RECORDING_MEDIA_DIR
+        media_dir = recordings_dir(self._hass)
         if not media_dir.is_dir():
             return []
 

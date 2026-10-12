@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import logging
-from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -166,11 +165,6 @@ def _find_camera_entity(hass: HomeAssistant, entity_id: str) -> Any:
             if camera.entity_id == entity_id:
                 return camera
     return None
-
-
-def _ensure_recordings_dir(recordings_dir: str) -> None:
-    """Create recordings directory (runs in executor)."""
-    Path(recordings_dir).mkdir(parents=True, exist_ok=True)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -509,10 +503,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if frontend_key not in hass.data:
         from homeassistant.components.http import StaticPathConfig
 
+        from .recordings import prepare_recordings_dir
         from .recordings_view import EvonRecordingsView
 
-        recordings_dir = hass.config.path("media/evon_recordings")
-        await hass.async_add_executor_job(_ensure_recordings_dir, recordings_dir)
+        # Inside HA's local media dir (/media on HAOS) so the media browser finds
+        # them; also migrates recordings from the pre-1.23.0 <config>/media location.
+        recordings_dir = str(await hass.async_add_executor_job(prepare_recordings_dir, hass))
 
         # The card JS is public (no secrets); a static path is fine for it.
         await hass.http.async_register_static_paths(
