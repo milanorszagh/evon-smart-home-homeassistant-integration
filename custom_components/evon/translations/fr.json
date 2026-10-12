@@ -178,7 +178,12 @@
         "name": "Énergie ce mois-ci"
       },
       "websocket_status": {
-        "name": "Statut WebSocket"
+        "name": "Statut WebSocket",
+        "state": {
+          "connected": "Connecté",
+          "disconnected": "Déconnecté",
+          "disabled": "Désactivé"
+        }
       },
       "websocket_latency": {
         "name": "Latence WebSocket"
@@ -214,6 +219,20 @@
       "options": {
         "mp4": "MP4 uniquement",
         "mp4_and_frames": "MP4 + images JPEG"
+      }
+    },
+    "home_state": {
+      "options": {
+        "at_home": "À la maison",
+        "holiday": "Vacances",
+        "night": "Nuit",
+        "work": "Travail"
+      }
+    },
+    "season_mode": {
+      "options": {
+        "heating": "Chauffage (Hiver)",
+        "cooling": "Refroidissement (Été)"
       }
     }
   },

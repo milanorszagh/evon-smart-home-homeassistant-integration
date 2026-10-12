@@ -178,7 +178,12 @@
         "name": "Energie tento měsíc"
       },
       "websocket_status": {
-        "name": "WebSocket stav"
+        "name": "WebSocket stav",
+        "state": {
+          "connected": "Připojeno",
+          "disconnected": "Odpojeno",
+          "disabled": "Vypnuto"
+        }
       },
       "websocket_latency": {
         "name": "WebSocket latence"
@@ -214,6 +219,20 @@
       "options": {
         "mp4": "Pouze MP4",
         "mp4_and_frames": "MP4 + JPEG snímky"
+      }
+    },
+    "home_state": {
+      "options": {
+        "at_home": "Doma",
+        "holiday": "Dovolená",
+        "night": "Noc",
+        "work": "Práce"
+      }
+    },
+    "season_mode": {
+      "options": {
+        "heating": "Topení (zima)",
+        "cooling": "Chlazení (léto)"
       }
     }
   },
