@@ -178,7 +178,12 @@
         "name": "Energija ta mesec"
       },
       "websocket_status": {
-        "name": "Status WebSocket"
+        "name": "Status WebSocket",
+        "state": {
+          "connected": "Povezano",
+          "disconnected": "Prekinjeno",
+          "disabled": "Onemogočeno"
+        }
       },
       "websocket_latency": {
         "name": "Latenca WebSocket"
@@ -214,6 +219,20 @@
       "options": {
         "mp4": "Samo MP4",
         "mp4_and_frames": "MP4 + JPEG sličice"
+      }
+    },
+    "home_state": {
+      "options": {
+        "at_home": "Doma",
+        "holiday": "Dopust",
+        "night": "Noč",
+        "work": "Delo"
+      }
+    },
+    "season_mode": {
+      "options": {
+        "heating": "Ogrevanje (zima)",
+        "cooling": "Hlajenje (poletje)"
       }
     }
   },

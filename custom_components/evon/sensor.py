@@ -466,6 +466,9 @@ class EvonWebSocketStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Se
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:websocket"
     _attr_translation_key = "websocket_status"
+    # Enum so the three states are translated (entity.sensor.websocket_status.state)
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["connected", "disconnected", "disabled"]
 
     def __init__(
         self,

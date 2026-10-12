@@ -170,3 +170,25 @@ async def test_air_quality_humidity_sensor(hass, mock_config_entry_v2, mock_evon
     assert float(state.state) == 45.5
     assert state.attributes.get("unit_of_measurement") == "%"
     assert state.attributes.get("device_class") == "humidity"
+
+
+@pytest.mark.asyncio
+async def test_websocket_status_sensor_is_enum_with_translatable_states(
+    hass, mock_config_entry_v2, mock_evon_api_class
+):
+    """The status sensor must be an enum so its states go through translations."""
+    from homeassistant.helpers import entity_registry as er
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "sensor", "evon", f"evon_websocket_status_{mock_config_entry_v2.entry_id}"
+    )
+    assert entity_id
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes.get("device_class") == "enum"
+    assert state.attributes.get("options") == ["connected", "disconnected", "disabled"]
+    assert state.state in state.attributes["options"]
