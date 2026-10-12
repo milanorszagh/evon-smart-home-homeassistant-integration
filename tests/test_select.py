@@ -20,15 +20,12 @@ async def test_home_state_select_setup(hass, mock_config_entry_v2, mock_evon_api
 
     state = hass.states.get("select.evon_home_state_home_state")
     assert state is not None
-    # HomeStateAtHome is active in mock data
-    assert state.state == "HomeStateAtHome"
+    # HomeStateAtHome is active in mock data; the select exposes lowercase option keys
+    assert state.state == "at_home"
+    assert state.attributes.get("evon_id") == "HomeStateAtHome"
 
-    # Check options include all home states
-    options = state.attributes.get("options", [])
-    assert "HomeStateAtHome" in options
-    assert "HomeStateNight" in options
-    assert "HomeStateWork" in options
-    assert "HomeStateHoliday" in options
+    # Check options include all home states (lowercase keys, preferred order)
+    assert state.attributes.get("options") == ["at_home", "night", "work", "holiday"]
 
 
 @pytest.mark.asyncio
@@ -41,7 +38,7 @@ async def test_home_state_select_option(hass, mock_config_entry_v2, mock_evon_ap
     await hass.services.async_call(
         "select",
         "select_option",
-        {"entity_id": "select.evon_home_state_home_state", "option": "HomeStateNight"},
+        {"entity_id": "select.evon_home_state_home_state", "option": "night"},
         blocking=True,
     )
 
@@ -57,19 +54,19 @@ async def test_home_state_optimistic_update(hass, mock_config_entry_v2, mock_evo
 
     # Initial state
     state = hass.states.get("select.evon_home_state_home_state")
-    assert state.state == "HomeStateAtHome"
+    assert state.state == "at_home"
 
     # Select new option - optimistic update
     await hass.services.async_call(
         "select",
         "select_option",
-        {"entity_id": "select.evon_home_state_home_state", "option": "HomeStateWork"},
+        {"entity_id": "select.evon_home_state_home_state", "option": "work"},
         blocking=True,
     )
 
     # State should reflect the optimistic update
     state = hass.states.get("select.evon_home_state_home_state")
-    assert state.state == "HomeStateWork"
+    assert state.state == "work"
 
 
 @pytest.mark.asyncio
@@ -206,7 +203,7 @@ class TestSelectPostCommandRecheck:
         entity.coordinator.async_request_refresh = AsyncMock()
 
         with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
-            await entity.async_select_option("HomeStateNight")
+            await entity.async_select_option("night")
 
         # No immediate refresh
         entity.coordinator.async_request_refresh.assert_not_called()

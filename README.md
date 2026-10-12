@@ -287,6 +287,10 @@ Switch between home-wide modes defined in your Evon system:
 
 These states trigger automations in the Evon system and can be used in Home Assistant automations as well.
 
+The select entity's option values are `at_home`, `night`, `work` and `holiday` (the same names the `evon.set_home_state` action uses). The raw Evon state ID is still available in the entity's `evon_id` attribute.
+
+> **Upgrading from 1.22 or earlier:** the options used to be the raw Evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Those values are still accepted by `select.select_option` for now (with a warning in the log), but state conditions and dashboards that compare against the old values need to be updated.
+
 ### Sensors
 
 - Temperature sensors from climate devices
