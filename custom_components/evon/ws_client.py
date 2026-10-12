@@ -18,6 +18,7 @@ from .api import EvonWsError, EvonWsNotConnectedError, EvonWsTimeoutError, encod
 from .const import (
     DEFAULT_LOGIN_TIMEOUT,
     DEFAULT_WS_RECONNECT_DELAY,
+    EVON_REMOTE_HOST,
     WS_DEFAULT_REQUEST_TIMEOUT,
     WS_HEARTBEAT_INTERVAL,
     WS_LOG_MESSAGE_TRUNCATE,
@@ -90,9 +91,9 @@ class EvonWsClient:
         self._engine_id = engine_id
 
         if is_remote:
-            # Remote WebSocket connects to wss://my.evon-smarthome.com/
-            self._host = "https://my.evon-smarthome.com"
-            self._ws_host = "wss://my.evon-smarthome.com/"
+            # Remote WebSocket connects to the relay (EVON_REMOTE_HOST, const.py)
+            self._host = EVON_REMOTE_HOST
+            self._ws_host = EVON_REMOTE_HOST.replace("https://", "wss://") + "/"
         else:
             # Local WebSocket
             self._host = host.rstrip("/")
@@ -227,7 +228,7 @@ class EvonWsClient:
             # Build cookie based on connection type
             if self._is_remote:
                 cookie = f"token={self._token}; x-elocs-isrelay=true; x-elocs-token_in_cookie_only=0"
-                origin = "https://my.evon-smarthome.com"
+                origin = EVON_REMOTE_HOST
             else:
                 cookie = f"token={self._token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0"
                 origin = self._host
@@ -275,7 +276,7 @@ class EvonWsClient:
                 headers["x-elocs-relayid"] = self._engine_id
                 headers["x-elocs-sessionlogin"] = "true"
                 headers["X-Requested-With"] = "XMLHttpRequest"
-                login_url = "https://my.evon-smarthome.com/login"
+                login_url = f"{EVON_REMOTE_HOST}/login"
             else:
                 login_url = f"{self._host}/login"
 
