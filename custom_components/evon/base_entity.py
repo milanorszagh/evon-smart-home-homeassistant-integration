@@ -122,7 +122,7 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
             name=self._device_name,
             manufacturer="Evon",
             model=model,
-            via_device=(DOMAIN, self._entry.entry_id),
+            via_device_id=self.coordinator.hub_device_id,
         )
         if self._room_name:
             info["suggested_area"] = self._room_name

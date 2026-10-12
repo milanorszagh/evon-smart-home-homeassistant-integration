@@ -32,6 +32,53 @@ class TestDeviceTriggerConstants:
         assert len(TRIGGER_TYPES) == 4
 
 
+class TestFindInstanceInData:
+    """`_find_instance_in_data` must not read `DeviceEntry.config_entries`.
+
+    HA 2026.10 deprecates the attribute (removal 2027.10); the lookup goes
+    through the integration's own `hass.data[DOMAIN]` entries instead.
+    """
+
+    def _device(self, instance_id: str):
+        from unittest.mock import MagicMock, PropertyMock
+
+        device = MagicMock()
+        device.identifiers = {("evon", instance_id)}
+        type(device).config_entries = PropertyMock(side_effect=AssertionError("deprecated attribute read"))
+        return device
+
+    def _hass(self, entity_type: str, instance_id: str):
+        from unittest.mock import MagicMock
+
+        coordinator = MagicMock()
+        coordinator.data = {entity_type: [{"id": instance_id}]}
+        hass = MagicMock()
+        hass.data = {"evon": {"entry_1": {"coordinator": coordinator}}}
+        return hass
+
+    def test_finds_instance_without_reading_config_entries(self):
+        from custom_components.evon.device_trigger import _find_instance_in_data
+
+        hass = self._hass("button_events", "SC1_M01.Switch1")
+        assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "button_events") == "SC1_M01.Switch1"
+
+    def test_returns_none_when_instance_not_in_entity_type(self):
+        from custom_components.evon.device_trigger import _find_instance_in_data
+
+        hass = self._hass("intercoms", "Intercom1")
+        assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "intercoms") is None
+
+    def test_skips_non_entry_values_in_domain_data(self):
+        from unittest.mock import MagicMock
+
+        from custom_components.evon.device_trigger import _find_instance_in_data
+
+        hass = self._hass("button_events", "SC1_M01.Switch1")
+        hass.data["evon"]["some_flag"] = True
+        hass.data["evon"]["broken"] = {"coordinator": MagicMock(data=None)}
+        assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "button_events") == "SC1_M01.Switch1"
+
+
 @requires_ha_test_framework
 class TestDeviceTriggerIntegration:
     """Integration tests for device triggers."""

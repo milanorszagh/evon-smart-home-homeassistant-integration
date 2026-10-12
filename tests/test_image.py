@@ -211,10 +211,15 @@ class TestEvonDoorbellSnapshot:
 
     def test_device_info(self):
         coord = _make_coordinator(doors=[SAMPLE_DOOR])
+        coord.hub_device_id = "hub-device-registry-id"
         entry = _make_entry()
         snap = EvonDoorbellSnapshot(coord, "Security.Door1", "Front Door", 0, entry)
         info = snap.device_info
         assert info is not None
+        # Dedicated snapshots device hangs off the hub by registry id (HA 2026.9+
+        # deprecates the `via_device` identifier tuple).
+        assert info["via_device_id"] == "hub-device-registry-id"
+        assert "via_device" not in info
 
     def test_max_snapshots_constant(self):
         assert MAX_SNAPSHOTS == 10
