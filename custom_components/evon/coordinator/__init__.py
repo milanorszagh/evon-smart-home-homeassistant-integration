@@ -94,6 +94,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.api = api
+        # Device-registry id of the hub device; set by async_setup_entry before the
+        # platforms load. Entities link their devices to it via `via_device_id`.
+        self.hub_device_id: str | None = None
         self._instances_cache: list[dict[str, Any]] = []
         self._sync_areas = sync_areas
         self._rooms_cache: dict[str, str] = {}

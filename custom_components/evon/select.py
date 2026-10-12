@@ -137,7 +137,7 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
             name="Evon Home State",
             manufacturer="Evon",
             model="Home State",
-            via_device=(DOMAIN, self._entry.entry_id),
+            via_device_id=self.coordinator.hub_device_id,
         )
 
     @property
@@ -268,7 +268,7 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
             name="Evon Season Mode",
             manufacturer="Evon",
             model="Season Mode",
-            via_device=(DOMAIN, self._entry.entry_id),
+            via_device_id=self.coordinator.hub_device_id,
         )
 
     @property

@@ -348,3 +348,24 @@ class TestHomeStateSelectOptionKeys:
         select._cancel_post_command_recheck_if_data_changed = MagicMock()
         select._handle_coordinator_update()
         assert select._optimistic_option is None
+
+
+# ---------------------------------------------------------------------------
+# Select device_info — hub link via `via_device_id`
+# ---------------------------------------------------------------------------
+
+
+class TestSelectDeviceInfoViaDeviceId:
+    def test_home_state_select_links_to_hub_by_registry_id(self):
+        select = _make_home_state_select(home_states=[{"id": "HomeStateAtHome"}])
+        select.coordinator.hub_device_id = "hub-device-registry-id"
+        info = select.device_info
+        assert info["via_device_id"] == "hub-device-registry-id"
+        assert "via_device" not in info
+
+    def test_season_mode_select_links_to_hub_by_registry_id(self):
+        select = _make_season_mode_select()
+        select.coordinator.hub_device_id = "hub-device-registry-id"
+        info = select.device_info
+        assert info["via_device_id"] == "hub-device-registry-id"
+        assert "via_device" not in info

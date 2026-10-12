@@ -47,19 +47,24 @@ def _find_instance_in_data(
     device: dr.DeviceEntry,
     entity_type: str,
 ) -> str | None:
-    """Find instance_id for a device in coordinator data of given entity_type."""
-    for identifier in device.identifiers:
-        if identifier[0] == DOMAIN:
-            instance_id = identifier[1]
-            for entry_id in device.config_entries:
-                entry_data = hass.data.get(DOMAIN, {}).get(entry_id, {})
-                if entry_data:
-                    coordinator = entry_data.get("coordinator")
-                    if coordinator and coordinator.data:
-                        entities = coordinator.data.get(entity_type, [])
-                        for entity in entities:
-                            if entity.get("id") == instance_id:
-                                return instance_id
+    """Find instance_id for a device in coordinator data of given entity_type.
+
+    Looks through every loaded Evon config entry rather than reading
+    ``device.config_entries`` (deprecated in HA 2026.10, removed 2027.10).
+    """
+    instance_ids = {identifier[1] for identifier in device.identifiers if identifier[0] == DOMAIN}
+    if not instance_ids:
+        return None
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(entry_data, dict):
+            continue
+        coordinator = entry_data.get("coordinator")
+        if coordinator is None or not coordinator.data:
+            continue
+        for entity in coordinator.data.get(entity_type, []):
+            entity_id = entity.get("id")
+            if entity_id in instance_ids:
+                return entity_id
     return None
 
 

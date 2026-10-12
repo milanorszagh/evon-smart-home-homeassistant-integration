@@ -152,6 +152,7 @@ class TestBaseEntityLogic:
         from custom_components.evon.base_entity import EvonEntity
 
         coordinator = MagicMock()
+        coordinator.hub_device_id = "hub-device-registry-id"
 
         entry = MagicMock()
         entry.entry_id = "test_entry_123"
@@ -163,7 +164,10 @@ class TestBaseEntityLogic:
         assert info["name"] == "Living Room Thermostat"
         assert info["manufacturer"] == "Evon"
         assert info["model"] == "Climate Control"
-        assert info["via_device"] == ("evon", "test_entry_123")
+        # HA 2026.9 deprecates `via_device` (identifier tuple); the hub's registry id
+        # is set on the coordinator by async_setup_entry and passed as `via_device_id`.
+        assert info["via_device_id"] == "hub-device-registry-id"
+        assert "via_device" not in info
         assert "suggested_area" not in info
 
     def test_build_device_info_with_room(self, setup_mocks):

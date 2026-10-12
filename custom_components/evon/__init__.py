@@ -269,9 +269,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Remote connection via my.evon-smarthome.com handled in helper
         await _async_setup_websocket(hass, coordinator, entry)
 
-    # Create hub device that child devices reference via via_device
+    # Create hub device that child devices reference via via_device_id
     device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
+    hub_device = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
         name="Evon Smart Home",
@@ -279,6 +279,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         model="Smart Home Controller",
         configuration_url=configuration_url,
     )
+    coordinator.hub_device_id = hub_device.id
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

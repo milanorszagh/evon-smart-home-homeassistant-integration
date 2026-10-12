@@ -103,7 +103,7 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
             name=f"{self._door_name} Snapshots",
             manufacturer="Evon",
             model="Doorbell Snapshots",
-            via_device=(DOMAIN, self._entry.entry_id),
+            via_device_id=self.coordinator.hub_device_id,
         )
 
     @property
