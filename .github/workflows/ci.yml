@@ -40,7 +40,7 @@ jobs:
 
       - name: Run mypy
         run: mypy custom_components/evon/ --ignore-missing-imports
-        continue-on-error: true  # 85 errors remain under mypy 2.x; tracked in docs/CODE_ANALYSIS_BACKLOG.md
+        continue-on-error: true  # ~100 errors remain under mypy 2.x (100 at v1.23.0); tracked in docs/CODE_ANALYSIS_BACKLOG.md
 
   lint-typescript:
     name: Lint TypeScript

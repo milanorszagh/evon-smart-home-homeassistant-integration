@@ -259,6 +259,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "cameras": {},  # instance_id -> EvonCamera, populated by camera platform
         "last_options": dict(entry.options),
+        "last_data": dict(entry.data),
     }
 
     # Apply debug logging settings
@@ -804,11 +805,14 @@ async def _async_cleanup_stale_entities(
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update.
+    """Handle config entry updates (options and data).
 
-    Debug logging is applied instantly. All other changes (scan interval,
-    sync areas, WebSocket mode, non-dimmable lights) are applied via
-    a full reload to ensure consistent state.
+    Debug logging is applied instantly. All other option changes (scan interval,
+    sync areas, WebSocket mode, non-dimmable lights) and any data change
+    (reconfigure / reauth: host, credentials, connection type) are applied via a
+    full reload to ensure consistent state. The reconfigure and reauth flows rely
+    on this listener for the reload — they must not reload themselves, HA reports
+    that as deprecated for integrations with an update listener (breaks 2026.12).
     """
     # Apply debug logging immediately (takes effect without reload)
     _apply_debug_logging(entry)
@@ -820,8 +824,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
     old_non_debug = {k: v for k, v in old_options.items() if k not in debug_keys}
     new_non_debug = {k: v for k, v in entry.options.items() if k not in debug_keys}
+    data_changed = dict(entry.data) != entry_data.get("last_data", {})
 
-    if old_non_debug != new_non_debug:
+    if old_non_debug != new_non_debug or data_changed:
         await hass.config_entries.async_reload(entry.entry_id)
     else:
         # Update stored options for next comparison

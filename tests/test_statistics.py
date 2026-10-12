@@ -105,6 +105,18 @@ class TestImportEnergyStatisticsRateLimiting:
             await import_energy_statistics(hass, "Meter1", "Meter", [1.0], force=True)
         mock_add.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_no_recorder_instance_returns_early(self):
+        """`get_instance` raises KeyError when the recorder integration is not loaded (after_dependencies)."""
+        hass = _make_hass()
+        mock_add = MagicMock()
+        with (
+            patch("custom_components.evon.statistics.get_instance", side_effect=KeyError("recorder_instance")),
+            patch("custom_components.evon.statistics.async_add_external_statistics", mock_add),
+        ):
+            await import_energy_statistics(hass, "Meter1", "Meter", [1.0], force=True)
+        mock_add.assert_not_called()
+
 
 class TestImportMeterStatistics:
     """Test daily statistics import."""

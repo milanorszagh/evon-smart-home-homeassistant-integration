@@ -908,7 +908,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push, PR, `v*` tags | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
 | **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
 

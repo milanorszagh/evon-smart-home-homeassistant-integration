@@ -39,11 +39,12 @@ class TestFindInstanceInData:
     through the integration's own `hass.data[DOMAIN]` entries instead.
     """
 
-    def _device(self, instance_id: str):
+    def _device(self, instance_id: str, config_entry_id: str = "entry_1"):
         from unittest.mock import MagicMock, PropertyMock
 
         device = MagicMock()
         device.identifiers = {("evon", instance_id)}
+        device.config_entry_id = config_entry_id
         type(device).config_entries = PropertyMock(side_effect=AssertionError("deprecated attribute read"))
         return device
 
@@ -68,15 +69,20 @@ class TestFindInstanceInData:
         hass = self._hass("intercoms", "Intercom1")
         assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "intercoms") is None
 
-    def test_skips_non_entry_values_in_domain_data(self):
-        from unittest.mock import MagicMock
+    def test_only_consults_the_devices_own_config_entry(self):
+        """Two controllers can share an instance id; the lookup must use the device's entry (config_entry_id)."""
+        from custom_components.evon.device_trigger import _find_instance_in_data
 
+        hass = self._hass("button_events", "SC1_M01.Switch1")  # only entry_1 is loaded
+        device_of_other_entry = self._device("SC1_M01.Switch1", config_entry_id="entry_2")
+        assert _find_instance_in_data(hass, device_of_other_entry, "button_events") is None
+
+    def test_returns_none_when_entry_not_loaded(self):
         from custom_components.evon.device_trigger import _find_instance_in_data
 
         hass = self._hass("button_events", "SC1_M01.Switch1")
-        hass.data["evon"]["some_flag"] = True
-        hass.data["evon"]["broken"] = {"coordinator": MagicMock(data=None)}
-        assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "button_events") == "SC1_M01.Switch1"
+        hass.data["evon"]["entry_1"]["coordinator"].data = None
+        assert _find_instance_in_data(hass, self._device("SC1_M01.Switch1"), "button_events") is None
 
 
 @requires_ha_test_framework

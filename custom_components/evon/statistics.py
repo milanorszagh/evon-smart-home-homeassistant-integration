@@ -118,8 +118,13 @@ async def import_energy_statistics(
         len(energy_data_month),
     )
 
-    # Check if recorder is available
-    if not get_instance(hass):
+    # Recorder is only an after_dependency: get_instance() raises KeyError when
+    # it is not loaded, and this runs as a fire-and-forget task.
+    try:
+        recorder = get_instance(hass)
+    except KeyError:
+        recorder = None
+    if not recorder:
         _LOGGER.debug("Recorder not available, skipping statistics import")
         return
 

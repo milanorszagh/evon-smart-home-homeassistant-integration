@@ -170,6 +170,20 @@ class TestBaseEntityLogic:
         assert "via_device" not in info
         assert "suggested_area" not in info
 
+    def test_build_device_info_omits_via_device_id_when_hub_unknown(self, setup_mocks):
+        """`via_device_id=None` would actively unlink the device; the key must be absent instead."""
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.hub_device_id = None
+        entry = MagicMock()
+        entry.entry_id = "test_entry_123"
+
+        info = EvonEntity(coordinator, "climate_1", "T", "", entry)._build_device_info("Climate Control")
+
+        assert "via_device_id" not in info
+        assert "via_device" not in info
+
     def test_build_device_info_with_room(self, setup_mocks):
         """Test building device info with suggested area."""
         from custom_components.evon.base_entity import EvonEntity

@@ -57,7 +57,12 @@ def setup_select_mocks():
             pass
 
     class MockSelectEntity:
-        pass
+        """Mirror the part of HA's SelectEntity the shim builds on."""
+
+        async def async_handle_select_option(self, option):
+            if option not in self._attr_options:
+                raise ValueError(f"Option {option} is not valid")
+            await self.async_select_option(option)
 
     sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
@@ -309,6 +314,13 @@ class TestHomeStateSelectOptionKeys:
         select = _make_home_state_select(home_states=states)
         assert select._attr_options == ["at_home", "my_party"]
 
+    def test_colliding_evon_ids_keep_first_and_warn(self, caplog):
+        states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateAt_Home"}]
+        select = _make_home_state_select(home_states=states, active_state="HomeStateAt_Home")
+        assert select._attr_options == ["at_home"]
+        assert select.current_option is None  # the dropped state is not silently mapped
+        assert "HomeStateAt_Home" in caplog.text and "at_home" in caplog.text
+
     def test_current_option_maps_active_evon_id_to_key(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
         select = _make_home_state_select(home_states=states, active_state="HomeStateNight")
@@ -326,13 +338,21 @@ class TestHomeStateSelectOptionKeys:
         select._api.activate_home_state.assert_awaited_once_with("HomeStateNight")
         assert select._optimistic_option == "night"
 
-    async def test_select_option_accepts_legacy_evon_id_with_warning(self, caplog):
+    async def test_service_handler_accepts_legacy_evon_id_with_warning(self, caplog):
+        """The shim must sit in the service handler: HA validates options before async_select_option."""
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
         select = _make_controllable_home_state_select(states, "HomeStateAtHome")
-        await select.async_select_option("HomeStateNight")
+        await select.async_handle_select_option("HomeStateNight")
         select._api.activate_home_state.assert_awaited_once_with("HomeStateNight")
         assert select._optimistic_option == "night"
         assert "deprecated" in caplog.text.lower()
+
+    async def test_service_handler_still_rejects_unknown_values(self):
+        states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
+        select = _make_controllable_home_state_select(states, "HomeStateAtHome")
+        with pytest.raises(ValueError):
+            await select.async_handle_select_option("party")
+        select._api.activate_home_state.assert_not_awaited()
 
     async def test_select_option_rejects_unknown_value(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
@@ -369,3 +389,12 @@ class TestSelectDeviceInfoViaDeviceId:
         info = select.device_info
         assert info["via_device_id"] == "hub-device-registry-id"
         assert "via_device" not in info
+
+    def test_selects_omit_via_device_id_when_hub_unknown(self):
+        home = _make_home_state_select(home_states=[{"id": "HomeStateAtHome"}])
+        season = _make_season_mode_select()
+        for select in (home, season):
+            select.coordinator.hub_device_id = None
+            info = select.device_info
+            assert "via_device_id" not in info
+            assert "via_device" not in info
