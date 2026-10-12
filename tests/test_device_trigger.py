@@ -57,7 +57,9 @@ class TestDeviceTriggerIntegration:
 
         # Get a light device (not an intercom)
         device_registry = dr.async_get(hass)
-        devices = list(device_registry.devices.values())
+        # HA 2026.10 forbids mapping-style access to `device_registry.devices`
+        # from non-integration code; use the registry helper instead.
+        devices = dr.async_entries_for_config_entry(device_registry, mock_config_entry_v2.entry_id)
 
         # Find the light device
         light_device = None
