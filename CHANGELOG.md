@@ -2,8 +2,11 @@
 
 All notable changes to the Evon Smart Home integration and the bundled MCP server.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); every
-version corresponds to a git tag and a GitHub release. The README keeps a one-line
-summary per version.
+version corresponds to a git tag and a GitHub release (1.8.2 has a tag but no release).
+Besides the standard section names (Added, Changed, Deprecated, Removed, Fixed, Security)
+two more are used: **Breaking changes** for anything that needs action after upgrading,
+and **Project** for CI, tooling and repository changes that do not affect what gets
+installed. The README keeps a one-line summary per version.
 
 Issue and PR numbers refer to this repository unless stated otherwise.
 
@@ -19,10 +22,17 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   `HomeStateNight`, `HomeStateWork`, `HomeStateHoliday`) to `at_home`, `night`, `work`,
   `holiday`, the same names the `evon.set_home_state` action already uses. Reason: Home
   Assistant's hassfest validator requires translation keys to match `[a-z0-9-_]+`.
-  - The old values are still accepted by `select.select_option` for now, with a warning in
-    the log. Planned removal: 1.25.0.
-  - State conditions and dashboards that compare against the old values must be updated.
+  - State conditions and dashboards that compare against the old values must be updated
+    (the old values keep working for now, see *Deprecated* below).
   - The raw Evon ID remains available in the entity's `evon_id` attribute.
+  - Two Evon states that derive the same option key (for example `HomeStateAt_Home` and
+    `HomeStateAtHome`) are reported once in the log; the first one wins.
+
+### Deprecated
+
+- The raw Evon IDs (`HomeStateAtHome`, ...) are still accepted by `select.select_option`
+  on the Home State select, with a warning in the log that names the replacement.
+  Planned removal: 1.25.0.
 
 ### Fixed
 
@@ -66,25 +76,34 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   are unaffected.
 - All remote-access URLs derive from one constant, so a future move of the relay host
   (`my.evon-smarthome.com`) is a one-line change.
-- The deploy and log helper scripts honour `HA_SSH_KEY` from `.env` (default
-  `~/.ssh/claude_code`).
+- Helper scripts: `scripts/ha-logs.sh` reads the whole current journal
+  (`HA_LOG_JOURNAL_LINES`, default 300000 lines) instead of the 100 lines `ha core logs`
+  returns by default, which with debug logging enabled covered only a few seconds, and
+  strips ANSI colour codes before filtering. Both `ha-deploy.sh` and `ha-logs.sh` honour
+  `HA_SSH_KEY` from `.env` (default `~/.ssh/claude_code`).
 - README links to Schrack Technik, the new home of evon Smart Home (the product is being
   renamed *Schrack Smart Building*). Nothing changes for the integration.
 
 ### Project
 
 - Home Assistant's hassfest validator runs in CI, also on release tags (#14); the manifest
-  declares its `http` and `recorder` dependencies.
+  declares `http` as a dependency and `recorder` as an after-dependency.
 - `hacs/action` and `hassfest` are pinned by commit (#13).
 - npm security audit is clean again: 7 advisories in transitive MCP server dependencies,
   including one critical, all resolved within the existing version ranges.
 - Test harness moved to HA 2026.10.1; GitHub Actions bumped to current majors
   (checkout, setup-python, setup-node, codecov v7; codeql-action v4).
 - Renovate is active (it had been running in Mend's silent mode): weekend schedule, patch
-  updates automerge on green CI, TypeScript 7 and `@types/node` 25+ held, CI Python version
-  excluded.
+  updates automerge on green CI, TypeScript 7 and `@types/node` 25 and newer held
+  (`allowedVersions: "<25"`), CI Python version excluded.
 - Held on purpose: TypeScript 7 (typescript-eslint does not support it yet), `@types/node`
-  26 (Node 24 floor), the climate `native_*` temperature rename (lands in HA 2026.11).
+  25 and newer (Node 24 floor), the climate `native_*` temperature rename (lands in HA
+  2026.11).
+- The relay-host guard test compares parsed hostnames (`urlsplit(...).hostname`) instead
+  of URL substrings, resolving a CodeQL `py/incomplete-url-substring-sanitization` alert.
+- This file: CHANGELOG.md introduced in Keep a Changelog format. The detailed version
+  history moved out of README.md (which keeps a compact table) and AGENTS.md, and the
+  GitHub release notes are now taken from the version's section here.
 - Test suite: 1322 Python tests and 21 MCP tests. New `tests/test_translations.py` keeps
   all 10 languages key-for-key in sync with `strings.json`.
 
@@ -134,11 +153,14 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - MCP server: `validateConfig()` replaced by `requireEvonHost()`; npm dependencies updated
   and remaining audit findings resolved.
 
+### Security
+
+- Camera recordings are served through an authenticated endpoint instead of an open
+  static path. Footage was previously downloadable by anyone who could reach the HA port,
+  including over a remote URL.
+
 ### Fixed
 
-- **Security:** camera recordings are served through an authenticated endpoint instead of
-  an open static path. Footage was previously downloadable by anyone who could reach the
-  HA port, including over a remote URL.
 - WebSocket updates arriving during a slow in-flight poll are no longer overwritten by the
   poll's stale snapshot (a toggled light no longer reverted for ~20 s).
 - Energy statistics import respects its 1-hour rate limit again.
@@ -213,6 +235,11 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - AGENTS.md gained the "Architecture Decisions (Do Not Change)" section.
 - Test suite: 1160 tests.
 
+### Project
+
+- npm audit clean again: eslint 10 and a `minimatch` override (`>=10.2.1`) for a
+  high-severity ReDoS advisory; a ruff formatting failure in CI fixed.
+
 ## [1.19.2] - 2026-02-21
 
 ### Fixed
@@ -272,10 +299,36 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - Eight new translations: French, Italian, Slovenian, Spanish, Portuguese, Polish, Czech,
   Slovak.
 
+### Changed
+
+- Energy statistics: `statistics_during_period` is queried once for all smart meters per
+  refresh instead of once per meter.
+- Coordinator: WebSocket value-change callbacks copy an entity's data before mutating it
+  (copy-on-write), so a poll on the same loop tick can no longer read a half-written
+  entity.
+- Fourteen top-priority findings of a deep code analysis: `SERVICE_*` and
+  `HOME_STATE_MAP` constants moved to `const.py`; the `recording_finished` event no longer
+  reports 0 frames; the camera recorder's frame buffer is capped (`deque(maxlen=7200)`);
+  O(1) entity lookup in the coordinator; the MCP server checks `EVON_HOST` at startup,
+  fixes a subscription leak in `getPropertyValues`, rejects pending requests on a
+  post-connection error and detects re-authentication failure in the API client retry;
+  CI gained a coverage threshold and tautological test assertions were fixed.
+- Further review fixes: bathroom radiator race condition, unload safety, energy entity
+  lookup, blocking I/O in entity data access, TypeScript hardening and API validation.
+- MCP server WebSocket client: `sequenceId` resets on reconnect; subscriptions are
+  re-registered after a reconnect; `connect()` aborts cleanly when `disconnect()` is
+  called mid-connect; the server exits with code 1 on fatal errors and shuts down cleanly
+  on SIGTERM/SIGINT; the blind, climate, home-state and bathroom-radiator helpers use
+  `CallMethod` instead of `SetValue` writes that only updated the UI.
+
 ### Project
 
+- CodeQL security scanning for Python and JavaScript/TypeScript (push, PR, weekly) with
+  CI and Codecov badges; Renovate configuration for automated dependency updates; CI
+  gained pip caching, a `pip-audit` step and a macOS job in the test matrix, and surfaces
+  Codecov upload failures.
 - GitHub Actions bumped, test dependencies cleaned up, ruff formatting applied.
-  Test suite: 876 tests.
+  Test suite: about 270 new tests (1,136 test functions at the tag, up from 874).
 
 ## [1.17.1] - 2026-02-11
 
@@ -342,6 +395,45 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - Parallel data processing for faster refreshes.
 - Security hardening: credentials removed from diagnostics, tokens removed from logs,
   session management hardened, WebSocket reconnect jitter, stricter input validation.
+
+## [1.14.3] - 2026-02-02
+
+### Fixed
+
+- Climate target temperature over WebSocket uses `CallMethod WriteCurrentSetTemperature`
+  instead of `SetValue SetTemperature`, which only updated the displayed value and never
+  reached the thermostat.
+
+The tags `v1.14.2` and `v1.14.3` both point at the same commit (358fdec, 2026-02-06),
+which lies after `v1.15.0` in the history; the compare links therefore span more than
+these two fixes.
+
+## [1.14.2] - 2026-02-02
+
+### Fixed
+
+- `Heating.ClimateControlUniversal` devices use WebSocket control: the class-name
+  constant was `ClimateControlUniversal`, so preset changes on these devices fell back to
+  HTTP.
+
+## [1.14.1] - 2026-02-02
+
+### Added
+
+- Integration actions: `evon.refresh`, `evon.reconnect_websocket`, `evon.set_home_state`,
+  `evon.set_season_mode`, `evon.all_lights_off`, `evon.all_blinds_open`,
+  `evon.all_blinds_close`.
+- WebSocket connection status binary sensor (diagnostic); device triggers for doorbell
+  ring and door open events; reduced poll interval while WebSocket is connected; entity
+  categories.
+
+### Fixed
+
+- Climate presets over WebSocket use `SetValue ModeSaved` (2/3/4 heating, 5/6/7 cooling)
+  instead of `CallMethod WriteDayMode` / `WriteNightMode` / `WriteFreezeMode`, which the
+  controller acknowledged but ignored. (Reversed again in 1.16.0: the `CallMethod` calls
+  are sent fire-and-forget because the controller sends no `MethodReturn` for them, and
+  `SetValue ModeSaved` only updates the displayed number.)
 
 ## [1.14.0] - 2026-02-01
 
@@ -421,15 +513,14 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [1.8.2] - 2026-01-16
 
+No GitHub release was published for this tag.
+
 ### Fixed
 
 - Blind optimistic state for group actions; clicking a group button twice to stop works.
-
-## [1.8.1] - 2026-01-16
-
-### Changed
-
-- Optimistic updates for all entities; improved preset icons.
+- Blind tilt open/close convention matches the Evon app (0 = open, 100 = closed); the
+  hardware quirk (tilt orientation depends on the last movement direction) is documented
+  in `docs/BLIND_TILT_BEHAVIOR.md` (bumped to 1.8.1 without a tag).
 
 ## [1.8.0] - 2026-01-16
 
@@ -479,7 +570,16 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Fixed
 
-- Reconfigure flow 500 error.
+- Config flow updated to the modern Home Assistant config-flow API (`ConfigFlowResult`,
+  `async_update_reload_and_abort()`, no `OptionsFlow.__init__()`), completing the 1.5.1
+  fix.
+
+## [1.5.1] - 2026-01-15
+
+### Fixed
+
+- Reconfigure flow 500 error: `async_step_reconfigure()` uses `_get_reconfigure_entry()`
+  instead of the deprecated `async_get_entry(self.context["entry_id"])` pattern.
 
 ## [1.5.0] - 2026-01-15
 
@@ -523,56 +623,51 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 ### Added
 
 - Smart meter, air quality and valve sensors; diagnostics support.
+- German translations (bumped to 1.2.1 without a tag).
 
-## [1.2.1]
-
-### Added
-
-- German translations.
-
-## [1.2.0]
+## [1.2.0] - 2026-01-15
 
 ### Added
 
 - Optional area sync (Evon rooms to Home Assistant areas).
 
-## [1.1.5]
+## [1.1.5] - 2026-01-15
 
 ### Fixed
 
 - `AbortFlow` handling ("Unexpected error" when already configured).
 
-## [1.1.4]
+## [1.1.4] - 2026-01-15
 
 ### Fixed
 
 - API client error handling (JSON decode, unexpected errors).
 
-## [1.1.3]
+## [1.1.3] - 2026-01-15
 
 ### Fixed
 
 - Config flow "Unexpected error" (missing `strings.json`, auth error handling).
 
-## [1.1.2]
+## [1.1.2] - 2026-01-15
 
 ### Fixed
 
 - Switch detection (class name `SmartCOM.Switch`).
 
-## [1.1.1]
+## [1.1.1] - 2026-01-15
 
 ### Changed
 
 - Documentation and branding updates, HACS buttons.
 
-## [1.1.0]
+## [1.1.0] - 2026-01-15
 
 ### Added
 
 - Sensors, switches, options flow, reconfigure flow, MCP resources and scenes.
 
-## [1.0.0]
+## [1.0.0] - 2026-01-15
 
 ### Added
 
@@ -590,7 +685,10 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 [1.17.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.17.0...v1.17.1
 [1.17.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.15.0...v1.16.0
-[1.15.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.14.0...v1.15.0
+[1.15.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.14.3...v1.15.0
+[1.14.3]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.14.2...v1.14.3
+[1.14.2]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.14.1...v1.14.2
+[1.14.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.14.0...v1.14.1
 [1.14.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.11.0...v1.12.0
@@ -608,10 +706,19 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 [1.7.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.5.2...v1.6.0
 [1.5.2]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.5.1...v1.5.2
+[1.5.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.3.3...v1.4.0
 [1.3.3]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.3.0...v1.3.1
-[1.3.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases/tag/v1.3.0
+[1.3.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.5...v1.2.0
+[1.1.5]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.4...v1.1.5
+[1.1.4]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.3...v1.1.4
+[1.1.3]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.2...v1.1.3
+[1.1.2]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases/tag/v1.0.0

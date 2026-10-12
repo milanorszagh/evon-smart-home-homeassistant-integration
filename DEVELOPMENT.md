@@ -18,7 +18,8 @@ custom_components/evon/
 ├── ws_control.py        # WebSocket control mappings (canonical WS-native names → WS calls, HTTP translation)
 ├── ws_mappings.py       # Property mappings for WebSocket data
 ├── base_entity.py       # Base entity class with common functionality
-├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, reauth, repairs)
+├── config_flow.py       # Configuration UI flows (setup, options, reconfigure, reauth)
+├── repairs.py           # Repair fix flows (async_create_fix_flow) — HA discovers them only in this module
 ├── const.py             # Constants, device classes, repair identifiers
 ├── coordinator/         # Data update coordinator package
 │   ├── __init__.py      # Main coordinator with connection failure tracking, WebSocket integration
@@ -49,13 +50,18 @@ custom_components/evon/
 ├── button.py            # Button platform (scenes)
 ├── camera.py            # Camera platform (2N intercoms)
 ├── camera_recorder.py   # Camera recording manager (snapshot → MP4)
-├── www/                 # Frontend assets (auto-registered)
+├── recordings.py        # Recordings folder: HA local media dir + one-time legacy migration (new in 1.23.0)
+├── recordings_view.py   # Authenticated HomeAssistantView serving recordings at /evon/recordings/{filename}
+├── www/                 # Frontend assets (static path /evon/evon-camera-recording-card.js; add as a dashboard resource manually)
 │   └── evon-camera-recording-card.js  # Custom Lovelace card for recording UI
 ├── image.py             # Image platform (doorbell snapshots)
 ├── event.py             # Event platform (doorbell ring, physical button press events)
-├── device_trigger.py    # Device triggers (doorbell press)
+├── device_trigger.py    # Device triggers (doorbell, button single/double/long press)
 ├── statistics.py        # External energy statistics import
 ├── diagnostics.py       # Diagnostics data export
+├── manifest.json        # Integration manifest (domain, version, dependencies)
+├── services.yaml        # Service definitions (refresh, home/season state, bulk control, recording)
+├── py.typed             # PEP 561 marker — the package ships type hints
 ├── strings.json         # UI strings
 └── translations/        # Localization files (en, de, fr, it, sl, es, pt, pl, cs, sk)
 ```
@@ -142,14 +148,14 @@ src/
 STARTUP:
 1. config_flow.py validates credentials with HTTP API
 2. __init__.py creates API client, coordinator, and WebSocket client
-3. coordinator.py fetches initial data via HTTP
+3. coordinator/__init__.py fetches initial data via HTTP
 4. ws_client.py connects and subscribes to all device properties
 5. Platform files create entities from coordinator data
 
 REAL-TIME UPDATES (state changes from wall switches, etc.):
 6. Evon sends ValuesChanged event via WebSocket (<100ms)
 7. ws_mappings.py converts WS property names to coordinator format
-8. coordinator.py updates entity data and notifies listeners
+8. coordinator/__init__.py updates entity data and notifies listeners
 9. Entity UI updates instantly
 
 DEVICE CONTROL (user taps light in HA):
@@ -169,7 +175,7 @@ FALLBACK:
 1. User adds integration via config flow
 2. config_flow.py validates credentials with API
 3. __init__.py creates API client and coordinator
-4. coordinator.py fetches all device data periodically (30s)
+4. coordinator/__init__.py fetches all device data periodically (30s)
 5. Platform files create entities from coordinator data
 6. Entities read state from coordinator.data
 7. Entities call HTTP API methods for control actions
@@ -237,7 +243,7 @@ Add credentials directly to `~/.claude.json`:
 }
 ```
 
-The server auto-detects plain text or encoded passwords.
+The server auto-detects plain text or encoded passwords: an 88-character Base64 value ending in `==` is treated as already encoded. Set `EVON_PASSWORD_ENCODED=true` or `false` to force either interpretation (`src/config.ts`).
 
 ### Available Tools
 
@@ -278,7 +284,7 @@ The server auto-detects plain text or encoded passwords.
 
 ## WebSocket Client
 
-The MCP server includes a WebSocket client (`src/ws-client.ts`) for real-time communication with Evon systems.
+The MCP server includes a WebSocket client (`src/ws-client.ts`) for real-time communication with Evon systems. It is a standalone library (`dist/ws-client.js`) usable from scripts; the registered MCP tools and resources use the HTTP client only — `src/index.ts` is its sole importer, and only for `getWsClient().disconnect()` on shutdown.
 
 ### Architecture
 
@@ -293,12 +299,11 @@ src/
 | Feature | Description |
 |---------|-------------|
 | **Real-time subscriptions** | Get instant notifications when device states change |
-| **Lower latency** | Faster than HTTP API for device control |
+| **Lower latency** | `CallMethod` round-trips are faster than the HTTP API — benefits scripts using this module, not the MCP tools (which stay on HTTP) |
 | **Batch queries** | Request multiple device properties in a single call |
 | **Automatic reconnection** | Handles connection drops gracefully |
 | **Liveness heartbeat** | Pings every 30 s (`WS_HEARTBEAT_INTERVAL_MS`); no pong within 10 s (`WS_PONG_TIMEOUT_MS`) terminates the half-open socket, fails pending calls fast and attempts one reconnect after 1 s (`WS_HEARTBEAT_RECONNECT_DELAY_MS`). Matches the HA integration's 30 s aiohttp heartbeat (issue #12) |
 | **Connection deduplication** | Concurrent connect/login calls are coalesced into a single request |
-| **Parallel bulk control** | `controlAllDevices` helper sends commands in parallel via `Promise.all` |
 
 ### Usage
 
@@ -335,16 +340,17 @@ client.registerValuesChanged([
 | `registerValuesChanged(subs, callback)` | Subscribe to property changes |
 | `unregisterValuesChanged(instanceIds)` | Unsubscribe from property changes |
 | `getPropertyValues(subscriptions)` | Get property values for multiple devices in a single call |
-| `setValue(instanceId, property, value)` | Set a device property |
-| `setLightOn(id, on)` | Turn light on/off |
-| `setLightBrightness(id, brightness)` | Set light brightness (0-100) |
-| `setBlindPosition(id, position)` | Set blind position (0-100) |
-| `setBlindAngle(id, angle)` | Set blind tilt angle (0-100) |
-| `setClimateTemperature(id, temp)` | Set target temperature |
-| `setClimateMode(id, mode)` | Set climate mode (0=off, 1=comfort, 2=eco, 3=away) |
-| `setHomeStateActive(id, active)` | Activate home state |
-| `setBathroomRadiatorOn(id, on)` | Control bathroom radiator on/off |
-| `setBathroomRadiatorTimer(id, minutes)` | Set bathroom radiator timer duration |
+| `setValue(instanceId, property, value)` | Set a device property (`SetValue instanceId.property`) |
+| `callMethod(instanceId, method, params?, fireAndForget?)` | Call any method (`CallMethod instanceId.method`); `fireAndForget` for methods that send no `MethodReturn` (climate) |
+| `setLightOn(instanceId, on)` | Turn light on/off (`CallMethod SwitchOn`/`SwitchOff`) |
+| `setLightBrightness(instanceId, brightness)` | Set brightness (`CallMethod BrightnessSetScaled [level, 0]`, clamped 0-100) |
+| `moveBlindToPosition(instanceId, angle, position)` | Move blind (`CallMethod MoveToPosition [angle, position]` — angle first, both clamped 0-100) |
+| `openBlind(instanceId)` / `closeBlind(instanceId)` / `stopBlind(instanceId)` | Blind movement (`CallMethod Open`/`Close`/`Stop`) |
+| `setClimateTemperature(instanceId, temp)` | Set target temperature (`WriteCurrentSetTemperature`, fire-and-forget) |
+| `setClimateMode(instanceId, mode)` | Set preset; `mode` is `"comfort" \| "eco" \| "away"` → `WriteDayMode`/`WriteNightMode`/`WriteFreezeMode` (fire-and-forget) |
+| `activateHomeState(instanceId)` | Activate a home state (`CallMethod Activate`) |
+| `setBathroomRadiatorOn(instanceId)` | Turn radiator on for the configured duration (`CallMethod SwitchOneTime`); takes no `on` argument |
+| `toggleBathroomRadiator(instanceId)` | Toggle radiator (`CallMethod Switch`) — used for off, since `SwitchOff` is acknowledged but has no effect |
 
 ### Convenience Functions
 
@@ -361,10 +367,10 @@ client.registerValuesChanged([
 | `wsGetClimateState(id)` | Get climate state (temperatures, mode) |
 | `wsGetHomeStateStatus(id)` | Get home state status (name, active) |
 | `wsGetBathroomRadiatorState(id)` | Get radiator state (isOn, timer, flags) |
-| `wsControlLight(id, opts)` | Control light (on/off, brightness) |
-| `wsControlBlind(id, opts)` | Control blind (position, angle) |
-| `wsControlClimate(id, opts)` | Control climate (temperature, mode) |
-| `wsControlBathroomRadiator(id, opts)` | Control radiator (on/off, timer) |
+| `wsControlLight(id, opts)` | Control light: `{ on?, brightness? }` |
+| `wsControlBlind(id, opts)` | Control blind: `{ position?, angle? }` → `MoveToPosition` (a missing value defaults to 0), or `{ action: "open" \| "close" \| "stop" }` |
+| `wsControlClimate(id, opts)` | Control climate: `{ temperature?, mode?: "comfort" \| "eco" \| "away" }` |
+| `wsControlBathroomRadiator(id, opts)` | Control radiator: `{ on?: boolean }` — `true` → `SwitchOneTime`, `false` → `Switch` (toggle); there is no timer option |
 | `wsActivateHomeState(id)` | Activate a home state |
 
 See [docs/WEBSOCKET_API.md](docs/WEBSOCKET_API.md) for detailed protocol documentation.
@@ -425,6 +431,8 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (se
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
+WS_RESUBSCRIBE_MAX_ATTEMPTS = 3        # Retries for a post-reconnect resubscribe before giving up
+WS_RESUBSCRIBE_RETRY_DELAY = 2.0       # Delay between resubscribe attempts (seconds)
 
 # Button press detection
 DEFAULT_BUTTON_DOUBLE_CLICK_DELAY = 0.8   # Configurable via options (0.2-1.4s)
@@ -624,9 +632,7 @@ The integration supports WebSocket-based control for faster response times. WS-n
 | `BrightnessSetScaled` | `[brightness, transition_ms]` | `AmznSetBrightness` | transition=0 for instant |
 | `SetValue ColorTemp` | `value` (Kelvin) | - | Color temperature for RGBW lights |
 
-**⚠️ Light Control Trap:** `Switch([true/false])` exists but behaves inconsistently on some devices. Always use `SwitchOn`/`SwitchOff` instead for explicit on/off control.
-
-**RGBW Color Temperature:** DynamicRGBWLight devices support color temperature via the `ColorTemp` property (in Kelvin). The `MinColorTemperature` and `MaxColorTemperature` properties define the supported range. Home Assistant converts between Kelvin and mireds internally. *Note: This feature is untested - please report issues if you have RGBW Evon modules.*
+**RGBW Color Temperature:** DynamicRGBWLight devices support color temperature via the `ColorTemp` property (in Kelvin). The `MinColorTemperature` and `MaxColorTemperature` properties define the supported range. Home Assistant converts between Kelvin and mireds internally.
 
 **Blinds (via WebSocket):**
 | Canonical Method | Parameters | HTTP Fallback Name | Notes |
@@ -636,19 +642,7 @@ The integration supports WebSocket-based control for faster response times. WS-n
 | `Stop` | `[]` | `Stop` | Stop movement |
 | `MoveToPosition` | `[angle, position]` | `AmznSetPercentage`/`SetAngle` | **Angle comes FIRST!** |
 
-**⚠️ Blind Control Trap:** `SetValue` on `Position` property updates the value in Evon but does NOT move the physical blind. Always use `MoveToPosition` CallMethod.
-
-**WebSocket CallMethod Format:**
-```json
-{"methodName":"CallWithReturn","request":{"args":["instanceId.methodName",[params]],"methodName":"CallMethod","sequenceId":N}}
-```
-
-**WebSocket SetValue Format:**
-```json
-{"methodName":"CallWithReturn","request":{"args":["instanceId.propertyName",value],"methodName":"SetValue","sequenceId":N}}
-```
-
-**Note:** Both CallMethod and SetValue concatenate the instance ID and method/property with a dot (e.g., `SC1_M01.Light3.SwitchOn`, `SC1_M01.Light3.IsOn`).
+**Traps and wire format:** `Switch([bool])` toggles inconsistently, `AmznTurnOn`/`AmznTurnOff` and `SetValue IsOn` are acknowledged without driving the hardware, and `SetValue Position` updates the value without moving the blind — always use the `CallMethod` names in these tables. The request format (`[instanceId.method, params]`, method/property joined to the instance ID with a dot), the verified captures and the full trap list live in [docs/WEBSOCKET_API.md — Device Control via WebSocket](docs/WEBSOCKET_API.md#device-control-via-websocket).
 
 **Climate (via WebSocket):**
 | WS Method/Property | Parameters | HTTP Equivalent | Notes |
@@ -745,7 +739,8 @@ Body: {"value": true}   // COOLING
 
 | Method | Parameters | Description |
 |--------|------------|-------------|
-| `Switch` | - | Toggle on/off |
+| `SwitchOneTime` | - | Turn on for the configured duration (`EnableForMins`); used by `turn_on_bathroom_radiator` in `api.py`. Idempotent — calling while on restarts the timer |
+| `Switch` | - | Toggle on/off. Used for **off** (`turn_off_bathroom_radiator`) only after a state check, because `SwitchOff` is acknowledged but has no effect on radiators |
 
 **Properties**: `Output` (state), `NextSwitchPoint` (minutes remaining), `EnableForMins` (duration)
 
@@ -777,6 +772,8 @@ Body: {"value": true}   // COOLING
 
 **Image Fetch:** After requesting an image via WebSocket (`ImageRequest=True`), the camera waits for the `Image` property to update via a `ValuesChanged` event (up to `CAMERA_IMAGE_UPDATE_TIMEOUT` seconds), then fetches the JPEG via HTTP with token authentication. This event-driven approach replaces the previous blind sleep and ensures the image is ready before fetching.
 
+**Recordings:** `camera_recorder.py` writes MP4s to `hass.config.media_dirs["local"]/evon_recordings` (`/media/evon_recordings` on HAOS/Docker, `<config>/media/evon_recordings` on venv installs), resolved by `recordings.py` — `recordings_dir()`, `legacy_recordings_dir()` and `prepare_recordings_dir()`, which creates the folder and moves files once from the pre-1.23.0 `<config>/media/evon_recordings` location (blocking; run in an executor at setup). Files are served by the authenticated `EvonRecordingsView` (`recordings_view.py`, `/evon/recordings/{filename}`) and browsable via `media_source`. The Lovelace card is served at `/evon/evon-camera-recording-card.js` and must be added as a dashboard resource manually (only the static path is registered).
+
 ### Smart Meter Properties
 
 | Property | Unit | Description |
@@ -802,19 +799,7 @@ Body: {"value": true}   // COOLING
 
 ### Calculated Energy Sensors
 
-The integration provides two calculated sensors that don't exist in the Evon API:
-
-| Sensor | Calculation | Source |
-|--------|-------------|--------|
-| **Energy Today** | Sum of hourly changes from HA statistics | `statistics_during_period()` on `sensor.*_energy_total` |
-| **Energy This Month** | Previous days from Evon + today from HA | `EnergyDataMonth[-N:]` + Energy Today |
-
-**Implementation Details:**
-- Calculation happens in `coordinator/_calculate_energy_today_and_month()`
-- Called during each coordinator refresh cycle
-- `statistics_during_period()` is a blocking call - use `async_add_executor_job()`
-- Values stored as `energy_today_calculated` and `energy_this_month_calculated` in meter data
-- Sensor classes read from coordinator data, return 0.0 if not yet calculated
+**Energy Today** and **Energy This Month** are computed in `coordinator/__init__.py` (`_calculate_energy_today_and_month()`) on every refresh: today from HA long-term statistics of `sensor.*_energy_total` (one batched `statistics_during_period()` call, run on the **recorder's** executor via `get_recorder_instance(hass).async_add_executor_job`), this month from Evon's `EnergyDataMonth` plus today. Stored as `energy_today_calculated` / `energy_this_month_calculated` in the meter data (sensors report 0.0 until first calculated); details in [docs/ENERGY_STATISTICS.md](docs/ENERGY_STATISTICS.md).
 
 ### Air Quality Properties
 
@@ -858,9 +843,9 @@ The double-click delay is user-configurable via integration options (0.2–1.4s)
 
 See `docs/WEBSOCKET_API.md` for detailed WebSocket subscription data and timing measurements.
 
-### Security Doors & Intercoms (Implemented!)
+### Security Doors & Intercoms
 
-Like relay switches and physical buttons, **security doors and intercoms also expose real-time events** via WebSocket:
+Like lights and physical buttons, **security doors and intercoms also expose real-time events** via WebSocket:
 
 | Device | Instance Example | Key Properties |
 |--------|------------------|----------------|
@@ -909,9 +894,9 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push, PR, `v*` tags | Lint (ruff, mypy, eslint), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
-| **Renovate** | `renovate.json` | Weekly (Monday) | Automated dependency update PRs, grouped by ecosystem, patch automerge |
+| **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, patch automerge; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
 
 ---
 
@@ -1082,7 +1067,7 @@ def _handle_coordinator_update(self) -> None:
 | Re-authentication required | `ConfigEntryAuthFailed` raised | N/A | Yes (on successful reauth) |
 | Config migration | Incompatible version | Error | No |
 
-Key files: `const.py` (constants), `coordinator/__init__.py` (connection tracking, auth errors), `__init__.py` (entity/migration repairs, cleanup on removal), `config_flow.py` (repair flows, reauth flow)
+Key files: `const.py` (constants), `coordinator/__init__.py` (connection tracking, auth errors), `__init__.py` (entity/migration repairs, cleanup on removal), `repairs.py` (fix flows via `async_create_fix_flow` — HA discovers them only in this module), `config_flow.py` (reauth flow)
 
 ---
 
@@ -1132,7 +1117,7 @@ node ws-switch-listener.mjs [mode]
 **Python 3.14 is required.** `pytest-homeassistant-custom-component` pins the exact
 Home Assistant version it tests against, and the release matching HA 2026.x needs
 3.14. On an older interpreter the install fails outright with
-`No matching distribution found for pytest-homeassistant-custom-component>=0.13.354`
+`No matching distribution found for pytest-homeassistant-custom-component>=0.13.372`
 — that is the version floor doing its job, not a broken requirements file.
 
 ```bash
@@ -1142,8 +1127,9 @@ pip install -r requirements-test.txt
 pytest -v
 ```
 
-Tests are in `tests/` - some require Home Assistant installed. CI skips many tests that need a full
-HA runtime or optional dependencies; that is expected unless running in a full HA dev environment.
+Tests are in `tests/`. With `requirements-test.txt` installed nothing is skipped — CI runs the full suite.
+The `requires_ha_test_framework` markers only skip HA-dependent tests in ad-hoc runs without Home
+Assistant installed.
 
 ### MCP Server Tests
 
@@ -1197,13 +1183,18 @@ Test files:
 - `test_options_flow_handler.py` - Options flow handler unit tests
 - `test_reconnect_delay.py` - WebSocket reconnect delay tests
 - `test_recording_services.py` - Recording service tests
+- `test_recordings_paths.py` - Recordings folder resolution and legacy migration tests (`recordings.py`, no HA dependency)
+- `test_recordings_view.py` - Authenticated recordings HTTP view tests
+- `test_repairs.py` - Repair fix flow tests (pins that HA discovers fix flows from `repairs.py`)
 - `test_select_unit.py` - Select entity unit tests (no HA dependency)
 - `test_sensor_unit.py` - Sensor entity unit tests (no HA dependency)
 - `test_service_invalid_params.py` - Service invalid parameter tests
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
+- `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
+- `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout)
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count; CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1330 Python + 23 MCP tests at v1.23.0); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
@@ -1215,7 +1206,7 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 1. Copy `.env.example` to `.env` with your HA IP
 2. Configure SSH on Home Assistant (Terminal & SSH add-on)
-3. Add your public key to authorized_keys
+3. Add your public key to authorized_keys — the scripts use the key named by `HA_SSH_KEY` in `.env` (default `~/.ssh/claude_code`)
 
 ### Commands
 
@@ -1246,10 +1237,12 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 Dependencies are kept up to date via [Renovate](https://docs.renovatebot.com/). Configuration is in `renovate.json`:
 
-- **Schedule**: Weekly on Mondays (Europe/Vienna timezone)
+- **Schedule**: `every weekend` (Europe/Vienna timezone)
 - **Grouping**: npm deps, npm devDeps, pip deps, and GitHub Actions are grouped into separate PRs
 - **Automerge**: Patch-level updates automerge when CI passes
 - **Labels**: All dependency PRs get the `dependencies` label
+- **Holds**: TypeScript major updates are disabled until typescript-eslint supports TS 7 (minors/patches still flow); `@types/node` is held `<25` to match the Node 24 runtime floor; the CI `python` github-actions dependency is disabled — bump it by hand together with the HA floor
+- **Dashboard**: Renovate's Dependency Dashboard is issue #21
 
 ---
 

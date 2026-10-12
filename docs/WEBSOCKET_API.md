@@ -44,6 +44,36 @@ const ws = new WebSocket('ws://<evon-host>/', 'echo-protocol', {
 });
 ```
 
+### Remote (relay) connection
+
+When the integration is configured for remote access, the WebSocket goes through Evon's relay instead of the local controller. The relay host is the single constant `EVON_REMOTE_HOST = "https://my.evon-smarthome.com"` (`custom_components/evon/const.py`); `ws_client.py` derives everything else from it:
+
+| | Local | Remote (relay) |
+|---|---|---|
+| Login URL | `http://<evon-host>/login` | `https://my.evon-smarthome.com/login` (at the root — the Engine ID is **not** in the path) |
+| Extra login headers | — | `x-elocs-relayid: <engine-id>`, `x-elocs-sessionlogin: true`, `X-Requested-With: XMLHttpRequest` |
+| WebSocket URL | `ws://<evon-host>/` | `wss://my.evon-smarthome.com/` (again no Engine ID in the path) |
+| `Origin` header | `http://<evon-host>` | `https://my.evon-smarthome.com` |
+| `Cookie` header | `token=…; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0` | `token=…; x-elocs-isrelay=true; x-elocs-token_in_cookie_only=0` |
+
+The sub-protocol (`echo-protocol`) and the message format are identical; the relay forwards frames to the controller identified by `x-elocs-relayid` at login. See `EvonWsClient.__init__`, `connect()` and `_login()` in `custom_components/evon/ws_client.py`.
+
+### Connection lifecycle
+
+**Home Assistant client (`custom_components/evon/ws_client.py`):**
+
+- **Liveness:** the socket is opened with aiohttp's `heartbeat=WS_HEARTBEAT_INTERVAL` (30 s). That ping/pong is the *only* dead-peer detector — there is deliberately no timeout around `receive()` (one was removed in v1.22.1 because quiet-but-healthy controllers were being disconnected every few minutes). A dead peer surfaces as an `ERROR` or `CLOSED` frame.
+- **Handshake:** after the socket opens, `_wait_for_connected()` waits up to 10 s for the server's `Connected` message; anything else (timeout, early close, unexpected first frame) counts as a failed handshake and is retried with backoff.
+- **Close frames:** `CLOSE`, `CLOSING` and `CLOSED` frames all trigger a clean disconnect followed by a reconnect (`CLOSING` used to be ignored; fixed in v1.23.0, #11). `ERROR` frames do the same.
+- **Disconnect:** pending RPC requests are rejected with `EvonWsNotConnectedError`, the token is cleared and the connection-state callback fires.
+- **Reconnect backoff:** exponential, starting at `DEFAULT_WS_RECONNECT_DELAY` (5 s) and doubling up to `WS_RECONNECT_MAX_DELAY` (300 s), with ±25 % jitter (`WS_RECONNECT_JITTER = 0.25`). The delay resets to 5 s only after a *confirmed* handshake. `sequenceId` restarts at 1 on every connect.
+- **Resubscribe:** after a successful reconnect the stored subscription list is re-registered by `_resubscribe()`, retried up to `WS_RESUBSCRIBE_MAX_ATTEMPTS` (3) times with `WS_RESUBSCRIBE_RETRY_DELAY` (2 s) between attempts.
+
+**MCP server client (`src/ws-client.ts`, constants in `src/constants.ts`):**
+
+- Sends a WebSocket ping every `WS_HEARTBEAT_INTERVAL_MS` (30 s). If no pong arrives within `WS_PONG_TIMEOUT_MS` (10 s) the socket is terminated and all pending calls are rejected (`rejectAllPending`).
+- One reconnect attempt is scheduled after `WS_HEARTBEAT_RECONNECT_DELAY_MS` (1 s) — unless `disconnect()` was requested in the meantime (`disconnectRequested`). After a reconnect, `resubscribeAll()` restores the server-side subscriptions; later calls reconnect lazily via `call()`.
+
 ## Message Format
 
 ### Request Format
@@ -173,7 +203,7 @@ Subscribe to property changes and get initial values.
 ```
 
 ### SetValue
-Set a property value to control a device.
+Set a property value. Reliable for plain property writes (e.g. `Base.ehThermostat.IsCool`, `Intercom2N1000.Cam.ImageRequest`). For device *control* use `CallMethod` — property writes on lights, blinds and climate are acknowledged by the server but not consistently acted on by the hardware (see the trap tables under "Device Control via WebSocket").
 
 ```javascript
 // Turn light on
@@ -196,19 +226,14 @@ Set a property value to control a device.
   }
 }
 
-// Set blind position
-{
-  methodName: "CallWithReturn",
-  request: {
-    args: ["SC1_M07.Blind1.Position", 75],
-    methodName: "SetValue",
-    sequenceId: 5
-  }
-}
+// ❌ Blind position via SetValue does NOT work: the value updates in the UI but the
+// hardware does not move and the value then reverts. Use
+// CallMethod MoveToPosition([angle, position]) instead — see "Blind Control" below.
+// (args: ["SC1_M07.Blind1.Position", 75], methodName: "SetValue")
 ```
 
 ### CallMethod
-Call a method on an instance. **Note:** This has limited support for device control - see "Device Control" section below.
+Call a method on an instance. CallMethod is the primary control mechanism — see "Device Control via WebSocket" below.
 
 ```javascript
 // Open a blind
@@ -254,7 +279,7 @@ The Evon WebSocket API supports two mechanisms for device control:
 | Climate Presets | ✅ `CallMethod WriteDayMode/WriteNightMode/WriteFreezeMode` | `[instanceId.WriteDayMode, []]` (fire-and-forget*) | Same |
 | Bathroom Radiator On | ✅ `CallMethod SwitchOneTime` | `[instanceId.SwitchOneTime, []]` | `SwitchOneTime` |
 | Bathroom Radiator Off | ✅ `CallMethod Switch` | `[instanceId.Switch, []]` (toggle) | `Switch` |
-| Switch (Relay) On/Off | ✅ `CallMethod SwitchOn/SwitchOff` | `[instanceId.SwitchOn, []]` | `AmznTurnOn/Off` |
+| Relay output (light platform) On/Off | ✅ `CallMethod SwitchOn/SwitchOff` | `[instanceId.SwitchOn, []]` | `AmznTurnOn/Off` |
 | Scene Activation | ✅ `CallMethod Execute` | `[instanceId.Execute, []]` | `Execute` |
 | Home State | ✅ `CallMethod Activate` | `[instanceId.Activate, []]` | `Activate` |
 | Smart Meter | ✅ `RegisterValuesChanged` | Subscribe to IL1-3, UL1N-3N, P1-3, Frequency | Read-only |
@@ -272,7 +297,7 @@ The Evon WebSocket API supports two mechanisms for device control:
 - **Smart Meters**: Subscribe via `RegisterValuesChanged` for real-time power/voltage/current updates
 - **Air Quality**: Subscribe via `RegisterValuesChanged` for humidity, temperature, CO2 updates
 - **Valves**: Subscribe via `RegisterValuesChanged` for open/closed state updates
-- **Switches (Relays)**: Use `CallMethod SwitchOn/SwitchOff([])`, same as lights. HTTP fallback translates to `AmznTurnOn/AmznTurnOff`
+- **Relay outputs (light platform, `SmartCOM.Light.Light`)**: Use `CallMethod SwitchOn/SwitchOff([])`, same as dimmable lights. HTTP fallback translates to `AmznTurnOn/AmznTurnOff`
 
 ### Light Control (Verified Working)
 
@@ -321,17 +346,14 @@ await ws.send(JSON.stringify({
 - `SwitchOff([])` - turn light off (no params, explicit)
 - `BrightnessSetScaled([brightness, transition])` - brightness 0-100, transition time in ms (use 0 for instant)
 
-**Alternative (also works):**
+**Alternative: `SetValue IsOn` (not used):**
 ```javascript
-// SetValue on IsOn property also works
-await ws.send(JSON.stringify({
-  methodName: "CallWithReturn",
-  request: {
-    args: ["SC1_M01.Light3.IsOn", true],
-    methodName: "SetValue",
-    sequenceId: seq++
-  }
-}));
+// SetValue on IsOn was acknowledged in the January 2026 test below, but later
+// testing found the write acknowledged WITHOUT the hardware responding (relay
+// outputs; the MCP server's setLightOn/setLightBrightness helpers were switched
+// to CallMethod SwitchOn/SwitchOff/BrightnessSetScaled [level, 0] in v1.23.0 for
+// this reason). Neither the HA integration nor the MCP server uses SetValue for lights.
+// args: ["SC1_M01.Light3.IsOn", true], methodName: "SetValue"
 ```
 
 ### Test Results (January 2026)
@@ -486,9 +508,9 @@ await ws.send(JSON.stringify({
 
 **⚠️ CRITICAL TRAP:** Using `SetValue` on `ModeSaved` or `MainState` only updates the UI number - it does NOT actually change the preset or target temperature! Always use the CallMethod variants.
 
-**Thermostat Types:**
-- `Heating.ClimateControlUniversal` - Bathrooms, uses `ModeSaved` property
-- `SmartCOM.Clima.ClimateControl` - Other rooms, uses `MainState` property
+**Thermostat Types** (room assignment below is from the test installation; which rooms use which class varies per site):
+- `Heating.ClimateControlUniversal` - uses `ModeSaved` property (the bathrooms on the test installation)
+- `SmartCOM.Clima.ClimateControl` - uses `MainState` property (all other rooms on the test installation)
 
 **Mode Values:**
 - Heating: 2=away, 3=eco, 4=comfort
@@ -504,7 +526,7 @@ Climate CallMethod operations (`WriteDayMode`, `WriteNightMode`, `WriteFreezeMod
 
 **Home Assistant Integration Notes:**
 - Use **optimistic state** for immediate UI feedback (preset changes shown instantly)
-- **Do NOT trigger HTTP refresh** after WebSocket commands - it causes race conditions where stale HTTP data overwrites correct WebSocket state
+- **Do not refresh via HTTP *immediately* after a WebSocket command** - a stale HTTP poll races the push update and can overwrite the correct WebSocket state. Instead the integration arms a 5 s recheck (`POST_COMMAND_QUIESCE_PERIOD`, `_schedule_post_command_recheck()`) that any WebSocket event for that entity cancels; the HTTP recheck only fires if the push never arrives. See "Optimistic Updates Pattern" in `DEVELOPMENT.md`.
 - Subscribe to both `ModeSaved` AND `MainState` properties (different thermostat types use different properties)
 - Temperature recall works automatically when switching presets via WebSocket CallMethod
 
@@ -677,8 +699,8 @@ Tested on:
 | `ModeSaved` | ❌ Not present | ✅ Present |
 | `SetTemperature` | ✅ Present | ✅ Present |
 
-**Temperature Range:**
-- All thermostats have min_temp=18°C (includes freeze protection range)
+**Temperature Range** (example values from the test installation; the integration derives the limits per thermostat from `MinSetValueHeat/Cool` and `MaxSetValueHeat/Cool`):
+- On the test installation every thermostat reports min_temp=18°C (includes the freeze-protection setpoint)
 - max_temp varies by room and season mode
 
 ### Bathroom Radiator Control (Verified Working)
@@ -804,8 +826,6 @@ Relay outputs are exposed as `SmartCOM.Light.Light` on the **light** platform (o
 | `IsOn` | boolean | Light on/off state |
 | `Brightness` | number | Raw brightness (internal value, avoid using) |
 | `ScaledBrightness` | number | **Recommended** - Brightness as percentage (0-100) |
-
-**Important:** Always use `ScaledBrightness` instead of `Brightness` for reading and setting brightness values. The raw `Brightness` property uses internal scaling that doesn't match the 0-100% range shown in the UI. Using `Brightness` instead of `ScaledBrightness` will cause mismatched values between your application and the Evon interface.
 | `DirectOn` | boolean | Directly switched on (not via dimming) |
 | `ColorTemp` | number | Color temperature |
 | `MinColorTemperature` | number | Minimum color temp |
@@ -816,6 +836,8 @@ Relay outputs are exposed as `SmartCOM.Light.Light` on the **light** platform (o
 | `Address` | number | Hardware address |
 | `Channel` | number | Hardware channel |
 | `Line` | number | Hardware line |
+
+**Important:** Always use `ScaledBrightness` instead of `Brightness` for reading and setting brightness values. The raw `Brightness` property uses internal scaling that doesn't match the 0-100% range shown in the UI. Using `Brightness` instead of `ScaledBrightness` will cause mismatched values between your application and the Evon interface.
 
 ### Blinds
 | Class | Description |
@@ -861,15 +883,7 @@ Relay outputs are exposed as `SmartCOM.Light.Light` on the **light** platform (o
 | `SetValueComfortHeating` | number | Comfort preset temperature (heating) |
 | `SetValueEnergySavingHeating` | number | Eco preset temperature (heating) |
 
-**Mode Values (ModeSaved/MainState):**
-| Value | Heating | Cooling |
-|-------|---------|---------|
-| 2 | away | - |
-| 3 | eco | - |
-| 4 | comfort | - |
-| 5 | - | away |
-| 6 | - | eco |
-| 7 | - | comfort |
+**Mode Values (ModeSaved/MainState):** heating 2=away, 3=eco, 4=comfort; cooling 5=away, 6=eco, 7=comfort. The canonical table lives in `DEVELOPMENT.md` ("Climate Properties" → "ModeSaved values by Season Mode"); the constants are `EVON_PRESET_HEATING` / `EVON_PRESET_COOLING` in `const.py`.
 
 **⚠️ Important:** `ModeSaved`, `MainState`, and `SetTemperature` are for READING state only. To CHANGE presets or temperature, use CallMethod with `WriteDayMode`, `WriteNightMode`, `WriteFreezeMode`, or `WriteCurrentSetTemperature`. See "Climate Control" section above.
 
@@ -930,7 +944,7 @@ Each climate module also has associated input instances:
 
 ### Security Doors & Intercoms
 
-Unlike physical switches, security doors and intercoms **DO expose real-time state** via WebSocket.
+Security doors and intercoms **expose real-time state** via WebSocket.
 
 | Class | Description |
 |-------|-------------|
@@ -994,7 +1008,7 @@ Physical wall buttons ("Taster" in German) use the `SmartCOM.Switch` class. Thes
 | Class | Description |
 |-------|-------------|
 | `SmartCOM.Switch` | Physical wall buttons (light buttons, blind buttons) |
-| `Base.bSwitch` | Base switch class (legacy — unused in HA integration; returns `None` and logs a warning) |
+| `Base.bSwitch` | Base switch class (legacy — unused in HA integration; `get_entity_type()` in `ws_mappings.py` returns `None` and the instance is silently skipped) |
 | `Base.bSwitchUniversal` | Universal switches/buttons |
 
 #### Key Properties (from API)
@@ -1018,7 +1032,7 @@ Physical wall buttons ("Taster" in German) use the `SmartCOM.Switch` class. Thes
 
 - **Light buttons**: `SC1_M{nn}.Input{1-4}` — 4 buttons per module
 - **Blind buttons**: `SC1_M{nn}.Switch{1-2}Up` / `SC1_M{nn}.Switch{1-2}Down` — paired up/down per blind
-- Modules M01-M04 are light modules, M07-M10 are blind modules
+- On the test installation, modules M01-M04 are light modules and M07-M10 are blind modules (module numbering is per installation)
 
 #### Button Press Types
 
@@ -1202,12 +1216,12 @@ ws.on('message', (data) => {
   }
 });
 
-// Turn light on
+// Turn light on (CallMethod SwitchOn — not SetValue IsOn, see "Light Control")
 ws.send(JSON.stringify({
   methodName: "CallWithReturn",
   request: {
-    args: ["SC1_M01.Light1.IsOn", true],
-    methodName: "SetValue",
+    args: ["SC1_M01.Light1.SwitchOn", []],
+    methodName: "CallMethod",
     sequenceId: seq++
   }
 }));
@@ -1319,6 +1333,6 @@ Fetch saved pictures via: `http://{evon-host}{imageUrlClient}` with token cookie
 - `custom_components/evon/api.py` - API client with WebSocket-preferred control, HTTP fallback
 - `custom_components/evon/climate.py` - Climate entity with optimistic state
 
-**Test Scripts:**
-- `scripts/test-evon-ws-temp-recall.py` - Temperature recall test via WebSocket
-- `scripts/test-ha-temp-recall.py` - End-to-end HA climate test
+**Test Scripts (repository root — `scripts/` is gitignored apart from the two deploy helpers):**
+- `ws-security-door.mjs` - Security door / intercom / doorbell event monitor via WebSocket
+- `ws-switch-listener.mjs` - Early physical-button listener experiment; its header still records the pre-February-2026 negative finding (see "Note on Earlier Testing" above — subscribing to `IsOn` does work)

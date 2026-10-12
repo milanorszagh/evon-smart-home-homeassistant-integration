@@ -44,7 +44,7 @@ The SmartMeter provides `EnergyDataMonth` via the WebSocket API - a rolling wind
 
 | Array | Length | Description | Used |
 |-------|--------|-------------|------|
-| `EnergyDataDay` | 1 | Today's consumption value (single numeric) | Yes (today's consumption) |
+| `EnergyDataDay` | 1 | Today's consumption value (single numeric) | No — subscribed (`ws_mappings.py`) and stored as `energy_today` in the meter data, but no entity reads it; the Energy Today sensor uses `energy_today_calculated` from HA statistics |
 | `EnergyDataYear` | 12 | Monthly values, rolling 12-month window | Yes (monthly statistics) |
 | `EnergyDataWeek` | 7 | Daily values for past 7 days (last = yesterday) | No |
 | `EnergyDataActual` | 96 | 15-min intervals, rolling 24h window (last = now) | No |
@@ -61,6 +61,7 @@ The integration imports `EnergyDataMonth` into Home Assistant's **external stati
 
 ### Import Process (`statistics.py`)
 
+0. **Recorder check**: `recorder` is only an `after_dependency` in `manifest.json` (the hard dependency is `http`), so the integration can load without it. `import_energy_statistics()` calls `get_instance(hass)` and returns early with the debug message `Recorder not available, skipping statistics import` when the recorder is not loaded.
 1. **Rate Limiting**: Statistics are imported at most once per hour
 2. **Date Mapping**:
    - Window calculated as: `yesterday - 30 days` to `yesterday`
@@ -104,7 +105,7 @@ Evon WebSocket → Coordinator → statistics.py → HA Recorder Database
                     async_add_external_statistics(hass, metadata, statistics)
 ```
 
-**Important**: `statistics_during_period()` is blocking and **must** run on the recorder's own executor via `get_recorder_instance(hass).async_add_executor_job()`, NOT on the general executor (`hass.async_add_executor_job()`) — using the general executor triggers HA warnings about blocking the database executor. `async_add_external_statistics()` is an async function and can be `await`ed (or called directly in a sync context — HA schedules the write internally); see `statistics.py:252,381`.
+**Important**: `statistics_during_period()` is blocking and **must** run on the recorder's own executor via `get_recorder_instance(hass).async_add_executor_job()`, NOT on the general executor (`hass.async_add_executor_job()`) — using the general executor triggers HA warnings about blocking the database executor. `async_add_external_statistics()` is **not** a coroutine: it is an HA `@callback` (synchronous, must be called from the event loop) that queues the write on the recorder. It is called without `await` at the end of `_import_meter_statistics()` and `_import_monthly_statistics()` in `statistics.py`.
 
 ## Today's Energy Consumption
 
@@ -210,7 +211,7 @@ The statistics only include data up to **yesterday**. Today's value is not in th
 ### Wrong Dates in Chart
 
 If dates appear shifted:
-1. Check the window calculation in logs: `STATS DEBUG: ... window: YYYY-MM-DD to YYYY-MM-DD (yesterday)`
+1. Check the window calculation in the debug log: `Importing statistics for evon:energy_...: N days from YYYY-MM-DD to YYYY-MM-DD (yesterday)` (`_import_meter_statistics()` in `statistics.py`)
 2. The last date should always be yesterday
 
 ### Statistics Not Updating
@@ -218,6 +219,10 @@ If dates appear shifted:
 - Statistics import is rate-limited to once per hour
 - Force reimport by restarting Home Assistant
 - Check logs for `custom_components.evon.statistics`
+
+### "Recorder not available, skipping statistics import" in the Debug Log
+
+`recorder` is only an `after_dependency` of the integration (`manifest.json`), not a hard dependency, so Evon can load without it. `import_energy_statistics()` checks `get_instance(hass)` and returns early with that debug message when the recorder is not loaded — no `evon:energy_*` statistics are written, and the Energy Today / This Month sensors have nothing to query. Make sure the `recorder` integration is enabled (it is part of `default_config`).
 
 ### "Energy Today" or "Energy This Month" Shows Unavailable
 
@@ -243,7 +248,7 @@ If dates appear shifted:
 |-------|-------------|
 | `EnergyDataMonth` | 31-day rolling window of daily values (last = yesterday) |
 | `EnergyDataYear` | 12-month rolling window of monthly values (last = previous month) |
-| `EnergyDataDay` | Today's consumption value (single numeric) |
+| `EnergyDataDay` | Today's consumption value (single numeric) — stored as `energy_today`, not read by any entity (see "Other Available Data Arrays") |
 | `Energy` | Current total meter reading |
 | `PowerActual` | Current power consumption (W) |
 
@@ -256,7 +261,7 @@ The coordinator's `_calculate_energy_today_and_month()` method:
 4. Adds today's consumption to get this month's total
 5. Stores values in meter data as `energy_today_calculated` and `energy_this_month_calculated`
 
-**Note**: `statistics_during_period()` is a blocking call and must be run via the recorder's own executor: `get_recorder_instance(hass).async_add_executor_job()` (see `coordinator/__init__.py:840`). `async_add_external_statistics()` is an async function and is called directly in `statistics.py:252,381`.
+**Note**: `statistics_during_period()` is a blocking call and must be run via the recorder's own executor: `get_recorder_instance(hass).async_add_executor_job(statistics_during_period, …)` — see `_calculate_energy_today_and_month()` in `coordinator/__init__.py`. `async_add_external_statistics()` is an HA `@callback` (synchronous) and is called without `await` in `_import_meter_statistics()` and `_import_monthly_statistics()` in `statistics.py`.
 
 ### Feed-in Energy (Solar Export)
 

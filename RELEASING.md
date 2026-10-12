@@ -59,23 +59,30 @@ edit pyproject.toml                         # Change version = "X.Y.Z"
 edit package.json                           # Change "version": "X.Y.Z"
 npm install --package-lock-only             # Sync package-lock.json
 
-# 4. Commit
-git add -A
-git commit -m "Fix description (vX.Y.Z)"
+# 4. Commit the version bump AND the changelog entries, as in a regular release
+#    - CHANGELOG.md: add a dated section for X.Y.Z with its compare link
+#      (vX.Y.(Z-1)...vX.Y.Z); the release notes are taken from it in step 6
+#    - README.md: one row in the Version History table (version, date, highlights)
+#    (the release tag must contain both — HACS renders README from the tag)
+git add custom_components/evon/manifest.json pyproject.toml package.json package-lock.json CHANGELOG.md README.md
+git add <any fix files not already committed>
+git commit -m "Release vX.Y.Z"
 
 # 5. Create and push tag (NOT the branch)
-git tag -a vX.Y.Z -m "Fix description"
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 
-# 6. Create GitHub release
-gh release create vX.Y.Z --title "Descriptive title here" --notes "Release notes here"
+# 6. Create GitHub release — notes are the version's CHANGELOG.md section
+awk '/^## \[X.Y.Z\]/{flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > /tmp/release-notes.md
+gh release create vX.Y.Z --title "Descriptive title here" --notes-file /tmp/release-notes.md
 # NOTE: Do NOT include the version in the title — HACS auto-prepends the tag.
 
 # 7. Switch back to main and DELETE the release branch
 git checkout main
 git branch -D release/vX.Y.Z
 
-# 8. Apply the same fix to main (if not already there)
+# 8. Apply the same fix to main (if not already there), including the CHANGELOG.md
+#    section and the README row, so main's history stays complete
 # Either cherry-pick or manually apply the changes
 ```
 
@@ -109,7 +116,11 @@ Before releasing:
 - [ ] TypeScript builds (`npm run build`)
 - [ ] MCP tests pass (`npm run test:mcp`)
 - [ ] Mypy passes or errors are tracked (`mypy custom_components/evon/ --ignore-missing-imports`)
-- [ ] `npm audit --audit-level=moderate` clean (must be — CI fails the build on high)
+- [ ] `npm audit --audit-level=moderate` clean. CI only fails the build at `--audit-level=high`;
+      the stricter local threshold is recommended so moderate advisories are dealt with
+      before they escalate.
+- [ ] hassfest passes locally, as it does in CI
+      (`docker run --rm --platform linux/amd64 -v "$PWD":/github/workspace ghcr.io/home-assistant/hassfest`)
 - [ ] `pip-audit -r requirements-test.txt` reviewed. Advisory only, like the CI step:
       Home Assistant hard-pins its dependencies (e.g. `cryptography==48.0.1`), so
       findings there usually cannot be fixed downstream and clear when HA bumps them.

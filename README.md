@@ -1,27 +1,22 @@
 # Evon Smart Home Integration
 
-<img src="custom_components/evon/icon.png" alt="Evon Smart Home" width="128" align="right">
+![Evon Smart Home](https://brands.home-assistant.io/evon/icon.png)
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![CI](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration/graph/badge.svg)](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![IoT Class](https://img.shields.io/badge/IoT_Class-local_push-blue.svg)](https://developers.home-assistant.io/docs/creating_integration_manifest#iot-class)
 [![HA Version](https://img.shields.io/badge/Home_Assistant-2026.8+-blue.svg)](https://www.home-assistant.io/)
-[![Python](https://img.shields.io/badge/Python-3.14-blue.svg)](https://www.python.org/)
 
 Home Assistant custom integration for [evon Smart Home](https://building.schrack.at/evon-smarthome-partner/) systems.
 
 > **evon is now Schrack Smart Building.** evon Smart Home has been taken over by [Schrack Technik](https://building.schrack.at/) and the product and app are being renamed *Schrack Smart Building*. Nothing changes for this integration: it works with systems carrying either name, the integration keeps the `evon` domain and entity IDs, and the remote-access relay (`my.evon-smarthome.com`) is unchanged.
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
-
 ## Supported Devices
 
 | Device Type | Features |
 |-------------|----------|
-| **Lights** | On/off, brightness control, color temperature (RGBW lights), relay outputs — L1144/L1244 (on/off only) |
+| **Lights** | On/off, brightness control, color temperature (RGBW lights), identify (flash the light) |
 | **Light Groups** | Control multiple lights as a single entity |
 | **Blinds/Covers** | Open/close/stop, position, tilt angle |
 | **Blind Groups** | Control multiple blinds as a single entity |
@@ -34,27 +29,32 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 | **Temperature Sensors** | Room temperature readings |
 | **Relay Outputs** | On/off light entities for relay modules (L1144, L1244) |
 | **Bathroom Radiators** | Electric heater control with timer |
-| **Scenes** | Trigger Evon-defined scenes from Home Assistant |
+| **Scenes** | Trigger scenes defined in your evon system from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
 | **Intercoms** | Door open/closed state, doorbell events, connection status |
-| **Cameras** | Live feed from 2N intercom cameras, snapshot-based video recording |
+| **Cameras** | Camera image from 2N intercoms (still image, refreshed when viewed), snapshot-based video recording |
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
-| **Physical Buttons** | Wall button (Taster) press events — single, double, and long press detection. Not to be confused with relay switches above — Evon uses class `SmartCOM.Switch` for physical buttons. |
+| **Wall Buttons (Taster)** | Single, double and long press events (the push buttons on the wall, not the relay outputs above) |
 
 ---
 
 ## Installation
 
+### Requirements
+
+- Home Assistant 2026.8.0 or newer
+- The **Energy Today** / **Energy This Month** sensors and the energy statistics import need the `recorder` integration; the media browser for camera recordings needs the `media_source` integration. Both are part of `default_config`.
+
 ### Via HACS (Recommended)
 
 1. Make sure [HACS](https://hacs.xyz/) is installed
-2. Click the button below to add the repository:
+2. Add this repository to HACS by clicking the button below:
 
    [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 
-   Or manually: **HACS** → **Integrations** → **⋮** → **Custom repositories** → Add `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration` as **Integration**
+   Or manually: open **HACS** → **⋮** (top right) → **Custom repositories**, paste `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`, choose the type **Integration** and click **Add**
 
-3. Click **Download** and restart Home Assistant
+3. Search for **Evon Smart Home** in HACS, click **Download** and restart Home Assistant
 4. Add the integration:
 
    [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=evon)
@@ -77,19 +77,19 @@ The integration supports two connection methods:
 
 | Method | When to Use |
 |--------|-------------|
-| **Local Network** (Recommended) | When Home Assistant is on the same network as your Evon system. Faster and more reliable. |
+| **Local Network** (Recommended) | When Home Assistant is on the same network as your evon system. Faster and more reliable. |
 | **Remote Access** | When connecting from outside your home network (e.g., cloud-hosted Home Assistant). |
 
 ### Local Network Setup
 
 1. Select **Local network** as connection type
-2. Enter your Evon system's local IP address or hostname (e.g., `http://192.168.1.100`)
+2. Enter your evon system's local IP address or hostname (e.g., `http://192.168.1.100`)
 3. Enter your username and password
 
 ### Remote Access Setup
 
 1. Select **Remote access** as connection type
-2. Enter your **Engine ID** (found in your Evon system settings or documentation)
+2. Enter your **Engine ID** (4–12 letters/digits, found in your evon system settings or documentation)
 3. Enter your username and password (same credentials as local login)
 
 **Note:** Local network connection is recommended for faster response times and better reliability. Only use remote access when you cannot connect locally.
@@ -104,8 +104,8 @@ After installation, configure via **Settings** → **Devices & Services** → **
 
 | Option | Description |
 |--------|-------------|
-| **Sync areas from Evon** | Automatically assign devices to HA areas based on Evon room assignments |
-| **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers) |
+| **Sync areas from Evon** | Automatically assign devices to HA areas based on evon room assignments |
+| **Non-dimmable lights** | Select lights that should be on/off only (useful for LED strips with PWM controllers). Only shown when at least one dimmable light exists. |
 
 **HTTP API vs WebSocket** (collapsible section):
 
@@ -118,22 +118,16 @@ After installation, configure via **Settings** → **Devices & Services** → **
 
 | Option | Description |
 |--------|-------------|
-| **Max recording duration** | Maximum recording duration in seconds (30-3600, default: 300). Prevents forgotten recordings from filling disk. |
+| **Max recording duration (seconds)** | Maximum recording duration in seconds (30-3600, default: 300). Prevents forgotten recordings from filling disk. |
 | **Recording output format** | Choose "MP4 only" or "MP4 + JPEG frames" to also save individual frames. |
 
-**Physical Buttons** (collapsible section, shown when physical buttons are detected):
+**Physical Buttons** (collapsible section, shown when wall buttons are detected):
 
 | Option | Description |
 |--------|-------------|
-| **Double-click detection delay** | Time window for detecting double-press (0.2–1.4 seconds, default: 0.8s). Lower values make single-press faster but may miss double-presses. |
+| **Double-click delay (seconds)** | Time to wait after a button release before firing a single press event (0.2–1.4 seconds, default: 0.8). A longer delay improves double-press detection but makes single presses feel slower. |
 
-**Debug Logging** (collapsible section):
-
-| Option | Description |
-|--------|-------------|
-| **API** | Enable debug logging for HTTP API requests and responses. |
-| **WebSocket** | Enable debug logging for WebSocket messages. |
-| **Coordinator** | Enable debug logging for the data coordinator. |
+**Debug Logging** (collapsible section): per-component debug toggles for the API, WebSocket and coordinator — see [Debug Logging](#debug-logging) under Troubleshooting.
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.
 
@@ -147,8 +141,9 @@ The integration creates repair issues in **Settings** → **System** → **Repai
 | **WebSocket disconnected** | Warning when the real-time WebSocket connection is lost. Auto-clears on reconnect. |
 | **Stale entities cleaned** | Notice when orphaned entities are removed (dismissible). |
 | **Relay migrated to light** | Notice when relay switch entities are migrated to light entities (dismissible). |
-| **Re-authentication required** | Triggered when credentials become invalid. Guides you through re-entering credentials. |
 | **Config migration failed** | Error if configuration was created with a newer incompatible version. |
+
+If your credentials stop working, Home Assistant's own re-authentication prompt appears on the integration card (**Settings** → **Devices & Services**) and guides you through entering new credentials.
 
 ### Translations
 
@@ -168,38 +163,17 @@ Supported languages:
 
 WebSocket is **enabled by default** for instant state synchronization and device control. To disable, check **"Use HTTP API only"** in options.
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        THE WEBSOCKET ADVANTAGE                          │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│   HTTP Polling (old)              WebSocket (default)                   │
-│   ──────────────────              ──────────────────────                │
-│                                                                         │
-│   HA ──────► Evon                 HA ◄═══════════════► Evon             │
-│      poll     │                         persistent                      │
-│      every    │                         bidirectional                   │
-│      30s      ▼                         connection                      │
-│            response                                                     │
-│                                   • State changes push instantly        │
-│   • State can be 30s stale        • Commands execute in <50ms           │
-│   • Control takes 200-500ms       • Single connection, no handshakes    │
-│   • Constant network traffic      • Event-driven, minimal traffic       │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
 | Feature | HTTP Only | WebSocket (Default) |
 |---------|-----------|---------------------|
-| **State updates** | Up to 30 seconds | Instant (<100ms) |
-| **Control response** | ~200-500ms | Instant (<50ms) |
-| **Poll interval** | 30 seconds | 60 seconds (safety net) |
+| **State updates** | Up to 30 seconds | Instant |
+| **Control response** | Noticeable delay | Instant |
+| **Poll interval** | 30 seconds (default) | 60 seconds (safety net) |
 | **Network traffic** | Continuous polling | Event-driven |
 
 **How it works:**
 - **Bidirectional communication**: Same WebSocket connection handles both state updates AND device control
 - **State updates**: When a light is turned on via a physical wall button (Taster), HA updates immediately (no polling delay)
-- **Device control**: Commands execute in <50ms - tap a light and it responds instantly
+- **Device control**: Commands are sent over the open connection — tap a light and it responds instantly
 - **Automatic fallback**: If WebSocket is unavailable, commands fall back to HTTP API seamlessly
 - HTTP polling continues at reduced frequency (1 minute) as a safety net
 - For remote connections, WebSocket connects via `wss://my.evon-smarthome.com/`
@@ -221,20 +195,20 @@ WebSocket is **enabled by default** for instant state synchronization and device
 When using remote access via `my.evon-smarthome.com`:
 
 - **SSL/TLS**: All connections use HTTPS with certificate verification
-- **Authentication**: Requires your Evon credentials and Engine ID
-- **Relay Server**: Traffic passes through Evon's relay server, which proxies requests to your local system
+- **Authentication**: Requires your evon credentials and Engine ID
+- **Relay Server**: Traffic passes through the evon relay server, which proxies requests to your local system
 
 **Recommendations:**
 - Use **local network** connection when possible (faster and doesn't rely on external servers)
-- Keep your Evon credentials secure and don't share them
+- Keep your evon credentials secure and don't share them
 - The Engine ID is not secret but identifies your specific system
 
 ### Network Security
 
 For local connections:
-- Ensure your Evon system is on a trusted network
+- Ensure your evon system is on a trusted network
 - Consider using a VLAN to isolate IoT devices
-- The integration uses HTTP by default for local connections (most Evon systems don't have HTTPS enabled locally)
+- The integration uses HTTP by default for local connections (most evon systems don't have HTTPS enabled locally)
 
 ---
 
@@ -244,12 +218,11 @@ For local connections:
 
 - Turn on/off
 - Brightness control (0-100%)
-- Color temperature control for RGBW lights (warm to cool white) *
+- Color temperature control for RGBW lights (warm to cool white)
 - Light Groups: Control multiple lights as a single entity
 - Relay outputs (L1144/L1244 modules) appear as on/off lights automatically
 - Dimmable lights can be configured as non-dimmable (useful for LED strips with PWM controllers)
-
-\* *RGBW color temperature support is untested - please report issues if you have RGBW Evon modules*
+- **Identify** button: every light has an Identify button (in the device's configuration section) that briefly flashes the light, so you can tell which physical light an entity belongs to
 
 ### Covers (Blinds)
 
@@ -268,7 +241,7 @@ For local connections:
   - **Eco** - Energy saving mode
   - **Away** - Protection mode (freeze protection in winter, heat protection in summer)
 
-The Evon system automatically decides when to heat or cool based on the target temperature and the global Season Mode setting.
+The evon system automatically decides when to heat or cool based on the target temperature and the global Season Mode setting.
 
 ### Season Mode
 
@@ -280,48 +253,47 @@ Options:
 
 ### Home State
 
-Switch between home-wide modes defined in your Evon system:
+Switch between home-wide modes defined in your evon system:
 
 - **At Home** - Normal home operation
 - **Night** - Night mode
 - **Work** - Away at work
 - **Holiday** - Vacation mode
 
-These states trigger automations in the Evon system and can be used in Home Assistant automations as well.
+These states trigger automations in the evon system and can be used in Home Assistant automations as well.
 
-The select entity's option values are `at_home`, `night`, `work` and `holiday` (the same names the `evon.set_home_state` action uses). The raw Evon state ID is still available in the entity's `evon_id` attribute.
+The select entity's option values are `at_home`, `night`, `work` and `holiday` (the same names the `evon.set_home_state` action uses). The raw evon state ID is still available in the entity's `evon_id` attribute.
 
-> **Upgrading from 1.22 or earlier:** the options used to be the raw Evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Those values are still accepted by the `select.select_option` action for now (with a warning in the log; planned removal in 1.25), but state conditions and dashboards that compare against the old values need to be updated.
+> **Upgrading from 1.22 or earlier:** the options used to be the raw evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Those values are still accepted by the `select.select_option` action for now (with a warning in the log; planned removal in 1.25), but state conditions and dashboards that compare against the old values need to be updated.
 
 ### Sensors
 
 - Temperature sensors from climate devices
 - Smart meter:
-  - Power (W), Energy Total (kWh), Energy 24h Rolling
-  - **Energy Today** (kWh) - today's consumption, calculated from HA statistics
-  - **Energy This Month** (kWh) - this month's total, combining Evon data with today's stats
+  - Power (W), Energy Total (kWh), Energy (24h Rolling)
+  - Energy Today and Energy This Month (kWh) - calculated sensors, see [Energy Statistics](#energy-statistics) below
   - Voltage per phase (V) - L1, L2, L3
   - Current per phase (A) - L1, L2, L3
   - Frequency (Hz)
   - Feed-in Energy Total (kWh) - for solar/grid export tracking
 - Air quality: CO2 (ppm), Humidity (%)
 
-**Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from Evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
+**Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
 
-#### Daily Energy Statistics
+#### Energy Statistics
 
 The integration provides two calculated sensors for easy energy tracking:
 
 | Sensor | Description |
 |--------|-------------|
-| **Energy Today** | Today's consumption, calculated from HA statistics on the Energy Total sensor |
-| **Energy This Month** | This month's total, combining Evon's daily data (previous days) with today's consumption |
+| **Energy Today** | Today's consumption, calculated from Home Assistant's statistics on the Energy Total sensor |
+| **Energy This Month** | This month's total, combining the daily values reported by your evon system (previous days) with today's consumption |
 
-These sensors update automatically with each coordinator refresh.
+These sensors update automatically with each refresh. They need the `recorder` integration (part of `default_config`).
 
-The integration also imports **daily energy consumption data** from Evon's `EnergyDataMonth` into Home Assistant's external statistics. This provides accurate daily consumption values for the **previous 31 days** (not including today).
+The integration also imports the **daily energy consumption** reported by your evon smart meter into Home Assistant's long-term statistics. This provides accurate daily values for the **previous 31 days** (not including today), plus monthly totals and feed-in energy where your meter reports them.
 
-**Statistic ID:** `evon:energy_smartmeter{ID}` (e.g., `evon:energy_smartmeter3006939`)
+**Statistic IDs:** `evon:energy_<meter>`, `evon:feed_in_<meter>` and `evon:energy_monthly_<meter>`, where `<meter>` is the meter's ID in lowercase (e.g., `evon:energy_smartmeter3006939`)
 
 Display in a dashboard using the `statistics-graph` card:
 
@@ -356,19 +328,22 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 
 The integration provides device triggers for automations:
 
-- **Doorbell pressed** - Triggered when a doorbell is pressed on an intercom *
+- **Doorbell pressed** - on intercom devices, when the doorbell is pressed
+- **Button single press**, **Button double press** and **Button long press** - on every wall button (Taster) device
 
-To use: Go to **Automations** → **Create Automation** → **Device** → Select your intercom → **Doorbell pressed**
+To use: Go to **Settings** → **Automations & Scenes** → **Create Automation** → **Device** → select your intercom or wall button → pick the trigger
 
 ### Events
 
 The integration fires Home Assistant events that can be used in automations:
 
-- **`evon_doorbell`**: Fired when a doorbell is pressed on an intercom *
-  - Event data: `device_id` (intercom instance ID), `name` (intercom name)
+- **`evon_doorbell`**: Fired when a doorbell is pressed on an intercom
+  - Event data: `device_id` (intercom ID), `name` (intercom name)
   - Use in automations to trigger notifications, announcements, or other actions
-
-\* *Doorbell events are untested - please report issues if you have 2N intercoms*
+- **`evon_button_press`**: Fired for every detected wall button press
+  - Event data: `device_id` (button ID), `name` (button name), `press_type` (`single_press`, `double_press` or `long_press`)
+- **`evon_recording_finished`**: Fired when a camera recording has been saved
+  - Event data: `entity_id` (camera entity), `path` (path of the saved MP4 file), `frames` (number of captured frames; included when the recording was stopped automatically at the maximum duration)
 
 ### Event Entities
 
@@ -377,52 +352,56 @@ The integration fires Home Assistant events that can be used in automations:
 
 ### Cameras
 
-Cameras from 2N intercoms are supported with live feed capability:
+Cameras from 2N intercoms are supported:
 
-- **Live feed**: Near-real-time image updates via WebSocket
-- **Snapshot on demand**: Triggers image capture from the intercom camera
+- **Camera image**: A still image that is refreshed each time you view it — the integration asks the intercom for a fresh snapshot and fetches the resulting JPEG
 - **Error monitoring**: Shows connection status
-- **Saved pictures**: Historical doorbell snapshots available as image entities
-
-The camera entity provides a still image that updates when you view it. The integration triggers an image request via WebSocket and fetches the resulting JPEG from the Evon server.
+- **Saved pictures**: Historical doorbell snapshots available as image entities (see [Doorbell Snapshots](#doorbell-snapshots))
 
 **Camera Recording:**
 
-Since Evon cameras are snapshot-based (no RTSP stream), the integration provides a custom recording feature that rapidly polls snapshots and stitches them into an MP4 video:
+Since the cameras are snapshot-based (no video stream), the integration provides a recording feature that rapidly polls snapshots and stitches them into an MP4 video:
 
-- **Start/Stop via services**: `evon.start_recording` and `evon.stop_recording`
+- **Start/stop via actions**: `evon.start_recording` and `evon.stop_recording` (see [Actions](#actions))
 - **Recording switch**: Toggle entity for easy dashboard control
 - **Timestamp overlay**: Each frame includes a burned-in timestamp
 - **Configurable output**: MP4 only, or MP4 + individual JPEG frames
-- **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings
-- **Output location**: Saved to `/media/evon_recordings/` in your HA instance
-- **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, recent recordings list with inline video playback, and a link to the media browser
-- **Media browser access**: Recordings are accessible via HA's media browser under **My media → evon_recordings**
+- **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings. The `evon_recording_finished` event fires when a recording has been saved.
+- **Storage location**: Recordings are saved in Home Assistant's local media folder — `/media/evon_recordings` on Home Assistant OS and Docker, `<config>/media/evon_recordings` on venv installs. Recordings made with versions before 1.23.0 are moved there automatically.
+- **Media browser**: Recordings appear in Home Assistant's media browser under **My media → evon_recordings** (requires the `media_source` integration, part of `default_config`)
+- **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, a list of recent recordings with inline video playback, and a link to the media browser
 
-**Note:** Frame rate is limited by hardware response time (~0.5-2 FPS). The result is more of a timelapse than smooth video, but is useful for security and monitoring purposes.
+**Note:** The frame rate is limited by how quickly the intercom delivers snapshots (roughly 0.5–2 frames per second). The result is more of a timelapse than smooth video, but is useful for security and monitoring purposes.
 
 **Recording Card Usage:**
 
-Add the recording card to any dashboard (works great inside Bubble Card popups):
+The integration serves the card at `/evon/evon-camera-recording-card.js`, but you have to register it as a dashboard resource once:
+
+1. Go to **Settings** → **Dashboards** → **⋮** (top right) → **Resources** → **Add resource** (the Resources entry is only visible with **Advanced mode** enabled in your user profile)
+2. Enter the URL `/evon/evon-camera-recording-card.js` and choose the type **JavaScript module**
+3. Reload the browser page
+
+If you manage dashboards in YAML, add the resource to `configuration.yaml` instead:
+```yaml
+lovelace:
+  resources:
+    - url: /evon/evon-camera-recording-card.js
+      type: module
+```
+
+Then add the card to any dashboard (works great inside Bubble Card popups):
 ```yaml
 type: custom:evon-camera-recording-card
 entity: camera.your_camera_entity
 recording_switch: switch.your_camera_recording  # optional, auto-derived from entity if omitted
 ```
 
-The card auto-registers as a Lovelace resource on integration setup — no manual YAML imports needed.
-
-**2N Intercom Camera Specifications:**
-- Frame rate: Up to 10 fps for streaming
-- Resolutions: 160×120 to 1280×960 (model dependent)
-- Historical buffer: 30 seconds of footage retained on device
-
 ### Doorbell Snapshots
 
-When someone rings the doorbell, Evon automatically captures and stores a snapshot. These are exposed as image entities:
+When someone rings the doorbell, evon automatically captures and stores a snapshot. These are exposed as image entities:
 
-- **Up to 10 snapshots** stored by Evon (their limit)
-- **Entities**: `image.eingangstur_snapshots_snapshot_1` through `..._snapshot_10`
+- **Up to 10 snapshots** stored by evon (their limit)
+- **Entities**: One image entity per snapshot, grouped in a "<Door name> Snapshots" device — e.g., `image.front_door_snapshots_snapshot_1` through `..._snapshot_10`
 - **Attributes**: Each image includes `datetime` timestamp
 - **Dashboard ready**: Add to any Lovelace card for a visual doorbell history
 
@@ -438,15 +417,11 @@ cards:
     square: true
     cards:
       - type: picture-entity
-        entity: image.eingangstur_snapshots_snapshot_1
+        entity: image.front_door_snapshots_snapshot_1
         show_state: false
         show_name: false
       # ... repeat for snapshot_2 through snapshot_10
 ```
-
-### Relay Outputs
-
-Evon relay modules (`SmartCOM.Light.Light` / L1144, L1244) are exposed as **on/off light entities** (`ColorMode.ONOFF`) — no dimming, just on/off control. Not to be confused with physical wall buttons (Tasters), which use a different Evon class (`SmartCOM.Switch`) and are exposed as [event entities](#event-entities).
 
 ### Bathroom Radiators
 
@@ -454,24 +429,26 @@ Evon relay modules (`SmartCOM.Light.Light` / L1144, L1244) are exposed as **on/o
 
 ---
 
-## Services
+## Actions
 
-The integration provides the following services that can be called from automations, scripts, or the Developer Tools:
+The integration provides the following actions that can be called from automations, scripts, or the Developer Tools:
 
-| Service | Description |
-|---------|-------------|
-| `evon.refresh` | Force refresh all device states from the Evon system |
+| Action | Description |
+|--------|-------------|
+| `evon.refresh` | Force refresh all device states from the evon system |
 | `evon.reconnect_websocket` | Reconnect the WebSocket connection (use if real-time updates stop working) |
 | `evon.set_home_state` | Set home state: `at_home`, `night`, `work`, `holiday` |
 | `evon.set_season_mode` | Set season mode: `heating` or `cooling` |
-| `evon.all_lights_off` | Turn off all Evon lights at once |
-| `evon.all_blinds_close` | Close all Evon blinds at once |
-| `evon.all_blinds_open` | Open all Evon blinds at once |
+| `evon.all_lights_off` | Turn off all evon lights at once |
+| `evon.all_blinds_close` | Close all evon blinds at once |
+| `evon.all_blinds_open` | Open all evon blinds at once |
 | `evon.all_climate_comfort` | Set all climate devices to Comfort preset |
 | `evon.all_climate_eco` | Set all climate devices to Eco (energy saving) preset |
 | `evon.all_climate_away` | Set all climate devices to Away (freeze/heat protection) preset |
-| `evon.start_recording` | Start recording snapshots from a camera (target entity_id + optional duration) |
-| `evon.stop_recording` | Stop an active camera recording and save the video |
+| `evon.start_recording` | Start recording snapshots from a camera. Fields: `entity_id` (camera entity, required), `duration` (optional, 30–3600 seconds; uses the configured maximum if omitted) |
+| `evon.stop_recording` | Stop an active camera recording and save the video. Field: `entity_id` (camera entity, required) |
+
+For the recording actions, `entity_id` is a data field (under `data:`), not a `target:`.
 
 ### Example Automations
 
@@ -479,23 +456,23 @@ The integration provides the following services that can be called from automati
 ```yaml
 automation:
   - alias: "Refresh Evon on startup"
-    trigger:
-      - platform: homeassistant
+    triggers:
+      - trigger: homeassistant
         event: start
-    action:
+    actions:
       - delay: "00:00:30"
-      - service: evon.refresh
+      - action: evon.refresh
 ```
 
 **Doorbell notification (for 2N intercoms):**
 ```yaml
 automation:
   - alias: "Doorbell notification"
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: evon_doorbell
-    action:
-      - service: notify.mobile_app
+    actions:
+      - action: notify.mobile_app
         data:
           title: "Doorbell"
           message: "Someone is at {{ trigger.event.data.name }}"
@@ -505,11 +482,11 @@ automation:
 ```yaml
 automation:
   - alias: "Close blinds at sunset"
-    trigger:
-      - platform: sun
+    triggers:
+      - trigger: sun
         event: sunset
-    action:
-      - service: cover.close_cover
+    actions:
+      - action: cover.close_cover
         target:
           entity_id: cover.living_room_blinds
 ```
@@ -518,12 +495,12 @@ automation:
 ```yaml
 automation:
   - alias: "Away mode when leaving"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: person.me
         from: "home"
-    action:
-      - service: evon.set_home_state
+    actions:
+      - action: evon.set_home_state
         data:
           state: work
 ```
@@ -532,23 +509,23 @@ automation:
 ```yaml
 automation:
   - alias: "All lights off at midnight"
-    trigger:
-      - platform: time
+    triggers:
+      - trigger: time
         at: "00:00:00"
-    action:
-      - service: evon.all_lights_off
+    actions:
+      - action: evon.all_lights_off
 ```
 
 **Eco mode when leaving home:**
 ```yaml
 automation:
   - alias: "Eco climate when away"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: person.me
         from: "home"
-    action:
-      - service: evon.all_climate_eco
+    actions:
+      - action: evon.all_climate_eco
 ```
 
 ### Physical Button Automations
@@ -559,13 +536,13 @@ Physical wall buttons (Taster) fire event entities with three press types: `sing
 ```yaml
 automation:
   - alias: "Toggle desk lamp relay on button press"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: event.hallway_button
         attribute: event_type
         to: "single_press"
-    action:
-      - service: light.toggle
+    actions:
+      - action: light.toggle
         target:
           entity_id: light.desk_lamp  # relay output entity (on/off light)
 ```
@@ -574,13 +551,13 @@ automation:
 ```yaml
 automation:
   - alias: "Movie mode on double press"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: event.living_room_button
         attribute: event_type
         to: "double_press"
-    action:
-      - service: scene.turn_on
+    actions:
+      - action: scene.turn_on
         target:
           entity_id: scene.movie_mode
 ```
@@ -589,26 +566,26 @@ automation:
 ```yaml
 automation:
   - alias: "All lights off on long press"
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: event.bedroom_button
         attribute: event_type
         to: "long_press"
-    action:
-      - service: evon.all_lights_off
+    actions:
+      - action: evon.all_lights_off
 ```
 
 **Using the bus event (for advanced automations):**
 ```yaml
 automation:
   - alias: "Button press notification"
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: evon_button_press
         event_data:
           press_type: double_press
-    action:
-      - service: notify.mobile_app
+    actions:
+      - action: notify.mobile_app
         data:
           title: "Button Pressed"
           message: "{{ trigger.event.data.name }} was double-pressed"
@@ -618,14 +595,14 @@ automation:
 ```yaml
 automation:
   - alias: "Summer cooling mode"
-    trigger:
-      - platform: numeric_state
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.outdoor_temperature
         above: 25
         for:
           hours: 2
-    action:
-      - service: evon.set_season_mode
+    actions:
+      - action: evon.set_season_mode
         data:
           mode: cooling
 ```
@@ -634,7 +611,7 @@ automation:
 
 ## MCP Server
 
-An MCP (Model Context Protocol) server is included for AI assistant integration (e.g., Claude). This allows AI assistants to control your Evon devices directly.
+An MCP (Model Context Protocol) server is included for AI assistant integration (e.g., Claude). This allows AI assistants to control your evon devices directly.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
@@ -646,26 +623,26 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for setup instructions and available tools.
 
 | Problem | Solution |
 |---------|----------|
-| **"Failed to connect"** during setup | Verify the Evon system is powered on and reachable. Try pinging the IP address. |
-| **Devices show "Unavailable"** | Check network connectivity. Use `evon.reconnect_websocket` service to re-establish connection. |
+| **"Failed to connect"** during setup | Verify the evon system is powered on and reachable. Try pinging the IP address. |
+| **Devices show "Unavailable"** | Check that the evon system is reachable from Home Assistant, then reload the integration (see below). |
 | **Slow state updates** | Ensure WebSocket is enabled (uncheck "Use HTTP API only" in options). |
-| **Remote access not working** | Verify Engine ID is correct. Check that remote access is enabled in your Evon system. |
+| **Remote access not working** | Verify Engine ID is correct. Check that remote access is enabled in your evon system. |
+
+**Devices show "Unavailable":** this means the integration could not fetch device states from the evon system. Check that the system is reachable from Home Assistant (try pinging its IP address), then reload the integration via **Settings** → **Devices & Services** → **Evon** → **⋮** → **Reload**. A lost WebSocket connection alone does not make devices unavailable — the integration falls back to polling.
 
 ### WebSocket Troubleshooting
 
-```
-Check WebSocket status in Home Assistant logs:
-Settings → System → Logs → Filter by "evon"
+Check the WebSocket status in the Home Assistant logs (**Settings** → **System** → **Logs**, search for "evon") or on the **WebSocket Status** diagnostic sensor. Messages you may see in the log:
 
-Common WebSocket messages:
-✓ "WebSocket connected" - Working normally
-✗ "WebSocket connection failed" - Network/firewall issue
-✗ "WebSocket authentication failed" - Check credentials
-```
+| Message | Meaning |
+|---------|---------|
+| `WebSocket connected to Evon Smart Home` | Working normally |
+| `WebSocket connection failed: ...` | Network / firewall issue — the error details follow the colon |
+| `WebSocket login failed: Invalid credentials` | Check your username and password |
 
 If WebSocket keeps disconnecting:
 1. Check your router/firewall allows WebSocket connections
-2. Try the `evon.reconnect_websocket` service
+2. Try the `evon.reconnect_websocket` action
 3. As a last resort, enable "Use HTTP API only" in options
 
 ### Entity Issues
@@ -680,13 +657,13 @@ If WebSocket keeps disconnecting:
 
 The easiest way to enable debug logging is via the integration options:
 
-**Settings** → **Devices & Services** → **Evon Smart Home** → **Configure** → Enable the relevant debug toggle(s):
+**Settings** → **Devices & Services** → **Evon Smart Home** → **Configure** → **Debug Logging** → Enable the relevant toggle(s):
 
 | Option | What it logs |
 |--------|-------------|
-| **Debug logging: API** | HTTP requests, responses, authentication |
-| **Debug logging: WebSocket** | WebSocket messages, connection events |
-| **Debug logging: Coordinator** | Data processing, entity updates |
+| **API** | HTTP requests, responses, authentication |
+| **WebSocket** | WebSocket messages, connection events |
+| **Coordinator** | Data processing, entity updates |
 
 Alternatively, enable full debug logging via `configuration.yaml`:
 
@@ -705,7 +682,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **1.23.0** | unreleased | Home Assistant 2026.10 compatibility, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select option values are now `at_home` / `night` / `work` / `holiday` |
+| **1.23.0** | unreleased | HA 2026.10 compatibility, recordings in the media folder, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select options are now `at_home` / `night` / `work` / `holiday` |
 | **1.22.1** | 2026-08-24 | Quiet systems no longer disconnect every 3 minutes |
 | **1.22.0** | 2026-08-07 | Post-command bounce-back fixed, camera recordings served through an authenticated endpoint, many review fixes. **Breaking:** minimum HA 2026.5.0 (Python 3.14), Node 24 for the MCP server |
 | **1.21.0** | 2026-03-24 | HA 2026.3 compatibility, HACS hardening, security fixes |
@@ -718,7 +695,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 | **1.17.0** | 2026-02-08 | Camera recording with a custom Lovelace card |
 | **1.16.0** | 2026-02-07 | Energy Today and Energy This Month sensors |
 | **1.15.0** | 2026-02-02 | Camera live feed, doorbell snapshots, security door sensors |
-| **1.14.0** | 2026-02-01 | WebSocket device control, security doors and intercoms, light and blind groups |
+| **1.14.0 – 1.14.3** | 2026-02-01 – 06 | WebSocket device control, security doors and intercoms, light and blind groups, climate WebSocket control fixes |
 | **1.13.0** | 2026-01-31 | WebSocket real-time state updates |
 | **1.12.0** | 2026-01-30 | Remote access via the relay server, security improvements |
 | **1.11.0** | 2026-01-29 | Scenes, smart meter current / frequency / feed-in sensors |
@@ -729,7 +706,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 | **1.6.0** | 2026-01-15 | Automatic stale entity cleanup |
 | **1.5.0 – 1.5.2** | 2026-01-15 | Home State selector |
 | **1.3.0 – 1.4.1** | 2026-01-15 | Smart meter, air quality and valve sensors, diagnostics, blind control fix |
-| **1.0.0 – 1.2.1** | | Initial release, sensors and switches, options and reconfigure flows, area sync, German translations |
+| **1.0.0 – 1.2.0** | 2026-01-15 | Initial release, sensors and switches, options and reconfigure flows, area sync, German translations |
 
 ---
 
@@ -743,4 +720,4 @@ MIT License - see [LICENSE](LICENSE) file.
 
 ## Disclaimer
 
-This project is not affiliated with or endorsed by Evon Smart Home. Use at your own risk.
+This project is not affiliated with or endorsed by evon Smart Home, Schrack Technik or Schrack Smart Building. Use at your own risk.

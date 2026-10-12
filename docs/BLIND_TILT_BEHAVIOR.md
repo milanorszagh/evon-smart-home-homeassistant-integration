@@ -83,10 +83,10 @@ async def _normalize_tilt_direction(self):
 **Concept**: Store the last movement direction in Home Assistant and invert tilt values when needed.
 
 **Why Rejected**:
-1. Evon does not fire events for state changes
+1. The API exposes no last-direction property, and the WebSocket `ValuesChanged` events the integration receives for blinds (since v1.13.0; `ws_mappings.py` subscribes to `Position` and `Angle`, `cover.py` consumes them) carry position and angle only — direction would have to be inferred from position deltas
 2. Users can control blinds via hardware switches or Evon app
-3. Direction state would become out of sync, causing incorrect tilt behavior
-4. No reliable way to detect external changes
+3. An inferred direction would drift after hardware-switch moves, causing incorrect tilt behavior
+4. No reliable way to detect the *direction* of external changes
 
 ### Option 3: Dedicated Tilt Commands (Not Available)
 
@@ -118,58 +118,22 @@ async def _normalize_tilt_direction(self):
 
 ## Current Implementation
 
-The Home Assistant integration uses **Option 4** (match Evon app behavior):
+The Home Assistant integration uses **Option 4** (match Evon app behavior). The only tilt-specific logic is the inversion between the HA and Evon conventions, in `custom_components/evon/cover.py` (`async_open_cover_tilt`, `async_close_cover_tilt`, `async_set_cover_tilt_position`):
 
 ```python
-async def async_open_cover_tilt(self, **kwargs):
-    """Open the cover tilt (slats horizontal, letting light through)."""
-    # HA tilt 100 = open, Evon angle 0 = open
-    self._optimistic_tilt = 100
-    self._set_optimistic_timestamp()
-    self.async_write_ha_state()
-    try:
-        await self._api.set_blind_tilt(self._instance_id, 0)
-    except EvonApiError:
-        self._optimistic_tilt = None
-        self._optimistic_state_set_at = None
-        self.async_write_ha_state()
-        raise
-    self._schedule_post_command_recheck()
+# async_open_cover_tilt:  HA tilt 100 = open (horizontal), Evon angle 0 = open
+await self._api.set_blind_tilt(self._instance_id, 0)
 
-async def async_close_cover_tilt(self, **kwargs):
-    """Close the cover tilt (slats angled to block light)."""
-    # HA tilt 0 = closed, Evon angle 100 = closed
-    self._optimistic_tilt = 0
-    self._set_optimistic_timestamp()
-    self.async_write_ha_state()
-    try:
-        await self._api.set_blind_tilt(self._instance_id, 100)
-    except EvonApiError:
-        self._optimistic_tilt = None
-        self._optimistic_state_set_at = None
-        self.async_write_ha_state()
-        raise
-    self._schedule_post_command_recheck()
+# async_close_cover_tilt: HA tilt 0 = closed (blocking), Evon angle 100 = closed
+await self._api.set_blind_tilt(self._instance_id, 100)
 
-async def async_set_cover_tilt_position(self, **kwargs):
-    """Set the cover tilt position.
-    HA: 0=closed (blocking), 100=open (horizontal)
-    Evon: 0=open, 100=closed (inverted)
-    """
-    ha_tilt = kwargs[ATTR_TILT_POSITION]
-    evon_angle = 100 - ha_tilt  # Invert for Evon
-    self._optimistic_tilt = ha_tilt
-    self._set_optimistic_timestamp()
-    self.async_write_ha_state()
-    try:
-        await self._api.set_blind_tilt(self._instance_id, evon_angle)
-    except EvonApiError:
-        self._optimistic_tilt = None
-        self._optimistic_state_set_at = None
-        self.async_write_ha_state()
-        raise
-    self._schedule_post_command_recheck()
+# async_set_cover_tilt_position: convert HA (0=closed, 100=open) → Evon (0=open, 100=closed)
+ha_tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
+evon_angle = 100 - ha_tilt
+await self._api.set_blind_tilt(self._instance_id, evon_angle)
 ```
+
+Everything around those calls — the optimistic tilt value, the WS-liveness snapshot captured *before* the command await (`recheck_snapshot = self._recheck_snapshot()`) and the 5 s post-command recheck it is passed to (`_schedule_post_command_recheck(recheck_snapshot)`) — is the shared entity plumbing described under "Optimistic Updates Pattern" in `DEVELOPMENT.md`; read `cover.py` for the current code rather than a copy here.
 
 ## User Impact
 
