@@ -1,5 +1,11 @@
 # High-Severity Stability Fixes
 
+> **Status: implemented and shipped in v1.18.0 — historical record, do not execute.** Every item (P-H1, P-H2,
+> T-H1–T-H4, T-L4) is in the Fixed table (#11–#17) of `docs/CODE_ANALYSIS_BACKLOG.md` and is
+> present in the current code and listed under 1.18.0 in `CHANGELOG.md` (batched
+> statistics query, copy-on-write WebSocket updates, MCP client reconnect fixes, graceful
+> shutdown). Line numbers and runtime versions reflect February 2026.
+
 Date: 2026-02-14
 Scope: 6 high-severity issues from CODE_ANALYSIS_BACKLOG.md (P-H1, P-H2, T-H1, T-H2, T-H3, T-H4)
 Bonus: T-L4 (graceful shutdown) since we're already modifying the WS client

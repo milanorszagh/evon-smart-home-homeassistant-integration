@@ -1,16 +1,21 @@
 # Code Analysis Backlog
 
-> **Note:** This document tracks the 2026-02-13 analysis sweep through v1.21.0.
-> Post-v1.21.0 follow-ups landed on `main` and are not listed here:
+> **Note:** This document tracks the 2026-02-13 analysis sweep through v1.21.0,
+> plus the v1.22.0 pre-release review passes (RV / RV2 sections below).
+> Post-v1.21.0 follow-ups landed on `main` and are not listed in the fixed table:
 > npm audit fixes (#4), `validateConfig → requireEvonHost` refactor (#5),
 > coordinator WS handler migration to `async_update_listeners`, dimmable
-> brightness=0 when off, and always-refresh on light/switch commands.
+> brightness=0 when off, and the 5 s post-command quiesce/recheck
+> (`POST_COMMAND_QUIESCE_PERIOD`, v1.22.0) that replaced the earlier always-refresh
+> on light/switch commands. Release-level history is in `CHANGELOG.md`.
+> Suite size when this file was last updated (v1.23.0): 1330 Python tests, 23 MCP tests.
 
 Deep code analysis performed on 2026-02-13 identified **74 issues** across the
 Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
-**67 issues were fixed** across eight backlog sweep tasks. This document tracks the remaining
-**7 issues** (4 won't fix, 3 deferred/ongoing) organized by severity and category.
+**68 issues were fixed** across eight backlog sweep tasks (see the Fixed table below and the
+Summary Statistics). This document tracks the remaining **5 issues** (4 won't fix, 1 deferred — C-H7)
+organized by severity and category.
 
 ---
 
@@ -37,11 +42,11 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 | 17 | TS | Add SIGTERM/SIGINT graceful shutdown handler (T-L4) |
 | 18 | Python | Add null guard to `current_humidity` transform (P-L1) |
 | 19 | Python | Clear WS client credentials on shutdown (P-L2) |
-| 20 | Python | Optimize stale entity cleanup to run only on version upgrades (P-L4) |
+| 20 | Python | Optimize stale entity cleanup to run only on version upgrades (P-L4) *(superseded in v1.22.0: cleanup now runs on every complete, successful setup and is skipped when `coordinator.last_poll_had_partial_failures` is set — see RV-D6)* |
 | 21 | Python | Improve recording loop auto-stop error logging (P-L5) |
 | 22 | Python | Add defensive check for WS key parsing edge case (P-L6) |
 | 23 | Python | Add bounds checking for sequence ID to prevent theoretical overflow (P-L8) |
-| 24 | Python | Fix bathroom radiator `turn_off` race condition with server-side state verification (P-M1) |
+| 24 | Python | Fix bathroom radiator `turn_off` race condition with server-side state verification (P-M1) *(superseded in v1.22.0: the 3 s verify timer was removed; `EvonBathroomRadiatorSwitch.async_turn_off` now relies on the optimistic double-tap guard plus the 5 s post-command recheck)* |
 | 25 | Python | Add partial unload safeguards for service handlers (P-M2) |
 | 26 | Python | Use entity registry for energy entity_id resolution (P-M3) |
 | 27 | Python | Synchronize `update_interval` mutation in WS callback (P-M4) |
@@ -95,15 +100,15 @@ Python HA integration (18), TypeScript MCP server (27), and Tests/CI (29).
 
 #### Tests / CI
 
-| ID | Category | File | Line | Description | Status |
-|----|----------|------|------|-------------|--------|
-| C-H7 | CI | `.github/workflows/ci.yml` | 42 | **mypy runs with `continue-on-error: true`.** Type errors never fail CI. This was partially addressed (requirements now install correctly) but the flag remains because type errors still exist. Track resolution of those errors to eventually remove the flag. | Tracked separately as standalone effort |
+| ID | Category | File | Location | Description | Status |
+|----|----------|------|----------|-------------|--------|
+| C-H7 | CI | `.github/workflows/ci.yml` | "Run mypy" step (`continue-on-error: true`) | **mypy runs with `continue-on-error: true`.** Type errors never fail CI. This was partially addressed (requirements now install correctly) but the flag remains because type errors still exist. Track resolution of those errors to eventually remove the flag. | Tracked separately as standalone effort |
 
 #### v1.22.0 Pre-Release Review (2026-07)
 
 A deep review of the `fix/post-command-quiesce` branch fixed 2 security issues
 and 7 correctness bugs, plus a cleanup pass — see commits `da74d6b`
-(blockers) and `5691416` (cleanup) and the README v1.22.0 changelog. The items
+(blockers) and `5691416` (cleanup) and the v1.22.0 entry in `CHANGELOG.md`. The items
 below were surfaced by the same review but deliberately deferred; they are
 tracked here rather than lost.
 
@@ -143,12 +148,12 @@ Low-severity hardening (all fixed):
 
 The following issues were analyzed and determined to be either framework limitations, intentional design decisions, or benign behavior that doesn't warrant changes:
 
-| ID | Category | File | Line | Description | Reason |
-|----|----------|------|------|-------------|--------|
-| P-L3 | Resource Leak | `__init__.py` | 503 | **Static path / view not cleaned up on unload.** The `StaticPathConfig` for the camera card JS and the `EvonRecordingsView` (recordings are served via an authenticated view as of v1.22.0, not a static path) are registered once but never unregistered on `async_unload_entry`. They remain accessible after the integration is removed. | HA framework limitation: Home Assistant does not provide an API to unregister static paths or views. This is a known limitation affecting all integrations that register static content. |
+| ID | Category | File | Location | Description | Reason |
+|----|----------|------|----------|-------------|--------|
+| P-L3 | Resource Leak | `__init__.py` | `async_setup_entry` (frontend registration block: `async_register_static_paths` / `register_view`) | **Static path / view not cleaned up on unload.** The `StaticPathConfig` for the camera card JS and the `EvonRecordingsView` (recordings are served via an authenticated view as of v1.22.0, not a static path) are registered once but never unregistered on `async_unload_entry`. They remain accessible after the integration is removed. | HA framework limitation: Home Assistant does not provide an API to unregister static paths or views. This is a known limitation affecting all integrations that register static content. |
 | P-L7 | Security | `config_flow.py` | varies | **Config entry password stored plain text on disk.** `ConfigEntry.data[CONF_PASSWORD]` stores the user's plaintext password in `.storage/core.config_entries`. This is readable by any process with filesystem access. | HA-wide pattern: All Home Assistant integrations store credentials this way in the config entry. This is the standard practice across the entire HA ecosystem. Changing this would require framework-level support. |
 | P-L9 | HA Practices | `climate.py` | varies | **HVAC OFF maps to freeze protection, not actual off.** Setting `HVACMode.OFF` sends the freeze protection mode to the Evon controller rather than actually turning off heating. This may surprise users. | Intentional design: Freeze protection mode prevents pipe damage in cold weather. This is a safety feature that protects the user's home. The behavior is consistent with the Evon controller's intended operation. |
-| T-L9 | Maintenance | `src/ws-client.ts` | 252 | **No server-side subscription cleanup on disconnect.** `disconnect()` does not send `RegisterValuesChanged(false, ...)` to the server. The server may continue processing subscriptions for the closed connection until it detects the disconnect. (The local subscription map is intentionally retained — not cleared — so `resubscribeAll()` can restore subscriptions after reconnect.) | Benign behavior: The server automatically detects closed connections and cleans up its own state. The local subscription map now persists across reconnects (per T-H3 fix) to enable `resubscribeAll()` functionality, making explicit unsubscribe unnecessary. |
+| T-L9 | Maintenance | `src/ws-client.ts` | `disconnect()` | **No server-side subscription cleanup on disconnect.** `disconnect()` does not send `RegisterValuesChanged(false, ...)` to the server. The server may continue processing subscriptions for the closed connection until it detects the disconnect. (The local subscription map is intentionally retained — not cleared — so `resubscribeAll()` can restore subscriptions after reconnect.) | Benign behavior: The server automatically detects closed connections and cleans up its own state. The local subscription map now persists across reconnects (per T-H3 fix) to enable `resubscribeAll()` functionality, making explicit unsubscribe unnecessary. |
 
 ---
 

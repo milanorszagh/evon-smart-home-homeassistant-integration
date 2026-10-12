@@ -1,6 +1,9 @@
 # Features & Bugfix Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status: implemented and shipped in v1.18.0 — historical record, do not execute.**
+> Line numbers and runtime versions reflect February 2026.
+
+> *(Archived plan. The original "For Claude: REQUIRED SUB-SKILL … executing-plans" banner has been removed so that no agent re-runs it; the work it describes was completed in February 2026.)*
 
 **Goal:** Fix the v1.17.1 auth retry storm regression (Issue #2), add WebSocket connection quality diagnostic sensors, add doorbell event entity for 2N intercoms, and add 8 language translations.
 

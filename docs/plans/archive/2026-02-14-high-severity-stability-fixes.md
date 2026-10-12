@@ -1,6 +1,12 @@
 # High-Severity Stability Fixes — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Status: implemented and shipped in v1.18.0 — historical record, do not execute.** Every item (P-H1, P-H2,
+> T-H1–T-H4, T-L4) is in the Fixed table (#11–#17) of `docs/CODE_ANALYSIS_BACKLOG.md` and is
+> present in the current code and listed under 1.18.0 in `CHANGELOG.md` (batched
+> statistics query, copy-on-write WebSocket updates, MCP client reconnect fixes, graceful
+> shutdown). Line numbers and runtime versions reflect February 2026.
+
+> *(Archived plan. The original "For Claude: REQUIRED SUB-SKILL … executing-plans" banner has been removed so that no agent re-runs it; the work it describes was completed in February 2026.)*
 
 **Goal:** Fix all 6 high-severity issues (P-H1, P-H2, T-H1, T-H2, T-H3, T-H4) plus bonus T-L4 to eliminate silent crashes, data races, and lost WS subscriptions.
 

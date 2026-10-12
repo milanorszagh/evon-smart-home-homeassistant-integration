@@ -1,5 +1,8 @@
 # Feature Batch: Issue #2 Fix, WS Sensor, Doorbell Event, Translations
 
+> **Status: implemented and shipped in v1.18.0 — historical record, do not execute.**
+> Line numbers and runtime versions reflect February 2026.
+
 Date: 2026-02-15
 
 ## Overview

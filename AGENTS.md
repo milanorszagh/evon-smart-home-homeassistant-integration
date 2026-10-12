@@ -28,6 +28,8 @@ Integrations:
 | **CHANGELOG.md** | Everyone | The detailed version history in [Keep a Changelog](https://keepachangelog.com/) format: one section per version with Breaking / Added / Changed / Fixed / Project bullets |
 | **DEVELOPMENT.md** | Developers | Architecture, API reference, device classes, methods, code patterns, testing, MCP server setup |
 | **AGENTS.md** | AI agents | Critical API knowledge, debugging tips, gotchas, implementation patterns |
+| **RELEASING.md** | Maintainers | The release recipe: regular release from `main`, hotfix release from a previous tag, HACS compatibility, version numbering, release checklist |
+| **docs/*.md** | Developers | Deep dives: `BLIND_TILT_BEHAVIOR.md`, `ENERGY_STATISTICS.md`, `WEBSOCKET_API.md` (reverse-engineered WS protocol), `CODE_ANALYSIS_BACKLOG.md` (open analysis/mypy findings); `docs/plans/` and `docs/superpowers/` are historical 2026 design plans/specs, not current guidance |
 
 ### What Goes Where
 
@@ -41,6 +43,8 @@ Integrations:
 | Debugging tips and gotchas | AGENTS.md |
 | Code patterns and examples | DEVELOPMENT.md, AGENTS.md |
 | MCP tools/resources tables | DEVELOPMENT.md |
+| Release steps (version bump, tagging, GitHub release, hotfix) | RELEASING.md |
+| Long-form protocol/behaviour write-ups | docs/*.md |
 | Version history (one line per version) | README.md |
 | Version history (detailed, per version) | CHANGELOG.md |
 
@@ -55,52 +59,14 @@ Integrations:
 
 ## Remote Access API - CRITICAL
 
-The Evon API supports both local and remote access. **Remote access has different authentication requirements.**
+Local (`http://{local-ip}`, direct LAN, recommended) and remote (`https://my.evon-smarthome.com`, relay server) connections share the same API methods — the relay proxies to the local system — but **log in differently**. Full header/URL reference: [DEVELOPMENT.md → Remote Authentication](DEVELOPMENT.md#remote-authentication).
 
-### Connection Types
-
-| Type | Base URL | Use Case |
-|------|----------|----------|
-| **Local** | `http://{local-ip}` | Direct LAN connection (faster, recommended) |
-| **Remote** | `https://my.evon-smarthome.com` | Internet access via relay server |
-
-### Remote Login - IMPORTANT DIFFERENCES
-
-**Local login:**
-```
-POST http://{local-ip}/login
-Headers:
-  x-elocs-username: <username>
-  x-elocs-password: <encoded-password>
-```
-
-**Remote login:**
-```
-POST https://my.evon-smarthome.com/login   ← Note: /login at ROOT, NOT /{engine-id}/login
-Headers:
-  x-elocs-username: <username>
-  x-elocs-password: <encoded-password>
-  x-elocs-relayid: <engine-id>              ← REQUIRED for remote
-  x-elocs-sessionlogin: true                ← REQUIRED for remote
-  X-Requested-With: XMLHttpRequest          ← REQUIRED for remote
-```
-
-**Critical gotcha:** The remote login URL is `https://my.evon-smarthome.com/login` (at root), NOT `https://my.evon-smarthome.com/{engine-id}/login`. The engine ID goes in the `x-elocs-relayid` header only.
-
-### Remote API Calls
-
-After login, API calls use different base URLs:
-
-| Type | API Base URL |
-|------|--------------|
-| Local | `http://{local-ip}/api/instances/...` |
-| Remote | `https://my.evon-smarthome.com/{engine-id}/api/instances/...` |
-
-The actual API methods (get instances, turn on/off, etc.) are identical - the relay server proxies requests to the local Evon system.
-
-### Engine ID
-
-The Engine ID is found in your Evon system settings. It identifies your installation on the relay server (e.g., `985315`).
+Agent-critical gotchas:
+- **The remote login URL is `https://my.evon-smarthome.com/login` — at the ROOT, NOT `/{engine-id}/login`.** The Engine ID goes into the `x-elocs-relayid` header only.
+- Remote login also requires the headers `x-elocs-sessionlogin: true` and `X-Requested-With: XMLHttpRequest` (local login needs only `x-elocs-username` / `x-elocs-password`).
+- After login the Engine ID *does* appear in the path: `https://my.evon-smarthome.com/{engine-id}/api/instances/...` vs. local `http://{local-ip}/api/instances/...`.
+- Engine ID: 4–12 alphanumeric characters from the Evon system settings (e.g. `985315`); validated in both the config flow and `api.py`.
+- Every remote URL (API base, WS host, Origin, login) derives from `EVON_REMOTE_HOST` in `const.py` — never hardcode the relay host.
 
 ---
 
@@ -227,15 +193,15 @@ else:
 
 ### Climate Status (Per-Room Activity) - READ-ONLY
 
-The **Climate Status** indicates what the room's climate system is currently doing. This is **read-only** and cannot be changed directly.
+`hvac_action` reports what the room's climate system is doing. It is **read-only** and derived in `climate.py` (`hvac_action` property) from two Evon properties that the climate processor (`coordinator/processors/climate.py`) exposes as `is_on` ← `IsOn` and `is_cooling` ← `CoolingMode`:
 
-| Status | Meaning |
-|--------|---------|
-| `heating` | Actively heating the room |
-| `cooling` | Actively cooling the room |
-| `idle` | Target temperature reached, not actively heating/cooling |
+| `IsOn` | `CoolingMode` | `hvac_action` |
+|--------|---------------|---------------|
+| `false` | any | `off` (`HVACAction.OFF`) |
+| `true` | `false` | `heating` |
+| `true` | `true` | `cooling` |
 
-**Note**: The exact API property for reading this status needs verification. It may be derived from valve state or a dedicated property.
+There is **no `idle`** state — the entity only distinguishes off (`IsOn` false) from heating/cooling (`IsOn` true, split by `CoolingMode`, which mirrors the global Season Mode). It returns `None` only when the entity has no coordinator data.
 
 ### Bathroom Radiators - TOGGLE CONTROL
 
@@ -286,9 +252,9 @@ Physical wall buttons (`SmartCOM.Switch` class) are exposed as **HA event entiti
 - Press detection flows: coordinator `_handle_button_press()` → detector → `_fire_button_event()` (on_press) / `_button_press_timeout()` (on_timeout)
 - Bus event `evon_button_press` is fired with `device_id`, `name`, and `press_type`
 - Device triggers are available for automation (single/double/long press per button)
-- `SmartCOM.Light.Light` (relay outputs) are now exposed as HA light entities with `ColorMode.ONOFF` (not switches)
+- `SmartCOM.Light.Light` (relay outputs) are exposed as HA light entities with `ColorMode.ONOFF` (not switches)
 
-**Testing confirmed (February 2026):**
+**Verified on hardware:**
 - Button instances fire WebSocket events reliably
 - Single press ~190ms, double press detection within configurable delay window (default 0.8s), long press >1.5s
 - The Evon controller sends 4 different WS patterns for double-press: `True,True,False` (coalesced release), `True,False,False` (coalesced press), `True,False,True,False` (standard 4-event), and `False,True,False` (swallowed first True — controller drops the first press-down). All 4 patterns are handled by the detector.
@@ -305,11 +271,11 @@ The codebase uses **WS-native method names as canonical names** everywhere. The 
 | `SetPosition` | `AmznSetPercentage` | Blind position |
 | `SetAngle` | `SetAngle` | Blind tilt |
 
-Relay outputs (`SmartCOM.Light.Light`) are now light entities and use the same `SwitchOn`/`SwitchOff` WS control as dimmable lights.
+Relay outputs (`SmartCOM.Light.Light`) are light entities and use the same `SwitchOn`/`SwitchOff` WS control as dimmable lights.
 
-## WebSocket Control - CRITICAL FINDINGS (January 2026)
+## WebSocket Control - CRITICAL FINDINGS
 
-The integration now supports WebSocket-based device control for faster, more responsive operation. **However, there are important traps to avoid.**
+Device control goes over WebSocket first (`CallMethod`/`SetValue`), with HTTP as the fallback, for faster, more responsive operation. **There are important traps to avoid.**
 
 ### What Works via WebSocket
 
@@ -330,7 +296,7 @@ The integration now supports WebSocket-based device control for faster, more res
 
 | Device | Trap | What Happens |
 |--------|------|--------------|
-| **Switch** | `SetValue` or `CallMethod` | Returns success but hardware doesn't respond |
+| **Relay outputs** (`SmartCOM.Light.Light`) | `SetValue` on the state property or `CallMethod Switch([bool])` | Unreliable — relay outputs are lights: use `CallMethod SwitchOn`/`SwitchOff` exactly like dimmable lights (`LIGHT_MAPPINGS`; `SWITCH_MAPPINGS` in `ws_control.py` carries the same two methods) |
 | **Blind Position** | `SetValue Position` | Updates UI value but hardware doesn't move, then reverts |
 | **Light** | `CallMethod AmznTurnOn/Off` | Returns success but hardware doesn't respond |
 | **Light** | `Switch([true/false])` | Inconsistent - may toggle instead of set state on some devices |
@@ -381,7 +347,7 @@ The integration caches angle and position separately so:
 
 ### Note #4: Relay Output Control
 
-Relay outputs (`SmartCOM.Light.Light`) are now exposed as **light entities** with `ColorMode.ONOFF` (no dimming). They use `SwitchOn`/`SwitchOff` via WebSocket CallMethod, same as dimmable lights. HTTP fallback translates to `AmznTurnOn`/`AmznTurnOff`.
+Relay outputs (`SmartCOM.Light.Light`) are exposed as **light entities** with `ColorMode.ONOFF` (no dimming). They use `SwitchOn`/`SwitchOff` via WebSocket CallMethod, same as dimmable lights. HTTP fallback translates to `AmznTurnOn`/`AmznTurnOff`.
 
 **Important naming distinction:** `SmartCOM.Switch` is NOT a relay — it's the Evon class for physical wall buttons (Tasters), exposed as event entities. Relay outputs use class `SmartCOM.Light.Light` and appear as on/off lights in HA.
 ```
@@ -424,18 +390,26 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 
 ### Home Assistant Integration
 - All files in: `custom_components/evon/`
-- Entry point: `__init__.py`
+- Entry point: `__init__.py`; constants: `const.py`; integration metadata: `manifest.json`
 - API client: `api.py`
 - Base entity: `base_entity.py`
 - Data coordinator: `coordinator/` package
   - Main coordinator: `coordinator/__init__.py`
   - Button press detector: `coordinator/button_press.py` (standalone state machine, no HA dependencies)
   - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras, button_events)
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py`, `camera.py`, `camera_recorder.py` (snapshot→MP4 recording), `image.py` (doorbell snapshots)
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py` (scenes), `camera.py`, `image.py` (doorbell snapshots), `event.py` (physical buttons, doorbell)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 - Repairs: `repairs.py` (`async_create_fix_flow` for the fixable stale-entities / relay-migrated issues — HA discovers fix flows only from this `<domain>/repairs.py` module, not from `config_flow.py`)
 - WebSocket: `ws_client.py` (WebSocket client), `ws_control.py` (WebSocket control mappings), `ws_mappings.py` (WebSocket property mappings)
-- Utilities: `statistics.py` (long-term energy statistics), `device_trigger.py` (device automation triggers), `diagnostics.py` (integration diagnostics), `recordings_view.py` (authenticated HTTP view serving camera recordings)
+- Utilities: `statistics.py` (long-term energy statistics), `device_trigger.py` (device automation triggers), `diagnostics.py` (integration diagnostics), `camera_recorder.py` (snapshot→MP4 recording — a helper, not a platform), `recordings.py` (recordings folder inside HA's local media dir + one-time legacy migration, since 1.23.0), `recordings_view.py` (authenticated HTTP view serving camera recordings)
+- UI strings: `strings.json` + `translations/` (10 languages: cs, de, en, es, fr, it, pl, pt, sk, sl — `tests/test_translations.py` enforces parity); `services.yaml` (service descriptions and selectors)
+- Frontend: `www/evon-camera-recording-card.js` (custom Lovelace card, served as a static path at `/evon/evon-camera-recording-card.js`)
+
+### Repository
+- Docs: `README.md`, `DEVELOPMENT.md`, `AGENTS.md`, `CHANGELOG.md`, `RELEASING.md`, `docs/` (see Documentation Structure above)
+- Tests: `tests/` (Python/pytest), `tests-mcp/` (MCP server, Node's built-in test runner — `api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`)
+- Scripts: `scripts/ha-deploy.sh`, `scripts/ha-logs.sh` (the rest of `scripts/` is gitignored for local ad-hoc probes)
+- CI/automation: `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`, `renovate.json`
 
 ## Testing Changes
 
@@ -457,25 +431,10 @@ For live testing, use the deploy scripts (see Deploy Workflow below).
 
 ## Deploy Workflow (Home Assistant Integration)
 
-SSH access to Home Assistant enables quick deployment and log checking.
+SSH access to Home Assistant enables quick deployment and log checking. Setup (copy `.env.example` → `.env`, install the "Terminal & SSH" add-on, add your public key) is described in [DEVELOPMENT.md → Deploy Workflow](DEVELOPMENT.md#deploy-workflow).
 
-### Initial Setup
-
-1. **Copy `.env.example` to `.env`** and fill in your values:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your HA IP and user
-   ```
-
-2. **Configure SSH on Home Assistant:**
-   - Install "Terminal & SSH" add-on
-   - Add your public key to authorized_keys in the add-on configuration
-   - Start the add-on
-
-3. **Verify connection:**
-   ```bash
-   ssh root@192.168.1.x  # Replace with your HA IP
-   ```
+- `scripts/ha-deploy.sh` and `scripts/ha-logs.sh` read `HA_HOST` and `HA_USER` from `.env` and SSH with the private key from `HA_SSH_KEY` in `.env` — default `~/.ssh/claude_code` (a leading `~` is expanded).
+- `.env` is in `.gitignore`; never hardcode IPs or credentials in scripts — `.env.example` lists the variables without values.
 
 ### Deploy Scripts
 
@@ -504,15 +463,8 @@ SSH access to Home Assistant enables quick deployment and log checking.
 # 4. Check logs for errors
 ./scripts/ha-logs.sh
 
-# 5. Run linting before committing
-ruff check custom_components/evon/ && ruff format custom_components/evon/
+# 5. Run the pre-commit check (see "Pre-Commit Checklist" below) before committing
 ```
-
-### Security Notes
-
-- **`.env` is in `.gitignore`** - credentials are never committed
-- **Never hardcode IP addresses or credentials** in scripts
-- The `.env.example` file shows required variables without actual values
 
 ## Using Evon MCP Server for Debugging
 
@@ -524,23 +476,7 @@ The Evon MCP server can be used to directly query the Evon API for debugging and
 
 ### MCP Server Configuration
 
-The Evon MCP server is configured in `.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "evon": {
-      "command": "node",
-      "args": ["/path/to/evon-ha/dist/index.js"],
-      "env": {
-        "EVON_HOST": "http://192.168.x.x",
-        "EVON_USERNAME": "<username>",
-        "EVON_PASSWORD": "<password>"
-      }
-    }
-  }
-}
-```
+The Evon MCP server is configured in `~/.claude.json` under `mcpServers.evon` (env `EVON_HOST`, `EVON_USERNAME`, `EVON_PASSWORD`) — the JSON block is in "Environment Variables (MCP Server)" below; the `.env`-sourcing variant is in [DEVELOPMENT.md → Configuration](DEVELOPMENT.md#configuration).
 
 ### Useful MCP Tools for Debugging
 
@@ -616,6 +552,9 @@ When filtering devices from the API, use these class names:
 | Security Door | `Security.Door` | No (sensor only, stores SavedPictures) |
 | Intercom (2N) | `Security.Intercom.2N.Intercom2N` | No (sensor only) |
 | Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
+| Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
+| Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
+| Room/Area | `System.Location.Room` | No (used for area sync) |
 
 ### Smart Meter Energy Sensors - IMPORTANT
 
@@ -630,10 +569,6 @@ Evon smart meters expose two energy values:
 
 Always configure HA's Energy Dashboard to use `sensor.*_energy_total` instead.
 
-| Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
-| Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
-| Room/Area | `System.Location.Room` | No (used for area sync) |
-
 ## API Authentication Flow
 
 1. POST to `/login` with headers `x-elocs-username` and `x-elocs-password`
@@ -646,10 +581,8 @@ Always configure HA's Energy Dashboard to use `sensor.*_energy_total` instead.
 The API client implements several security measures:
 
 ### SSL/TLS
-- Explicit SSL context using `ssl.create_default_context()` for all HTTPS connections
-- System certificate store used for verification
-- Applied via `aiohttp.TCPConnector` for remote connections
-- Connection limits: 10 total, 5 per host
+- Inside Home Assistant the client always uses an HA-managed aiohttp session: `__init__.py` passes `get_session=lambda: async_get_clientsession(hass)` and the config flow passes `session=async_get_clientsession(self.hass)`. HA owns certificate verification and connection pooling there — no custom SSL context or connector is created.
+- The explicit SSL context (`ssl.create_default_context()`, system certificate store, built in an executor so it never blocks the event loop) and the `aiohttp.TCPConnector(limit=DEFAULT_CONNECTION_POOL_SIZE, limit_per_host=DEFAULT_CONNECTION_POOL_SIZE // 2)` (10 / 5) exist only in the fallback branch of `EvonApi._get_session()` — reached when no usable session or `get_session` callback is available (e.g. `EvonApi` used from a standalone script, or a passed-in session that was closed with no callback to replace it).
 
 ### Credential Protection
 - Sensitive headers redacted from debug logs (`x-elocs-token`, `x-elocs-password`, `cookie`, etc.)
@@ -682,6 +615,7 @@ The API client implements several security measures:
 - Session creation error handling
 
 ### Camera Recordings
+- Files live in HA's local media directory, in `evon_recordings` under `hass.config.media_dirs["local"]` — `/media/evon_recordings` on HAOS and Docker, `<config>/media/evon_recordings` on venv installs — resolved by `recordings.py` (`recordings_dir()`), so the card's "All Recordings" link (`media-source://media_source/local/evon_recordings`) finds them. Versions before 1.23.0 always wrote to `<config>/media/evon_recordings`; on HAOS that is a different folder, so `prepare_recordings_dir()` (run in an executor at setup) creates the new folder and moves existing files once, skipping names that already exist at the target.
 - Served through an authenticated `HomeAssistantView` (`recordings_view.py`, `requires_auth=True`) at `/evon/recordings/{filename}`, **not** a static path. Static paths registered via `async_register_static_paths` bypass HA auth (like `www/`), which would let anyone who can reach the HA HTTP port download footage — including over a Nabu Casa remote URL or reverse proxy.
 - The Lovelace card plays recordings inline via `auth/sign_path` signed URLs, which the authenticated view validates; the media browser (`media_source`) is likewise auth-gated.
 - Filenames are validated (no `/`, `\`, or dot-segments) and the resolved path is confined to the recordings directory before serving.
@@ -710,51 +644,10 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 | Home State Select | `current_option` |
 | Season Mode Select | `current_option` |
 
-**Implementation pattern:**
-```python
-# In __init__
-self._optimistic_is_on: bool | None = None
-
-# In property
-@property
-def is_on(self) -> bool:
-    if self._optimistic_is_on is not None:
-        return self._optimistic_is_on
-    # ... get from coordinator
-
-# In action method
-async def async_turn_on(self, **kwargs):
-    self._optimistic_is_on = True
-    self._set_optimistic_timestamp()
-    self.async_write_ha_state()
-    await self._api.turn_on(...)
-    self._schedule_post_command_recheck()  # 5s self-healing fallback
-
-# In coordinator update handler
-def _handle_coordinator_update(self):
-    self._cancel_post_command_recheck_if_data_changed()
-
-    # Comparison-clear ALWAYS runs (so matching WS clears optimistic ASAP)
-    if self._optimistic_is_on is not None:
-        actual = self.coordinator.get_entity_data(...)
-        if actual == self._optimistic_is_on:
-            self._optimistic_is_on = None
-            self._optimistic_state_set_at = None
-
-    # Suppress async_write_ha_state only while optimistic is still active
-    # (prevents attribute flicker during Evon's fade animation).
-    if (
-        self._optimistic_state_set_at is not None
-        and time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD
-    ):
-        return
-    super()._handle_coordinator_update()
-
-# In async_will_remove_from_hass
-async def async_will_remove_from_hass(self):
-    self._cleanup_post_command_recheck()
-    await super().async_will_remove_from_hass()
-```
+**Implementation pattern:** the code is in [DEVELOPMENT.md → Optimistic Updates Pattern](DEVELOPMENT.md#optimistic-updates-pattern). The rules an agent must not get wrong:
+- Set the optimistic field, call `self._set_optimistic_timestamp()` and `self.async_write_ha_state()` **before** the API call; call `self._schedule_post_command_recheck()` **after** it.
+- In `_handle_coordinator_update()`: first `self._cancel_post_command_recheck_if_data_changed()`, then the comparison-clear (reset the optimistic field and `_optimistic_state_set_at` when the coordinator value matches) — this part runs **always** — and only then the quiesce early-return (`time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD` → `return` before `super()._handle_coordinator_update()`).
+- Call `self._cleanup_post_command_recheck()` in `async_will_remove_from_hass()` before `await super().async_will_remove_from_hass()`.
 
 **Select entity override:** `EvonHomeStateSelect` and `EvonSeasonModeSelect` read state from `coordinator.get_active_home_state()` / `get_season_mode()` rather than `_get_data()`. They override `_recheck_snapshot()` and `_recheck_data_changed()` on `EvonEntity` so the cancel-on-WS mechanism uses value equality against the right coordinator method. Selects don't apply the quiesce drop — they have no animation.
 
@@ -785,7 +678,7 @@ These are intentional design choices. Do NOT flag them as bugs or attempt to "fi
 
 8. **`cover.py` uses `asyncio.sleep(COVER_STOP_DELAY)` inline**: Intentional 0.3s anti-flicker delay for toggle-style blind control. The `if self.hass is not None` guard after sleep is sufficient — the sleep is too short for CancelledError to be a practical concern.
 
-9. **`_extract_instance_id_from_unique_id` is a 123-line reverse parser (__init__.py)**: Intentional — changing the unique_id format would break existing installations. The function handles all known formats correctly.
+9. **`_extract_instance_id_from_unique_id` is a long reverse parser (__init__.py)**: Intentional — changing the unique_id format would break existing installations. The function handles all known formats correctly.
 
 10. **Login logic duplicated between `EvonApi.login()` and `EvonWsClient._login()`**: The two paths have subtle differences (WS accepts token on 302 redirect, different header handling for remote connections). Unifying them risks breaking authentication.
 
@@ -822,34 +715,11 @@ Configure via Claude Code's `~/.claude.json`:
 
 ## Password Encoding
 
-The Evon API requires `x-elocs-password` which is NOT plain text. The encoding is:
-
-```
-x-elocs-password = Base64(SHA512(username + password))
-```
-
-**Both integrations now handle this automatically:**
-- MCP Server: Auto-detects if password is already encoded (88 chars ending with `==`)
-- Home Assistant: Encodes plain text password in the `EvonApi` class
-
-**To manually encode (if needed):**
-```python
-import hashlib, base64
-encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest()).decode()
-```
+`x-elocs-password` is **never plain text**: `Base64(SHA512(username + password))`. Both integrations encode automatically — the MCP server auto-detects an already-encoded value (88 base64 chars ending with `==`; `isPasswordEncoded()` in `src/config.ts`, overridable with `EVON_PASSWORD_ENCODED=true|false`), the HA integration encodes in `EvonApi` (`password_is_encoded=True` skips it). Formula and Python one-liner: [DEVELOPMENT.md → Authentication](DEVELOPMENT.md#authentication).
 
 ## Adding New Device Types
 
-1. Find the device class name in `/api/instances` response
-2. Add class name constant to `const.py`
-3. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
-4. Export processor from `coordinator/processors/__init__.py`
-5. Call processor in `coordinator/__init__.py` `_async_update_data()`
-6. Set `_entity_type` class attribute and use `_get_data()` in entity
-7. Create new platform file (e.g., `sensor.py`)
-8. Add platform to `PLATFORMS` list in `__init__.py`
-9. Add tests in `tests/test_new_device.py`
-10. Update `manifest.json` if needed
+Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md#adding-new-device-types). Agent checklist: class-name constant in `const.py` → processor in `coordinator/processors/` (exported from its `__init__.py`, called from `coordinator/__init__.py` `_async_update_data()`) → entity sets `_entity_type` and reads via `_get_data()` → platform listed in `PLATFORMS` (`__init__.py`) → tests in `tests/test_<device>.py`. For WebSocket push updates also add the class to `CLASS_TO_TYPE` / `SUBSCRIBE_PROPERTIES` / `PROPERTY_MAPPINGS` in `ws_mappings.py`, and for WS control to `CLASS_CONTROL_MAPPINGS` in `ws_control.py`.
 
 ## Integration Features
 
@@ -874,67 +744,20 @@ encoded = base64.b64encode(hashlib.sha512((username + password).encode()).digest
 ### MCP Server
 - **Tools**: Device listing and control (lights, blinds, climate, home states, bathroom radiators)
 - **Resources**: Read device state via `evon://` URIs
-- **Scenes**: Pre-defined and custom scenes for whole-home control
 - **Home State**: Read and change home modes (at_home, holiday, night, work)
 - **Bathroom Radiators**: List and toggle electric heaters
 
 ## MCP Resources
 
-Resources allow reading device state without calling tools:
-
-| URI | Description |
-|-----|-------------|
-| `evon://lights` | All lights with state |
-| `evon://blinds` | All blinds with state |
-| `evon://climate` | All climate controls with state |
-| `evon://home_state` | Current home state and available states |
-| `evon://bathroom_radiators` | All bathroom radiators with state |
-| `evon://summary` | Home summary (counts, averages, home state) |
-
-## MCP Scenes
-
-Pre-defined scenes:
-- `all_off` - Turn off lights, close blinds
-- `movie_mode` - Dim to 10%, close blinds
-- `morning` - Open blinds, lights to 70%, comfort mode
-- `night` - Lights off, eco mode
+Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_state`, `evon://bathroom_radiators`, `evon://summary`) read device state without calling tools; the tool and resource tables are in [DEVELOPMENT.md → Available Resources](DEVELOPMENT.md#available-resources). The MCP server has **no scene feature** (`grep -ri scene src/` is empty) — scenes exist only as HA button entities.
 
 ## Linting
 
-**IMPORTANT**: CI runs both `ruff check` AND `ruff format --check`. Code must pass both.
-
-### Python (ruff)
-```bash
-# Check for linting issues
-ruff check custom_components/evon/
-
-# Auto-fix linting issues
-ruff check custom_components/evon/ --fix
-
-# Check formatting (what CI runs)
-ruff format --check custom_components/evon/
-
-# Auto-fix formatting
-ruff format custom_components/evon/
-```
-
-### TypeScript (eslint)
-```bash
-# Check for issues
-npm run lint
-
-# Auto-fix issues
-npm run lint:fix
-```
-
-### Quick CI Check (run before committing)
-```bash
-ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
-```
+**IMPORTANT**: CI runs both `ruff check` AND `ruff format --check` (plus eslint). Code must pass all of them. Auto-fix with `ruff check ... --fix`, `ruff format ...` and `npm run lint:fix`; the individual commands are in [DEVELOPMENT.md → Linting](DEVELOPMENT.md#linting). The one-line pre-commit check is in the "Pre-Commit Checklist" below (and at the top of this file).
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1322 tests):
+Tests are in the `tests/` directory (1330 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -977,6 +800,9 @@ Tests are in the `tests/` directory (1322 tests):
 - `test_options_flow_handler.py` - Options flow handler unit tests
 - `test_reconnect_delay.py` - WebSocket reconnect delay tests
 - `test_recording_services.py` - Recording service tests
+- `test_recordings_paths.py` - Recordings folder helper (`media_dirs["local"]` resolution, legacy `<config>/media` migration; no HA needed)
+- `test_recordings_view.py` - Authenticated recordings HTTP view (filename validation, path confinement)
+- `test_repairs.py` - Repair fix flows (reachable from `repairs.py`, issue id → confirm flow)
 - `test_services.py` - Service handler tests
 - `test_service_invalid_params.py` - Service invalid parameter tests
 - `test_stale_entities.py` - Stale entity cleanup tests
@@ -990,21 +816,23 @@ Tests are in the `tests/` directory (1322 tests):
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
 - `test_translations.py` - strings.json ↔ translations/*.json parity, selector/enum-state translatability (no HA needed)
 
+**MCP server tests (`tests-mcp/`, 23 tests, Node's built-in test runner):** `api-client.test.js`, `index.test.js`, `registry.test.js`, `stdio.test.js`, `ws-client.test.js` — run with `npm run build && npm run test:mcp` (they exercise the compiled `dist/`).
+
 ### Test Architecture
 
-**CI runs both linting and pytest.** Tests that require homeassistant use `requires_ha_test_framework` skip markers and are skipped in environments without HA installed.
+**CI runs linting and pytest.** `tests/conftest.py` makes the suite importable with or without Home Assistant installed:
 
-Tests are split by dependency:
-| Test File | Requires HA | How It Works |
-|-----------|-------------|--------------|
-| `test_api.py` | No | Mocks `homeassistant` module, uses `importlib` to load `api.py` directly |
-| `test_*_unit.py` | No | Unit tests that mock all HA dependencies |
-| `test_config_flow.py` | Yes | Uses `requires_ha_test_framework` skip marker |
-| `test_coordinator.py` | Yes | Uses `requires_ha_test_framework` skip marker |
+| Situation | What happens |
+|-----------|--------------|
+| `homeassistant` not importable | The top of `conftest.py` builds `MagicMock` stand-ins (with real string constants for the climate/light enums) and registers them in `sys.modules` **globally, before** anything imports `custom_components.evon` |
+| `pytest-homeassistant-custom-component` not installed | Tests that need the real HA runtime carry the `requires_ha_test_framework` marker (`conftest.py`, a `pytest.mark.skipif`) and are skipped |
+| Full environment (`requirements-test.txt`, Python 3.14) | Everything runs; `hass` and the other fixtures come from the plugin |
 
-**Why this matters for agents:**
-- When importing from `custom_components.evon.*`, Python executes `__init__.py` which imports from `homeassistant`
-- To test without HA, mock the homeassistant module before importing (like `test_api.py` and the `*_unit.py` tests)
+- `test_api.py`, `test_translations.py`, `test_ws_*.py`, `test_constants.py`, … simply `from custom_components.evon... import ...` — they do **not** mock HA themselves; when HA is absent they run on the conftest stand-ins.
+- The platform unit tests (`test_cover_unit.py`, `test_select_unit.py`, `test_sensor_unit.py`, `test_binary_sensor_unit.py`, `test_diagnostics_unit.py`) go one step further: an autouse fixture pops the cached `custom_components.evon*` modules, swaps its own `_HA_MODULES` list of stubs into `sys.modules` (e.g. a minimal `CoordinatorEntity`, `DeviceInfo = dict`) and re-imports the platform, so entity classes can be instantiated without HA's base classes. A few other files (`test_event.py`, `test_button_events.py`, `test_camera_mp4.py`, `test_processors.py`) also patch `sys.modules` for the same reason.
+- Integration-style tests (`test_config_flow.py`, `test_coordinator.py`, `test_light.py`, `test_climate.py`, `test_services.py`, …) carry `requires_ha_test_framework`.
+
+**Why this matters for agents:** importing `custom_components.evon.*` executes the package `__init__.py`, which imports `homeassistant`. A new no-HA test should rely on the conftest stand-ins (don't add another mock layer unless you need to instantiate an entity class) and must not assert HA behaviour the stubs cannot provide; a test that needs real HA behaviour gets the `requires_ha_test_framework` marker.
 
 ### Running Tests
 
@@ -1022,26 +850,26 @@ pytest -v
 
 ### CI Checks
 
-The CI workflow (`.github/workflows/ci.yml`) runs:
+The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull requests and on `v*` tags (the whole workflow, not just hassfest):
 1. `ruff check` - Python linting (custom_components/evon/ and tests/)
 2. `ruff format --check` - Python formatting
-3. `mypy` - Python type checking
+3. `mypy custom_components/evon/ --ignore-missing-imports` - **advisory only** (`continue-on-error: true`; ~100 errors remain, tracked in `docs/CODE_ANALYSIS_BACKLOG.md`) — a red mypy step never fails the build, so do not rely on CI to catch type errors
 4. `npm run lint` - TypeScript linting
 5. `npm run build` - TypeScript compilation
-6. `npm run test:mcp` - MCP server tests
-7. `npm audit` - npm security audit (fails the build at `--audit-level=high`)
-8. `pip-audit` - Python dependency audit (advisory-only; HA hard-pins its deps, so
+6. `npm run test:mcp` - MCP server tests (23 tests)
+7. `npm audit --audit-level=high` - npm security audit (fails the build)
+8. `pip-audit` - Python dependency audit (advisory-only, `continue-on-error: true`; HA hard-pins its deps, so
    findings there are usually not fixable downstream)
-9. `pytest` - Python tests (matrix: Python 3.14, Ubuntu + macOS) with Codecov upload
-10. HACS validation - Custom component structure check
+9. `pytest tests/ --cov=custom_components/evon --cov-fail-under=76` - Python tests (matrix: Python 3.14, Ubuntu + macOS); coverage below 76% fails the build; Codecov upload with `fail_ci_if_error: true`
+10. HACS validation - Custom component structure check (`hacs/action`, pinned by SHA)
 11. hassfest - Home Assistant's own integration validator (manifest keys and ordering, declared
     `dependencies`/`after_dependencies` for every imported component, translation key format
-    `[a-z0-9-_]+`, services, config flow). Also runs on `v*` tags. Run it locally before pushing:
-    `docker run --rm --platform linux/amd64 -v "$PWD"://github/workspace ghcr.io/home-assistant/hassfest`
+    `[a-z0-9-_]+`, services, config flow). Run it locally before pushing:
+    `docker run --rm --platform linux/amd64 -v "$PWD":/github/workspace ghcr.io/home-assistant/hassfest`
 
 Additional workflows:
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security scanning for Python and JavaScript/TypeScript on push, PRs, and weekly schedule. Results in the repo's Security tab.
-- **Renovate** (`renovate.json`) - Automated dependency updates. Runs weekly (Monday, Europe/Vienna). Groups updates by ecosystem (npm deps, npm devDeps, pip, GitHub Actions). Patch updates automerge when CI passes. **Note (2026-10):** the config has never produced an onboarding PR, dependency dashboard or update PR, so the Mend Renovate GitHub App is evidently not installed on the repository — until it is, dependency drift (and `npm audit` CI failures) must be checked by hand.
+- **Renovate** (`renovate.json`) - Active (the Mend Renovate app ran in silent mode until 2026-10-12, which is why no PRs appeared before then): schedule `every weekend` (Europe/Vienna), updates grouped into npm deps / npm devDeps / pip / GitHub Actions PRs, patch updates automerge on green CI, the TypeScript major is held (typescript-eslint does not support TS 7 yet), `@types/node` is pinned `<25` (Node 24 floor) and the CI `python` version is excluded (bumped by hand with the HA floor); the Dependency Dashboard is issue #21.
 
 ### Pending Home Assistant Deprecations
 
@@ -1049,18 +877,13 @@ Known upcoming HA changes that touch this integration but are not actionable yet
 
 | HA change | Affects | Warns from | Removed in | Action |
 |-----------|---------|------------|------------|--------|
-| Climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_target_temperature`, `native_current_temperature`) | `climate.py` (`_attr_temperature_unit`, `target_temperature`, `current_temperature`) | 2026.11 | 2027.11 | Rename once the HA floor is ≥ 2026.11 |
+| Climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_target_temperature`, `native_current_temperature`) | `climate.py` (`_attr_temperature_unit`, `target_temperature`, `current_temperature`) | 2026.11 | 2027.11 | Rename once the HA floor is ≥ 2026.11 ([HA developer blog, 2026-10-08](https://developers.home-assistant.io/blog/2026/10/08/climate-native-temperature)) |
 | Standard button event types (`ButtonEventType`) | `event.py` (`single_press`/`double_press`/`long_press`) | — (optional) | — | Optional; custom event types stay valid |
 | *(own deprecation)* legacy raw Evon IDs accepted by the home-state select's `async_handle_select_option` | `select.py` | v1.23.0 (warning) | v1.25.0 (planned) | Remove the shim and its tests |
 
 Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
 
-**Before committing, always run:**
-```bash
-ruff check custom_components/evon/ tests/
-ruff format custom_components/evon/ tests/
-npm run lint
-```
+**Before committing:** run the one-line check from the Pre-Commit Checklist below.
 
 ## Pre-Commit Checklist
 
@@ -1083,37 +906,15 @@ npm run lint
 
 ## Release Process
 
-Before creating a release, ensure the following are up to date:
+**Full recipe: see [RELEASING.md](RELEASING.md)** (regular release from `main`, hotfix release from a previous tag, HACS compatibility, version numbering, checklist). The rules an agent must not get wrong:
 
-1. **Version numbers** - Update in ALL FOUR files (they must match!):
-   - `package.json`
-   - `package-lock.json` ← Run `npm install --package-lock-only` to sync
-   - `pyproject.toml`
-   - `custom_components/evon/manifest.json`
+1. **Version numbers** - update ALL FOUR files and make them match: `package.json`, `package-lock.json` (run `npm install --package-lock-only`), `pyproject.toml`, `custom_components/evon/manifest.json`. (Historic mistake: `package.json` stayed at v1.4.1 while v1.11.0 shipped.)
+2. **Version history** - a `CHANGELOG.md` section (`## [X.Y.Z] - YYYY-MM-DD`, bullets under Breaking changes / Added / Changed / Fixed / Project; the date is set when tagging) plus one row in the README.md Version History table. Both must be in the tagged commit — HACS renders README from the tag.
+3. **Docs** - review README.md, DEVELOPMENT.md, AGENTS.md and `docs/*.md`.
+4. **Checks** - the Pre-Commit Checklist command, `npm run build`, and hassfest locally (see CI Checks).
+5. **The GitHub release title must NOT contain the version** - HACS prepends the tag (see the note at the top of this file).
 
-2. **Documentation** - Review and update ALL docs:
-   - `README.md` - User-facing documentation, supported devices
-   - `DEVELOPMENT.md` - API reference, code patterns
-   - `AGENTS.md` - AI guidelines, debugging tips
-   - `docs/*.md` - Detailed technical docs
-
-3. **Version history** - Add entry to:
-   - `CHANGELOG.md` (detailed: one `## [X.Y.Z] - YYYY-MM-DD` section, bullets grouped under Breaking changes / Added / Changed / Fixed / Project; set the date when tagging)
-   - `README.md` (one table row: version, date, highlights)
-
-4. **Linting** - Run all CI checks:
-   ```bash
-   ruff check custom_components/evon/ tests/ && ruff format --check custom_components/evon/ tests/ && npm run lint
-   ```
-
-5. **Build TypeScript** - Ensure MCP server compiles:
-   ```bash
-   npm run build
-   ```
-
-**Common mistake**: `package.json` version was not updated from v1.4.1 to v1.11.0 across multiple releases. Always check all four version files match!
-
-**Dependency updates**: Renovate is configured to open weekly dependency update PRs (see `renovate.json`). Patch updates automerge when CI passes. Review and merge minor/major update PRs manually.
+**Dependency updates:** Renovate (`renovate.json`) opens grouped PRs every weekend and automerges patch updates on green CI; review minor/major PRs by hand (Dependency Dashboard: issue #21).
 
 ## Version History
 
