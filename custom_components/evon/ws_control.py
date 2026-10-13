@@ -18,6 +18,8 @@ Light Control:
     - SwitchOn/SwitchOff: Explicit on/off (no params) - PREFERRED over Switch([bool])
     - Switch([true/false]): Exists but inconsistent behavior on some devices
     - BrightnessSetScaled([brightness, transition_ms]): Set brightness with optional fade
+    - SwitchAllOff/SwitchAllOn: Group commands on Base.ehLight (CallWithReturn — the
+      controller answers with a Callback, unlike the Base.bBlind group commands)
 
 Blind Control:
     - MoveToPosition([angle, position]): Set both tilt and position - angle comes FIRST!
@@ -90,6 +92,7 @@ from .const import (
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_BASE,
     EVON_CLASS_LIGHT_DIM,
+    EVON_CLASS_LIGHT_EH,
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
     EVON_CLASS_SCENE,
@@ -132,6 +135,10 @@ LIGHT_MAPPINGS: dict[str, WsControlMapping] = {
         None, "BrightnessSetScaled", lambda params: [params[0] if params else 0, 0]
     ),
     "SetColorTemp": WsControlMapping("ColorTemp", None, lambda params: params[0] if params else 4000),
+    # Group commands on Base.ehLight — captured from the web app's "all lights off/on"
+    # buttons (2026-10-13): CallWithReturn with args [], answered with a Callback in ~50ms.
+    "SwitchAllOff": WsControlMapping(None, "SwitchAllOff", None),
+    "SwitchAllOn": WsControlMapping(None, "SwitchAllOn", None),
 }
 
 # Blind control mappings (SmartCOM.Blind.Blind, Base.bBlind, Base.ehBlind)
@@ -209,6 +216,7 @@ CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
     EVON_CLASS_LIGHT_DIM: LIGHT_MAPPINGS,
     EVON_CLASS_LIGHT_GROUP: LIGHT_MAPPINGS,
     EVON_CLASS_LIGHT_BASE: LIGHT_MAPPINGS,
+    EVON_CLASS_LIGHT_EH: LIGHT_MAPPINGS,
     EVON_CLASS_LIGHT_RGBW: LIGHT_MAPPINGS,
     # Blinds
     EVON_CLASS_BLIND: BLIND_MAPPINGS,

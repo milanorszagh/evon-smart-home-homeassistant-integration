@@ -504,6 +504,35 @@ class TestEvonApiWebSocketControl:
         assert in_flight == 0
         mock_api_with_ws._request.assert_not_called()  # every call went over WS, no HTTP fallback
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("api_method", "evon_method"), [("all_lights_off", "SwitchAllOff"), ("all_lights_on", "SwitchAllOn")]
+    )
+    async def test_all_lights_group_command_over_ws(self, mock_api_with_ws, api_method, evon_method):
+        """all_lights_off()/all_lights_on() send ONE CallMethod on Base.ehLight (the
+        controller's own group command, as the web app does) instead of one per light."""
+        mock_api_with_ws.set_instance_classes(
+            [
+                {"ID": "Light1", "ClassName": "SmartCOM.Light.LightDim"},
+                {"ID": "Base.ehLight", "ClassName": "Base.ehLight"},
+            ]
+        )
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.call_method = AsyncMock(return_value=True)
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        await getattr(mock_api_with_ws, api_method)()
+
+        mock_ws.call_method.assert_awaited_once()
+        call = mock_ws.call_method.call_args
+        assert call.args[0] == "Base.ehLight"
+        assert call.args[1] == evon_method
+        assert not call.args[2]  # no parameters
+        fire_and_forget = call.args[3] if len(call.args) > 3 else call.kwargs.get("fire_and_forget", False)
+        assert fire_and_forget is False  # the controller sends a Callback for it
+        mock_api_with_ws._request.assert_not_called()
+
     def test_set_ws_client(self):
         """Test setting WebSocket client."""
         api = EvonApi(

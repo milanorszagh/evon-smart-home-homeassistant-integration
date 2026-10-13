@@ -291,6 +291,7 @@ Device control goes over WebSocket first (`CallMethod`/`SetValue`), with HTTP as
 | Climate Eco | `WriteNightMode` | `CallMethod [instanceId.WriteNightMode, []]` | ✅ Verified working |
 | Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
 | Season Mode | `IsCool` | `SetValue [Base.ehThermostat, "IsCool", bool]` | ✅ true=cooling, false=heating |
+| All lights off / on | `SwitchAllOff` / `SwitchAllOn` | `CallMethod [Base.ehLight.SwitchAllOff, []]` | ✅ Group object is `Base.ehLight` (NOT `Base.bLight`); answered with a Callback in ~50ms, so not fire-and-forget |
 
 ### What Does NOT Work via WebSocket
 
@@ -380,7 +381,9 @@ logged as unknown sequence ids. `EvonApi` bounds WS control requests with
 season-mode `SetValue`; subscriptions and `GetInstances` are not bounded. Raising the
 limit does not speed anything up (the controller is the bottleneck); it only brings the
 timeouts back. The HTTP fallback after a WS timeout re-sends the command — harmless for
-`SwitchOff`, but a toggle such as the radiator `Switch` would flip twice.
+`SwitchOff`, but a toggle such as the radiator `Switch` would flip twice. `evon.all_lights_off`
+therefore sends one `Base.ehLight.SwitchAllOff` (`EvonApi.all_lights_off()`, the frame the web
+app's button sends) and only falls back to the per-light loop when that call raises.
 
 ### Implementation Details
 
@@ -556,6 +559,7 @@ When filtering devices from the API, use these class names:
 | Relay Outputs (On/Off Lights) | `SmartCOM.Light.Light` | Yes |
 | RGBW Lights | `SmartCOM.Light.DynamicRGBWLight` | Yes |
 | Light Groups | `SmartCOM.Light.LightGroup` | Yes |
+| All-lights group object | `Base.ehLight` | Yes (`SwitchAllOff` / `SwitchAllOn`, used by `evon.all_lights_off`) |
 | Blinds | `SmartCOM.Blind.Blind` | Yes |
 | Blind Groups | `SmartCOM.Blind.BlindGroup` | Yes |
 | Climate | `SmartCOM.Clima.ClimateControl` | Yes |
@@ -774,7 +778,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1342 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1346 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

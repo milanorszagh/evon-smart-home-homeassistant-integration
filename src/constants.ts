@@ -11,6 +11,8 @@ export const DEVICE_CLASSES = {
   LIGHT_RELAY: "SmartCOM.Light.Light",
   LIGHT_RGBW: "SmartCOM.Light.DynamicRGBWLight",
   LIGHT_GROUP: "SmartCOM.Light.LightGroup",
+  // Group object whose SwitchAllOff/SwitchAllOn the web app's "all lights" buttons call
+  LIGHT_ALL: "Base.ehLight",
   BLIND: "SmartCOM.Blind.Blind",
   CLIMATE: "SmartCOM.Clima.ClimateControl",
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",

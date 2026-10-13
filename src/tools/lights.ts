@@ -5,6 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
+import { DEVICE_CLASSES } from "../constants.js";
 import { getInstances, filterLightDevices, controlAllDevices, fetchLightsWithState, sanitizeId } from "../helpers.js";
 import type { LightState } from "../types.js";
 
@@ -69,14 +70,32 @@ export function registerLightTools(server: McpServer): void {
       action: z.enum(["on", "off"]).describe("Turn all lights on or off"),
     },
     async ({ action }) => {
-      const instances = await getInstances();
-      const lights = filterLightDevices(instances);
-      const method = action === "off" ? "SwitchOff" : "SwitchOn";
-      const results = await controlAllDevices(lights, method);
+      // One controller group command — what the Evon web app's "all lights off/on"
+      // buttons send — instead of one request per light (the controller executes a
+      // session's requests serially, so a burst of per-light calls is slow).
+      const groupMethod = action === "off" ? "SwitchAllOff" : "SwitchAllOn";
+      try {
+        await callMethod(DEVICE_CLASSES.LIGHT_ALL, groupMethod);
+        return {
+          content: [{ type: "text", text: `Turned ${action} all lights (${DEVICE_CLASSES.LIGHT_ALL}.${groupMethod})` }],
+        };
+      } catch (error: unknown) {
+        // Controller without the group object (or an HTTP error): one call per light
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const instances = await getInstances();
+        const lights = filterLightDevices(instances);
+        const method = action === "off" ? "SwitchOff" : "SwitchOn";
+        const results = await controlAllDevices(lights, method);
 
-      return {
-        content: [{ type: "text", text: `Turned ${action} ${lights.length} lights:\n${results.join("\n")}` }],
-      };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Group command failed (${errorMsg}); turned ${action} ${lights.length} lights individually:\n${results.join("\n")}`,
+            },
+          ],
+        };
+      }
     }
   );
 }

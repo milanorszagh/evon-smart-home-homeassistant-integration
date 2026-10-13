@@ -84,6 +84,7 @@ EVON_CLASS_SCENE = "System.SceneApp"
 EVON_CLASS_LIGHT_RGBW = "SmartCOM.Light.DynamicRGBWLight"
 EVON_CLASS_LIGHT_GROUP = "SmartCOM.Light.LightGroup"
 EVON_CLASS_LIGHT_BASE = "Base.bLight"
+EVON_CLASS_LIGHT_EH = "Base.ehLight"  # Group object: SwitchAllOff/SwitchAllOn (web app "all lights" buttons)
 EVON_CLASS_BLIND_GROUP = "SmartCOM.Blind.BlindGroup"
 EVON_CLASS_BLIND_BASE = "Base.bBlind"
 EVON_CLASS_BLIND_EH = "Base.ehBlind"

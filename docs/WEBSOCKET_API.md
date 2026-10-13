@@ -346,6 +346,24 @@ await ws.send(JSON.stringify({
 - `SwitchOff([])` - turn light off (no params, explicit)
 - `BrightnessSetScaled([brightness, transition])` - brightness 0-100, transition time in ms (use 0 for instant)
 
+**Group Commands (Verified October 2026):**
+
+The web app's "all lights off" / "all lights on" buttons send one `CallMethod` on the group
+object `Base.ehLight` (not `Base.bLight`, which only carries `CountActive`/`CountObjects`),
+captured from the browser's WebSocket frames on 2026-10-13:
+
+```javascript
+{"methodName":"CallWithReturn","request":{"args":["Base.ehLight.SwitchAllOff",[]],"methodName":"CallMethod","sequenceId":41}}
+{"methodName":"CallWithReturn","request":{"args":["Base.ehLight.SwitchAllOn",[]],"methodName":"CallMethod","sequenceId":43}}
+```
+
+Unlike the `Base.bBlind` group commands these are answered with a `Callback` (~50 ms
+measured), so the HA integration sends them as normal `CallWithReturn` requests
+(`EvonApi.all_lights_off()` / `all_lights_on()`, used by `evon.all_lights_off` with the
+per-light loop as fallback). The HTTP equivalent `POST /api/instances/Base.ehLight/SwitchAllOff`
+is what the MCP server's `light_control_all` tries first; it has not been verified on hardware,
+the tool falls back to per-light calls on any error.
+
 **Alternative: `SetValue IsOn` (not used):**
 ```javascript
 // SetValue on IsOn was acknowledged in the January 2026 test below, but later

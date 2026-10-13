@@ -12,6 +12,14 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [Unreleased]
 
+### Changed
+
+- **`evon.all_lights_off` sends one command.** The action (and the MCP server's
+  `light_control_all` tool) now uses the controller's own group command
+  `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
+  sends, instead of one request per light; the per-light loop remains as fallback when
+  the group command fails. (#26)
+
 ### Fixed
 
 - **Clean shutdown on Home Assistant restart.** Home Assistant does not unload config
@@ -29,8 +37,7 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   lights at once (or right after a home-state change) made the last requests exceed the
   10 s timer, log a warning per light and fall back to HTTP although the WebSocket
   commands were still executing. Control requests are now limited to two in flight; the
-  rest wait for a slot. (#26, first part — the single `Base.bLight` group call is still
-  open until its method name is confirmed)
+  rest wait for a slot. (#26)
 
 ## [1.23.0] - 2026-10-12
 

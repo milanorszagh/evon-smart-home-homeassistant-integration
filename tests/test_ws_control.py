@@ -90,6 +90,17 @@ class TestLightMappings:
         m = LIGHT_MAPPINGS["SetColorTemp"]
         assert m.get_value(None) == 4000
 
+    def test_switch_all_off_on_group_commands(self):
+        """Base.ehLight.SwitchAllOff / SwitchAllOn are what the web app's 'all lights
+        off/on' buttons send (captured 2026-10-13: CallWithReturn, args []). The
+        controller answers them with a Callback, so they are NOT fire-and-forget."""
+        for name in ("SwitchAllOff", "SwitchAllOn"):
+            m = LIGHT_MAPPINGS[name]
+            assert m.property_name is None
+            assert m.method_name == name
+            assert m.fire_and_forget is False
+            assert m.get_value(None) is None
+
 
 class TestBlindMappings:
     """Test blind control mappings."""
@@ -196,6 +207,7 @@ class TestClassControlMappings:
             EVON_CLASS_LIGHT_DIM,
             EVON_CLASS_LIGHT_GROUP,
             "Base.bLight",
+            "Base.ehLight",
             EVON_CLASS_LIGHT_RGBW,
         ]:
             assert CLASS_CONTROL_MAPPINGS[cls] is LIGHT_MAPPINGS

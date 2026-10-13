@@ -24,6 +24,7 @@ from .const import (
     DEFAULT_REQUEST_TIMEOUT,
     ENGINE_ID_MAX_LENGTH,
     ENGINE_ID_MIN_LENGTH,
+    EVON_CLASS_LIGHT_EH,
     EVON_REMOTE_HOST,
     IMAGE_FETCH_TIMEOUT,
     LOGIN_BACKOFF_BASE,
@@ -745,6 +746,19 @@ class EvonApi:
     async def set_light_color_temp(self, instance_id: str, kelvin: int) -> None:
         """Set light color temperature (in Kelvin)."""
         await self.call_method(instance_id, "SetColorTemp", [kelvin])
+
+    async def all_lights_off(self) -> None:
+        """Switch every light off with the controller's own group command.
+
+        ``Base.ehLight.SwitchAllOff`` is what the Evon web app's "all lights off" button
+        sends: one request instead of one per light (issue #26). Raises on failure so
+        the caller can fall back to per-light calls.
+        """
+        await self.call_method(EVON_CLASS_LIGHT_EH, "SwitchAllOff", [])
+
+    async def all_lights_on(self) -> None:
+        """Switch every light on with the controller's own group command (``Base.ehLight.SwitchAllOn``)."""
+        await self.call_method(EVON_CLASS_LIGHT_EH, "SwitchAllOn", [])
 
     # Blind methods
     async def open_blind(self, instance_id: str) -> None:

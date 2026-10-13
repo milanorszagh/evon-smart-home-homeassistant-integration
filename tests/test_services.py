@@ -223,7 +223,23 @@ class TestServiceIntegration:
             blocking=True,
         )
 
-        # Service iterates through lights and turns off those that are on
+        # One controller group command (Base.ehLight.SwitchAllOff), no per-light calls
+        mock_evon_api_class.all_lights_off.assert_awaited_once()
+        mock_evon_api_class.turn_off_light.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_all_lights_off_falls_back_to_per_light_calls(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """If the group command fails (no Base.ehLight on this controller, HTTP 404, ...)
+        the service switches off the lights that are on one by one, as before."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        mock_evon_api_class.turn_off_light.reset_mock()
+        mock_evon_api_class.all_lights_off.side_effect = Exception("404 Not Found")
+
+        await hass.services.async_call("evon", "all_lights_off", {}, blocking=True)
+
         # Mock data has light_1, light_group_1, rgbw_light_1 with is_on=True
         assert mock_evon_api_class.turn_off_light.call_count == 3
         mock_evon_api_class.turn_off_light.assert_any_call("light_1")
@@ -443,6 +459,8 @@ class TestBulkServiceIdValidation:
         coordinator.data[ENTITY_TYPE_LIGHTS].append({"id": "..", "name": "Evil", "is_on": True})
 
         mock_evon_api_class.turn_off_light.reset_mock()
+        # Force the per-light path (the group command would skip the loop entirely)
+        mock_evon_api_class.all_lights_off.side_effect = Exception("no group command")
         await hass.services.async_call("evon", "all_lights_off", {}, blocking=True)
 
         called_ids = [c.args[0] for c in mock_evon_api_class.turn_off_light.call_args_list]

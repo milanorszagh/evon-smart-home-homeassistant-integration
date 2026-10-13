@@ -427,8 +427,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entity_type: str,
             api_method: str,
             filter_fn: Callable[[dict[str, Any]], bool] | None = None,
+            group_method: str | None = None,
         ) -> None:
-            """Execute a per-entity API method across all entries."""
+            """Execute a per-entity API method across all entries.
+
+            With ``group_method`` the controller's own group command (one request) is
+            tried first per entry; the per-entity loop is the fallback when it fails
+            (older controller without the group object, HTTP 404, ...).
+            """
             _LOGGER.info("%s service called", service_name)
             async with _get_service_lock(hass):
                 entries = list(hass.data.get(DOMAIN, {}).items())
@@ -442,6 +448,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         continue
                     coordinator = entry_data["coordinator"]
                     api = entry_data["api"]
+                    if group_method is not None:
+                        try:
+                            await getattr(api, group_method)()
+                        except Exception as err:
+                            _LOGGER.warning(
+                                "%s: group command %s failed (%s), falling back to per-device calls",
+                                service_name,
+                                group_method,
+                                err,
+                            )
+                        else:
+                            await coordinator.async_refresh()
+                            continue
                     if coordinator.data and entity_type in coordinator.data:
                         for entity in list(coordinator.data[entity_type]):
                             entity_id = entity.get("id")
@@ -466,6 +485,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ENTITY_TYPE_LIGHTS,
                 "turn_off_light",
                 filter_fn=lambda light: light.get("is_on"),
+                group_method="all_lights_off",
             )
 
         async def handle_all_blinds_close(call: ServiceCall) -> None:
