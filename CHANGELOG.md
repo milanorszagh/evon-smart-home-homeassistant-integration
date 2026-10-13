@@ -21,8 +21,9 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   "WebSocket disconnected" repair issue and ran one more full poll that delayed the
   shutdown by up to a poll cycle. The integration now stops polling and closes the
   WebSocket as soon as HA announces it is stopping, a WebSocket drop that arrives while
-  HA is stopping is no longer treated as a failure, and the error for a closed session
-  names the actual cause.
+  HA is stopping is no longer treated as a failure, a poll still in flight skips the
+  energy-statistics query (whose recorder executor is already gone), and the error for
+  a closed session names the actual cause. (#27)
 
 ## [1.23.0] - 2026-10-12
 

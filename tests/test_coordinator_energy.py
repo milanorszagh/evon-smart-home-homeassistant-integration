@@ -18,6 +18,7 @@ class TestBatchedEnergyStatistics:
         hass = MagicMock()
         hass.async_add_executor_job = AsyncMock()
         hass.async_create_task = MagicMock()
+        hass.is_stopping = False
         return hass
 
     @pytest.fixture
@@ -154,6 +155,20 @@ class TestBatchedEnergyStatistics:
         await calc(smart_meters)
 
         assert smart_meters[0]["energy_today_calculated"] is None
+
+    @pytest.mark.asyncio
+    async def test_skipped_while_hass_stopping(self, coordinator_and_method, mock_hass):
+        """A poll still in flight when HA starts stopping must not touch the
+        recorder executor (it is already shut down: "cannot schedule new futures
+        after shutdown")."""
+        obj, method = coordinator_and_method
+        mock_hass.is_stopping = True
+        meters = [{"id": "meter_1", "name": "Meter 1", "energy_data_month": None}]
+
+        await method(meters)
+
+        obj._mock_recorder.async_add_executor_job.assert_not_called()
+        assert "energy_today_calculated" not in meters[0]
 
     @pytest.mark.asyncio
     async def test_empty_meters_no_call(self, coordinator_and_method, mock_hass):

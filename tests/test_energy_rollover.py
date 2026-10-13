@@ -38,6 +38,7 @@ def _load_calculate_method():
 def mock_hass():
     """Create a mock HomeAssistant instance."""
     hass = MagicMock()
+    hass.is_stopping = False
     hass.async_add_executor_job = AsyncMock()
     hass.async_create_task = MagicMock()
     return hass

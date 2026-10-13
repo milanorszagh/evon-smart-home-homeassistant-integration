@@ -657,7 +657,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 2. **Token expiry**: Tokens expire; implement retry logic with re-authentication
 3. **Brightness values**: Evon uses 0-100, Home Assistant uses 0-255 — convert with `round()` in both directions for consistency. Minimum brightness is clamped to 1% (Evon) to prevent HA brightness=1 mapping to 0%.
 4. **Position inversion**: Evon and HA have opposite conventions for cover position
-5. **HA shutdown does not unload config entries**: `async_unload_entry` and the coordinator's `async_shutdown` (which HA binds to entry unload) never run at `EVENT_HOMEASSISTANT_STOP`. `async_setup_entry` therefore registers a once-listener via `_async_register_hass_stop()` that calls `coordinator.async_shutdown()` and `async_shutdown_websocket()`, so the WebSocket closes while HA's shared aiohttp session is still open (HA detaches it at `EVENT_HOMEASSISTANT_CLOSE`). Without it every restart logged three `Session is closed` reconnect tracebacks and ran a full poll that delayed the shutdown by one poll cycle. `_handle_ws_connection_state` additionally skips the repair issue and refresh while `hass.is_stopping`. Do not remove either.
+5. **HA shutdown does not unload config entries**: `async_unload_entry` and the coordinator's `async_shutdown` (which HA binds to entry unload) never run at `EVENT_HOMEASSISTANT_STOP`. `async_setup_entry` therefore registers a once-listener via `_async_register_hass_stop()` that calls `coordinator.async_shutdown()` and `async_shutdown_websocket()`, so the WebSocket closes while HA's shared aiohttp session is still open (HA detaches it at `EVENT_HOMEASSISTANT_CLOSE`). Without it every restart logged three `Session is closed` reconnect tracebacks and ran a full poll that delayed the shutdown by one poll cycle. `_handle_ws_connection_state` additionally skips the repair issue and refresh while `hass.is_stopping`, and `_calculate_energy_today_and_month` skips the recorder executor job while stopping (an in-flight poll would otherwise log `cannot schedule new futures after shutdown`). Do not remove any of the three.
 
 ## Architecture Decisions (Do Not Change)
 
@@ -758,7 +758,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1340 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1341 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

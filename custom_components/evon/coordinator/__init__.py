@@ -975,6 +975,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not smart_meters:
             return
 
+        if self.hass.is_stopping:
+            # The recorder's executor is already gone during shutdown; a poll
+            # that was in flight when HA started stopping must not schedule
+            # work on it ("cannot schedule new futures after shutdown").
+            _LOGGER.debug("Home Assistant is stopping; skipping energy statistics")
+            return
+
         now = dt_util.now()
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_day = now.day  # Day of month (1-31)
