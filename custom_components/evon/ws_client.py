@@ -193,7 +193,12 @@ class EvonWsClient:
         if self._session is not None and not self._session.closed:
             return self._session
 
-        raise RuntimeError("Session is closed and no session factory available")
+        if self._get_session is None:
+            raise RuntimeError("Session is closed and no session factory available")
+        raise RuntimeError(
+            "Session is closed and the session factory returned no open session "
+            "(Home Assistant's shared aiohttp session is closed, e.g. during shutdown)"
+        )
 
     async def connect(self) -> bool:
         """Connect to the WebSocket server.

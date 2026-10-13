@@ -2051,6 +2051,23 @@ class TestWsClientConnectionState:
         with pytest.raises(RuntimeError, match="Session is closed"):
             client._get_valid_session()
 
+    def test_get_valid_session_raises_when_factory_returns_closed_session(self):
+        """A factory that hands back a closed session (HA detaches its shared
+        session at shutdown) must be reported as such, not as a missing factory."""
+        closed_session = MagicMock()
+        closed_session.closed = True
+
+        client = EvonWsClient(
+            host="http://192.168.1.100",
+            username="user",
+            password="pass",
+            session=closed_session,
+            get_session=lambda: closed_session,
+        )
+
+        with pytest.raises(RuntimeError, match="session factory returned no open session"):
+            client._get_valid_session()
+
 
 class TestWsReconnectDelay:
     """Tests for WebSocket reconnect delay calculation."""

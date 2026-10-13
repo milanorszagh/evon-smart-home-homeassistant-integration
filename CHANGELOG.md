@@ -10,6 +10,20 @@ installed. The README keeps a one-line summary per version.
 
 Issue and PR numbers refer to this repository unless stated otherwise.
 
+## [Unreleased]
+
+### Fixed
+
+- **Clean shutdown on Home Assistant restart.** Home Assistant does not unload config
+  entries when it stops, so the integration kept its WebSocket loop and polling alive
+  until HA closed its shared HTTP session. Every restart then logged three
+  `Session is closed and no session factory available` tracebacks, opened a spurious
+  "WebSocket disconnected" repair issue and ran one more full poll that delayed the
+  shutdown by up to a poll cycle. The integration now stops polling and closes the
+  WebSocket as soon as HA announces it is stopping, a WebSocket drop that arrives while
+  HA is stopping is no longer treated as a failure, and the error for a closed session
+  names the actual cause.
+
 ## [1.23.0] - 2026-10-12
 
 ### Breaking changes
@@ -673,6 +687,7 @@ No GitHub release was published for this tag.
 
 - Initial release with lights, blinds and climate support.
 
+[Unreleased]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.23.0...HEAD
 [1.23.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.1...v1.23.0
 [1.22.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.21.0...v1.22.0

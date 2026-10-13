@@ -396,6 +396,7 @@ coordinator/       # Integrates WebSocket with data updates
 3. **Events**: `ValuesChanged` events trigger coordinator data updates
 4. **Reconnection**: Exponential backoff (5s → 300s max) on disconnect
 5. **Fallback**: HTTP polling resumes at normal rate when WS disconnects
+6. **Shutdown**: `async_setup_entry` listens once for `EVENT_HOMEASSISTANT_STOP` and calls `coordinator.async_shutdown()` + `async_shutdown_websocket()` — Home Assistant does not unload config entries at shutdown, so this is what closes the WebSocket cleanly before HA detaches its shared aiohttp session at `EVENT_HOMEASSISTANT_CLOSE`
 
 ### Property Mappings
 

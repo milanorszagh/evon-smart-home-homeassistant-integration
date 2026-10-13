@@ -297,3 +297,18 @@ Important issue and six minor ones; all fixed the same day. IDs continue the RV 
 All covered by 16 new tests (suite 1261 → 1277). A pre-existing behavior noted but NOT
 changed: radiator `turn_off` maps to Evon's `Switch` (a toggle) — a stale-on UI state
 turns the device on instead. Tracked here for a future decision.
+
+## Shutdown Review (2026-10-13)
+
+Follow-up to RV2-1, from the v1.23.0 restart logs: three `Session is closed and no
+session factory available` tracebacks plus a full poll during every HA restart.
+
+| ID | Severity | Finding | Resolution |
+|----|----------|---------|------------|
+| RV3-1 | Important | HA does not unload config entries at `EVENT_HOMEASSISTANT_STOP`, and `DataUpdateCoordinator.async_shutdown` is bound to entry unload — nothing stopped the coordinator or the WS loop. At `EVENT_HOMEASSISTANT_CLOSE` HA detached the shared aiohttp session: the WS drop was logged as "closed by server", the loop retried 3× (5s/10s backoff) against the closed cached session, and the disconnect handler opened a repair issue and scheduled a full poll (on an own-session fallback) that HA's close stage waited for (~20s per restart) | `_async_register_hass_stop()` in `__init__.py`: once-listener on `EVENT_HOMEASSISTANT_STOP` calling `coordinator.async_shutdown()` + `async_shutdown_websocket()`, unsubscribed on unload (guarded against removing the fired listener twice); `_handle_ws_connection_state` also skips repair + refresh while `hass.is_stopping`; the `_get_valid_session` error now says the factory returned a closed session |
+
+Covered by 3 new tests (suite 1337 → 1340).
+Verified on the live HAOS instance (HA 2026.10.1) on 2026-10-13: with the old code the
+shutdown produced the three tracebacks and a full poll and the new process started 36s
+after the WS drop; with the fix the stop hook ran at `EVENT_HOMEASSISTANT_STOP`, the WS
+closed cleanly, no poll or repair followed, and the new process started 10s later.

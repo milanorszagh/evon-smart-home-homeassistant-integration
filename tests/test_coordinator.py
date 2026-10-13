@@ -16,7 +16,8 @@ from tests.conftest import (
 )
 
 if HAS_HA_TEST_FRAMEWORK:
-    from homeassistant.core import HomeAssistant
+    from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+    from homeassistant.core import CoreState, HomeAssistant
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.evon.const import DOMAIN
@@ -1184,6 +1185,133 @@ class TestShutdownSuppression:
         issue_registry = ir.async_get(hass)
         issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
         assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+
+
+@requires_ha_test_framework
+class TestHomeAssistantStop:
+    """Home Assistant does not unload config entries when it shuts down, so the
+    integration has to stop polling and the WebSocket itself on
+    EVENT_HOMEASSISTANT_STOP. Without that hook the WS loop keeps reconnecting
+    against the shared aiohttp session that HA closes at EVENT_HOMEASSISTANT_CLOSE,
+    and the resulting "disconnect" opens a repair issue and schedules a full poll
+    that delays every restart by one poll cycle.
+    """
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+                "http_only": True,
+            },
+            entry_id="test_hass_stop_entry",
+        )
+
+    @staticmethod
+    def _inject_fake_ws_client(coordinator):
+        """Attach a fake *connected* WS client whose stop() behaves like the real
+        one: it notifies the connection-state callback with False."""
+
+        class _FakeWsClient:
+            def __init__(self, callback):
+                self._callback = callback
+                self.stopped = False
+
+            async def stop(self):
+                self.stopped = True
+                self._callback(False)
+
+        client = _FakeWsClient(coordinator._handle_ws_connection_state)
+        coordinator._ws_client = client
+        coordinator._ws_connected = True
+        return client
+
+    async def test_hass_stop_shuts_down_websocket_and_polling(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """EVENT_HOMEASSISTANT_STOP stops the WS client without a repair issue or
+        a poll, and the coordinator ignores refreshes from then on."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        ws_client = self._inject_fake_ws_client(coordinator)
+        polls_before = mock_evon_api_class.get_instances.call_count
+
+        hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+        await hass.async_block_till_done()
+
+        assert ws_client.stopped is True
+        assert coordinator.ws_client is None
+        assert coordinator.ws_connected is False
+
+        issue_registry = ir.async_get(hass)
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+        # The disconnect fired by stop() must not have scheduled a poll ...
+        assert mock_evon_api_class.get_instances.call_count == polls_before
+        # ... and the coordinator is shut down: later refreshes are ignored.
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert mock_evon_api_class.get_instances.call_count == polls_before
+
+        # Unloading afterwards (the test harness does this at teardown) must not
+        # try to remove the already-fired once-listener a second time.
+        assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert "Unable to remove unknown job listener" not in caplog.text
+
+    async def test_disconnect_while_hass_stopping_skips_repair_and_refresh(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Defense in depth: a WS drop that arrives while HA is already stopping
+        (e.g. the transport dies before the stop hook ran) is not a failure."""
+        from homeassistant.helpers import issue_registry as ir
+
+        from custom_components.evon.const import REPAIR_WEBSOCKET_DISCONNECTED
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = hass.data[DOMAIN][mock_config_entry.entry_id]["coordinator"]
+        coordinator._ws_connected = True
+        polls_before = mock_evon_api_class.get_instances.call_count
+
+        hass.set_state(CoreState.stopping)
+        try:
+            coordinator._handle_ws_connection_state(False)
+            await hass.async_block_till_done()
+        finally:
+            hass.set_state(CoreState.running)
+
+        issue_registry = ir.async_get(hass)
+        issue_id = f"{REPAIR_WEBSOCKET_DISCONNECTED}_{mock_config_entry.entry_id}"
+        assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+        assert mock_evon_api_class.get_instances.call_count == polls_before
+        assert coordinator.ws_connected is False
 
 
 @requires_ha_test_framework

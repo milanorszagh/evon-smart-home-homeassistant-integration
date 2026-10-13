@@ -652,9 +652,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         self._ws_connected = connected
 
-        if not connected and self._shutting_down:
-            # Intentional teardown (unload/reload/options save), not a failure:
-            # no repair issue, no refresh against a session that is closing.
+        if not connected and (self._shutting_down or self.hass.is_stopping):
+            # Intentional teardown (unload/reload/options save) or HA shutting
+            # down, not a failure: no repair issue, no refresh against a session
+            # that is closing.
             _LOGGER.debug("WebSocket stopped as part of shutdown; skipping disconnect repair and refresh")
             return
 

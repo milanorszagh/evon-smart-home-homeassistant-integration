@@ -8,8 +8,8 @@ import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -165,6 +165,43 @@ def _find_camera_entity(hass: HomeAssistant, entity_id: str) -> Any:
             if camera.entity_id == entity_id:
                 return camera
     return None
+
+
+@callback
+def _async_register_hass_stop(hass: HomeAssistant, coordinator: EvonDataUpdateCoordinator) -> CALLBACK_TYPE:
+    """Stop polling and the WebSocket when Home Assistant shuts down.
+
+    Home Assistant does not unload config entries at shutdown, so neither the
+    coordinator's ``async_shutdown`` (bound to entry unload) nor
+    ``async_shutdown_websocket`` would run. The WebSocket loop would then keep
+    reconnecting against the shared aiohttp session that HA closes at
+    EVENT_HOMEASSISTANT_CLOSE, and the resulting "disconnect" would open a repair
+    issue and schedule a full poll that delays the shutdown by one poll cycle.
+
+    Returns an unsubscribe callback that is safe to call after the event fired
+    (a once-listener removes itself when it fires; removing it again on a later
+    unload would log "Unable to remove unknown job listener").
+    """
+    unsub: CALLBACK_TYPE | None = None
+
+    async def _async_on_hass_stop(_: Event) -> None:
+        nonlocal unsub
+        unsub = None
+        # Block scheduled and requested refreshes first, then close the WebSocket
+        # while HA's shared session is still open. async_shutdown_websocket flags
+        # the teardown so the disconnect callback neither opens a repair issue
+        # nor schedules a poll.
+        await coordinator.async_shutdown()
+        await coordinator.async_shutdown_websocket()
+
+    unsub = hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_on_hass_stop)
+
+    @callback
+    def _async_unsub() -> None:
+        if unsub is not None:
+            unsub()
+
+    return _async_unsub
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -543,6 +580,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register update listener for options changes
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    # Stop polling and the WebSocket on HA shutdown (entries are not unloaded then)
+    entry.async_on_unload(_async_register_hass_stop(hass, coordinator))
 
     return True
 
