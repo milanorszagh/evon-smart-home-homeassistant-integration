@@ -467,6 +467,43 @@ class TestEvonApiWebSocketControl:
 
         return api
 
+    @pytest.mark.asyncio
+    async def test_ws_control_bounds_in_flight_requests(self, mock_api_with_ws):
+        """Issue #26: the controller answers a session's CallWithReturn requests strictly
+        in order and executes real switch-offs serially (0.1-1.3s each, a home-state
+        activation ~7s), so a burst of control calls sent at once makes the last ones
+        exceed the 10s request timer. Control requests are limited to
+        WS_CONTROL_MAX_IN_FLIGHT at a time; the rest wait for a slot instead of timing
+        out and falling back to HTTP."""
+        import asyncio
+
+        from custom_components.evon.const import WS_CONTROL_MAX_IN_FLIGHT
+
+        lights = [f"Light{i}" for i in range(8)]
+        mock_api_with_ws.set_instance_classes([{"ID": lid, "ClassName": "SmartCOM.Light.LightDim"} for lid in lights])
+
+        in_flight = 0
+        peak = 0
+
+        async def fake_call_method(instance_id, method, params=None, fire_and_forget=False):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0.01)  # a "serial" controller: the call takes time
+            in_flight -= 1
+            return True
+
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.call_method = fake_call_method
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        await asyncio.gather(*(mock_api_with_ws.turn_off_light(lid) for lid in lights))
+
+        assert peak == WS_CONTROL_MAX_IN_FLIGHT
+        assert in_flight == 0
+        mock_api_with_ws._request.assert_not_called()  # every call went over WS, no HTTP fallback
+
     def test_set_ws_client(self):
         """Test setting WebSocket client."""
         api = EvonApi(

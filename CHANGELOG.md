@@ -24,6 +24,13 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   HA is stopping is no longer treated as a failure, a poll still in flight skips the
   energy-statistics query (whose recorder executor is already gone), and the error for
   a closed session names the actual cause. (#27)
+- **Bulk light commands no longer time out over WebSocket.** The controller executes a
+  session's requests one at a time and answers them in order, so switching off many
+  lights at once (or right after a home-state change) made the last requests exceed the
+  10 s timer, log a warning per light and fall back to HTTP although the WebSocket
+  commands were still executing. Control requests are now limited to two in flight; the
+  rest wait for a slot. (#26, first part — the single `Base.bLight` group call is still
+  open until its method name is confirmed)
 
 ## [1.23.0] - 2026-10-12
 

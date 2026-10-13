@@ -371,6 +371,34 @@ Tested on: `SC1_M01.Light3` (Licht Zi3, SmartCOM.Light.LightDim)
 | SetValue IsOn=true | ✅ PASS | Also works for on/off |
 | SetValue ScaledBrightness=X | ✅ PASS | Also works for brightness |
 
+### Request Processing Is Serial (Verified October 2026)
+
+The controller executes a session's `CallWithReturn` requests **one at a time, in order**,
+and sends each `Callback` only after that request's command has completed. Evidence from
+Home Assistant's journal, 2026-10-13 08:07 (a "leaving home" automation):
+
+| Time | Event |
+|------|-------|
+| 08:07:26.30–.34 | 22 `CallMethod` requests sent within 35 ms: `HomeStateWork.Activate`, 16× `Light.SwitchOff`, 6× fire-and-forget `WriteFreezeMode` |
+| 08:07:33.15 | first `Callback` (seq 101, the home-state activation) — 6.8 s after sending |
+| 08:07:33.23 … 36.59 | `Callback`s for seq 102, 103, … arrive strictly in sequence order, 0.1–1.3 s apart, each followed by that light's `ValuesChanged` (brightness 100 → 0) |
+| 08:07:36.32 | the 10 s timer expires for seq 107–122; the client logs 16 timeouts and falls back to HTTP |
+| 08:07:36.34 … | the late `Callback`s for seq 107+ keep arriving (`pending=[]`) while the HTTP fallbacks "succeed" in ~10 ms each — the lights were being switched off by the queued WS commands anyway |
+
+A controlled experiment the same day (12 concurrent `SwitchOff` on lights that were already
+off) completed in 70 ms with a median reply of 38 ms, so the cost is per executed command,
+not per request: a no-op is ~5 ms, a real fade-out 0.1–1.3 s, a home-state activation ~7 s.
+
+Consequences for clients:
+
+- A request's timer must not start while many commands are queued ahead of it. The HA
+  integration keeps at most `WS_CONTROL_MAX_IN_FLIGHT` (2) control requests in flight
+  (`asyncio.Semaphore` in `EvonApi.call_method()`); more concurrency adds nothing.
+- Re-sending a timed-out command (the HTTP fallback) duplicates it; fine for idempotent
+  methods such as `SwitchOff`, wrong for toggles.
+- The `MaxMethodCalls: 20` / `SaveMethodCalls` properties on `Base.bLight` belong to the
+  controller's method-call history (`GetMethodCalls`), not to a concurrency limit.
+
 ### Brightness Scale
 
 The brightness scale for lights is **0-100**:

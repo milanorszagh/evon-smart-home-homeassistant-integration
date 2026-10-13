@@ -366,6 +366,22 @@ When a non-dimmable light (e.g., Evon relay controlling power for a combined lig
 
 This is handled automatically in `light.py` - non-dimmable lights that are already on will not receive WebSocket commands when brightness changes on the group.
 
+### Note #6: The Controller Executes a Session's Requests Serially
+
+Verified 2026-10-13 from HA's journal and a live experiment (docs/WEBSOCKET_API.md →
+*Request Processing Is Serial*): `CallWithReturn` replies arrive strictly in sequence order,
+and each real command is executed before the next one is started — a light `SwitchOff`
+with a fade takes 0.1–1.3 s, a `HomeState*.Activate` ~7 s, a `SwitchOff` on a light that is
+already off ~5 ms. A burst of 16 light commands after a home-state change therefore pushes
+the last requests past the 10 s timer; they then "fail", fall back to HTTP (which succeeds
+only because the queued WS commands are executing anyway) and their late replies are
+logged as unknown sequence ids. `EvonApi` bounds WS control requests with
+`asyncio.Semaphore(WS_CONTROL_MAX_IN_FLIGHT)` (2) around `_try_ws_control()` and the
+season-mode `SetValue`; subscriptions and `GetInstances` are not bounded. Raising the
+limit does not speed anything up (the controller is the bottleneck); it only brings the
+timeouts back. The HTTP fallback after a WS timeout re-sends the command — harmless for
+`SwitchOff`, but a toggle such as the radiator `Switch` would flip twice.
+
 ### Implementation Details
 
 The codebase uses WS-native names as canonical method names everywhere. When the HTTP fallback is needed, `ws_control.get_http_method_name()` (Python) or `CANONICAL_TO_HTTP_METHOD` (TypeScript) translates them to HTTP names automatically.
@@ -758,7 +774,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1341 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1342 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

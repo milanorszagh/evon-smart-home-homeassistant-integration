@@ -432,6 +432,7 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (se
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)
 WS_LOG_MESSAGE_TRUNCATE = 500          # Max characters to log from WS messages
 WS_MAX_PENDING_REQUESTS = 100          # Maximum pending WS requests before rejecting new ones
+WS_CONTROL_MAX_IN_FLIGHT = 2           # Concurrent WS control requests; the controller executes a session's requests serially
 WS_RESUBSCRIBE_MAX_ATTEMPTS = 3        # Retries for a post-reconnect resubscribe before giving up
 WS_RESUBSCRIBE_RETRY_DELAY = 2.0       # Delay between resubscribe attempts (seconds)
 

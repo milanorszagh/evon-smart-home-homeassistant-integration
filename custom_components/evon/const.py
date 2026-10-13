@@ -178,6 +178,7 @@ WS_DEFAULT_REQUEST_TIMEOUT = 10.0  # Default timeout for WebSocket RPC requests 
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0  # Timeout for subscription requests (many devices) (seconds)
 WS_LOG_MESSAGE_TRUNCATE = 500  # Max characters to log from WebSocket messages
 WS_MAX_PENDING_REQUESTS = 100  # Maximum pending WebSocket requests before rejecting new ones
+WS_CONTROL_MAX_IN_FLIGHT = 2  # Concurrent WS control requests (CallMethod/SetValue); the controller executes a session's requests serially, see docs/WEBSOCKET_API.md
 WS_RESUBSCRIBE_MAX_ATTEMPTS = 3  # Retries for a post-reconnect resubscribe before giving up
 WS_RESUBSCRIBE_RETRY_DELAY = 2.0  # Delay between resubscribe attempts (seconds)
 

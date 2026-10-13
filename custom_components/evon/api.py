@@ -28,6 +28,7 @@ from .const import (
     IMAGE_FETCH_TIMEOUT,
     LOGIN_BACKOFF_BASE,
     LOGIN_MAX_BACKOFF,
+    WS_CONTROL_MAX_IN_FLIGHT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -229,6 +230,8 @@ class EvonApi:
         self._token: str | None = None
         self._token_timestamp: float = 0.0
         self._token_lock = asyncio.Lock()
+        # Bounds concurrent WebSocket control requests, see call_method()
+        self._ws_control_slots = asyncio.Semaphore(WS_CONTROL_MAX_IN_FLIGHT)
         self._own_session = False
         self._is_remote = engine_id is not None
         self._engine_id = engine_id
@@ -577,7 +580,14 @@ class EvonApi:
         if self._ws_client and self._ws_client.is_connected:
             ws_attempted = True
             _LOGGER.debug("Attempting WS control for %s.%s", instance_id, method)
-            if await self._try_ws_control(instance_id, method, params):
+            # The controller answers a session's requests strictly in order and
+            # executes them one at a time (a real light switch-off takes 0.1-1.3s,
+            # a home-state activation ~7s), so a burst sent at once makes the last
+            # requests wait for all the others and exceed the request timer. Keep
+            # only a few in flight; the rest wait here for a slot (issue #26).
+            async with self._ws_control_slots:
+                ws_ok = await self._try_ws_control(instance_id, method, params)
+            if ws_ok:
                 _LOGGER.debug("WS control succeeded for %s.%s", instance_id, method)
                 return {}
             _LOGGER.debug("WS control failed/unavailable, falling back to HTTP")
@@ -875,7 +885,8 @@ class EvonApi:
         ws_attempted = self._ws_client and self._ws_client.is_connected
         if ws_attempted:
             _LOGGER.debug("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
-            result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
+            async with self._ws_control_slots:
+                result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
             _LOGGER.debug("WS control: SetValue result = %s", result)
             if result:
                 return
