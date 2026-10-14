@@ -438,6 +438,7 @@ WS_RESUBSCRIBE_RETRY_DELAY = 2.0       # Delay between resubscribe attempts (sec
 
 # Button press detection
 DEFAULT_BUTTON_DOUBLE_CLICK_DELAY = 0.8   # Configurable via options (0.2-1.4s)
+DEFAULT_DOOR_OPEN_SECONDS = 2             # Door-opener pulse (SwitchOnFor), configurable via options (1-30s)
 BUTTON_LONG_PRESS_THRESHOLD = 1.5         # Hold duration for long press (seconds)
 
 # Optimistic state and animation timing
@@ -605,7 +606,7 @@ All requests require: `Cookie: token=<token>`
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
-| `Security.Door` | Security door | No (sensor) |
+| `Security.Door` | Security Door | Yes (open-door button via the linked intercom's `SwitchOnFor`) |
 | `Security.Intercom.2N.Intercom2N` | 2N Intercom | Yes (`SwitchOnFor` door opener, see `EvonApi.open_intercom_door()`) |
 | `Security.Intercom.2N.Intercom2NCam` | 2N Camera | Yes (image request) |
 | `System.Location.Room` | Room/area | No |

@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Wybierz światła, które powinny być traktowane tylko jako wł./wył. (bez ściemniania). Przydatne dla taśm LED podłączonych przez ściemniacze PWM, które wymagają pełnej mocy. Uwaga: Zmiana tej opcji spowoduje ponowne załadowanie integracji."
         },
         "sections": {
+          "doors": {
+            "name": "Otwieranie drzwi",
+            "data": {
+              "door_open_seconds": "Impuls otwarcia drzwi (sekundy)"
+            },
+            "data_description": {
+              "door_open_seconds": "Jak długo otwieracz drzwi jest aktywny po naciśnięciu przycisku Otwórz drzwi. Zakres: 1–30 sekund."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 from .const import (
     DEFAULT_CONNECTION_POOL_SIZE,
+    DEFAULT_DOOR_OPEN_SECONDS,
     DEFAULT_LOGIN_TIMEOUT,
     DEFAULT_REQUEST_TIMEOUT,
     ENGINE_ID_MAX_LENGTH,
@@ -27,7 +28,6 @@ from .const import (
     EVON_CLASS_LIGHT_EH,
     EVON_REMOTE_HOST,
     IMAGE_FETCH_TIMEOUT,
-    INTERCOM_DOOR_OPEN_SECONDS,
     LOGIN_BACKOFF_BASE,
     LOGIN_MAX_BACKOFF,
     WS_CONTROL_MAX_IN_FLIGHT,
@@ -762,7 +762,7 @@ class EvonApi:
         await self.call_method(EVON_CLASS_LIGHT_EH, "SwitchAllOn", [])
 
     # Intercom methods
-    async def open_intercom_door(self, instance_id: str, seconds: int = INTERCOM_DOOR_OPEN_SECONDS) -> None:
+    async def open_intercom_door(self, instance_id: str, seconds: int = DEFAULT_DOOR_OPEN_SECONDS) -> None:
         """Open the door of a 2N intercom for ``seconds`` (``SwitchOnFor``).
 
         The pulse length travels as a string, mirroring the Evon web app and the

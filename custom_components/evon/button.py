@@ -16,10 +16,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
 from .const import (
+    CONF_DOOR_OPEN_SECONDS,
+    DEFAULT_DOOR_OPEN_SECONDS,
     DOMAIN,
     ENTITY_TYPE_INTERCOMS,
     ENTITY_TYPE_LIGHTS,
     ENTITY_TYPE_SCENES,
+    ENTITY_TYPE_SECURITY_DOORS,
     LIGHT_IDENTIFY_ANIMATION_DELAY,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -77,6 +80,25 @@ async def async_setup_entry(
                     intercom.get("room_name", ""),
                     entry,
                     api,
+                )
+            )
+
+    # Open-door buttons on security doors that are linked to an intercom (the door
+    # object has no opener of its own; the button pulses the linked intercom).
+    if coordinator.data and ENTITY_TYPE_SECURITY_DOORS in coordinator.data:
+        for door in coordinator.data[ENTITY_TYPE_SECURITY_DOORS]:
+            intercom_id = door.get("intercom_instance_name")
+            if not intercom_id:
+                continue
+            entities.append(
+                EvonSecurityDoorOpenButton(
+                    coordinator,
+                    door["id"],
+                    door["name"],
+                    door.get("room_name", ""),
+                    entry,
+                    api,
+                    intercom_id,
                 )
             )
 
@@ -200,10 +222,53 @@ class EvonIntercomDoorButton(EvonEntity, ButtonEntity):
         """Return device info for this intercom."""
         return self._build_device_info("Intercom")
 
+    @property
+    def _intercom_id(self) -> str:
+        """The intercom whose SwitchOnFor pulses the door release."""
+        return self._instance_id
+
+    def _pulse_seconds(self) -> int:
+        """Pulse length from the integration options (door_open_seconds)."""
+        return int(self._entry.options.get(CONF_DOOR_OPEN_SECONDS, DEFAULT_DOOR_OPEN_SECONDS))
+
     async def async_press(self) -> None:
         """Open the door (SwitchOnFor pulse on the intercom)."""
-        _LOGGER.info("Opening door via intercom %s (%s)", self._device_name, self._instance_id)
+        seconds = self._pulse_seconds()
+        _LOGGER.info("Opening door %s for %ss via intercom %s", self._device_name, seconds, self._intercom_id)
         try:
-            await self._api.open_intercom_door(self._instance_id)
+            await self._api.open_intercom_door(self._intercom_id, seconds)
         except EvonApiError as err:
             raise HomeAssistantError(f"Failed to open door {self._device_name}: {err}") from err
+
+
+class EvonSecurityDoorOpenButton(EvonIntercomDoorButton):
+    """Open-door button on a Security.Door, pulsing the intercom linked to it.
+
+    ``Security.Door`` objects have no opener of their own; ``IntercomInstanceName``
+    names the intercom whose ``SwitchOnFor`` releases the door.
+    """
+
+    _entity_type = ENTITY_TYPE_SECURITY_DOORS
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+        api: EvonApi,
+        intercom_id: str,
+    ) -> None:
+        """Initialize the door-opener button for a security door."""
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
+        self._linked_intercom_id = intercom_id
+
+    @property
+    def _intercom_id(self) -> str:
+        return self._linked_intercom_id
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this security door."""
+        return self._build_device_info("Security Door")

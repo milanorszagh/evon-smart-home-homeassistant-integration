@@ -108,6 +108,7 @@ class TestSecurityDoorProcessor:
             "DoorIsOpen": False,
             "CallInProgress": False,
             "CamInstanceName": "intercom_1.Cam",
+            "IntercomInstanceName": "intercom_1",
             "SavedPictures": [
                 {"imageUrlClient": "/images/snap1.jpg", "datetime": 1706900000000},
                 {"imageUrlClient": "/images/snap2.jpg", "datetime": 1706899000000},
@@ -132,6 +133,7 @@ class TestSecurityDoorProcessor:
         assert door["is_open"] is False
         assert door["call_in_progress"] is False
         assert door["cam_instance_name"] == "intercom_1.Cam"
+        assert door["intercom_instance_name"] == "intercom_1"
         assert len(door["saved_pictures"]) == 2
 
     def test_process_security_doors_saved_pictures_lowercase(self, door_instances, door_details):

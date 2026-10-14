@@ -203,14 +203,14 @@ class TestIntercomMappings:
     verified HTTP call POST /api/instances/Intercom2N1000/SwitchOnFor with body ["2"]."""
 
     def test_switch_on_for_defaults_to_pulse_seconds(self):
-        from custom_components.evon.const import INTERCOM_DOOR_OPEN_SECONDS
+        from custom_components.evon.const import DEFAULT_DOOR_OPEN_SECONDS
         from custom_components.evon.ws_control import INTERCOM_MAPPINGS
 
         m = INTERCOM_MAPPINGS["SwitchOnFor"]
         assert m.property_name is None
         assert m.method_name == "SwitchOnFor"
         assert m.fire_and_forget is False
-        assert m.get_value(None) == [str(INTERCOM_DOOR_OPEN_SECONDS)]
+        assert m.get_value(None) == [str(DEFAULT_DOOR_OPEN_SECONDS)]
         assert m.get_value(["5"]) == ["5"]
 
     def test_intercom_class_mapped(self):

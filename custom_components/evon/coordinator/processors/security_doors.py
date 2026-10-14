@@ -76,6 +76,8 @@ def process_security_doors(
                 "is_open": details.get("IsOpen", False) or details.get("DoorIsOpen", False),
                 "call_in_progress": details.get("CallInProgress", False),
                 "cam_instance_name": details.get("CamInstanceName", ""),
+                # Intercom whose SwitchOnFor opens this door (empty when none is linked)
+                "intercom_instance_name": details.get("IntercomInstanceName", ""),
                 "saved_pictures": saved_pictures,
             }
         )

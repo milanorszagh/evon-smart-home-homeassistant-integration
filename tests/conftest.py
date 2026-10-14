@@ -745,6 +745,7 @@ MOCK_INSTANCE_DETAILS = {
         "DoorIsOpen": False,
         "CallInProgress": False,
         "CamInstanceName": "intercom_1.Cam",
+        "IntercomInstanceName": "intercom_1",
         "SavedPictures": [
             {"imageUrlClient": "/images/snapshot_1.jpg", "datetime": 1706900000000},
             {"imageUrlClient": "/images/snapshot_2.jpg", "datetime": 1706899000000},

@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Selecione luzes que devem ser tratadas apenas como ligar/desligar (sem regulação). Útil para tiras LED conectadas via dimmers PWM que precisam de energia total. Nota: Alterar esta opção irá recarregar a integração."
         },
         "sections": {
+          "doors": {
+            "name": "Abertura da porta",
+            "data": {
+              "door_open_seconds": "Impulso de abertura da porta (segundos)"
+            },
+            "data_description": {
+              "door_open_seconds": "Durante quanto tempo o trinco é ativado quando um botão Abrir porta é premido. Intervalo: 1–30 segundos."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

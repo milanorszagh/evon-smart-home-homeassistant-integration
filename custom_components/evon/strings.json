@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Select lights that should be treated as on/off only (no dimming). Useful for LED strips connected via PWM dimmers that need full power. Note: Changing this option will reload the integration."
         },
         "sections": {
+          "doors": {
+            "name": "Door opener",
+            "data": {
+              "door_open_seconds": "Door open pulse (seconds)"
+            },
+            "data_description": {
+              "door_open_seconds": "How long the door release is activated when an Open door button is pressed. Range: 1–30 seconds."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

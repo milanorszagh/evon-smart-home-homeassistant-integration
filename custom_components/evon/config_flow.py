@@ -28,6 +28,7 @@ from .const import (
     CONF_DEBUG_API,
     CONF_DEBUG_COORDINATOR,
     CONF_DEBUG_WEBSOCKET,
+    CONF_DOOR_OPEN_SECONDS,
     CONF_ENGINE_ID,
     CONF_HOST,
     CONF_HTTP_ONLY,
@@ -44,6 +45,7 @@ from .const import (
     DEFAULT_DEBUG_API,
     DEFAULT_DEBUG_COORDINATOR,
     DEFAULT_DEBUG_WEBSOCKET,
+    DEFAULT_DOOR_OPEN_SECONDS,
     DEFAULT_HTTP_ONLY,
     DEFAULT_MAX_RECORDING_DURATION,
     DEFAULT_SCAN_INTERVAL,
@@ -53,11 +55,14 @@ from .const import (
     ENGINE_ID_MIN_LENGTH,
     ENTITY_TYPE_BUTTON_EVENTS,
     ENTITY_TYPE_CAMERAS,
+    ENTITY_TYPE_INTERCOMS,
     ENTITY_TYPE_LIGHTS,
     MAX_BUTTON_DOUBLE_CLICK_DELAY,
+    MAX_DOOR_OPEN_SECONDS,
     MAX_POLL_INTERVAL,
     MAX_RECORDING_DURATION,
     MIN_BUTTON_DOUBLE_CLICK_DELAY,
+    MIN_DOOR_OPEN_SECONDS,
     MIN_PASSWORD_LENGTH,
     MIN_POLL_INTERVAL,
     MIN_RECORDING_DURATION,
@@ -709,11 +714,13 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
         current_double_click_delay = self.config_entry.options.get(
             CONF_BUTTON_DOUBLE_CLICK_DELAY, DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
         )
+        current_door_open_seconds = self.config_entry.options.get(CONF_DOOR_OPEN_SECONDS, DEFAULT_DOOR_OPEN_SECONDS)
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
         has_cameras = False
         has_buttons = False
+        has_doors = False
         if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
             if coordinator and coordinator.data:
@@ -728,6 +735,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     has_cameras = True
                 if ENTITY_TYPE_BUTTON_EVENTS in coordinator.data and coordinator.data[ENTITY_TYPE_BUTTON_EVENTS]:
                     has_buttons = True
+                if ENTITY_TYPE_INTERCOMS in coordinator.data and coordinator.data[ENTITY_TYPE_INTERCOMS]:
+                    has_doors = True
 
         # Build schema with sections for better organization
         schema_dict: dict[Any, Any] = {
@@ -754,6 +763,20 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                                 min=MIN_BUTTON_DOUBLE_CLICK_DELAY,
                                 max=MAX_BUTTON_DOUBLE_CLICK_DELAY,
                             ),
+                        ),
+                    }
+                ),
+                {"collapsed": True},
+            )
+
+        # Door opener section: only shown when an intercom (door opener) is present
+        if has_doors:
+            schema_dict[vol.Required("doors")] = section(
+                vol.Schema(
+                    {
+                        vol.Required(CONF_DOOR_OPEN_SECONDS, default=current_door_open_seconds): vol.All(
+                            vol.Coerce(int),
+                            vol.Range(min=MIN_DOOR_OPEN_SECONDS, max=MAX_DOOR_OPEN_SECONDS),
                         ),
                     }
                 ),

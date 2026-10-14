@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Wählen Sie Leuchten, die nur als Ein/Aus behandelt werden sollen (keine Dimmung). Nützlich für LED-Streifen, die über PWM-Dimmer angeschlossen sind und volle Leistung benötigen. Hinweis: Das Ändern dieser Option lädt die Integration neu."
         },
         "sections": {
+          "doors": {
+            "name": "Türöffner",
+            "data": {
+              "door_open_seconds": "Türöffner-Impuls (Sekunden)"
+            },
+            "data_description": {
+              "door_open_seconds": "Wie lange der Türöffner aktiviert wird, wenn eine Tür-öffnen-Schaltfläche gedrückt wird. Bereich: 1–30 Sekunden."
+            }
+          },
           "connection": {
             "name": "HTTP-API vs WebSocket",
             "data": {

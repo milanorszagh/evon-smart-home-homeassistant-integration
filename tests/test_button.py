@@ -12,7 +12,12 @@ from tests.conftest import HAS_HA_TEST_FRAMEWORK, requires_ha_test_framework
 
 # Entity classes require proper HA base classes (metaclass inheritance)
 if HAS_HA_TEST_FRAMEWORK:
-    from custom_components.evon.button import EvonIdentifyButton, EvonIntercomDoorButton, EvonSceneButton
+    from custom_components.evon.button import (
+        EvonIdentifyButton,
+        EvonIntercomDoorButton,
+        EvonSceneButton,
+        EvonSecurityDoorOpenButton,
+    )
 
 
 # =============================================================================
@@ -47,6 +52,7 @@ def _make_entry():
     """Create a mock config entry."""
     entry = MagicMock()
     entry.entry_id = "test_entry"
+    entry.options = {}
     return entry
 
 
@@ -118,7 +124,17 @@ class TestEvonIntercomDoorButton:
         api = _make_api()
         coord = _make_coordinator()
         await self._btn(api, coord).async_press()
-        api.open_intercom_door.assert_awaited_once_with("Intercom2N1000")
+        api.open_intercom_door.assert_awaited_once_with("Intercom2N1000", 2)
+
+    @pytest.mark.asyncio
+    async def test_press_uses_configured_pulse(self):
+        """The pulse length comes from the door_open_seconds integration option."""
+        api = _make_api()
+        entry = _make_entry()
+        entry.options = {"door_open_seconds": 5}
+        btn = EvonIntercomDoorButton(_make_coordinator(), "Intercom2N1000", "Haupteingang", "Entrance", entry, api)
+        await btn.async_press()
+        api.open_intercom_door.assert_awaited_once_with("Intercom2N1000", 5)
 
     @pytest.mark.asyncio
     async def test_press_api_error_raises_ha_error(self):
@@ -128,6 +144,37 @@ class TestEvonIntercomDoorButton:
 
         with pytest.raises(HomeAssistantError, match="Failed to open door"):
             await self._btn(api).async_press()
+
+
+@requires_ha_test_framework
+class TestEvonSecurityDoorOpenButton:
+    """Open-door button on a Security.Door: delegates to the door's linked intercom."""
+
+    def _btn(self, api=None, entry=None):
+        return EvonSecurityDoorOpenButton(
+            _make_coordinator(),
+            "Door7586",
+            "Eingangstür",
+            "Entrance",
+            entry or _make_entry(),
+            api or _make_api(),
+            "Intercom2N1000",
+        )
+
+    def test_unique_id_uses_the_door(self):
+        assert self._btn()._attr_unique_id == "evon_open_door_Door7586"
+
+    def test_disabled_by_default(self):
+        assert self._btn().entity_registry_enabled_default is False
+
+    def test_device_info_is_the_door_device(self):
+        assert ("evon", "Door7586") in self._btn().device_info["identifiers"]
+
+    @pytest.mark.asyncio
+    async def test_press_opens_via_linked_intercom(self):
+        api = _make_api()
+        await self._btn(api).async_press()
+        api.open_intercom_door.assert_awaited_once_with("Intercom2N1000", 2)
 
 
 @requires_ha_test_framework
@@ -305,3 +352,19 @@ async def test_intercom_door_button_created_disabled(hass, mock_config_entry_v2,
     assert entity_id is not None
     assert ent_reg.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert hass.states.get(entity_id) is None
+
+
+@requires_ha_test_framework
+@pytest.mark.asyncio
+async def test_security_door_button_created_disabled(hass, mock_config_entry_v2, mock_evon_api_class):
+    """A Security.Door linked to an intercom gets its own (disabled) open-door button."""
+    from homeassistant.helpers import entity_registry as er
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id("button", "evon", "evon_open_door_security_door_1")
+    assert entity_id is not None
+    assert ent_reg.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION

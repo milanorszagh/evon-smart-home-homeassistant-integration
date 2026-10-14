@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Seleziona le luci che devono essere trattate solo come acceso/spento (senza dimmerazione). Utile per strisce LED collegate tramite dimmer PWM che richiedono la massima potenza. Nota: La modifica di questa opzione ricaricherà l'integrazione."
         },
         "sections": {
+          "doors": {
+            "name": "Apriporta",
+            "data": {
+              "door_open_seconds": "Impulso apriporta (secondi)"
+            },
+            "data_description": {
+              "door_open_seconds": "Per quanto tempo viene attivato l'apriporta alla pressione di un pulsante Apri porta. Intervallo: 1–30 secondi."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

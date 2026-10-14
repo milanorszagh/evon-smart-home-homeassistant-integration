@@ -68,6 +68,9 @@ class TestOptionsFlowUnit:
         assert options.get(CONF_DEBUG_API, DEFAULT_DEBUG_API) == DEFAULT_DEBUG_API
         assert options.get(CONF_DEBUG_WEBSOCKET, DEFAULT_DEBUG_WEBSOCKET) == DEFAULT_DEBUG_WEBSOCKET
         assert options.get(CONF_DEBUG_COORDINATOR, DEFAULT_DEBUG_COORDINATOR) == DEFAULT_DEBUG_COORDINATOR
+        from custom_components.evon.const import CONF_DOOR_OPEN_SECONDS, DEFAULT_DOOR_OPEN_SECONDS
+
+        assert options.get(CONF_DOOR_OPEN_SECONDS, DEFAULT_DOOR_OPEN_SECONDS) == 2
 
 
 @requires_ha_test_framework
@@ -119,6 +122,9 @@ class TestOptionsFlowIntegration:
                 CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
             }
 
+        if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
+            user_input["doors"] = {"door_open_seconds": 2}
+
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input=user_input,
@@ -145,6 +151,49 @@ class TestOptionsFlowIntegration:
         assert schema is not None
         schema_keys = [str(k) for k in schema.schema]
         assert "buttons" in schema_keys
+
+    @pytest.mark.asyncio
+    async def test_options_flow_shows_doors_section(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """The door-opener section is offered when the system has an intercom (mock data has one)."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
+        assert "doors" in [str(k) for k in result["data_schema"].schema]
+
+    @pytest.mark.asyncio
+    async def test_options_flow_submit_with_doors(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """The door pulse length is stored flat under door_open_seconds."""
+        from custom_components.evon.const import CONF_DOOR_OPEN_SECONDS
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
+        schema_keys = [str(k) for k in result["data_schema"].schema]
+        user_input = {
+            CONF_SYNC_AREAS: True,
+            "doors": {CONF_DOOR_OPEN_SECONDS: 5},
+            "connection": {CONF_HTTP_ONLY: False, CONF_SCAN_INTERVAL: 60},
+            "debug": {CONF_DEBUG_API: False, CONF_DEBUG_WEBSOCKET: False, CONF_DEBUG_COORDINATOR: False},
+        }
+        if "buttons" in schema_keys:
+            user_input["buttons"] = {CONF_BUTTON_DOUBLE_CLICK_DELAY: DEFAULT_BUTTON_DOUBLE_CLICK_DELAY}
+        if "recording" in schema_keys:
+            user_input["recording"] = {
+                CONF_MAX_RECORDING_DURATION: DEFAULT_MAX_RECORDING_DURATION,
+                CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
+            }
+
+        if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
+            user_input["doors"] = {"door_open_seconds": 2}
+
+        result2 = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
+
+        assert result2["type"] == "create_entry"
+        assert result2["data"][CONF_DOOR_OPEN_SECONDS] == 5
 
     @pytest.mark.asyncio
     async def test_options_flow_submit_with_buttons(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -175,6 +224,9 @@ class TestOptionsFlowIntegration:
                 CONF_MAX_RECORDING_DURATION: DEFAULT_MAX_RECORDING_DURATION,
                 CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
             }
+
+        if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
+            user_input["doors"] = {"door_open_seconds": 2}
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
@@ -216,6 +268,9 @@ class TestOptionsFlowIntegration:
                 CONF_MAX_RECORDING_DURATION: DEFAULT_MAX_RECORDING_DURATION,
                 CONF_RECORDING_OUTPUT_FORMAT: RECORDING_OUTPUT_MP4,
             }
+
+        if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
+            user_input["doors"] = {"door_open_seconds": 2}
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],

@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Vyberte svetlá, ktoré by mali byť považované za zapnuté/vypnuté len (bez stmievania). Užitočné pre LED pásy pripojené cez PWM stmievače, ktoré potrebujú plný výkon. Poznámka: Zmena tejto možnosti znovu načíta integráciu."
         },
         "sections": {
+          "doors": {
+            "name": "Otváranie dverí",
+            "data": {
+              "door_open_seconds": "Impulz otvorenia dverí (sekundy)"
+            },
+            "data_description": {
+              "door_open_seconds": "Ako dlho je otvárač dverí aktivovaný po stlačení tlačidla Otvoriť dvere. Rozsah: 1–30 sekúnd."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

@@ -85,6 +85,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .const import (
+    DEFAULT_DOOR_OPEN_SECONDS,
     EVON_CLASS_BATHROOM_RADIATOR,
     EVON_CLASS_BLIND,
     EVON_CLASS_BLIND_BASE,
@@ -101,7 +102,6 @@ from .const import (
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
     EVON_CLASS_SCENE,
-    INTERCOM_DOOR_OPEN_SECONDS,
 )
 
 
@@ -220,7 +220,7 @@ SCENE_MAPPINGS: dict[str, WsControlMapping] = {
 # verified HTTP call POST /api/instances/<intercom>/SwitchOnFor with body ["2"].
 INTERCOM_MAPPINGS: dict[str, WsControlMapping] = {
     "SwitchOnFor": WsControlMapping(
-        None, "SwitchOnFor", lambda params: params if params else [str(INTERCOM_DOOR_OPEN_SECONDS)]
+        None, "SwitchOnFor", lambda params: params if params else [str(DEFAULT_DOOR_OPEN_SECONDS)]
     ),
 }
 

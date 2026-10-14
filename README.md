@@ -317,7 +317,7 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Security door call in progress
 - Intercom door state (open/closed)
 - Intercom connection status
-- Intercom door opener: an **Open door** button on each 2N intercom that pulses the door release for 2 seconds. It is created **disabled** — enable it under the entity's settings before dashboards or automations can open the door
+- Door opener: an **Open door** button on each 2N intercom, and on each security door that is linked to an intercom, pulses the door release (2 seconds by default, adjustable under the integration's options → *Door opener*). The buttons are created **disabled** — enable them under the entity's settings before dashboards or automations can open the door
 - **WebSocket connection status** (diagnostic) - shows if real-time updates are active
 
 ### Diagnostic Sensors

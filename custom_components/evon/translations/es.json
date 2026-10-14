@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Seleccione las luces que deben tratarse solo como encendido/apagado (sin regulación). Útil para tiras LED conectadas a través de reguladores PWM que necesitan potencia completa. Nota: Cambiar esta opción recargará la integración."
         },
         "sections": {
+          "doors": {
+            "name": "Apertura de puerta",
+            "data": {
+              "door_open_seconds": "Impulso de apertura de puerta (segundos)"
+            },
+            "data_description": {
+              "door_open_seconds": "Cuánto tiempo se activa el abrepuertas al pulsar un botón Abrir puerta. Rango: 1–30 segundos."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {

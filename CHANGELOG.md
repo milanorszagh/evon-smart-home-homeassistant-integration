@@ -14,10 +14,12 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Added
 
-- **Door opener button for 2N intercoms.** Each intercom device gets an *Open door* button
-  that pulses the door release for 2 seconds (the controller's `SwitchOnFor` method, sent over
-  WebSocket with HTTP fallback). The button is created disabled; enable it in the entity
-  settings before dashboards or automations can open the door.
+- **Door opener buttons.** Each 2N intercom device, and each security door linked to an
+  intercom, gets an *Open door* button that pulses the door release (the controller's
+  `SwitchOnFor` method, sent over WebSocket with HTTP fallback). The pulse length is a new
+  integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s). The buttons are
+  created disabled; enable them in the entity settings before dashboards or automations can
+  open the door.
 
 ### Changed
 

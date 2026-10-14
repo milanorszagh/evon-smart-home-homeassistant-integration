@@ -292,7 +292,7 @@ Device control goes over WebSocket first (`CallMethod`/`SetValue`), with HTTP as
 | Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
 | Season Mode | `IsCool` | `SetValue [Base.ehThermostat, "IsCool", bool]` | ✅ true=cooling, false=heating |
 | All lights off / on | `SwitchAllOff` / `SwitchAllOn` | `CallMethod [Base.ehLight.SwitchAllOff, []]` | ✅ Group object is `Base.ehLight` (NOT `Base.bLight`); answered with a Callback in ~50ms, so not fire-and-forget |
-| Intercom door opener | `SwitchOnFor` | `CallMethod [Intercom2N1000.SwitchOnFor, ["2"]]` | ✅ Pulse seconds as a STRING (mirrors the HTTP body `["2"]`); Callback in ~35ms. `DoorOpenTriggered`/`IsDoorOpen` do NOT flip on the pulse — they follow the door contact |
+| Intercom door opener | `SwitchOnFor` | `CallMethod [Intercom2N1000.SwitchOnFor, ["2"]]` | ✅ Pulse seconds as a STRING (mirrors the HTTP body `["2"]`); Callback in ~35ms. `DoorOpenTriggered`/`IsDoorOpen` do NOT flip on the pulse — they follow the door contact. Pulse length = `door_open_seconds` option (default 2, 1–30). `Security.Door` has no opener of its own: its button calls the intercom named in `IntercomInstanceName` |
 
 ### What Does NOT Work via WebSocket
 
@@ -570,7 +570,7 @@ When filtering devices from the API, use these class names:
 | Scene | `System.SceneApp` | Yes (use `Execute` method) |
 | Physical Buttons | `SmartCOM.Switch` | No (event entity, WS-only) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
-| Security Door | `Security.Door` | No (sensor only, stores SavedPictures) |
+| Security Door | `Security.Door` | Yes (open-door `button`, disabled by default, pulses the intercom in `IntercomInstanceName`; stores SavedPictures) |
 | Intercom (2N) | `Security.Intercom.2N.Intercom2N` | Yes (`SwitchOnFor(["2"])` door opener → `button` entity, disabled by default) |
 | Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
 | Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
@@ -750,7 +750,7 @@ Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
-- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging, camera recording settings, button double-click delay
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging, camera recording settings, button double-click delay, door-opener pulse length
 - **Non-dimmable Lights**: Mark lights as on/off only (useful for LED strips with PWM controllers)
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -779,7 +779,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1357 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1365 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

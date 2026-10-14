@@ -546,6 +546,9 @@ async def test_options_flow(
             "buttons": {
                 "button_double_click_delay": 0.8,
             },
+            "doors": {
+                "door_open_seconds": 2,
+            },
             "connection": {
                 "http_only": False,
                 "scan_interval": 60,
@@ -593,6 +596,9 @@ async def test_options_flow_http_only(
             "sync_areas": False,
             "buttons": {
                 "button_double_click_delay": 0.8,
+            },
+            "doors": {
+                "door_open_seconds": 2,
             },
             "connection": {
                 "http_only": True,

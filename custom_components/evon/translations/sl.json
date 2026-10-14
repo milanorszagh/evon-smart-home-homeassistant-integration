@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Izberite luči, ki naj se obravnavajo samo kot vklop/izklop (brez zatemnjevanja). Uporabno za LED trakove, povezane prek PWM zatemnitvenikov, ki potrebujejo polno moč. Opomba: Sprememba te možnosti bo ponovno naložila integracijo."
         },
         "sections": {
+          "doors": {
+            "name": "Odpiranje vrat",
+            "data": {
+              "door_open_seconds": "Impulz odpiranja vrat (sekunde)"
+            },
+            "data_description": {
+              "door_open_seconds": "Kako dolgo je odpiralnik vrat aktiviran ob pritisku gumba Odpri vrata. Razpon: 1–30 sekund."
+            }
+          },
           "connection": {
             "name": "HTTP API proti WebSocket",
             "data": {

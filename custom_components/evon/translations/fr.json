@@ -338,6 +338,15 @@
           "non_dimmable_lights": "Sélectionnez les lumières qui doivent être traitées uniquement en marche/arrêt (sans gradation). Utile pour les bandes LED connectées via des gradateurs PWM qui nécessitent une puissance complète. Remarque : La modification de cette option rechargera l'intégration."
         },
         "sections": {
+          "doors": {
+            "name": "Ouverture de porte",
+            "data": {
+              "door_open_seconds": "Impulsion d'ouverture de porte (secondes)"
+            },
+            "data_description": {
+              "door_open_seconds": "Durée d'activation de la gâche lorsqu'un bouton Ouvrir la porte est pressé. Plage : 1–30 secondes."
+            }
+          },
           "connection": {
             "name": "HTTP API vs WebSocket",
             "data": {
