@@ -416,7 +416,7 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 - Data coordinator: `coordinator/` package
   - Main coordinator: `coordinator/__init__.py`
   - Button press detector: `coordinator/button_press.py` (standalone state machine, no HA dependencies)
-  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras, button_events)
+  - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras, button_events, weather)
 - Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py` (scenes), `camera.py`, `image.py` (doorbell snapshots), `event.py` (physical buttons, doorbell)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 - Repairs: `repairs.py` (`async_create_fix_flow` for the fixable stale-entities / relay-migrated issues — HA discovers fix flows only from this `<domain>/repairs.py` module, not from `config_flow.py`)
@@ -575,7 +575,31 @@ When filtering devices from the API, use these class names:
 | Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
 | Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
 | Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
+| Weather Station | `Weather.ProxyStation` | No (sensor only, poll-only via Home Connect proxy) |
+| Home Connect proxy | `Rest.evonHomeConnect.evonHomeConnect` | No (gateway to a shared controller) |
 | Room/Area | `System.Location.Room` | No (used for area sync) |
+
+### Weather Station (proxy) - CRITICAL
+
+The weather station is **not** in the apartment controller's instance list. It lives on a
+shared controller and is read through the apartment's **Home Connect proxy** (class
+`Rest.evonHomeConnect.evonHomeConnect`, a named non-template instance, e.g.
+`evonHomeConnect4939`). It is **poll-only** — there is no WebSocket subscription.
+
+Read via the proxy's `Get` method (verified on the LOCAL API, no relay):
+
+```
+POST /api/instances/<home_connect_id>/Get
+Body: ["<path>", {}, false]
+```
+
+The payload is nested at `response["data"]["Data"]["data"]`. `EvonApi.get_via_home_connect(home_connect_id, path)` does this and returns that inner payload.
+- Path `/instances` → the shared controller's full instance list; filter `ClassName == "Weather.ProxyStation"` with a non-empty `Name` to find stations (e.g. `WeatherStation1525`, "Wetterstation Dining").
+- Path `/instances/<station_id>` → the weather dict for one station.
+
+Flow: the coordinator discovers sources once (`_discover_weather_sources` → cached in `_weather_sources`; re-discovered only while empty), then polls each station per cycle (`_poll_weather_stations`, tolerant of per-station failure). `process_weather_stations` shapes the dict; `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`). Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override auto-discovery when both are set.
+
+Weather dict keys (not all are available on every model): `Temperature`/`TemperatureValid`, `WindSpeed`, `Brightness` (Lux), `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLux), `Rain`(bool), `Twilight`(bool), `WindAlarm`/`WindAlarm1`/`WindAlarm2`(bool), `Connected`/`PollingActivated`(bool), `MinTemp`/`MaxTemp`/`MinTempToday`/`MaxTempToday`(°C), `MaxWind`/`MaxWindToday`(km/h), `LastRainDateTime` ("dd.mm.YYYY, HH:MM:SS", controller-local), `LastRainInDays`. Not available: humidity, pressure, wind direction, rain amount, forecast.
 
 ### Smart Meter Energy Sensors - IMPORTANT
 

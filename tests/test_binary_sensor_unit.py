@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sys
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -59,12 +61,35 @@ def setup_binary_sensor_mocks():
     class MockBinarySensorEntity:
         pass
 
+    @dataclasses.dataclass(frozen=True)
+    class MockBinarySensorEntityDescription:
+        key: str = ""
+        name: str | None = None
+        device_class: Any = None
+        entity_category: Any = None
+        translation_key: str | None = None
+        icon: str | None = None
+
     sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
     sys.modules["homeassistant.core"].callback = lambda f: f
     sys.modules["homeassistant.components.binary_sensor"].BinarySensorEntity = MockBinarySensorEntity
+    sys.modules[
+        "homeassistant.components.binary_sensor"
+    ].BinarySensorEntityDescription = MockBinarySensorEntityDescription
+
+    # Patch dataclass to accept kw_only on Python < 3.10
+    _original_dataclass = dataclasses.dataclass
+
+    def _compat_dataclass(*args, **kwargs):
+        kwargs.pop("kw_only", None)
+        return _original_dataclass(*args, **kwargs)
+
+    dataclasses.dataclass = _compat_dataclass
 
     yield
+
+    dataclasses.dataclass = _original_dataclass
 
     for mod in _HA_MODULES:
         if mod in saved:
@@ -135,6 +160,19 @@ def _make_intercom_connection(entity_data=None, instance_id="intercom_1"):
     entry = MagicMock()
     entry.entry_id = "test_entry"
     return EvonIntercomConnectionSensor(coordinator, instance_id, "Test Intercom", "", entry)
+
+
+def _make_weather_binary(entity_data=None, description=None, instance_id="WeatherStation1525"):
+    from custom_components.evon.binary_sensor import EvonWeatherBinarySensor
+
+    coordinator = MagicMock()
+    coordinator.get_entity_data.return_value = entity_data
+    entry = MagicMock()
+    entry.entry_id = "test_entry"
+    if description is None:
+        description = MagicMock()
+        description.key = "rain"
+    return EvonWeatherBinarySensor(coordinator, instance_id, "Weather Dining", "", entry, description)
 
 
 def _make_ws_status(ws_connected=True, last_update_success=True, use_websocket=True):
@@ -325,3 +363,67 @@ class TestWebSocketStatusSensor:
     def test_unique_id(self):
         sensor = _make_ws_status()
         assert sensor._attr_unique_id == "evon_websocket_test_entry"
+
+
+# ---------------------------------------------------------------------------
+# WEATHER_BINARY_SENSORS + EvonWeatherBinarySensor
+# ---------------------------------------------------------------------------
+
+
+class TestWeatherBinarySensors:
+    def test_count_and_keys(self):
+        from custom_components.evon.binary_sensor import WEATHER_BINARY_SENSORS
+
+        keys = [d.key for d in WEATHER_BINARY_SENSORS]
+        assert len(keys) == 8
+        assert keys == [
+            "rain",
+            "twilight",
+            "wind_alarm",
+            "wind_alarm_1",
+            "wind_alarm_2",
+            "connected",
+            "temperature_valid",
+            "polling_activated",
+        ]
+
+    def test_translation_keys(self):
+        from custom_components.evon.binary_sensor import WEATHER_BINARY_SENSORS
+
+        for d in WEATHER_BINARY_SENSORS:
+            assert d.translation_key == f"weather_{d.key}"
+
+    def test_is_on_true(self):
+        description = MagicMock()
+        description.key = "rain"
+        sensor = _make_weather_binary({"rain": True}, description)
+        assert sensor.is_on is True
+
+    def test_is_on_false(self):
+        description = MagicMock()
+        description.key = "rain"
+        sensor = _make_weather_binary({"rain": False}, description)
+        assert sensor.is_on is False
+
+    def test_is_on_none_when_field_missing(self):
+        description = MagicMock()
+        description.key = "rain"
+        sensor = _make_weather_binary({"temperature": 1.0}, description)
+        assert sensor.is_on is None
+
+    def test_is_on_none_when_no_data(self):
+        sensor = _make_weather_binary(None)
+        assert sensor.is_on is None
+
+    def test_unique_id_format(self):
+        description = MagicMock()
+        description.key = "wind_alarm_2"
+        sensor = _make_weather_binary({"wind_alarm_2": True}, description, instance_id="WeatherStation1525")
+        assert sensor._attr_unique_id == "evon_weather_WeatherStation1525_wind_alarm_2"
+
+    def test_device_info_model(self):
+        sensor = _make_weather_binary({"rain": False})
+        sensor.coordinator.hub_device_id = None
+        info = sensor.device_info
+        assert info["model"] == "Weather Station"
+        assert info["manufacturer"] == "Evon"

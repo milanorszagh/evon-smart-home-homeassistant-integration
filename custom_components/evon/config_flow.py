@@ -39,6 +39,8 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_SYNC_AREAS,
     CONF_USERNAME,
+    CONF_WEATHER_HOME_CONNECT_ID,
+    CONF_WEATHER_STATION_ID,
     CONNECTION_TYPE_LOCAL,
     CONNECTION_TYPE_REMOTE,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
@@ -715,12 +717,15 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             CONF_BUTTON_DOUBLE_CLICK_DELAY, DEFAULT_BUTTON_DOUBLE_CLICK_DELAY
         )
         current_door_open_seconds = self.config_entry.options.get(CONF_DOOR_OPEN_SECONDS, DEFAULT_DOOR_OPEN_SECONDS)
+        current_weather_hc = self.config_entry.options.get(CONF_WEATHER_HOME_CONNECT_ID, "")
+        current_weather_station = self.config_entry.options.get(CONF_WEATHER_STATION_ID, "")
 
         # Get available lights from coordinator
         light_options: dict[str, str] = {}
         has_cameras = False
         has_buttons = False
         has_doors = False
+        has_home_connect = False
         if self.config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
             coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id].get("coordinator")
             if coordinator and coordinator.data:
@@ -737,6 +742,8 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                     has_buttons = True
                 if ENTITY_TYPE_INTERCOMS in coordinator.data and coordinator.data[ENTITY_TYPE_INTERCOMS]:
                     has_doors = True
+            if coordinator and coordinator.has_home_connect_proxy:
+                has_home_connect = True
 
         # Build schema with sections for better organization
         schema_dict: dict[Any, Any] = {
@@ -778,6 +785,20 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
                             vol.Coerce(int),
                             vol.Range(min=MIN_DOOR_OPEN_SECONDS, max=MAX_DOOR_OPEN_SECONDS),
                         ),
+                    }
+                ),
+                {"collapsed": True},
+            )
+
+        # Weather-station section: only shown when a Home Connect proxy exists
+        # (a weather station is read through it). Both fields are optional manual
+        # overrides — set them only when auto-discovery does not find the station.
+        if has_home_connect:
+            schema_dict[vol.Required("weather")] = section(
+                vol.Schema(
+                    {
+                        vol.Optional(CONF_WEATHER_HOME_CONNECT_ID, default=current_weather_hc): str,
+                        vol.Optional(CONF_WEATHER_STATION_ID, default=current_weather_station): str,
                     }
                 ),
                 {"collapsed": True},

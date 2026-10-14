@@ -168,6 +168,30 @@
       },
       "websocket": {
         "name": "WebSocket"
+      },
+      "weather_rain": {
+        "name": "Regen"
+      },
+      "weather_twilight": {
+        "name": "Dämmerung"
+      },
+      "weather_wind_alarm": {
+        "name": "Windalarm"
+      },
+      "weather_wind_alarm_1": {
+        "name": "Windalarm 1"
+      },
+      "weather_wind_alarm_2": {
+        "name": "Windalarm 2"
+      },
+      "weather_connected": {
+        "name": "Verbunden"
+      },
+      "weather_temperature_valid": {
+        "name": "Temperatur gültig"
+      },
+      "weather_polling_activated": {
+        "name": "Abfrage aktiv"
       }
     },
     "sensor": {
@@ -190,6 +214,51 @@
       },
       "websocket_latency": {
         "name": "WebSocket Latenz"
+      },
+      "weather_temperature": {
+        "name": "Temperatur"
+      },
+      "weather_wind_speed": {
+        "name": "Windgeschwindigkeit"
+      },
+      "weather_brightness": {
+        "name": "Helligkeit"
+      },
+      "weather_sun_north": {
+        "name": "Sonne Nord"
+      },
+      "weather_sun_east": {
+        "name": "Sonne Ost"
+      },
+      "weather_sun_south": {
+        "name": "Sonne Süd"
+      },
+      "weather_sun_west": {
+        "name": "Sonne West"
+      },
+      "weather_temp_min_today": {
+        "name": "Min. Temperatur heute"
+      },
+      "weather_temp_max_today": {
+        "name": "Max. Temperatur heute"
+      },
+      "weather_wind_max_today": {
+        "name": "Max. Wind heute"
+      },
+      "weather_temp_min": {
+        "name": "Min. Temperatur"
+      },
+      "weather_temp_max": {
+        "name": "Max. Temperatur"
+      },
+      "weather_wind_max": {
+        "name": "Max. Wind"
+      },
+      "weather_last_rain": {
+        "name": "Letzter Regen"
+      },
+      "weather_last_rain_in_days": {
+        "name": "Tage seit Regen"
       }
     },
     "select": {
@@ -390,6 +459,17 @@
               "debug_api": "Debug-Protokollierung für HTTP-API-Anfragen und -Antworten aktivieren. Nützlich zur Fehlerbehebung bei Verbindungs- oder Authentifizierungsproblemen.",
               "debug_websocket": "Debug-Protokollierung für WebSocket-Nachrichten aktivieren. Nützlich zur Fehlerbehebung bei Echtzeit-Updates.",
               "debug_coordinator": "Debug-Protokollierung für den Datenkoordinator aktivieren. Nützlich zur Fehlerbehebung bei Datenverarbeitung und Entitätsaktualisierungen."
+            }
+          },
+          "weather": {
+            "name": "Wetterstation",
+            "data": {
+              "weather_home_connect_id": "Home-Connect-Proxy-ID",
+              "weather_station_id": "Wetterstations-ID"
+            },
+            "data_description": {
+              "weather_home_connect_id": "Optional. Nur setzen, wenn die Wetterstation nicht automatisch gefunden wird. Die ID der Home-Connect-Proxy-Instanz (z. B. evonHomeConnect4939).",
+              "weather_station_id": "Optional. Nur setzen, wenn die Wetterstation nicht automatisch gefunden wird. Die ID der Wetterstations-Instanz (z. B. WeatherStation1525)."
             }
           }
         }

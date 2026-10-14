@@ -547,6 +547,38 @@ class EvonApi:
         result = await self._request("GET", f"/instances/{instance_id}")
         return result.get("data", {})
 
+    async def get_via_home_connect(self, home_connect_id: str, path: str) -> Any:
+        """Read data from a shared controller through a Home Connect proxy.
+
+        Calls the proxy's ``Get`` method: POST /instances/<home_connect_id>/Get
+        with body ``[path, {}, False]``. The remote payload is nested at
+        ``response["data"]["Data"]["data"]`` (the apartment controller wraps the
+        shared controller's REST response). Used for the weather station, which
+        lives on a shared controller and is not in the apartment instance list.
+
+        Args:
+            home_connect_id: the Rest.evonHomeConnect.evonHomeConnect instance id.
+            path: the remote REST path, e.g. "/instances/WeatherStation1525" to
+                read one station, or "/instances" to list the shared controller.
+
+        Returns:
+            The remote payload (a dict for a single instance, a list for
+            "/instances"), or None if the nested payload is absent.
+        """
+        _validate_instance_id(home_connect_id)
+        if not isinstance(path, str) or not path.startswith("/instances"):
+            raise ValueError(f"Invalid Home Connect path: {path!r}")
+        result = await self._request("POST", f"/instances/{home_connect_id}/Get", [path, {}, False])
+        if not isinstance(result, dict):
+            return None
+        data = result.get("data")
+        if not isinstance(data, dict):
+            return None
+        inner = data.get("Data")
+        if not isinstance(inner, dict):
+            return None
+        return inner.get("data")
+
     async def get_rooms(self, room_class: str = "System.Location.Room") -> dict[str, str]:
         """Get all rooms as a mapping of room_id -> room_name.
 

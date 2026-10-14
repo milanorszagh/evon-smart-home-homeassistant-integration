@@ -71,6 +71,7 @@ def setup_sensor_mocks():
         suggested_display_precision: int | None = None
         entity_category: Any = None
         translation_key: str | None = None
+        icon: str | None = None
 
     sys.modules["homeassistant.helpers.update_coordinator"].CoordinatorEntity = MockCoordinatorEntity
     sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = dict
@@ -149,6 +150,20 @@ def _make_air_quality_sensor(entity_data=None, description=None, instance_id="aq
         description.key = "co2"
         description.value_fn = lambda data: data.get("co2")
     return EvonAirQualitySensor(coordinator, instance_id, "Test AQ", "", entry, description)
+
+
+def _make_weather_sensor(entity_data=None, description=None, instance_id="WeatherStation1525"):
+    from custom_components.evon.sensor import EvonWeatherSensor
+
+    coordinator = MagicMock()
+    coordinator.get_entity_data.return_value = entity_data
+    entry = MagicMock()
+    entry.entry_id = "test_entry"
+    if description is None:
+        description = MagicMock()
+        description.key = "temperature"
+        description.value_fn = lambda data: data.get("temperature")
+    return EvonWeatherSensor(coordinator, instance_id, "Weather Dining", "", entry, description)
 
 
 def _make_energy_today_sensor(entity_data=None, instance_id="meter_1"):
@@ -464,3 +479,65 @@ class TestWsLatencySensor:
 
         sensor = EvonWebSocketLatencySensor(coordinator, entry)
         assert sensor.native_value is None
+
+
+# ---------------------------------------------------------------------------
+# WEATHER_SENSORS entity descriptions + EvonWeatherSensor
+# ---------------------------------------------------------------------------
+
+
+class TestWeatherSensors:
+    def test_count_and_keys(self):
+        from custom_components.evon.sensor import WEATHER_SENSORS
+
+        keys = [d.key for d in WEATHER_SENSORS]
+        assert len(keys) == 15
+        assert keys == [
+            "temperature",
+            "wind_speed",
+            "brightness",
+            "sun_north",
+            "sun_east",
+            "sun_south",
+            "sun_west",
+            "temp_min_today",
+            "temp_max_today",
+            "wind_max_today",
+            "temp_min",
+            "temp_max",
+            "wind_max",
+            "last_rain",
+            "last_rain_in_days",
+        ]
+
+    def test_all_have_value_fn_and_translation_key(self):
+        from custom_components.evon.sensor import WEATHER_SENSORS
+
+        for d in WEATHER_SENSORS:
+            assert d.value_fn is not None
+            assert d.translation_key == f"weather_{d.key}"
+
+    def test_native_value_reads_field(self):
+        description = MagicMock()
+        description.key = "temperature"
+        description.value_fn = lambda data: data.get("temperature")
+        sensor = _make_weather_sensor({"temperature": 12.5}, description)
+        assert sensor.native_value == 12.5
+
+    def test_native_value_none_when_no_data(self):
+        sensor = _make_weather_sensor(None)
+        assert sensor.native_value is None
+
+    def test_unique_id_format(self):
+        description = MagicMock()
+        description.key = "wind_speed"
+        description.value_fn = lambda data: data.get("wind_speed")
+        sensor = _make_weather_sensor({"wind_speed": 3.0}, description, instance_id="WeatherStation1525")
+        assert sensor._attr_unique_id == "evon_weather_WeatherStation1525_wind_speed"
+
+    def test_device_info_model(self):
+        sensor = _make_weather_sensor({"temperature": 1.0})
+        sensor.coordinator.hub_device_id = None
+        info = sensor.device_info
+        assert info["model"] == "Weather Station"
+        assert info["manufacturer"] == "Evon"

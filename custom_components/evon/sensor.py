@@ -15,6 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    LIGHT_LUX,
     PERCENTAGE,
     EntityCategory,
     UnitOfElectricCurrent,
@@ -23,7 +24,9 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfRatio,
+    UnitOfSpeed,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -36,6 +39,7 @@ from .const import (
     ENTITY_TYPE_AIR_QUALITY,
     ENTITY_TYPE_CLIMATES,
     ENTITY_TYPE_SMART_METERS,
+    ENTITY_TYPE_WEATHER,
 )
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -183,6 +187,146 @@ AIR_QUALITY_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
     ),
 )
 
+# "kLx" (kilolux) is not a standard HA unit, so the sun-intensity sensors carry no
+# device_class; the raw value and an icon are enough for display.
+_KILOLUX = "kLx"
+
+WEATHER_SENSORS: tuple[EvonSensorEntityDescription, ...] = (
+    EvonSensorEntityDescription(
+        key="temperature",
+        translation_key="weather_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("temperature"),
+    ),
+    EvonSensorEntityDescription(
+        key="wind_speed",
+        translation_key="weather_wind_speed",
+        device_class=SensorDeviceClass.WIND_SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("wind_speed"),
+    ),
+    EvonSensorEntityDescription(
+        key="brightness",
+        translation_key="weather_brightness",
+        device_class=SensorDeviceClass.ILLUMINANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=LIGHT_LUX,
+        suggested_display_precision=0,
+        value_fn=lambda data: data.get("brightness"),
+    ),
+    EvonSensorEntityDescription(
+        key="sun_north",
+        translation_key="weather_sun_north",
+        icon="mdi:weather-sunny",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=_KILOLUX,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("sun_north"),
+    ),
+    EvonSensorEntityDescription(
+        key="sun_east",
+        translation_key="weather_sun_east",
+        icon="mdi:weather-sunny",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=_KILOLUX,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("sun_east"),
+    ),
+    EvonSensorEntityDescription(
+        key="sun_south",
+        translation_key="weather_sun_south",
+        icon="mdi:weather-sunny",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=_KILOLUX,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("sun_south"),
+    ),
+    EvonSensorEntityDescription(
+        key="sun_west",
+        translation_key="weather_sun_west",
+        icon="mdi:weather-sunny",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=_KILOLUX,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("sun_west"),
+    ),
+    EvonSensorEntityDescription(
+        key="temp_min_today",
+        translation_key="weather_temp_min_today",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("temp_min_today"),
+    ),
+    EvonSensorEntityDescription(
+        key="temp_max_today",
+        translation_key="weather_temp_max_today",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("temp_max_today"),
+    ),
+    EvonSensorEntityDescription(
+        key="wind_max_today",
+        translation_key="weather_wind_max_today",
+        device_class=SensorDeviceClass.WIND_SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("wind_max_today"),
+    ),
+    # Lifetime extremes: no state_class (not a live measurement to graph/aggregate).
+    EvonSensorEntityDescription(
+        key="temp_min",
+        translation_key="weather_temp_min",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("temp_min"),
+    ),
+    EvonSensorEntityDescription(
+        key="temp_max",
+        translation_key="weather_temp_max",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("temp_max"),
+    ),
+    EvonSensorEntityDescription(
+        key="wind_max",
+        translation_key="weather_wind_max",
+        device_class=SensorDeviceClass.WIND_SPEED,
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda data: data.get("wind_max"),
+    ),
+    EvonSensorEntityDescription(
+        key="last_rain",
+        translation_key="weather_last_rain",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda data: data.get("last_rain"),
+    ),
+    EvonSensorEntityDescription(
+        key="last_rain_in_days",
+        translation_key="weather_last_rain_in_days",
+        icon="mdi:weather-rainy",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.DAYS,
+        suggested_display_precision=1,
+        value_fn=lambda data: data.get("last_rain_in_days"),
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -267,6 +411,23 @@ async def async_setup_entry(
                             description,
                         )
                     )
+
+    # Create weather-station sensors using entity descriptions. All fields are
+    # created regardless of their current value: a None (e.g. last_rain before the
+    # first rain) must not permanently suppress the entity.
+    if coordinator.data and ENTITY_TYPE_WEATHER in coordinator.data:
+        for station in coordinator.data[ENTITY_TYPE_WEATHER]:
+            for description in WEATHER_SENSORS:
+                entities.append(
+                    EvonWeatherSensor(
+                        coordinator,
+                        station["id"],
+                        station["name"],
+                        station.get("room_name", ""),
+                        entry,
+                        description,
+                    )
+                )
 
     # WebSocket diagnostic sensors
     entities.append(EvonWebSocketStatusSensor(coordinator, entry))
@@ -398,6 +559,40 @@ class EvonAirQualitySensor(EvonEntity, SensorEntity):
             elif self.entity_description.key == "humidity":
                 attrs["humidity_index"] = data.get("humidity_index")
         return attrs
+
+
+class EvonWeatherSensor(EvonEntity, SensorEntity):
+    """Representation of an Evon weather-station sensor (one field)."""
+
+    _entity_type = ENTITY_TYPE_WEATHER
+    entity_description: EvonSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+        description: EvonSensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self.entity_description = description
+        self._attr_unique_id = f"evon_weather_{instance_id}_{description.key}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this sensor."""
+        return self._build_device_info("Weather Station")
+
+    @property
+    def native_value(self) -> Any:
+        """Return the sensor value."""
+        data = self._get_data()
+        if data and self.entity_description.value_fn:
+            return self.entity_description.value_fn(data)
+        return None
 
 
 class EvonEnergyTodaySensor(EvonEntity, SensorEntity):

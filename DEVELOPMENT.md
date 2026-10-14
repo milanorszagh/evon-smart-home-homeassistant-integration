@@ -587,6 +587,14 @@ All requests require: `Cookie: token=<token>`
 | `/api/instances/{id}/{method}` | POST | Call method on device |
 | `/api/instances/{id}/{property}` | PUT | Set property value |
 
+**Reading a shared controller (weather station).** A device on a shared controller
+(e.g. the weather station) is not in the apartment instance list. Read it through the
+apartment's Home Connect proxy (`Rest.evonHomeConnect.evonHomeConnect`) by POSTing to
+`/api/instances/{home_connect_id}/Get` with body `["{path}", {}, false]`, where `{path}`
+is `/instances` (to list the shared controller) or `/instances/{id}` (one instance). The
+remote payload is nested at `response.data.Data.data`. `EvonApi.get_via_home_connect()`
+wraps this. See AGENTS.md → "Weather Station (proxy)" for the full field list.
+
 ### Device Classes
 
 | Class Name | Type | Controllable |
@@ -606,6 +614,8 @@ All requests require: `Cookie: token=<token>`
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
+| `Weather.ProxyStation` | Weather station on a shared controller | No (sensor, poll-only via the Home Connect proxy) |
+| `Rest.evonHomeConnect.evonHomeConnect` | Home Connect proxy to a shared controller | No (gateway; read via its `Get` method) |
 | `Security.Door` | Security Door | Yes (open-door button via the linked intercom's `SwitchOnFor`) |
 | `Security.Intercom.2N.Intercom2N` | 2N Intercom | Yes (`SwitchOnFor` door opener, see `EvonApi.open_intercom_door()`) |
 | `Security.Intercom.2N.Intercom2NCam` | 2N Camera | Yes (image request) |

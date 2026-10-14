@@ -28,6 +28,7 @@ from .const import (
     ENTITY_TYPE_SMART_METERS,
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
+    ENTITY_TYPE_WEATHER,
 )
 
 TO_REDACT = {CONF_PASSWORD, CONF_USERNAME, CONF_HOST, CONF_ENGINE_ID, "token", "x-elocs-token", "x-elocs-password"}
@@ -60,6 +61,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         ENTITY_TYPE_CAMERAS,
         ENTITY_TYPE_BUTTON_EVENTS,
         ENTITY_TYPE_HOME_STATES,
+        ENTITY_TYPE_WEATHER,
     ]
 
     # Get device counts from coordinator data
@@ -110,6 +112,14 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         ENTITY_TYPE_CAMERAS: [("id", "id"), ("name", "name"), ("error", "error")],
         ENTITY_TYPE_BUTTON_EVENTS: [("id", "id"), ("name", "name")],
         ENTITY_TYPE_HOME_STATES: [("id", "id"), ("name", "name"), ("active", "active")],
+        ENTITY_TYPE_WEATHER: [
+            ("id", "id"),
+            ("name", "name"),
+            ("temperature", "temperature"),
+            ("wind_speed", "wind_speed"),
+            ("rain", "rain"),
+            ("connected", "connected"),
+        ],
     }
 
     # Build device summaries (without sensitive data)

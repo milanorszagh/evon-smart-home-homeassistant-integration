@@ -14,6 +14,7 @@ from .security_doors import process_security_doors
 from .smart_meters import process_smart_meters
 from .switches import process_switches
 from .valves import process_valves
+from .weather import process_weather_stations
 
 __all__ = [
     "process_lights",
@@ -30,4 +31,5 @@ __all__ = [
     "process_security_doors",
     "process_intercoms",
     "process_cameras",
+    "process_weather_stations",
 ]

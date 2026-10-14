@@ -124,6 +124,8 @@ class TestOptionsFlowIntegration:
 
         if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
             user_input["doors"] = {"door_open_seconds": 2}
+        if "weather" in [str(k) for k in result["data_schema"].schema] and "weather" not in user_input:
+            user_input["weather"] = {}
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
@@ -189,6 +191,8 @@ class TestOptionsFlowIntegration:
 
         if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
             user_input["doors"] = {"door_open_seconds": 2}
+        if "weather" in [str(k) for k in result["data_schema"].schema] and "weather" not in user_input:
+            user_input["weather"] = {}
 
         result2 = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
 
@@ -227,6 +231,8 @@ class TestOptionsFlowIntegration:
 
         if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
             user_input["doors"] = {"door_open_seconds": 2}
+        if "weather" in [str(k) for k in result["data_schema"].schema] and "weather" not in user_input:
+            user_input["weather"] = {}
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],
@@ -271,6 +277,8 @@ class TestOptionsFlowIntegration:
 
         if "doors" in [str(k) for k in result["data_schema"].schema] and "doors" not in user_input:
             user_input["doors"] = {"door_open_seconds": 2}
+        if "weather" in [str(k) for k in result["data_schema"].schema] and "weather" not in user_input:
+            user_input["weather"] = {}
 
         result2 = await hass.config_entries.options.async_configure(
             result["flow_id"],

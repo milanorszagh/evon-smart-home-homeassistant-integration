@@ -168,6 +168,30 @@
       },
       "websocket": {
         "name": "WebSocket"
+      },
+      "weather_rain": {
+        "name": "Dež"
+      },
+      "weather_twilight": {
+        "name": "Mrak"
+      },
+      "weather_wind_alarm": {
+        "name": "Alarm vetra"
+      },
+      "weather_wind_alarm_1": {
+        "name": "Alarm vetra 1"
+      },
+      "weather_wind_alarm_2": {
+        "name": "Alarm vetra 2"
+      },
+      "weather_connected": {
+        "name": "Povezano"
+      },
+      "weather_temperature_valid": {
+        "name": "Temperatura veljavna"
+      },
+      "weather_polling_activated": {
+        "name": "Poizvedovanje aktivno"
       }
     },
     "sensor": {
@@ -190,6 +214,51 @@
       },
       "websocket_latency": {
         "name": "Latenca WebSocket"
+      },
+      "weather_temperature": {
+        "name": "Temperatura"
+      },
+      "weather_wind_speed": {
+        "name": "Hitrost vetra"
+      },
+      "weather_brightness": {
+        "name": "Svetlost"
+      },
+      "weather_sun_north": {
+        "name": "Sonce sever"
+      },
+      "weather_sun_east": {
+        "name": "Sonce vzhod"
+      },
+      "weather_sun_south": {
+        "name": "Sonce jug"
+      },
+      "weather_sun_west": {
+        "name": "Sonce zahod"
+      },
+      "weather_temp_min_today": {
+        "name": "Najn. temperatura danes"
+      },
+      "weather_temp_max_today": {
+        "name": "Najv. temperatura danes"
+      },
+      "weather_wind_max_today": {
+        "name": "Najv. veter danes"
+      },
+      "weather_temp_min": {
+        "name": "Najn. temperatura"
+      },
+      "weather_temp_max": {
+        "name": "Najv. temperatura"
+      },
+      "weather_wind_max": {
+        "name": "Najv. veter"
+      },
+      "weather_last_rain": {
+        "name": "Zadnji dež"
+      },
+      "weather_last_rain_in_days": {
+        "name": "Dni od dežja"
       }
     },
     "select": {
@@ -390,6 +459,17 @@
               "debug_api": "Omogoči beleženje razhroščevanja za HTTP API zahteve in odgovore. Uporabno za odpravljanje težav s povezavo ali preverjanjem pristnosti.",
               "debug_websocket": "Omogoči beleženje razhroščevanja za WebSocket sporočila. Uporabno za odpravljanje težav s posodobitvami v realnem času.",
               "debug_coordinator": "Omogoči beleženje razhroščevanja za koordinator podatkov. Uporabno za odpravljanje težav pri obdelavi podatkov in posodobitvah entitet."
+            }
+          },
+          "weather": {
+            "name": "Vremenska postaja",
+            "data": {
+              "weather_home_connect_id": "ID proxyja Home Connect",
+              "weather_station_id": "ID vremenske postaje"
+            },
+            "data_description": {
+              "weather_home_connect_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance proxyja Home Connect (npr. evonHomeConnect4939).",
+              "weather_station_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance vremenske postaje (npr. WeatherStation1525)."
             }
           }
         }

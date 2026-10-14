@@ -91,6 +91,8 @@ EVON_CLASS_BLIND_EH = "Base.ehBlind"
 EVON_CLASS_SECURITY_DOOR = "Security.Door"
 EVON_CLASS_INTERCOM_2N = "Security.Intercom.2N.Intercom2N"
 EVON_CLASS_INTERCOM_2N_CAM = "Security.Intercom.2N.Intercom2NCam"
+EVON_CLASS_WEATHER_PROXY = "Weather.ProxyStation"  # Weather station, read via the Home Connect proxy (poll-only)
+EVON_CLASS_HOME_CONNECT = "Rest.evonHomeConnect.evonHomeConnect"  # Home Connect proxy to a shared controller
 
 # Entity type keys (used in coordinator.data dictionary)
 ENTITY_TYPE_LIGHTS = "lights"
@@ -107,6 +109,7 @@ ENTITY_TYPE_HOME_STATES = "home_states"
 ENTITY_TYPE_VALVES = "valves"
 ENTITY_TYPE_CAMERAS = "cameras"
 ENTITY_TYPE_BUTTON_EVENTS = "button_events"
+ENTITY_TYPE_WEATHER = "weather_stations"
 
 # Button press detection timing (seconds)
 BUTTON_LONG_PRESS_THRESHOLD = 1.5  # Min hold duration for long press
@@ -188,6 +191,9 @@ WS_RESUBSCRIBE_RETRY_DELAY = 2.0  # Delay between resubscribe attempts (seconds)
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0
 # Door opener (2N intercom SwitchOnFor pulse; also used by the Security.Door buttons)
 CONF_DOOR_OPEN_SECONDS = "door_open_seconds"
+# Weather station (optional manual override for the Home Connect proxy + station IDs)
+CONF_WEATHER_HOME_CONNECT_ID = "weather_home_connect_id"
+CONF_WEATHER_STATION_ID = "weather_station_id"
 DEFAULT_DOOR_OPEN_SECONDS = 2  # seconds, sent as a string like the web app / HTTP body ["2"]
 MIN_DOOR_OPEN_SECONDS = 1
 MAX_DOOR_OPEN_SECONDS = 30

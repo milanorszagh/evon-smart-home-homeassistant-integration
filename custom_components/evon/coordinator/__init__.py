@@ -23,6 +23,8 @@ from homeassistant.util import dt as dt_util
 
 from ..api import EvonApi, EvonApiError, EvonAuthError, EvonRateLimitError
 from ..const import (
+    CONF_WEATHER_HOME_CONNECT_ID,
+    CONF_WEATHER_STATION_ID,
     CONNECTION_FAILURE_THRESHOLD,
     DEFAULT_BUTTON_DOUBLE_CLICK_DELAY,
     DEFAULT_SCAN_INTERVAL,
@@ -42,6 +44,7 @@ from ..const import (
     ENTITY_TYPE_SMART_METERS,
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
+    ENTITY_TYPE_WEATHER,
     EVON_CLASS_PHYSICAL_BUTTON,
     EVON_CLASS_SCENE,
     REPAIR_CONNECTION_FAILED,
@@ -64,7 +67,9 @@ from .processors import (
     process_smart_meters,
     process_switches,
     process_valves,
+    process_weather_stations,
 )
+from .processors.weather import find_home_connect_instances, find_weather_stations_in
 
 if TYPE_CHECKING:
     from ..ws_client import EvonWsClient
@@ -133,6 +138,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Setup uses this to avoid deleting entities that are only transiently
         # missing (see _async_cleanup_stale_entities).
         self._last_poll_had_partial_failures = False
+        # Discovered weather-station sources: list of (home_connect_id, station_id,
+        # name). None = not yet discovered; re-discovered while empty so a station
+        # that appears later is picked up (the heavy proxy listing only runs when a
+        # Home Connect instance exists). Poll-only, read via the Home Connect proxy.
+        self._weather_sources: list[tuple[str, str, str | None]] | None = None
 
         # WebSocket support
         self._use_websocket = use_websocket
@@ -221,6 +231,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # missing (see _async_cleanup_stale_entities).
             self._last_poll_had_partial_failures = any(details is None for _, details in results)
 
+            # Weather stations live on a shared controller, read via the Home
+            # Connect proxy (poll-only; not in the apartment instance list).
+            weather_raw = await self._poll_weather_stations()
+
             # Extract season mode from prefetched data
             thermostat_details = instance_details.get("Base.ehThermostat", {})
             season_mode = self._extract_season_mode(thermostat_details)
@@ -240,6 +254,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             intercoms = process_intercoms(instance_details, instances, self._get_room_name)
             cameras = process_cameras(instance_details, instances, self._get_room_name)
             button_events = process_button_events(instances, self._get_room_name)
+            weather_stations = process_weather_stations(weather_raw)
 
             _LOGGER.debug(
                 "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d, button_events=%d",
@@ -272,6 +287,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ENTITY_TYPE_INTERCOMS: intercoms,
                 ENTITY_TYPE_CAMERAS: cameras,
                 ENTITY_TYPE_BUTTON_EVENTS: button_events,
+                ENTITY_TYPE_WEATHER: weather_stations,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -400,6 +416,82 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except EvonApiError:
             _LOGGER.warning("Failed to fetch rooms, area sync disabled for this update")
             self._rooms_cache = {}
+
+    async def _discover_weather_sources(self) -> list[tuple[str, str, str | None]]:
+        """Discover weather stations reachable via a Home Connect proxy.
+
+        Weather stations live on a shared controller and are read through the
+        apartment's Home Connect proxy. Result is cached in ``_weather_sources``.
+        A cached non-empty list is reused; an empty/None cache is re-discovered so
+        a station that appears later is picked up. The two options
+        (``CONF_WEATHER_HOME_CONNECT_ID`` / ``CONF_WEATHER_STATION_ID``), when both
+        set, bypass auto-discovery entirely.
+
+        Returns:
+            List of (home_connect_id, station_id, name) tuples (name may be None
+            for an options override; the processor falls back to the polled Name).
+        """
+        if self._weather_sources:
+            return self._weather_sources
+
+        options = self.config_entry.options if self.config_entry else {}
+        hc_override = (options.get(CONF_WEATHER_HOME_CONNECT_ID) or "").strip()
+        station_override = (options.get(CONF_WEATHER_STATION_ID) or "").strip()
+        if hc_override and station_override:
+            self._weather_sources = [(hc_override, station_override, None)]
+            _LOGGER.debug(
+                "Weather station source from options: proxy=%s station=%s",
+                hc_override,
+                station_override,
+            )
+            return self._weather_sources
+
+        proxies = find_home_connect_instances(self._instances_cache)
+        if not proxies:
+            self._weather_sources = []
+            return self._weather_sources
+
+        sources: list[tuple[str, str, str | None]] = []
+        for proxy in proxies:
+            hc_id = proxy["id"]
+            try:
+                remote = await self.api.get_via_home_connect(hc_id, "/instances")
+            except Exception as err:  # tolerate proxy/remote failures
+                _LOGGER.debug("Weather discovery via proxy %s failed: %s", hc_id, err)
+                continue
+            for station in find_weather_stations_in(remote):
+                sources.append((hc_id, station["id"], station.get("name")))
+
+        self._weather_sources = sources
+        if sources:
+            _LOGGER.debug("Discovered %d weather station(s) via Home Connect", len(sources))
+        return sources
+
+    async def _poll_weather_stations(self) -> list[dict[str, Any]]:
+        """Poll each discovered weather station through its Home Connect proxy.
+
+        Returns:
+            Raw ``[{"id", "name", "data"}]`` list for ``process_weather_stations``;
+            empty when there are no weather stations. Per-station failures are
+            tolerated so one unreachable station never fails the whole poll.
+        """
+        sources = await self._discover_weather_sources()
+        if not sources:
+            return []
+
+        async def _fetch(source: tuple[str, str, str | None]) -> dict[str, Any] | None:
+            hc_id, station_id, name = source
+            try:
+                data = await self.api.get_via_home_connect(hc_id, f"/instances/{station_id}")
+            except Exception as err:  # tolerate per-station failures
+                _LOGGER.debug("Weather station %s poll failed: %s", station_id, err)
+                return None
+            if not isinstance(data, dict):
+                return None
+            return {"id": station_id, "name": name, "data": data}
+
+        results = await asyncio.gather(*[_fetch(src) for src in sources])
+        return [r for r in results if r is not None]
 
     def _extract_season_mode(self, thermostat_details: dict[str, Any]) -> bool:
         """Extract the global season mode from prefetched thermostat data.
@@ -1127,3 +1219,12 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def use_websocket(self) -> bool:
         """Return whether WebSocket is enabled."""
         return self._use_websocket
+
+    @property
+    def has_home_connect_proxy(self) -> bool:
+        """Return whether a Home Connect proxy instance is present.
+
+        Used by the options flow to decide whether to offer the weather-station
+        override fields (a weather station is read through this proxy).
+        """
+        return bool(find_home_connect_instances(self._instances_cache))

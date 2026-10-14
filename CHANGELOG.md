@@ -14,6 +14,15 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Added
 
+- **Weather station support.** A weather station (`Weather.ProxyStation`) on a shared
+  controller is now discovered and polled through the apartment's Home Connect proxy, and
+  exposed as one device per station with individual sensors (temperature, wind speed,
+  brightness, the four sun-intensity values, today's and lifetime min/max temperature and
+  max wind, last rain and days since rain) and binary sensors (rain, twilight, three wind
+  alarms, plus diagnostic connected/temperature-valid/polling-active). It is poll-only (no
+  WebSocket). When auto-discovery does not find the station, two optional overrides in a new
+  *Weather station* options section (Home Connect proxy ID, weather station ID) let you set
+  it manually.
 - **Talk button for SIP intercom audio.** The camera card takes an optional
   `sip_extension`; when set it shows a **Talk** button that answers an incoming door
   call, hangs up an active one, or dials the door, through the `window.sipCore` engine.

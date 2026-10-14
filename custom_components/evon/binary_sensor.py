@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
+    BinarySensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
@@ -20,8 +22,63 @@ from .const import (
     ENTITY_TYPE_INTERCOMS,
     ENTITY_TYPE_SECURITY_DOORS,
     ENTITY_TYPE_VALVES,
+    ENTITY_TYPE_WEATHER,
 )
 from .coordinator import EvonDataUpdateCoordinator
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvonBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes an Evon binary sensor entity.
+
+    ``key`` doubles as the coordinator data field to read and the unique_id suffix.
+    """
+
+
+# Weather-station binary sensors. ``key`` is the coordinator data field.
+WEATHER_BINARY_SENSORS: tuple[EvonBinarySensorEntityDescription, ...] = (
+    EvonBinarySensorEntityDescription(
+        key="rain",
+        translation_key="weather_rain",
+        device_class=BinarySensorDeviceClass.MOISTURE,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="twilight",
+        translation_key="weather_twilight",
+        icon="mdi:weather-night",
+    ),
+    EvonBinarySensorEntityDescription(
+        key="wind_alarm",
+        translation_key="weather_wind_alarm",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="wind_alarm_1",
+        translation_key="weather_wind_alarm_1",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="wind_alarm_2",
+        translation_key="weather_wind_alarm_2",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="connected",
+        translation_key="weather_connected",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="temperature_valid",
+        translation_key="weather_temperature_valid",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    EvonBinarySensorEntityDescription(
+        key="polling_activated",
+        translation_key="weather_polling_activated",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -103,8 +160,60 @@ async def async_setup_entry(
         )
     )
 
+    # Create weather-station binary sensors using entity descriptions
+    if coordinator.data and ENTITY_TYPE_WEATHER in coordinator.data:
+        for station in coordinator.data[ENTITY_TYPE_WEATHER]:
+            for description in WEATHER_BINARY_SENSORS:
+                entities.append(
+                    EvonWeatherBinarySensor(
+                        coordinator,
+                        station["id"],
+                        station["name"],
+                        station.get("room_name", ""),
+                        entry,
+                        description,
+                    )
+                )
+
     if entities:
         async_add_entities(entities)
+
+
+class EvonWeatherBinarySensor(EvonEntity, BinarySensorEntity):
+    """Representation of an Evon weather-station binary sensor (one field)."""
+
+    _entity_type = ENTITY_TYPE_WEATHER
+    entity_description: EvonBinarySensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+        description: EvonBinarySensorEntityDescription,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, instance_id, name, room_name, entry)
+        self.entity_description = description
+        self._attr_unique_id = f"evon_weather_{instance_id}_{description.key}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this sensor."""
+        return self._build_device_info("Weather Station")
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the binary state, or None when the field is missing."""
+        data = self._get_data()
+        if not data:
+            return None
+        value = data.get(self.entity_description.key)
+        if value is None:
+            return None
+        return bool(value)
 
 
 class EvonValveSensor(EvonEntity, BinarySensorEntity):

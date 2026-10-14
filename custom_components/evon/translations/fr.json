@@ -168,6 +168,30 @@
       },
       "websocket": {
         "name": "WebSocket"
+      },
+      "weather_rain": {
+        "name": "Pluie"
+      },
+      "weather_twilight": {
+        "name": "Crépuscule"
+      },
+      "weather_wind_alarm": {
+        "name": "Alarme de vent"
+      },
+      "weather_wind_alarm_1": {
+        "name": "Alarme de vent 1"
+      },
+      "weather_wind_alarm_2": {
+        "name": "Alarme de vent 2"
+      },
+      "weather_connected": {
+        "name": "Connecté"
+      },
+      "weather_temperature_valid": {
+        "name": "Température valide"
+      },
+      "weather_polling_activated": {
+        "name": "Interrogation active"
       }
     },
     "sensor": {
@@ -190,6 +214,51 @@
       },
       "websocket_latency": {
         "name": "Latence WebSocket"
+      },
+      "weather_temperature": {
+        "name": "Température"
+      },
+      "weather_wind_speed": {
+        "name": "Vitesse du vent"
+      },
+      "weather_brightness": {
+        "name": "Luminosité"
+      },
+      "weather_sun_north": {
+        "name": "Soleil nord"
+      },
+      "weather_sun_east": {
+        "name": "Soleil est"
+      },
+      "weather_sun_south": {
+        "name": "Soleil sud"
+      },
+      "weather_sun_west": {
+        "name": "Soleil ouest"
+      },
+      "weather_temp_min_today": {
+        "name": "Température min. aujourd'hui"
+      },
+      "weather_temp_max_today": {
+        "name": "Température max. aujourd'hui"
+      },
+      "weather_wind_max_today": {
+        "name": "Vent max. aujourd'hui"
+      },
+      "weather_temp_min": {
+        "name": "Température min."
+      },
+      "weather_temp_max": {
+        "name": "Température max."
+      },
+      "weather_wind_max": {
+        "name": "Vent max."
+      },
+      "weather_last_rain": {
+        "name": "Dernière pluie"
+      },
+      "weather_last_rain_in_days": {
+        "name": "Jours depuis la pluie"
       }
     },
     "select": {
@@ -390,6 +459,17 @@
               "debug_api": "Activer la journalisation de débogage pour les requêtes et réponses de l'API HTTP. Utile pour dépanner les problèmes de connexion ou d'authentification.",
               "debug_websocket": "Activer la journalisation de débogage pour les messages WebSocket. Utile pour dépanner les problèmes de mise à jour en temps réel.",
               "debug_coordinator": "Activer la journalisation de débogage pour le coordinateur de données. Utile pour dépanner le traitement des données et les mises à jour des entités."
+            }
+          },
+          "weather": {
+            "name": "Station météo",
+            "data": {
+              "weather_home_connect_id": "ID du proxy Home Connect",
+              "weather_station_id": "ID de la station météo"
+            },
+            "data_description": {
+              "weather_home_connect_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance du proxy Home Connect (par ex. evonHomeConnect4939).",
+              "weather_station_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance de la station météo (par ex. WeatherStation1525)."
             }
           }
         }

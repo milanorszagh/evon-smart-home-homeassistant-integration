@@ -168,6 +168,30 @@
       },
       "websocket": {
         "name": "WebSocket"
+      },
+      "weather_rain": {
+        "name": "Déšť"
+      },
+      "weather_twilight": {
+        "name": "Soumrak"
+      },
+      "weather_wind_alarm": {
+        "name": "Výstraha větru"
+      },
+      "weather_wind_alarm_1": {
+        "name": "Výstraha větru 1"
+      },
+      "weather_wind_alarm_2": {
+        "name": "Výstraha větru 2"
+      },
+      "weather_connected": {
+        "name": "Připojeno"
+      },
+      "weather_temperature_valid": {
+        "name": "Teplota platná"
+      },
+      "weather_polling_activated": {
+        "name": "Dotazování aktivní"
       }
     },
     "sensor": {
@@ -190,6 +214,51 @@
       },
       "websocket_latency": {
         "name": "WebSocket latence"
+      },
+      "weather_temperature": {
+        "name": "Teplota"
+      },
+      "weather_wind_speed": {
+        "name": "Rychlost větru"
+      },
+      "weather_brightness": {
+        "name": "Jas"
+      },
+      "weather_sun_north": {
+        "name": "Slunce sever"
+      },
+      "weather_sun_east": {
+        "name": "Slunce východ"
+      },
+      "weather_sun_south": {
+        "name": "Slunce jih"
+      },
+      "weather_sun_west": {
+        "name": "Slunce západ"
+      },
+      "weather_temp_min_today": {
+        "name": "Min. teplota dnes"
+      },
+      "weather_temp_max_today": {
+        "name": "Max. teplota dnes"
+      },
+      "weather_wind_max_today": {
+        "name": "Max. vítr dnes"
+      },
+      "weather_temp_min": {
+        "name": "Min. teplota"
+      },
+      "weather_temp_max": {
+        "name": "Max. teplota"
+      },
+      "weather_wind_max": {
+        "name": "Max. vítr"
+      },
+      "weather_last_rain": {
+        "name": "Poslední déšť"
+      },
+      "weather_last_rain_in_days": {
+        "name": "Dny od deště"
       }
     },
     "select": {
@@ -390,6 +459,17 @@
               "debug_api": "Zapnout ladící protokolování pro HTTP API požadavky a odpovědi. Užitečné pro řešení problémů s připojením nebo autentizací.",
               "debug_websocket": "Zapnout ladící protokolování pro WebSocket zprávy. Užitečné pro řešení problémů s aktualizacemi v reálném čase.",
               "debug_coordinator": "Zapnout ladící protokolování pro data coordinator. Užitečné pro řešení problémů se zpracováním dat a aktualizacemi entit."
+            }
+          },
+          "weather": {
+            "name": "Meteostanice",
+            "data": {
+              "weather_home_connect_id": "ID proxy Home Connect",
+              "weather_station_id": "ID meteostanice"
+            },
+            "data_description": {
+              "weather_home_connect_id": "Volitelné. Nastavte pouze tehdy, pokud meteostanice není nalezena automaticky. ID instance proxy Home Connect (např. evonHomeConnect4939).",
+              "weather_station_id": "Volitelné. Nastavte pouze tehdy, pokud meteostanice není nalezena automaticky. ID instance meteostanice (např. WeatherStation1525)."
             }
           }
         }
