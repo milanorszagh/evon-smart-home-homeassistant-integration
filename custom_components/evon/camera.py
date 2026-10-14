@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .base_entity import EvonEntity
 from .camera_recorder import EvonCameraRecorder
@@ -79,6 +80,10 @@ class EvonCamera(EvonEntity, Camera):
         self._image_lock = asyncio.Lock()
         self._image_event = asyncio.Event()
         self._tracked_image_path: str = ""
+        # When the currently shown frame was captured (image_path last changed),
+        # exposed as the image_last_updated attribute so a dashboard overlay can
+        # show the age of the displayed picture (a real liveness indicator).
+        self._image_captured_at: Any = None
         self._recorder = EvonCameraRecorder(coordinator.hass, self)
 
     @callback
@@ -89,6 +94,7 @@ class EvonCamera(EvonEntity, Camera):
             new_path = data.get("image_path", "")
             if new_path and new_path != self._tracked_image_path:
                 self._tracked_image_path = new_path
+                self._image_captured_at = dt_util.utcnow()
                 self._image_event.set()
         # Refresh recordings cache asynchronously (non-blocking)
         self.hass.async_create_task(
@@ -128,6 +134,11 @@ class EvonCamera(EvonEntity, Camera):
         if data:
             attrs["ip_address"] = data.get("ip_address")
             attrs["error"] = data.get("error", False)
+
+        # Capture time of the currently shown frame (image_path last changed), for a
+        # dashboard overlay that shows how fresh the displayed picture is.
+        if self._image_captured_at is not None:
+            attrs["image_last_updated"] = self._image_captured_at.isoformat()
 
         # Find linked door and get saved pictures
         saved_pictures = self._get_saved_pictures()

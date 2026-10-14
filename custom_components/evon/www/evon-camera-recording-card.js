@@ -456,15 +456,23 @@ window.customCards.push({
   description: "Recording controls, history and an optional door-opener button for Evon cameras",
 });
 
-// Tiny ticking 24-hour clock element (HH:MM:SS), updated every second. Meant as a
-// picture-elements overlay on a live camera so you can tell at a glance the feed is
-// live. Shares this resource with the card, so no extra Lovelace resource is needed.
+// Overlay badge for a live camera feed that shows the CURRENTLY SHOWN frame's
+// capture time (24h HH:MM:SS) and its age ("Xs ago"), not the wall clock. It reads
+// the camera entity's `image_last_updated` attribute (set by the Evon camera when a
+// new frame arrives), so the time only changes when the picture changes and the age
+// climbs if the feed freezes — a real liveness indicator. The age ticks every second
+// while the frame time stays put between frames. Used as a picture-elements element:
+//   { type: "custom:evon-live-clock", entity: "camera.xxx" }
+// Shares this resource with the card, so no extra Lovelace resource is needed.
 class EvonLiveClock extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
   }
 
-  set hass(_hass) {}
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
 
   connectedCallback() {
     if (!this._root) {
@@ -472,12 +480,13 @@ class EvonLiveClock extends HTMLElement {
       this._root.style.cssText =
         "background:rgba(0,0,0,0.55);color:#fff;padding:2px 7px;border-radius:6px;" +
         "font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;" +
-        "pointer-events:none;line-height:1.4;" +
+        "pointer-events:none;line-height:1.4;white-space:nowrap;" +
         "font-family:var(--ha-font-family-body,var(--mdc-typography-font-family,sans-serif));";
       this.appendChild(this._root);
     }
-    this._tick();
-    this._iv = setInterval(() => this._tick(), 1000);
+    this._render();
+    // Tick the age every second; the frame time only changes when a new frame arrives.
+    this._iv = setInterval(() => this._render(), 1000);
   }
 
   disconnectedCallback() {
@@ -485,10 +494,31 @@ class EvonLiveClock extends HTMLElement {
     this._iv = null;
   }
 
-  _tick() {
-    const d = new Date();
+  _frameDate() {
+    const ent = this._config && this._config.entity;
+    if (!ent || !this._hass || !this._hass.states[ent]) return null;
+    const attrs = this._hass.states[ent].attributes || {};
+    const iso = attrs.image_last_updated;
+    if (!iso) return null;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  _render() {
+    if (!this._root) return;
+    const d = this._frameDate();
+    if (!d) {
+      this._root.textContent = "no frame";
+      this._root.style.color = "#bbb";
+      return;
+    }
     const p = (n) => String(n).padStart(2, "0");
-    this._root.textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    const t = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    const age = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+    const ageStr = age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`;
+    this._root.textContent = `${t} · ${ageStr} ago`;
+    // Green when fresh, amber then red as it goes stale.
+    this._root.style.color = age <= 5 ? "#fff" : age <= 15 ? "#ffd54f" : "#ff8a80";
   }
 }
 

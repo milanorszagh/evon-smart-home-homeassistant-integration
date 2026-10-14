@@ -132,6 +132,21 @@ class TestEvonCamera:
         pics = cam._get_saved_pictures()
         assert len(pics) == 2
 
+    def test_image_last_updated_absent_without_frame(self):
+        """No image_last_updated attribute until a frame has been seen."""
+        coord = _make_coordinator(cam_data=[SAMPLE_CAM])
+        cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())
+        assert "image_last_updated" not in cam.extra_state_attributes
+
+    def test_image_last_updated_in_attributes(self):
+        """The captured-at time of the current frame is exposed as ISO."""
+        from datetime import UTC, datetime
+
+        coord = _make_coordinator(cam_data=[SAMPLE_CAM])
+        cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())
+        cam._image_captured_at = datetime(2026, 10, 14, 19, 53, tzinfo=UTC)
+        assert cam.extra_state_attributes["image_last_updated"] == "2026-10-14T19:53:00+00:00"
+
 
 @requires_ha_test_framework
 class TestEvonCameraImage:
