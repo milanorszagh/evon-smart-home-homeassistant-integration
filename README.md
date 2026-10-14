@@ -370,7 +370,7 @@ Since the cameras are snapshot-based (no video stream), the integration provides
 - **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings. The `evon_recording_finished` event fires when a recording has been saved.
 - **Storage location**: Recordings are saved in Home Assistant's local media folder — `/media/evon_recordings` on Home Assistant OS and Docker, `<config>/media/evon_recordings` on venv installs. Recordings made with versions before 1.23.0 are moved there automatically.
 - **Media browser**: Recordings appear in Home Assistant's media browser under **My media → evon_recordings** (requires the `media_source` integration, part of `default_config`)
-- **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, a list of recent recordings with inline video playback, and a link to the media browser
+- **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, a list of recent recordings with inline video playback, a link to the media browser, and an optional **Open door** button for the intercom's door opener
 
 **Note:** The frame rate is limited by how quickly the intercom delivers snapshots (roughly 0.5–2 frames per second). The result is more of a timelapse than smooth video, but is useful for security and monitoring purposes.
 
@@ -395,7 +395,14 @@ Then add the card to any dashboard (works great inside Bubble Card popups):
 type: custom:evon-camera-recording-card
 entity: camera.your_camera_entity
 recording_switch: switch.your_camera_recording  # optional, auto-derived from entity if omitted
+door_button: button.your_intercom_open_door     # optional, adds an "Open door" button next to "Record"
+sip_extension: "8001"                           # optional, adds a "Talk" button for SIP two-way audio (see docs/INTERCOM_AUDIO.md)
+show_title: false                               # optional, hides the "Recording" heading (default: true)
 ```
+
+`door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds.
+
+`sip_extension` adds a **Talk** button for two-way audio with the door station. It needs an optional, self-hosted SIP stack (an Asterisk add-on, the SIP Core card, and HTTPS for microphone access, e.g. via Tailscale) that is **not** part of this integration. The full setup, requirements and config templates are in [docs/INTERCOM_AUDIO.md](docs/INTERCOM_AUDIO.md).
 
 ### Doorbell Snapshots
 

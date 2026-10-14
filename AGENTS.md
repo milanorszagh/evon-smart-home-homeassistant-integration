@@ -29,7 +29,7 @@ Integrations:
 | **DEVELOPMENT.md** | Developers | Architecture, API reference, device classes, methods, code patterns, testing, MCP server setup |
 | **AGENTS.md** | AI agents | Critical API knowledge, debugging tips, gotchas, implementation patterns |
 | **RELEASING.md** | Maintainers | The release recipe: regular release from `main`, hotfix release from a previous tag, HACS compatibility, version numbering, release checklist |
-| **docs/*.md** | Developers | Deep dives: `BLIND_TILT_BEHAVIOR.md`, `ENERGY_STATISTICS.md`, `WEBSOCKET_API.md` (reverse-engineered WS protocol), `CODE_ANALYSIS_BACKLOG.md` (open analysis/mypy findings); `docs/plans/` and `docs/superpowers/` are historical 2026 design plans/specs, not current guidance |
+| **docs/*.md** | Developers | Deep dives: `BLIND_TILT_BEHAVIOR.md`, `ENERGY_STATISTICS.md`, `WEBSOCKET_API.md` (reverse-engineered WS protocol), `INTERCOM_AUDIO.md` (optional SIP two-way-audio + doorbell-notification setup, not integration code), `CODE_ANALYSIS_BACKLOG.md` (open analysis/mypy findings); `docs/plans/` and `docs/superpowers/` are historical 2026 design plans/specs, not current guidance |
 
 ### What Goes Where
 
@@ -423,7 +423,7 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 - WebSocket: `ws_client.py` (WebSocket client), `ws_control.py` (WebSocket control mappings), `ws_mappings.py` (WebSocket property mappings)
 - Utilities: `statistics.py` (long-term energy statistics), `device_trigger.py` (device automation triggers), `diagnostics.py` (integration diagnostics), `camera_recorder.py` (snapshot→MP4 recording — a helper, not a platform), `recordings.py` (recordings folder inside HA's local media dir + one-time legacy migration, since 1.23.0), `recordings_view.py` (authenticated HTTP view serving camera recordings)
 - UI strings: `strings.json` + `translations/` (10 languages: cs, de, en, es, fr, it, pl, pt, sk, sl — `tests/test_translations.py` enforces parity); `services.yaml` (service descriptions and selectors)
-- Frontend: `www/evon-camera-recording-card.js` (custom Lovelace card, served as a static path at `/evon/evon-camera-recording-card.js`)
+- Frontend: `www/evon-camera-recording-card.js` (custom Lovelace card, served as a static path at `/evon/evon-camera-recording-card.js`). Besides the recording UI and the optional `door_button`, it has an optional **Talk** button (config `sip_extension`) that drives `window.sipCore` (answer incoming / hang up / dial the door) for the SIP intercom-audio stack — see `docs/INTERCOM_AUDIO.md`. That stack (Asterisk add-on + SIP Core + Tailscale HTTPS) is **not** part of the integration; the card only calls the global `sipCore` engine when `sip_extension` is set. After editing the card JS, bump the Lovelace resource URL `?v=` — the HA frontend service worker caches it even though it is served with `cache_headers=False`.
 
 ### Repository
 - Docs: `README.md`, `DEVELOPMENT.md`, `AGENTS.md`, `CHANGELOG.md`, `RELEASING.md`, `docs/` (see Documentation Structure above)

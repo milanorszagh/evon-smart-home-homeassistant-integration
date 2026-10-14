@@ -14,12 +14,21 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Added
 
+- **Talk button for SIP intercom audio.** The camera card takes an optional
+  `sip_extension`; when set it shows a **Talk** button that answers an incoming door
+  call, hangs up an active one, or dials the door, through the `window.sipCore` engine.
+  This drives an optional self-hosted SIP stack (Asterisk add-on + SIP Core + HTTPS such
+  as Tailscale) documented in `docs/INTERCOM_AUDIO.md`; the stack itself is not part of
+  the integration. Edit the card JS and the Lovelace resource URL needs a `?v=` bump.
 - **Door opener buttons.** Each 2N intercom device, and each security door linked to an
   intercom, gets an *Open door* button that pulses the door release (the controller's
   `SwitchOnFor` method, sent over WebSocket with HTTP fallback). The pulse length is a new
   integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s). The buttons are
   created disabled; enable them in the entity settings before dashboards or automations can
   open the door.
+- **Recording card door button.** `evon-camera-recording-card` takes an optional
+  `door_button` (one of the *Open door* button entities) and shows it next to *Record*;
+  `show_title: false` hides the *Recording* heading above the buttons.
 
 ### Changed
 
