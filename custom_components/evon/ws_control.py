@@ -21,6 +21,10 @@ Light Control:
     - SwitchAllOff/SwitchAllOn: Group commands on Base.ehLight (CallWithReturn — the
       controller answers with a Callback, unlike the Base.bBlind group commands)
 
+Intercom Control (Security.Intercom.2N.Intercom2N):
+    - SwitchOnFor(["2"]): open the door for N seconds — the pulse length is a STRING,
+      exactly like the verified HTTP call POST /api/instances/<intercom>/SwitchOnFor ["2"]
+
 Blind Control:
     - MoveToPosition([angle, position]): Set both tilt and position - angle comes FIRST!
     - Open/Close/Stop: Simple commands with no params
@@ -89,6 +93,7 @@ from .const import (
     EVON_CLASS_CLIMATE,
     EVON_CLASS_CLIMATE_UNIVERSAL,
     EVON_CLASS_HOME_STATE,
+    EVON_CLASS_INTERCOM_2N,
     EVON_CLASS_LIGHT,
     EVON_CLASS_LIGHT_BASE,
     EVON_CLASS_LIGHT_DIM,
@@ -96,6 +101,7 @@ from .const import (
     EVON_CLASS_LIGHT_GROUP,
     EVON_CLASS_LIGHT_RGBW,
     EVON_CLASS_SCENE,
+    INTERCOM_DOOR_OPEN_SECONDS,
 )
 
 
@@ -209,6 +215,15 @@ SCENE_MAPPINGS: dict[str, WsControlMapping] = {
     "Execute": WsControlMapping(None, "Execute", None),
 }
 
+# Intercom control mappings (Security.Intercom.2N.Intercom2N)
+# Door opener: SwitchOnFor([seconds]) with the pulse length as a string, mirroring the
+# verified HTTP call POST /api/instances/<intercom>/SwitchOnFor with body ["2"].
+INTERCOM_MAPPINGS: dict[str, WsControlMapping] = {
+    "SwitchOnFor": WsControlMapping(
+        None, "SwitchOnFor", lambda params: params if params else [str(INTERCOM_DOOR_OPEN_SECONDS)]
+    ),
+}
+
 # Map class names to their control mappings
 CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
     # Lights - SwitchOn/SwitchOff for on/off, BrightnessSetScaled for dimming
@@ -232,6 +247,8 @@ CLASS_CONTROL_MAPPINGS: dict[str, dict[str, WsControlMapping]] = {
     EVON_CLASS_BATHROOM_RADIATOR: BATHROOM_RADIATOR_MAPPINGS,
     # Scenes
     EVON_CLASS_SCENE: SCENE_MAPPINGS,
+    # Intercoms (door opener)
+    EVON_CLASS_INTERCOM_2N: INTERCOM_MAPPINGS,
 }
 
 

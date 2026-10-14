@@ -27,6 +27,7 @@ from .const import (
     EVON_CLASS_LIGHT_EH,
     EVON_REMOTE_HOST,
     IMAGE_FETCH_TIMEOUT,
+    INTERCOM_DOOR_OPEN_SECONDS,
     LOGIN_BACKOFF_BASE,
     LOGIN_MAX_BACKOFF,
     WS_CONTROL_MAX_IN_FLIGHT,
@@ -759,6 +760,15 @@ class EvonApi:
     async def all_lights_on(self) -> None:
         """Switch every light on with the controller's own group command (``Base.ehLight.SwitchAllOn``)."""
         await self.call_method(EVON_CLASS_LIGHT_EH, "SwitchAllOn", [])
+
+    # Intercom methods
+    async def open_intercom_door(self, instance_id: str, seconds: int = INTERCOM_DOOR_OPEN_SECONDS) -> None:
+        """Open the door of a 2N intercom for ``seconds`` (``SwitchOnFor``).
+
+        The pulse length travels as a string, mirroring the Evon web app and the
+        verified HTTP call ``POST /api/instances/{intercom}/SwitchOnFor`` with body ``["2"]``.
+        """
+        await self.call_method(instance_id, "SwitchOnFor", [str(seconds)])
 
     # Blind methods
     async def open_blind(self, instance_id: str) -> None:

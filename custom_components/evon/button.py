@@ -15,7 +15,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
 from .base_entity import EvonEntity
-from .const import DOMAIN, ENTITY_TYPE_LIGHTS, ENTITY_TYPE_SCENES, LIGHT_IDENTIFY_ANIMATION_DELAY
+from .const import (
+    DOMAIN,
+    ENTITY_TYPE_INTERCOMS,
+    ENTITY_TYPE_LIGHTS,
+    ENTITY_TYPE_SCENES,
+    LIGHT_IDENTIFY_ANIMATION_DELAY,
+)
 from .coordinator import EvonDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +60,21 @@ async def async_setup_entry(
                     light["id"],
                     light["name"],
                     light.get("room_name", ""),
+                    entry,
+                    api,
+                )
+            )
+
+    # Door-opener buttons for 2N intercoms. Created disabled: opening the front door
+    # from Home Assistant must be a deliberate choice made in the entity settings.
+    if coordinator.data and ENTITY_TYPE_INTERCOMS in coordinator.data:
+        for intercom in coordinator.data[ENTITY_TYPE_INTERCOMS]:
+            entities.append(
+                EvonIntercomDoorButton(
+                    coordinator,
+                    intercom["id"],
+                    intercom["name"],
+                    intercom.get("room_name", ""),
                     entry,
                     api,
                 )
@@ -150,3 +171,39 @@ class EvonIdentifyButton(EvonEntity, ButtonEntity):
 
         except EvonApiError as err:
             raise HomeAssistantError(f"Failed to identify light {self._device_name}: {err}") from err
+
+
+class EvonIntercomDoorButton(EvonEntity, ButtonEntity):
+    """Button that opens the door of a 2N intercom (a ``SwitchOnFor`` pulse)."""
+
+    _attr_icon = "mdi:door-open"
+    _entity_type = ENTITY_TYPE_INTERCOMS
+    _attr_translation_key = "open_door"
+    # Opening the front door from HA must be enabled deliberately in the entity settings
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: EvonDataUpdateCoordinator,
+        instance_id: str,
+        name: str,
+        room_name: str,
+        entry: ConfigEntry,
+        api: EvonApi,
+    ) -> None:
+        """Initialize the door-opener button."""
+        super().__init__(coordinator, instance_id, name, room_name, entry, api)
+        self._attr_unique_id = f"evon_open_door_{instance_id}"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for this intercom."""
+        return self._build_device_info("Intercom")
+
+    async def async_press(self) -> None:
+        """Open the door (SwitchOnFor pulse on the intercom)."""
+        _LOGGER.info("Opening door via intercom %s (%s)", self._device_name, self._instance_id)
+        try:
+            await self._api.open_intercom_door(self._instance_id)
+        except EvonApiError as err:
+            raise HomeAssistantError(f"Failed to open door {self._device_name}: {err}") from err

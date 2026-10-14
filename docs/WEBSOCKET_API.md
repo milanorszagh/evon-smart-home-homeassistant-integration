@@ -1022,6 +1022,19 @@ Security doors and intercoms **expose real-time state** via WebSocket.
 | `ErrorCode` | number | Error code (999 = OK) |
 | `HasCam` | boolean | Camera available |
 
+**Door opener (verified October 2026):** the intercom's `SwitchOnFor` method pulses the door
+release. The pulse length is passed as a **string**; this is the HTTP call captured by a user
+(`POST /api/instances/Intercom2N1000/SwitchOnFor`, body `["2"]`) and its WebSocket form:
+
+```javascript
+{"methodName":"CallWithReturn","request":{"args":["Intercom2N1000.SwitchOnFor",["2"]],"methodName":"CallMethod","sequenceId":2}}
+```
+
+The controller answers with a normal `Callback` (~35 ms). `DoorOpenTriggered` and `IsDoorOpen`
+do not change on the pulse — they follow the physical door contact. The HA integration exposes it
+as a `button` entity per intercom (`EvonIntercomDoorButton`, disabled by default) through
+`EvonApi.open_intercom_door()`; the HTTP fallback is the same call.
+
 **Doorbell Switch Properties (e.g., `Intercom2N1000.DoorSwitch`):**
 | Property | Type | Description |
 |----------|------|-------------|

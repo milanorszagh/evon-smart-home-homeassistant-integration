@@ -186,6 +186,9 @@ WS_RESUBSCRIBE_RETRY_DELAY = 2.0  # Delay between resubscribe attempts (seconds)
 # Light identification animation timing (seconds)
 # Evon lights fade in/out over ~2.5s, so 3s provides buffer for visual effect
 LIGHT_IDENTIFY_ANIMATION_DELAY = 3.0
+INTERCOM_DOOR_OPEN_SECONDS = (
+    2  # Door-opener pulse for Intercom2N.SwitchOnFor (sent as a string, like the web app / HTTP body ["2"])
+)
 
 # Service names
 SERVICE_REFRESH = "refresh"

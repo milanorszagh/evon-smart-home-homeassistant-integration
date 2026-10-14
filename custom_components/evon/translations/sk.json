@@ -149,6 +149,9 @@
     "button": {
       "identify": {
         "name": "Identifikovať"
+      },
+      "open_door": {
+        "name": "Otvoriť dvere"
       }
     },
     "switch": {

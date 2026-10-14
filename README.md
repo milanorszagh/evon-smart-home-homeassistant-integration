@@ -31,7 +31,7 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 | **Bathroom Radiators** | Electric heater control with timer |
 | **Scenes** | Trigger scenes defined in your evon system from Home Assistant |
 | **Security Doors** | Door open/closed state, call in progress indicator |
-| **Intercoms** | Door open/closed state, doorbell events, connection status |
+| **Intercoms** | Door open/closed state, doorbell events, connection status, door opener button (disabled by default) |
 | **Cameras** | Camera image from 2N intercoms (still image, refreshed when viewed), snapshot-based video recording |
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
 | **Wall Buttons (Taster)** | Single, double and long press events (the push buttons on the wall, not the relay outputs above) |
@@ -317,6 +317,7 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Security door call in progress
 - Intercom door state (open/closed)
 - Intercom connection status
+- Intercom door opener: an **Open door** button on each 2N intercom that pulses the door release for 2 seconds. It is created **disabled** — enable it under the entity's settings before dashboards or automations can open the door
 - **WebSocket connection status** (diagnostic) - shows if real-time updates are active
 
 ### Diagnostic Sensors

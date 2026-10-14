@@ -12,7 +12,7 @@ from tests.conftest import HAS_HA_TEST_FRAMEWORK, requires_ha_test_framework
 
 # Entity classes require proper HA base classes (metaclass inheritance)
 if HAS_HA_TEST_FRAMEWORK:
-    from custom_components.evon.button import EvonIdentifyButton, EvonSceneButton
+    from custom_components.evon.button import EvonIdentifyButton, EvonIntercomDoorButton, EvonSceneButton
 
 
 # =============================================================================
@@ -39,6 +39,7 @@ def _make_api():
     api.turn_off_light = AsyncMock()
     api.set_light_brightness = AsyncMock()
     api.execute_scene = AsyncMock()
+    api.open_intercom_door = AsyncMock()
     return api
 
 
@@ -84,6 +85,49 @@ class TestEvonSceneButton:
 
         with pytest.raises(HomeAssistantError, match="Failed to execute scene"):
             await btn.async_press()
+
+
+@requires_ha_test_framework
+class TestEvonIntercomDoorButton:
+    """Test EvonIntercomDoorButton entity (2N intercom door opener)."""
+
+    def _btn(self, api=None, coord=None):
+        return EvonIntercomDoorButton(
+            coord or _make_coordinator(),
+            "Intercom2N1000",
+            "Haupteingang",
+            "Entrance",
+            _make_entry(),
+            api or _make_api(),
+        )
+
+    def test_unique_id(self):
+        assert self._btn()._attr_unique_id == "evon_open_door_Intercom2N1000"
+
+    def test_disabled_by_default(self):
+        """Opening the front door must be enabled deliberately before HA can do it."""
+        assert self._btn().entity_registry_enabled_default is False
+
+    def test_device_info_is_the_intercom_device(self):
+        info = self._btn().device_info
+        assert info is not None
+        assert ("evon", "Intercom2N1000") in info["identifiers"]
+
+    @pytest.mark.asyncio
+    async def test_press_opens_door(self):
+        api = _make_api()
+        coord = _make_coordinator()
+        await self._btn(api, coord).async_press()
+        api.open_intercom_door.assert_awaited_once_with("Intercom2N1000")
+
+    @pytest.mark.asyncio
+    async def test_press_api_error_raises_ha_error(self):
+        api = _make_api()
+        api.open_intercom_door.side_effect = EvonApiError("fail")
+        from homeassistant.exceptions import HomeAssistantError
+
+        with pytest.raises(HomeAssistantError, match="Failed to open door"):
+            await self._btn(api).async_press()
 
 
 @requires_ha_test_framework
@@ -243,3 +287,21 @@ async def test_scene_button_press(hass, mock_config_entry_v2, mock_evon_api_clas
 
     # Verify API was called
     mock_evon_api_class.execute_scene.assert_called_once_with("SceneApp1234")
+
+
+@requires_ha_test_framework
+@pytest.mark.asyncio
+async def test_intercom_door_button_created_disabled(hass, mock_config_entry_v2, mock_evon_api_class):
+    """The door button exists in the registry for the mock intercom but is disabled by the
+    integration, so it has no state until the user enables it."""
+    from homeassistant.helpers import entity_registry as er
+
+    mock_config_entry_v2.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+    await hass.async_block_till_done()
+
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id("button", "evon", "evon_open_door_intercom_1")
+    assert entity_id is not None
+    assert ent_reg.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None

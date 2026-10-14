@@ -34,6 +34,9 @@ class TestBasicPrefixes:
     def test_identify(self):
         assert _extract_instance_id_from_unique_id("evon_identify_SC1_M01.Light1", ENTRY_ID) == "SC1_M01.Light1"
 
+    def test_open_door(self):
+        assert _extract_instance_id_from_unique_id("evon_open_door_Intercom2N1000", ENTRY_ID) == "Intercom2N1000"
+
     def test_camera(self):
         assert _extract_instance_id_from_unique_id("evon_camera_Intercom2N1000.Cam", ENTRY_ID) == "Intercom2N1000.Cam"
 

@@ -606,7 +606,7 @@ All requests require: `Cookie: token=<token>`
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
 | `Security.Door` | Security door | No (sensor) |
-| `Security.Intercom.2N.Intercom2N` | 2N Intercom | No (sensor) |
+| `Security.Intercom.2N.Intercom2N` | 2N Intercom | Yes (`SwitchOnFor` door opener, see `EvonApi.open_intercom_door()`) |
 | `Security.Intercom.2N.Intercom2NCam` | 2N Camera | Yes (image request) |
 | `System.Location.Room` | Room/area | No |
 

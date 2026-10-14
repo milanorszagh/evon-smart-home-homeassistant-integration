@@ -292,6 +292,7 @@ Device control goes over WebSocket first (`CallMethod`/`SetValue`), with HTTP as
 | Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
 | Season Mode | `IsCool` | `SetValue [Base.ehThermostat, "IsCool", bool]` | ✅ true=cooling, false=heating |
 | All lights off / on | `SwitchAllOff` / `SwitchAllOn` | `CallMethod [Base.ehLight.SwitchAllOff, []]` | ✅ Group object is `Base.ehLight` (NOT `Base.bLight`); answered with a Callback in ~50ms, so not fire-and-forget |
+| Intercom door opener | `SwitchOnFor` | `CallMethod [Intercom2N1000.SwitchOnFor, ["2"]]` | ✅ Pulse seconds as a STRING (mirrors the HTTP body `["2"]`); Callback in ~35ms. `DoorOpenTriggered`/`IsDoorOpen` do NOT flip on the pulse — they follow the door contact |
 
 ### What Does NOT Work via WebSocket
 
@@ -570,7 +571,7 @@ When filtering devices from the API, use these class names:
 | Physical Buttons | `SmartCOM.Switch` | No (event entity, WS-only) |
 | Smart Meter | Contains `Energy.SmartMeter` | No (sensor only) |
 | Security Door | `Security.Door` | No (sensor only, stores SavedPictures) |
-| Intercom (2N) | `Security.Intercom.2N.Intercom2N` | No (sensor only) |
+| Intercom (2N) | `Security.Intercom.2N.Intercom2N` | Yes (`SwitchOnFor(["2"])` door opener → `button` entity, disabled by default) |
 | Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
 | Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
 | Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
@@ -778,7 +779,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1346 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1357 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

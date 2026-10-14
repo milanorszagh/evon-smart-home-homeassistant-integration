@@ -12,6 +12,13 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [Unreleased]
 
+### Added
+
+- **Door opener button for 2N intercoms.** Each intercom device gets an *Open door* button
+  that pulses the door release for 2 seconds (the controller's `SwitchOnFor` method, sent over
+  WebSocket with HTTP fallback). The button is created disabled; enable it in the entity
+  settings before dashboards or automations can open the door.
+
 ### Changed
 
 - **`evon.all_lights_off` sends one command.** The action (and the MCP server's

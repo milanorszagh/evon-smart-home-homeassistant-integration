@@ -533,6 +533,30 @@ class TestEvonApiWebSocketControl:
         assert fire_and_forget is False  # the controller sends a Callback for it
         mock_api_with_ws._request.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_open_intercom_door_over_ws(self, mock_api_with_ws):
+        """open_intercom_door() sends Intercom2N1000.SwitchOnFor(["2"]) over WebSocket —
+        the pulse length as a string, mirroring the verified HTTP body ["2"]."""
+        mock_api_with_ws.set_instance_classes(
+            [{"ID": "Intercom2N1000", "ClassName": "Security.Intercom.2N.Intercom2N"}]
+        )
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.call_method = AsyncMock(return_value=True)
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        await mock_api_with_ws.open_intercom_door("Intercom2N1000")
+
+        mock_ws.call_method.assert_awaited_once_with("Intercom2N1000", "SwitchOnFor", ["2"], False)
+        mock_api_with_ws._request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_open_intercom_door_http_without_ws(self, mock_api_with_ws):
+        """Without a WebSocket the same call goes out as the HTTP POST the neighbour verified."""
+        await mock_api_with_ws.open_intercom_door("Intercom2N1000")
+
+        mock_api_with_ws._request.assert_awaited_once_with("POST", "/instances/Intercom2N1000/SwitchOnFor", ["2"])
+
     def test_set_ws_client(self):
         """Test setting WebSocket client."""
         api = EvonApi(

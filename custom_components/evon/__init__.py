@@ -621,6 +621,7 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
     - evon_intercom_{instance_id}[_connection]
     - evon_scene_{instance_id}
     - evon_identify_{instance_id}
+    - evon_open_door_{instance_id}
     - evon_camera_{instance_id}
     - evon_snapshot_{door_id}_{index}
     - evon_temp_{instance_id}
@@ -655,6 +656,7 @@ def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | 
         "evon_energy_today_",
         "evon_security_door_",
         "evon_camera_recording_",
+        "evon_open_door_",
         "evon_doorbell_",
         "evon_intercom_",
         "evon_snapshot_",
