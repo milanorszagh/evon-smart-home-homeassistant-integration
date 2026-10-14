@@ -46,6 +46,10 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
   sends, instead of one request per light; the per-light loop remains as fallback when
   the group command fails. (#26)
+- **Recording timestamps use 24-hour time.** The camera card's recording list now shows
+  times like `Oct 14 at 19:53` instead of `7:53 PM`. The card's JS resource also provides a
+  small `evon-live-clock` element (a ticking 24-hour `HH:MM:SS`) for overlaying on a live
+  camera feed via `picture-elements`, so you can tell at a glance the feed is live.
 
 ### Fixed
 

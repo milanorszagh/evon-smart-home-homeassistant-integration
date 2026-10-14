@@ -455,3 +455,43 @@ window.customCards.push({
   name: "Evon Camera Recording",
   description: "Recording controls, history and an optional door-opener button for Evon cameras",
 });
+
+// Tiny ticking 24-hour clock element (HH:MM:SS), updated every second. Meant as a
+// picture-elements overlay on a live camera so you can tell at a glance the feed is
+// live. Shares this resource with the card, so no extra Lovelace resource is needed.
+class EvonLiveClock extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+  }
+
+  set hass(_hass) {}
+
+  connectedCallback() {
+    if (!this._root) {
+      this._root = document.createElement("div");
+      this._root.style.cssText =
+        "background:rgba(0,0,0,0.55);color:#fff;padding:2px 7px;border-radius:6px;" +
+        "font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;" +
+        "pointer-events:none;line-height:1.4;" +
+        "font-family:var(--ha-font-family-body,var(--mdc-typography-font-family,sans-serif));";
+      this.appendChild(this._root);
+    }
+    this._tick();
+    this._iv = setInterval(() => this._tick(), 1000);
+  }
+
+  disconnectedCallback() {
+    if (this._iv) clearInterval(this._iv);
+    this._iv = null;
+  }
+
+  _tick() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    this._root.textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+}
+
+if (!customElements.get("evon-live-clock")) {
+  customElements.define("evon-live-clock", EvonLiveClock);
+}

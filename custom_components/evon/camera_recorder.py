@@ -411,7 +411,7 @@ class EvonCameraRecorder:
             results.append(
                 {
                     "filename": f.name,
-                    "timestamp": mtime.strftime("%-b %-d at %-I:%M %p"),
+                    "timestamp": mtime.strftime("%-b %-d at %H:%M"),
                     "size": size_str,
                     "url": f"/evon/recordings/{f.name}",
                 }
