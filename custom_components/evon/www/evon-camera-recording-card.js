@@ -338,7 +338,7 @@ class EvonCameraRecordingCard extends HTMLElement {
         }
         .separator ha-icon { --mdc-icon-size: 20px; color: var(--primary-text-color); opacity: 0.6; }
 
-        .record-row { display: flex; align-items: center; gap: 16px; padding: 8px 16px; }
+        .record-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 16px; padding: 8px 16px; }
         .record-row.no-title { padding-top: 12px; }
         .record-btn {
           display: flex; align-items: center; gap: 8px;
