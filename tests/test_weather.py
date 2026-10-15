@@ -28,6 +28,7 @@ from custom_components.evon.coordinator.processors.weather import (
     parse_last_rain,
     process_weather_stations,
 )
+from tests.conftest import requires_ha_test_framework
 
 # A full weather payload as read via the proxy (.data.Data.data).
 FULL_WEATHER = {
@@ -272,6 +273,7 @@ class _StubCoordinator:
         self.config_entry = SimpleNamespace(options=options or {})
         self._instances_cache = instances or []
         self._weather_sources = None
+        self._weather_discovered_at = None
 
 
 class TestDiscoverWeatherSources:
@@ -348,6 +350,42 @@ class TestDiscoverWeatherSources:
         assert sources == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
         api.get_via_home_connect.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_empty_result_is_not_rediscovered_on_every_poll(self):
+        """A proxy without a station (or a failing proxy) must not cost a full remote
+        instance listing per poll; empty results are retried after a back-off."""
+        import time
+
+        api = AsyncMock()
+        coord = _StubCoordinator(
+            api,
+            instances=[{"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}],
+        )
+        coord._weather_sources = []
+        coord._weather_discovered_at = time.monotonic() - 10  # tried 10 s ago
+
+        assert await coord._discover_weather_sources() == []
+        api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_result_is_retried_after_backoff(self):
+        import time
+
+        from custom_components.evon.const import WEATHER_REDISCOVERY_INTERVAL
+
+        api = AsyncMock()
+        api.get_via_home_connect.return_value = [
+            {"ID": "WeatherStation1525", "Name": "Dining", "ClassName": EVON_CLASS_WEATHER_PROXY},
+        ]
+        coord = _StubCoordinator(
+            api,
+            instances=[{"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}],
+        )
+        coord._weather_sources = []
+        coord._weather_discovered_at = time.monotonic() - WEATHER_REDISCOVERY_INTERVAL - 1
+
+        assert await coord._discover_weather_sources() == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+
     def test_has_home_connect_proxy_property(self):
         coord = _StubCoordinator(
             AsyncMock(),
@@ -405,3 +443,57 @@ class TestPollWeatherStations:
         coord._weather_sources = [("hc", "WeatherStation1525", "Dining")]
         result = await coord._poll_weather_stations()
         assert result == []
+
+
+@requires_ha_test_framework
+class TestWeatherEntitiesAddedLater:
+    """A station found after setup (proxy slow/failing during the first refresh)
+    must still get its entities without a manual reload."""
+
+    async def test_station_discovered_after_setup_gets_entities(self, hass, mock_evon_api_class):
+        from homeassistant.helpers import entity_registry as er
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        from custom_components.evon.const import DOMAIN
+        from tests.conftest import MOCK_INSTANCES, TEST_HOST, TEST_PASSWORD, TEST_USERNAME
+
+        proxy = {"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}
+        mock_evon_api_class.get_instances = AsyncMock(return_value=[*MOCK_INSTANCES, proxy])
+        mock_evon_api_class.get_via_home_connect = AsyncMock(side_effect=RuntimeError("proxy not ready"))
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
+            options={"scan_interval": 30, "sync_areas": False},
+            entry_id="weather_late_entry",
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        registry = er.async_get(hass)
+        temp_uid = "evon_weather_WeatherStation1525_temperature"
+        rain_uid = "evon_weather_WeatherStation1525_rain"
+        assert registry.async_get_entity_id("sensor", DOMAIN, temp_uid) is None
+
+        async def _proxy(hc_id, path):
+            if path == "/instances":
+                return [{"ID": "WeatherStation1525", "Name": "Dining", "ClassName": EVON_CLASS_WEATHER_PROXY}]
+            return FULL_WEATHER
+
+        mock_evon_api_class.get_via_home_connect = AsyncMock(side_effect=_proxy)
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        coordinator._weather_discovered_at = None  # skip the back-off for the test
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        assert registry.async_get_entity_id("sensor", DOMAIN, temp_uid) is not None
+        assert registry.async_get_entity_id("binary_sensor", DOMAIN, rain_uid) is not None
+
+        # A further refresh must not add duplicates (HA would log an error).
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert (
+            len([e for e in er.async_entries_for_config_entry(registry, entry.entry_id) if e.unique_id == temp_uid])
+            == 1
+        )

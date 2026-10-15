@@ -429,6 +429,7 @@ WS_RECONNECT_MAX_DELAY = 300           # Max reconnect delay (seconds)
 WS_PROTOCOL = "echo-protocol"          # WebSocket sub-protocol
 WS_POLL_INTERVAL = 120                 # Safety net poll interval when WS connected
 POLL_DETAIL_MAX_IN_FLIGHT = 8          # Concurrent per-instance detail GETs during a poll
+WEATHER_REDISCOVERY_INTERVAL = 300     # Back-off before an empty weather discovery is retried
 WS_HEARTBEAT_INTERVAL = 30             # WebSocket heartbeat/ping interval (seconds)
 WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (seconds)
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)

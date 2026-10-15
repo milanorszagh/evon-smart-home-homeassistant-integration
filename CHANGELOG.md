@@ -27,7 +27,7 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   alarms, plus diagnostic connected/temperature-valid/polling-active). It is poll-only (no
   WebSocket). When auto-discovery does not find the station, two optional overrides in a new
   *Weather station* options section (Home Connect proxy ID, weather station ID) let you set
-  it manually.
+  it manually. Stations found after setup get their entities automatically.
 - **Talk button for SIP intercom audio.** The camera card takes an optional
   `sip_extension`; when set it shows a **Talk** button that answers an incoming door
   call, hangs up an active one, or dials the door, through the `window.sipCore` engine.
@@ -36,7 +36,8 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   the integration.
 - **Door opener buttons.** Each 2N intercom device, and each security door linked to an
   intercom, gets an *Open door* button that pulses the door release (the controller's
-  `SwitchOnFor` method, sent over WebSocket with HTTP fallback). The pulse length is a new
+  `SwitchOnFor` method, sent over WebSocket with HTTP fallback; a pulse whose WebSocket
+  reply is late is reported as failed instead of being sent a second time). The pulse length is a new
   integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s). The buttons are
   created disabled; enable them in the entity settings before dashboards or automations can
   open the door.
@@ -70,6 +71,13 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   controller up so far that the camera's snapshot request timed out (109 of 109 timeouts
   in a 26-hour log fell inside a poll). Fixed by the cheaper poll above; the timeout is now
   logged at debug level with its cause instead of as an empty "Unexpected error".
+- **One slow request no longer makes every device unavailable.** A device request that
+  timed out aborted the whole poll; it is now handled like any other transient failure
+  and the other devices keep their state.
+- **Saving the options form kept hidden settings.** Sections such as camera recording or
+  physical buttons are shown only while the controller reports those devices; saving the
+  form while one was hidden (for example with the controller offline) deleted its
+  settings. They are now kept.
 - **Recording list showed UTC times.** The camera card listed recordings in UTC; it now
   uses Home Assistant's time zone.
 - **Camera card buttons stay centred.** The card's action buttons (*Record*, *Open door*,

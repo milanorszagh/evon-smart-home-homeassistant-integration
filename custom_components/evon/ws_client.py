@@ -952,6 +952,24 @@ class EvonWsClient:
             _LOGGER.warning("WebSocket SetValue failed: %s", err)
             return False
 
+    async def call_method_checked(
+        self,
+        instance_id: str,
+        method: str,
+        params: list[Any] | None = None,
+    ) -> None:
+        """Call a method and wait for the reply, letting failures propagate.
+
+        Unlike :meth:`call_method` (which maps every failure to ``False``) the
+        caller can tell the cases apart: ``EvonWsNotConnectedError`` and the
+        too-many-pending ``EvonWsError`` mean the frame was never sent, while
+        ``EvonWsTimeoutError`` (or a connection lost while waiting) means it was
+        sent and may still execute. Needed for non-idempotent commands such as
+        the door opener, which must not be re-sent over HTTP after a send.
+        """
+        await self._send_request("CallMethod", [f"{instance_id}.{method}", params or []])
+        _LOGGER.debug("Control via WebSocket: CallMethod %s.%s(%s) confirmed", instance_id, method, params or [])
+
     async def call_method(
         self,
         instance_id: str,

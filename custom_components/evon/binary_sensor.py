@@ -12,7 +12,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -160,23 +160,38 @@ async def async_setup_entry(
         )
     )
 
-    # Create weather-station binary sensors using entity descriptions
-    if coordinator.data and ENTITY_TYPE_WEATHER in coordinator.data:
-        for station in coordinator.data[ENTITY_TYPE_WEATHER]:
-            for description in WEATHER_BINARY_SENSORS:
-                entities.append(
-                    EvonWeatherBinarySensor(
-                        coordinator,
-                        station["id"],
-                        station["name"],
-                        station.get("room_name", ""),
-                        entry,
-                        description,
-                    )
-                )
-
     if entities:
         async_add_entities(entities)
+
+    # Weather stations can appear after setup (the Home Connect proxy was slow or
+    # failing during the first refresh, or a station was added on the shared
+    # controller), so add their entities whenever the coordinator reports one we
+    # have not created yet — not only from the setup-time data.
+    known_stations: set[str] = set()
+
+    @callback
+    def _add_new_weather_stations() -> None:
+        new_entities = []
+        for station in (coordinator.data or {}).get(ENTITY_TYPE_WEATHER, []):
+            if station["id"] in known_stations:
+                continue
+            known_stations.add(station["id"])
+            new_entities.extend(
+                EvonWeatherBinarySensor(
+                    coordinator,
+                    station["id"],
+                    station["name"],
+                    station.get("room_name", ""),
+                    entry,
+                    description,
+                )
+                for description in WEATHER_BINARY_SENSORS
+            )
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_new_weather_stations()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_weather_stations))
 
 
 class EvonWeatherBinarySensor(EvonEntity, BinarySensorEntity):

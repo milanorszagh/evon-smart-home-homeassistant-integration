@@ -48,6 +48,7 @@ from ..const import (
     POLL_DETAIL_MAX_IN_FLIGHT,
     REPAIR_CONNECTION_FAILED,
     REPAIR_WEBSOCKET_DISCONNECTED,
+    WEATHER_REDISCOVERY_INTERVAL,
     WS_POLL_INTERVAL,
 )
 from ..ws_mappings import get_entity_type, get_ws_mapped_keys
@@ -177,6 +178,10 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # that appears later is picked up (the heavy proxy listing only runs when a
         # Home Connect instance exists). Poll-only, read via the Home Connect proxy.
         self._weather_sources: list[tuple[str, str, str | None]] | None = None
+        # time.monotonic() of the last auto-discovery; an empty result is retried
+        # only after WEATHER_REDISCOVERY_INTERVAL (the discovery lists the shared
+        # controller's whole instance tree through the proxy).
+        self._weather_discovered_at: float | None = None
         # Safety-net poll statistics, exposed on the WebSocket status sensor so
         # the poll's cost and usefulness can be judged from real data (see
         # _record_poll_corrections).
@@ -465,8 +470,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Weather stations live on a shared controller and are read through the
         apartment's Home Connect proxy. Result is cached in ``_weather_sources``.
-        A cached non-empty list is reused; an empty/None cache is re-discovered so
-        a station that appears later is picked up. The two options
+        A cached non-empty list is reused; an empty result (no station yet, or the
+        proxy failed) is re-discovered after ``WEATHER_REDISCOVERY_INTERVAL`` so a
+        station that appears later is picked up without listing the shared
+        controller on every poll (the platforms add entities for new stations).
+        The two options
         (``CONF_WEATHER_HOME_CONNECT_ID`` / ``CONF_WEATHER_STATION_ID``), when both
         set, bypass auto-discovery entirely.
 
@@ -493,6 +501,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not proxies:
             self._weather_sources = []
             return self._weather_sources
+
+        if (
+            self._weather_sources is not None
+            and self._weather_discovered_at is not None
+            and time.monotonic() - self._weather_discovered_at < WEATHER_REDISCOVERY_INTERVAL
+        ):
+            return self._weather_sources  # empty, retried after the back-off
+        self._weather_discovered_at = time.monotonic()
 
         sources: list[tuple[str, str, str | None]] = []
         for proxy in proxies:

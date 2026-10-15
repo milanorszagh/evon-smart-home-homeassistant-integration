@@ -693,8 +693,15 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            # HA replaces entry.options wholesale, and sections are rendered only
+            # when the controller currently reports the matching devices. Start
+            # from the stored options so a section hidden right now (controller
+            # offline, a device fetch failed) keeps its settings; drop only keys
+            # the rendered form left empty (e.g. a cleared weather override).
+            flat_data: dict[str, Any] = dict(self.config_entry.options)
+            for key in getattr(self, "_rendered_option_keys", ()):
+                flat_data.pop(key, None)
             # Flatten section data back to a flat dict for storage
-            flat_data: dict[str, Any] = {}
             for key, value in user_input.items():
                 if isinstance(value, dict):
                     flat_data.update(value)
@@ -797,8 +804,14 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             schema_dict[vol.Required("weather")] = section(
                 vol.Schema(
                     {
-                        vol.Optional(CONF_WEATHER_HOME_CONNECT_ID, default=current_weather_hc): str,
-                        vol.Optional(CONF_WEATHER_STATION_ID, default=current_weather_station): str,
+                        # suggested_value, not default: a default is re-inserted when
+                        # the field is emptied, so the override could never be cleared.
+                        vol.Optional(
+                            CONF_WEATHER_HOME_CONNECT_ID, description={"suggested_value": current_weather_hc}
+                        ): str,
+                        vol.Optional(
+                            CONF_WEATHER_STATION_ID, description={"suggested_value": current_weather_station}
+                        ): str,
                     }
                 ),
                 {"collapsed": True},
@@ -852,6 +865,15 @@ class EvonOptionsFlow(config_entries.OptionsFlow):
             ),
             {"collapsed": True},
         )
+
+        # Remember which option keys this form renders (see the submit branch).
+        rendered: set[str] = set()
+        for key, value in schema_dict.items():
+            if isinstance(value, section):
+                rendered.update(str(k) for k in value.schema.schema)
+            else:
+                rendered.add(str(key))
+        self._rendered_option_keys = rendered
 
         return self.async_show_form(
             step_id="init",

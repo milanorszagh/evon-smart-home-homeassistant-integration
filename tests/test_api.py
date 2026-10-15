@@ -569,13 +569,50 @@ class TestEvonApiWebSocketControl:
         )
         mock_ws = MagicMock()
         mock_ws.is_connected = True
-        mock_ws.call_method = AsyncMock(return_value=True)
+        mock_ws.call_method_checked = AsyncMock(return_value=None)
         mock_api_with_ws.set_ws_client(mock_ws)
 
         await mock_api_with_ws.open_intercom_door("Intercom2N1000")
 
-        mock_ws.call_method.assert_awaited_once_with("Intercom2N1000", "SwitchOnFor", ["2"], False)
+        mock_ws.call_method_checked.assert_awaited_once_with("Intercom2N1000", "SwitchOnFor", ["2"])
         mock_api_with_ws._request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_open_intercom_door_not_resent_after_ws_timeout(self, mock_api_with_ws):
+        """A WS timeout means the pulse was sent and may still execute (the controller
+        works through a session's requests serially). Re-sending it over HTTP would
+        release the door a second time with no user action, so the call fails instead."""
+        from custom_components.evon.api import EvonApiError, EvonWsTimeoutError
+
+        mock_api_with_ws.set_instance_classes(
+            [{"ID": "Intercom2N1000", "ClassName": "Security.Intercom.2N.Intercom2N"}]
+        )
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.call_method_checked = AsyncMock(side_effect=EvonWsTimeoutError("Request timeout: CallMethod"))
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        with pytest.raises(EvonApiError, match="not confirmed"):
+            await mock_api_with_ws.open_intercom_door("Intercom2N1000")
+
+        mock_api_with_ws._request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_open_intercom_door_falls_back_to_http_when_ws_never_sent(self, mock_api_with_ws):
+        """If the frame never left (socket closed before send), HTTP is safe."""
+        from custom_components.evon.api import EvonWsNotConnectedError
+
+        mock_api_with_ws.set_instance_classes(
+            [{"ID": "Intercom2N1000", "ClassName": "Security.Intercom.2N.Intercom2N"}]
+        )
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.call_method_checked = AsyncMock(side_effect=EvonWsNotConnectedError("WebSocket closed before send"))
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        await mock_api_with_ws.open_intercom_door("Intercom2N1000")
+
+        mock_api_with_ws._request.assert_awaited_once_with("POST", "/instances/Intercom2N1000/SwitchOnFor", ["2"])
 
     @pytest.mark.asyncio
     async def test_open_intercom_door_http_without_ws(self, mock_api_with_ws):
@@ -1547,6 +1584,21 @@ class TestApiErrorHandling:
 
         with pytest.raises(EvonConnectionError, match="Connection error"):
             await api_with_token._request("GET", "/instances")
+
+    @pytest.mark.asyncio
+    async def test_request_timeout_is_a_connection_error(self, api_with_token):
+        """aiohttp's total timeout raises a bare TimeoutError (not a ClientError).
+        It must surface as EvonConnectionError so a single slow detail GET is
+        handled like any other transient failure instead of aborting the poll."""
+        from custom_components.evon.api import EvonConnectionError
+
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.request.side_effect = TimeoutError()
+        api_with_token._session = mock_session
+
+        with pytest.raises(EvonConnectionError, match="timed out"):
+            await api_with_token._request("GET", "/instances/Light1")
 
     @pytest.mark.asyncio
     async def test_request_success_200(self, api_with_token):

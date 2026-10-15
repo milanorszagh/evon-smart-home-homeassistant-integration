@@ -128,6 +128,20 @@ After installation, configure via **Settings** → **Devices & Services** → **
 |--------|-------------|
 | **Double-click delay (seconds)** | Time to wait after a button release before firing a single press event (0.2–1.4 seconds, default: 0.8). A longer delay improves double-press detection but makes single presses feel slower. |
 
+**Door Opener** (collapsible section, shown when a 2N intercom is present):
+
+| Option | Description |
+|--------|-------------|
+| **Door open pulse (seconds)** | How long the *Open door* buttons release the door (1–30 seconds, default: 2). |
+
+**Weather Station** (collapsible section, shown when the controller has a Home Connect gateway):
+
+| Option | Description |
+|--------|-------------|
+| **Home Connect proxy ID** / **Weather station ID** | Manual override for when automatic discovery does not find your weather station. Set both or neither; clear both to return to automatic discovery. |
+
+Settings of a section that is currently hidden (for example while the controller is offline) are kept when you save the form.
+
 **Debug Logging** (collapsible section): per-component debug toggles for the API, WebSocket and coordinator — see [Debug Logging](#debug-logging) under Troubleshooting.
 
 To change connection credentials or switch between local and remote access, use **Reconfigure** from the integration menu.

@@ -535,6 +535,9 @@ class EvonApi:
 
         except aiohttp.ClientError as err:
             raise EvonConnectionError(f"Connection error: {err}") from err
+        except TimeoutError as err:
+            # aiohttp's total timeout is a bare TimeoutError, not a ClientError.
+            raise EvonConnectionError(f"Request to {endpoint} timed out after {DEFAULT_REQUEST_TIMEOUT}s") from err
 
     async def get_instances(self) -> list[dict[str, Any]]:
         """Get all instances."""
@@ -799,8 +802,38 @@ class EvonApi:
 
         The pulse length travels as a string, mirroring the Evon web app and the
         verified HTTP call ``POST /api/instances/{intercom}/SwitchOnFor`` with body ``["2"]``.
+
+        Unlike :meth:`call_method` this never re-sends over HTTP once the WebSocket
+        frame has left: a WS timeout only means the reply is late (the controller
+        executes a session's requests serially), and a second pulse would release
+        the door again with no user action. HTTP is used only when the frame was
+        provably not sent (no WS, unknown class, socket closed before send, too many
+        pending requests).
+
+        Raises:
+            EvonApiError: the WS command was sent but not confirmed.
         """
-        await self.call_method(instance_id, "SwitchOnFor", [str(seconds)])
+        _validate_instance_id(instance_id)
+        params = [str(seconds)]
+        if self._ws_client and self._ws_client.is_connected and self._instance_classes.get(instance_id):
+            async with self._ws_control_slots:
+                ws = self._ws_client  # re-read: may have been torn down while waiting
+                if ws and ws.is_connected:
+                    try:
+                        await ws.call_method_checked(instance_id, "SwitchOnFor", params)
+                        return
+                    except EvonWsTimeoutError as err:
+                        raise EvonApiError(
+                            "Door command was sent over WebSocket but not confirmed; not re-sending it over HTTP"
+                        ) from err
+                    except EvonWsError as err:
+                        # Not connected / too many pending: the frame never left.
+                        _LOGGER.debug("WS door command not sent (%s), using HTTP", err)
+                    except Exception as err:  # noqa: BLE001 - lost while waiting: may have executed
+                        raise EvonApiError(
+                            f"Door command over WebSocket failed after sending ({err!r}); not re-sending it over HTTP"
+                        ) from err
+        await self._request("POST", f"/instances/{instance_id}/SwitchOnFor", params)
 
     # Blind methods
     async def open_blind(self, instance_id: str) -> None:

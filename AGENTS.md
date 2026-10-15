@@ -292,7 +292,7 @@ Device control goes over WebSocket first (`CallMethod`/`SetValue`), with HTTP as
 | Climate Away | `WriteFreezeMode` | `CallMethod [instanceId.WriteFreezeMode, []]` | ✅ Verified working |
 | Season Mode | `IsCool` | `SetValue [Base.ehThermostat, "IsCool", bool]` | ✅ true=cooling, false=heating |
 | All lights off / on | `SwitchAllOff` / `SwitchAllOn` | `CallMethod [Base.ehLight.SwitchAllOff, []]` | ✅ Group object is `Base.ehLight` (NOT `Base.bLight`); answered with a Callback in ~50ms, so not fire-and-forget |
-| Intercom door opener | `SwitchOnFor` | `CallMethod [Intercom2N1000.SwitchOnFor, ["2"]]` | ✅ Pulse seconds as a STRING (mirrors the HTTP body `["2"]`); Callback in ~35ms. `DoorOpenTriggered`/`IsDoorOpen` do NOT flip on the pulse — they follow the door contact. Pulse length = `door_open_seconds` option (default 2, 1–30). `Security.Door` has no opener of its own: its button calls the intercom named in `IntercomInstanceName` |
+| Intercom door opener | `SwitchOnFor` | `CallMethod [Intercom2N1000.SwitchOnFor, ["2"]]` | ✅ Sent via `EvonWsClient.call_method_checked()` by `EvonApi.open_intercom_door()`, which falls back to HTTP **only** when the frame was provably not sent (no WS / unknown class / `EvonWsNotConnectedError` / too-many-pending `EvonWsError`); after a WS timeout it raises instead of re-sending, because a second pulse would release the door again. Pulse seconds as a STRING (mirrors the HTTP body `["2"]`); Callback in ~35ms. `DoorOpenTriggered`/`IsDoorOpen` do NOT flip on the pulse — they follow the door contact. Pulse length = `door_open_seconds` option (default 2, 1–30). `Security.Door` has no opener of its own: its button calls the intercom named in `IntercomInstanceName` |
 
 ### What Does NOT Work via WebSocket
 
@@ -382,7 +382,9 @@ logged as unknown sequence ids. `EvonApi` bounds WS control requests with
 season-mode `SetValue`; subscriptions and `GetInstances` are not bounded. Raising the
 limit does not speed anything up (the controller is the bottleneck); it only brings the
 timeouts back. The HTTP fallback after a WS timeout re-sends the command — harmless for
-`SwitchOff`, but a toggle such as the radiator `Switch` would flip twice. `evon.all_lights_off`
+`SwitchOff`, but a toggle such as the radiator `Switch` would flip twice, and the door opener
+would release the door a second time — so `open_intercom_door()` never re-sends after a send
+(see the door-opener row in the table above). `evon.all_lights_off`
 therefore sends one `Base.ehLight.SwitchAllOff` (`EvonApi.all_lights_off()`, the frame the web
 app's button sends) and only falls back to the per-light loop when that call raises.
 
@@ -640,7 +642,7 @@ The payload is nested at `response["data"]["Data"]["data"]`. `EvonApi.get_via_ho
 - Path `/instances` → the shared controller's full instance list; filter `ClassName == "Weather.ProxyStation"` with a non-empty `Name` to find stations (e.g. `WeatherStation1525`, "Wetterstation Dining").
 - Path `/instances/<station_id>` → the weather dict for one station.
 
-Flow: the coordinator discovers sources once (`_discover_weather_sources` → cached in `_weather_sources`; re-discovered only while empty), then polls each station per cycle (`_poll_weather_stations`, tolerant of per-station failure). `process_weather_stations` shapes the dict; `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`). Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override auto-discovery when both are set.
+Flow: the coordinator discovers sources once (`_discover_weather_sources` → cached in `_weather_sources`; an empty result — no station, or the proxy failed — is retried after `WEATHER_REDISCOVERY_INTERVAL` (300 s), never on every poll, because discovery lists the shared controller's whole instance tree), then polls each station per cycle (`_poll_weather_stations`, tolerant of per-station failure). `process_weather_stations` shapes the dict; `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`); a coordinator listener (`_add_new_weather_stations`) adds the entities of stations that first appear after setup, so a slow proxy during the first refresh no longer needs a reload. Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override auto-discovery when both are set.
 
 Weather dict keys (not all are available on every model): `Temperature`/`TemperatureValid`, `WindSpeed`, `Brightness` (Lux), `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLux), `Rain`(bool), `Twilight`(bool), `WindAlarm`/`WindAlarm1`/`WindAlarm2`(bool), `Connected`/`PollingActivated`(bool), `MinTemp`/`MaxTemp`/`MinTempToday`/`MaxTempToday`(°C), `MaxWind`/`MaxWindToday`(km/h), `LastRainDateTime` ("dd.mm.YYYY, HH:MM:SS", controller-local), `LastRainInDays`. Not available: humidity, pressure, wind direction, rain amount, forecast.
 
@@ -747,6 +749,9 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 4. **Position inversion**: Evon and HA have opposite conventions for cover position
 5. **HA shutdown does not unload config entries**: `async_unload_entry` and the coordinator's `async_shutdown` (which HA binds to entry unload) never run at `EVENT_HOMEASSISTANT_STOP`. `async_setup_entry` therefore registers a once-listener via `_async_register_hass_stop()` that calls `coordinator.async_shutdown()` and `async_shutdown_websocket()`, so the WebSocket closes while HA's shared aiohttp session is still open (HA detaches it at `EVENT_HOMEASSISTANT_CLOSE`). Without it every restart logged three `Session is closed` reconnect tracebacks and ran a full poll that delayed the shutdown by one poll cycle. `_handle_ws_connection_state` additionally skips the repair issue and refresh while `hass.is_stopping`, and `_calculate_energy_today_and_month` skips the recorder executor job while stopping (an in-flight poll would otherwise log `cannot schedule new futures after shutdown`). Do not remove any of the three.
 
+6. **Options form sections are conditional**: `async_step_init` renders the buttons, doors, weather, recording and non-dimmable sections only when the coordinator currently reports such devices, while HA replaces `entry.options` wholesale. The submit branch therefore starts from the stored options and drops only the keys the rendered form left empty (`self._rendered_option_keys`). Optional text fields use `description={"suggested_value": ...}`, never `default=` — a default is re-inserted when the user empties the field, so the value could never be cleared.
+7. **`EvonApi._request` maps `TimeoutError` to `EvonConnectionError`**: aiohttp's total timeout is a bare `TimeoutError`, not a `ClientError`; unmapped, one slow detail GET aborted the whole poll and made every entity unavailable. (`login()` still lets it propagate — a test pins that.)
+
 ## Architecture Decisions (Do Not Change)
 
 These are intentional design choices. Do NOT flag them as bugs or attempt to "fix" them during code reviews:
@@ -846,7 +851,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1450 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1459 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

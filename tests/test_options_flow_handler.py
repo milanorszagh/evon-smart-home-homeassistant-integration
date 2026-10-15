@@ -286,3 +286,91 @@ class TestOptionsFlowIntegration:
         )
 
         assert result2["type"] == "create_entry"
+
+
+def _minimal_options_input(schema_keys: list[str]) -> dict:
+    """A valid submission for whatever sections the form rendered."""
+    user_input: dict = {
+        CONF_SYNC_AREAS: False,
+        "connection": {CONF_HTTP_ONLY: True, CONF_SCAN_INTERVAL: 30},
+        "debug": {CONF_DEBUG_API: False, CONF_DEBUG_WEBSOCKET: False, CONF_DEBUG_COORDINATOR: False},
+    }
+    if "buttons" in schema_keys:
+        user_input["buttons"] = {CONF_BUTTON_DOUBLE_CLICK_DELAY: 0.8}
+    if "recording" in schema_keys:
+        user_input["recording"] = {CONF_MAX_RECORDING_DURATION: 300, CONF_RECORDING_OUTPUT_FORMAT: "mp4"}
+    if "doors" in schema_keys:
+        user_input["doors"] = {"door_open_seconds": 2}
+    return user_input
+
+
+@requires_ha_test_framework
+class TestOptionsFlowHiddenSections:
+    """Sections are shown only when the controller has the matching devices. Saving
+    the form while a section is hidden (controller offline, device fetch failed)
+    must not delete that section's stored settings, and the weather overrides must
+    be clearable."""
+
+    @pytest.mark.asyncio
+    async def test_hidden_section_keeps_its_stored_options(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        from custom_components.evon.const import CONF_WEATHER_HOME_CONNECT_ID, CONF_WEATHER_STATION_ID
+
+        mock_config_entry_v2.add_to_hass(hass)
+        hass.config_entries.async_update_entry(
+            mock_config_entry_v2,
+            options={
+                **mock_config_entry_v2.options,
+                CONF_WEATHER_HOME_CONNECT_ID: "evonHomeConnect4939",
+                CONF_WEATHER_STATION_ID: "WeatherStation1525",
+            },
+        )
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
+        schema_keys = [str(k) for k in result["data_schema"].schema]
+        assert "weather" not in schema_keys  # no Home Connect proxy in the mock data
+
+        result2 = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input=_minimal_options_input(schema_keys)
+        )
+
+        assert result2["data"][CONF_WEATHER_HOME_CONNECT_ID] == "evonHomeConnect4939"
+        assert result2["data"][CONF_WEATHER_STATION_ID] == "WeatherStation1525"
+
+    @pytest.mark.asyncio
+    async def test_weather_overrides_can_be_cleared(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        from unittest.mock import AsyncMock
+
+        from custom_components.evon.const import (
+            CONF_WEATHER_HOME_CONNECT_ID,
+            CONF_WEATHER_STATION_ID,
+            EVON_CLASS_HOME_CONNECT,
+        )
+        from tests.conftest import MOCK_INSTANCES
+
+        proxy = {"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}
+        mock_evon_api_class.get_instances = AsyncMock(return_value=[*MOCK_INSTANCES, proxy])
+        mock_evon_api_class.get_via_home_connect = AsyncMock(return_value=None)
+        mock_config_entry_v2.add_to_hass(hass)
+        hass.config_entries.async_update_entry(
+            mock_config_entry_v2,
+            options={
+                **mock_config_entry_v2.options,
+                CONF_WEATHER_HOME_CONNECT_ID: "evonHomeConnect4939",
+                CONF_WEATHER_STATION_ID: "WeatherStation1525",
+            },
+        )
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(mock_config_entry_v2.entry_id)
+        schema_keys = [str(k) for k in result["data_schema"].schema]
+        assert "weather" in schema_keys
+        user_input = _minimal_options_input(schema_keys)
+        user_input["weather"] = {}  # the frontend omits emptied optional text fields
+
+        result2 = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
+
+        assert not result2["data"].get(CONF_WEATHER_HOME_CONNECT_ID)
+        assert not result2["data"].get(CONF_WEATHER_STATION_ID)

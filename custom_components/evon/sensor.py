@@ -28,7 +28,7 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -412,23 +412,6 @@ async def async_setup_entry(
                         )
                     )
 
-    # Create weather-station sensors using entity descriptions. All fields are
-    # created regardless of their current value: a None (e.g. last_rain before the
-    # first rain) must not permanently suppress the entity.
-    if coordinator.data and ENTITY_TYPE_WEATHER in coordinator.data:
-        for station in coordinator.data[ENTITY_TYPE_WEATHER]:
-            for description in WEATHER_SENSORS:
-                entities.append(
-                    EvonWeatherSensor(
-                        coordinator,
-                        station["id"],
-                        station["name"],
-                        station.get("room_name", ""),
-                        entry,
-                        description,
-                    )
-                )
-
     # WebSocket diagnostic sensors
     entities.append(EvonWebSocketStatusSensor(coordinator, entry))
     if coordinator.ws_client is not None:
@@ -436,6 +419,38 @@ async def async_setup_entry(
 
     if entities:
         async_add_entities(entities)
+
+    # Weather stations can appear after setup (the Home Connect proxy was slow or
+    # failing during the first refresh, or a station was added on the shared
+    # controller), so add their entities whenever the coordinator reports one we
+    # have not created yet — not only from the setup-time data. All fields are
+    # created regardless of their current value: a None (e.g. last_rain before the
+    # first rain) must not permanently suppress the entity.
+    known_stations: set[str] = set()
+
+    @callback
+    def _add_new_weather_stations() -> None:
+        new_entities = []
+        for station in (coordinator.data or {}).get(ENTITY_TYPE_WEATHER, []):
+            if station["id"] in known_stations:
+                continue
+            known_stations.add(station["id"])
+            new_entities.extend(
+                EvonWeatherSensor(
+                    coordinator,
+                    station["id"],
+                    station["name"],
+                    station.get("room_name", ""),
+                    entry,
+                    description,
+                )
+                for description in WEATHER_SENSORS
+            )
+        if new_entities:
+            async_add_entities(new_entities)
+
+    _add_new_weather_stations()
+    entry.async_on_unload(coordinator.async_add_listener(_add_new_weather_stations))
 
 
 class EvonTemperatureSensor(EvonEntity, SensorEntity):

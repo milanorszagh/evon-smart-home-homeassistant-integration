@@ -2822,3 +2822,21 @@ class TestRemoteConnectionPaths:
         assert kwargs["headers"]["x-elocs-sessionlogin"] == "true"
         assert kwargs["headers"]["X-Requested-With"] == "XMLHttpRequest"
         assert kwargs["allow_redirects"] is False
+
+
+class TestCallMethodChecked:
+    """call_method_checked sends like call_method but lets failures propagate, so a
+    caller can tell 'never sent' from 'sent, no reply' (needed for the door opener)."""
+
+    @pytest.mark.asyncio
+    async def test_propagates_timeout(self):
+        from custom_components.evon.api import EvonWsTimeoutError
+        from custom_components.evon.ws_client import EvonWsClient
+
+        client = EvonWsClient.__new__(EvonWsClient)
+        client._send_request = AsyncMock(side_effect=EvonWsTimeoutError("Request timeout: CallMethod"))
+
+        with pytest.raises(EvonWsTimeoutError):
+            await client.call_method_checked("Intercom2N1000", "SwitchOnFor", ["2"])
+
+        client._send_request.assert_awaited_once_with("CallMethod", ["Intercom2N1000.SwitchOnFor", ["2"]])
