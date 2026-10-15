@@ -289,7 +289,7 @@ class TestWebSocketConstants:
         """Test WebSocket safety poll interval."""
         from custom_components.evon.const import WS_POLL_INTERVAL
 
-        assert WS_POLL_INTERVAL == 60
+        assert WS_POLL_INTERVAL == 120
 
 
 class TestRepairConstants:

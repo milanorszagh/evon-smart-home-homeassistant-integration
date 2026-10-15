@@ -694,21 +694,34 @@ class EvonWebSocketStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Se
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return connection quality metrics."""
-        ws_client = self.coordinator.ws_client
-        if ws_client is None:
-            return {}
-        return {
-            "connection_uptime_seconds": round(ws_client.connection_uptime, 1),
-            "reconnect_count": ws_client.reconnect_count,
-            "messages_received": ws_client.messages_received,
-            "requests_sent": ws_client.requests_sent,
-            "pending_requests": ws_client.pending_request_count,
-            "avg_response_time_ms": round(ws_client.avg_response_time_ms, 1)
-            if ws_client.avg_response_time_ms is not None
-            else None,
-            "last_error": ws_client.last_error,
+        """Return safety-net poll statistics and connection quality metrics."""
+        coordinator = self.coordinator
+        corrected_at = coordinator.last_poll_correction_at
+        attrs: dict[str, Any] = {
+            "poll_count": coordinator.poll_count,
+            "last_poll_duration_seconds": coordinator.last_poll_duration,
+            "last_poll_instances_fetched": coordinator.last_poll_instances_fetched,
+            "poll_corrections": coordinator.poll_correction_count,
+            "last_poll_correction": coordinator.last_poll_correction,
+            "last_poll_correction_at": corrected_at.isoformat() if corrected_at is not None else None,
         }
+        ws_client = coordinator.ws_client
+        if ws_client is None:
+            return attrs
+        attrs.update(
+            {
+                "connection_uptime_seconds": round(ws_client.connection_uptime, 1),
+                "reconnect_count": ws_client.reconnect_count,
+                "messages_received": ws_client.messages_received,
+                "requests_sent": ws_client.requests_sent,
+                "pending_requests": ws_client.pending_request_count,
+                "avg_response_time_ms": round(ws_client.avg_response_time_ms, 1)
+                if ws_client.avg_response_time_ms is not None
+                else None,
+                "last_error": ws_client.last_error,
+            }
+        )
+        return attrs
 
 
 class EvonWebSocketLatencySensor(CoordinatorEntity[EvonDataUpdateCoordinator], SensorEntity):

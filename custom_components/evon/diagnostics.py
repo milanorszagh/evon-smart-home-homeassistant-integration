@@ -131,6 +131,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
                 for entity in coordinator.data.get(etype, [])
             ]
 
+    corrected_at = getattr(coordinator, "last_poll_correction_at", None)
     return {
         "entry": {
             "entry_id": entry.entry_id,
@@ -147,6 +148,13 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "coordinator": {
             "last_update_success": getattr(coordinator, "last_update_success", None),
             "update_interval": str(getattr(coordinator, "update_interval", "unknown")),
+            # Safety-net poll statistics (see coordinator._record_poll_corrections)
+            "poll_count": getattr(coordinator, "poll_count", None),
+            "last_poll_duration_seconds": getattr(coordinator, "last_poll_duration", None),
+            "last_poll_instances_fetched": getattr(coordinator, "last_poll_instances_fetched", None),
+            "poll_corrections": getattr(coordinator, "poll_correction_count", None),
+            "last_poll_correction": getattr(coordinator, "last_poll_correction", None),
+            "last_poll_correction_at": corrected_at.isoformat() if corrected_at is not None else None,
         },
         "device_counts": device_counts,
         "devices": device_summaries,

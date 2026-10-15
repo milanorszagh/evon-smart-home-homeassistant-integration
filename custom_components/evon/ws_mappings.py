@@ -262,6 +262,53 @@ def get_entity_type(class_name: str) -> str | None:
     return None
 
 
+# Coordinator keys that ws_to_coordinator_data() derives beyond the 1:1 PROPERTY_MAPPINGS.
+_WS_DERIVED_KEYS: dict[str, frozenset[str]] = {
+    ENTITY_TYPE_CLIMATES: frozenset(
+        {
+            "cooling_enabled",
+            "min_set_value_cool",
+            "max_set_value_cool",
+            "min_set_value_heat",
+            "max_set_value_heat",
+            "comfort_temp",
+            "eco_temp",
+            "protection_temp",
+            "min_temp",
+            "max_temp",
+        }
+    ),
+    ENTITY_TYPE_SECURITY_DOORS: frozenset({"saved_pictures"}),
+    ENTITY_TYPE_SMART_METERS: frozenset({"power"}),
+}
+
+# Every coordinator key the WebSocket can refresh, per entity type.
+WS_UPDATABLE_KEYS: dict[str, frozenset[str]] = {
+    entity_type: frozenset(mapping.values()) | _WS_DERIVED_KEYS.get(entity_type, frozenset())
+    for entity_type, mapping in PROPERTY_MAPPINGS.items()
+}
+
+
+def get_ws_mapped_keys(entity_type: str) -> frozenset[str]:
+    """Return the coordinator keys mapped 1:1 from a WebSocket property.
+
+    Unlike :func:`get_ws_updatable_keys` this excludes values the WS path
+    derives (the meter's summed ``power``, the climate setpoint summaries),
+    which can differ from the HTTP poll's value by float rounding alone.
+    """
+    return frozenset(PROPERTY_MAPPINGS.get(entity_type, {}).values())
+
+
+def get_ws_updatable_keys(entity_type: str) -> frozenset[str]:
+    """Return the coordinator keys the WebSocket can refresh for an entity type.
+
+    Everything else in an entity dict — name, room, poll-only inputs such as a
+    meter's ``feed_in``, poll-derived values such as ``energy_today_calculated`` —
+    only changes through the HTTP poll. Empty for poll-only types (weather).
+    """
+    return WS_UPDATABLE_KEYS.get(entity_type, frozenset())
+
+
 def get_subscribe_properties(entity_type: str) -> list[str]:
     """Get the WebSocket properties to subscribe for an entity type.
 

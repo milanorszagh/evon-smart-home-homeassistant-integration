@@ -168,7 +168,7 @@ WebSocket is **enabled by default** for instant state synchronization and device
 |---------|-----------|---------------------|
 | **State updates** | Up to 30 seconds | Instant |
 | **Control response** | Noticeable delay | Instant |
-| **Poll interval** | 30 seconds (default) | 60 seconds (safety net) |
+| **Poll interval** | 30 seconds (default) | 2 minutes (safety net) |
 | **Network traffic** | Continuous polling | Event-driven |
 
 **How it works:**
@@ -176,7 +176,8 @@ WebSocket is **enabled by default** for instant state synchronization and device
 - **State updates**: When a light is turned on via a physical wall button (Taster), HA updates immediately (no polling delay)
 - **Device control**: Commands are sent over the open connection — tap a light and it responds instantly
 - **Automatic fallback**: If WebSocket is unavailable, commands fall back to HTTP API seamlessly
-- HTTP polling continues at reduced frequency (1 minute) as a safety net
+- HTTP polling continues at reduced frequency (2 minutes) as a safety net
+- The *WebSocket status* diagnostic sensor shows how often that poll runs, how long it takes and whether it ever corrected a value the WebSocket missed
 - For remote connections, WebSocket connects via `wss://my.evon-smarthome.com/`
 
 **Note:** WebSocket is recommended for the best experience. Only disable it if you experience connection issues.

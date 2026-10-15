@@ -209,3 +209,38 @@ class TestDiagnosticsUnit:
         result = _run_diagnostics(coordinator_data={})
         assert result["device_counts"] == {}
         assert result["devices"] == {}
+
+
+class TestDiagnosticsPollStatistics:
+    """The safety-net poll's cost and usefulness are part of the diagnostics export."""
+
+    def test_coordinator_section_includes_poll_statistics(self):
+        from custom_components.evon.const import DOMAIN
+        from custom_components.evon.diagnostics import async_get_config_entry_diagnostics
+
+        hass = MagicMock()
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+        entry.data = {}
+        entry.options = {}
+        coordinator = MagicMock()
+        coordinator.data = None
+        coordinator.last_update_success = True
+        coordinator.update_interval = "0:01:00"
+        coordinator.poll_count = 7
+        coordinator.last_poll_duration = 1.3
+        coordinator.last_poll_instances_fetched = 89
+        coordinator.poll_correction_count = 1
+        coordinator.last_poll_correction = "lights/L1 is_on: False -> True"
+        coordinator.last_poll_correction_at = None
+        hass.data = {DOMAIN: {entry.entry_id: {"coordinator": coordinator}}}
+
+        result = asyncio.run(async_get_config_entry_diagnostics(hass, entry))
+
+        section = result["coordinator"]
+        assert section["poll_count"] == 7
+        assert section["last_poll_duration_seconds"] == 1.3
+        assert section["last_poll_instances_fetched"] == 89
+        assert section["poll_corrections"] == 1
+        assert section["last_poll_correction"] == "lights/L1 is_on: False -> True"
+        assert section["last_poll_correction_at"] is None

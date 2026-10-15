@@ -946,6 +946,53 @@ class TestFetchImagePathValidation:
         assert mock_session.get.call_args[0][0] == "http://192.168.1.100/temp/snapshot.jpg"
 
 
+class TestFetchImageErrorLogging:
+    """A controller that is busy answers the snapshot GET late; that is routine, not 'unexpected'."""
+
+    def _api_with_session_raising(self, exc: BaseException):
+        import time
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "test_token"
+        api._token_timestamp = time.monotonic()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(side_effect=exc)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        mock_session = MagicMock()
+        mock_session.closed = False
+        mock_session.get = MagicMock(return_value=cm)
+        api._session = mock_session
+        return api
+
+    @pytest.mark.asyncio
+    async def test_timeout_is_logged_at_debug_not_warning(self, caplog):
+        import logging
+
+        api = self._api_with_session_raising(TimeoutError())
+
+        with caplog.at_level(logging.DEBUG, logger="custom_components.evon.api"):
+            result = await api.fetch_image("/temp/snapshot.jpg")
+
+        assert result is None
+        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
+        assert any("timed out" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_names_the_exception_type(self, caplog):
+        """str() of many exceptions is empty; the warning must still say what happened."""
+        import logging
+
+        api = self._api_with_session_raising(RuntimeError())
+
+        with caplog.at_level(logging.WARNING, logger="custom_components.evon.api"):
+            result = await api.fetch_image("/temp/snapshot.jpg")
+
+        assert result is None
+        warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "RuntimeError" in warnings[0]
+
+
 class TestValidateMethodName:
     """Tests for _validate_method_name function."""
 

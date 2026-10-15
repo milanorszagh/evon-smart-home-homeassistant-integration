@@ -1523,3 +1523,79 @@ class TestEnergyImportRateLimitPreCheck:
         await hass.async_block_till_done()
 
         assert len(created) == 1
+
+
+@requires_ha_test_framework
+class TestPollDetailPrefetch:
+    """The safety-net poll must stay cheap: only entity classes, bounded concurrency."""
+
+    @pytest.fixture
+    def mock_config_entry(self) -> MockConfigEntry:
+        """Create a mock config entry."""
+        return MockConfigEntry(
+            domain="evon",
+            title="Evon Smart Home",
+            data={
+                "host": TEST_HOST,
+                "username": TEST_USERNAME,
+                "password": TEST_PASSWORD,
+            },
+            options={
+                "scan_interval": 30,
+                "sync_areas": False,
+            },
+            entry_id="test_prefetch_entry",
+        )
+
+    async def test_poll_fetches_details_only_for_entity_classes(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """Rooms, scenes, buttons and other non-entity objects are not fetched one by one."""
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        fetched = {call.args[0] for call in mock_evon_api_class.get_instance.call_args_list}
+
+        assert {"light_1", "blind_1", "climate_1", "smart_meter_1", "Base.ehThermostat"} <= fetched
+        assert not {"room_living", "SceneApp1234", "switch_1"} & fetched
+
+    async def test_poll_bounds_detail_fetch_concurrency(
+        self,
+        hass: HomeAssistant,
+        mock_evon_api_class,
+        mock_config_entry: MockConfigEntry,
+    ) -> None:
+        """At most POLL_DETAIL_MAX_IN_FLIGHT detail requests run at once (a 100-wide
+        burst saturates the controller for ~20s and starves camera snapshots)."""
+        import asyncio
+
+        from custom_components.evon.const import POLL_DETAIL_MAX_IN_FLIGHT
+
+        lights = [
+            {"ID": f"light_{i}", "ClassName": "SmartCOM.Light.LightDim", "Name": f"Light {i}", "Group": "g"}
+            for i in range(POLL_DETAIL_MAX_IN_FLIGHT * 4)
+        ]
+        mock_evon_api_class.get_instances = AsyncMock(return_value=lights)
+
+        in_flight = 0
+        max_in_flight = 0
+
+        async def _get_instance(instance_id):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.01)
+            in_flight -= 1
+            return {"IsOn": True, "ScaledBrightness": 50}
+
+        mock_evon_api_class.get_instance = AsyncMock(side_effect=_get_instance)
+
+        mock_config_entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert max_in_flight == POLL_DETAIL_MAX_IN_FLIGHT

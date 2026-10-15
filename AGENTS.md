@@ -386,6 +386,43 @@ timeouts back. The HTTP fallback after a WS timeout re-sends the command — har
 therefore sends one `Base.ehLight.SwitchAllOff` (`EvonApi.all_lights_off()`, the frame the web
 app's button sends) and only falls back to the per-light loop when that call raises.
 
+### Note #7: The Safety-Net Poll Is Cheap by Design
+
+With the WebSocket connected the coordinator still polls every `WS_POLL_INTERVAL` (120 s since
+October 2026, 60 s before). Until
+October 2026 that poll fetched the details of **every** instance on the controller (930 on the
+reference system, up to 100 in parallel through HA's shared aiohttp session) and took 20–25 s;
+during that window the controller neither delivered the camera's `image_path` WS event within
+5 s nor served the snapshot GET within 10 s, so the live view froze for ~15 s of every minute
+(109 of 109 image-fetch timeouts in a 26 h journal fell inside a poll window). Rules:
+
+- `select_instances_for_detail_fetch()` (`coordinator/__init__.py`) fetches details only for
+  **named** instances of classes that `ws_mappings.get_entity_type()` maps to an entity type
+  (minus WS-only buttons) plus `Base.ehThermostat` — 64 instances instead of 930. Rooms, scenes,
+  `System.Notification`, `Logic.*`, unnamed templates/channels etc. are never fetched. A new
+  device class must therefore be in `CLASS_TO_TYPE` (or the substring rules in
+  `get_entity_type`) **before** its processor can see any details, and every processor must
+  keep skipping unnamed instances.
+- Detail GETs run under `asyncio.Semaphore(POLL_DETAIL_MAX_IN_FLIGHT)` (8). Measured
+  2026-10-15: the controller serves these (property-heavy) instance GETs at ~12/s whatever the
+  concurrency (4 → 6/s, 8 → 12/s, 16 → 13/s; ~150 ms each when idle, 0.5–3 s under the burst),
+  so a poll costs ~5 s of controller saturation and a wider semaphore buys nothing. The camera
+  may still miss one 5 s `image_path` wait inside that window — hence the 120 s interval.
+  Future option if that is still too much: the WS `GetInstances` call returns every property of
+  all instances of a class in one reply (docs/WEBSOCKET_API.md), i.e. ~12 calls instead of 63.
+- Smart meters are **field-merged** in `_merge_ws_updates_into_poll_result()`: WS-updatable keys
+  (`ws_mappings.get_ws_updatable_keys()`) come from the WS entity, poll-only inputs (`feed_in`, …)
+  and poll-derived values (`energy_today_calculated`, `energy_this_month_calculated`) from the
+  poll. Replacing the whole dict with the poll's snapshot regressed the `total_increasing`
+  `energy` counter by 0.1 kWh once (recorder warning "not strictly increasing", 2026-10-14).
+- **Is the poll ever needed?** `_record_poll_corrections()` counts values the poll changed on
+  WS-covered entities that had no WS event during the poll (1:1 mapped keys only — derived
+  values such as the meter's summed `power` differ from HTTP by float rounding), logs them at INFO
+  (`Poll corrected N value(s) the WebSocket did not deliver: …`) and exposes `poll_count`,
+  `last_poll_duration_seconds`, `last_poll_instances_fetched`, `poll_corrections`,
+  `last_poll_correction`, `last_poll_correction_at` as attributes of the WebSocket status sensor
+  (also in the diagnostics export). Check these before changing `WS_POLL_INTERVAL`.
+
 ### Implementation Details
 
 The codebase uses WS-native names as canonical method names everywhere. When the HTTP fallback is needed, `ws_control.get_http_method_name()` (Python) or `CANONICAL_TO_HTTP_METHOD` (TypeScript) translates them to HTTP names automatically.
@@ -477,8 +514,10 @@ SSH access to Home Assistant enables quick deployment and log checking. Setup (c
 # 2. Deploy to HA
 ./scripts/ha-deploy.sh
 
-# 3. Reload integration in HA UI (or restart HA)
-# Settings → Devices & Services → Evon → ⋮ → Reload
+# 3. Restart HA: ./scripts/ha-deploy.sh restart
+#    A config-entry reload (Settings → Devices & Services → Evon → ⋮ → Reload) re-runs setup
+#    with the ALREADY-IMPORTED modules, so Python changes do not take effect (verified
+#    2026-10-15: after a reload the old poll code kept running). Reload only for option changes.
 
 # 4. Check logs for errors
 ./scripts/ha-logs.sh
@@ -803,7 +842,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1365 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1445 tests), plus 23 MCP server tests in `tests-mcp/`:
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -844,6 +883,7 @@ Tests are in the `tests/` directory (1365 tests), plus 23 MCP server tests in `t
 - `test_optimistic_state.py` - Optimistic state update tests
 - `test_options_flow.py` - Options flow integration tests
 - `test_options_flow_handler.py` - Options flow handler unit tests
+- `test_poll_prefetch.py` - Safety-net poll: detail prefetch selection, WS-updatable keys, poll-correction diagnostics (no HA needed)
 - `test_reconnect_delay.py` - WebSocket reconnect delay tests
 - `test_recording_services.py` - Recording service tests
 - `test_recordings_paths.py` - Recordings folder helper (`media_dirs["local"]` resolution, legacy `<config>/media` migration; no HA needed)

@@ -118,7 +118,7 @@ src/
 │  │  (ws_client.py)             │   │  (api.py)                   │         │
 │  │                             │   │                             │         │
 │  │  ┌─────────────────────┐    │   │  • Initial data fetch       │         │
-│  │  │ State Updates (IN)  │◄───┼───┼─── Fallback polling (60s)   │         │
+│  │  │ State Updates (IN)  │◄───┼───┼─── Fallback polling (120s)  │         │
 │  │  │ • ValuesChanged     │    │   │                             │         │
 │  │  │ • <100ms latency    │    │   │  • Fallback control         │         │
 │  │  └─────────────────────┘    │   │  • Auth & token refresh     │         │
@@ -166,7 +166,8 @@ DEVICE CONTROL (user taps light in HA):
 14. WebSocket confirms actual state
 
 FALLBACK:
-• HTTP polling continues at 60s as safety net
+• HTTP polling continues every 120s as safety net (named entity-class instances only,
+  ≤ 8 concurrent detail requests; poll statistics are attributes of the WebSocket status sensor)
 • If WebSocket unavailable, control falls back to HTTP automatically
 ```
 
@@ -426,7 +427,8 @@ DEFAULT_WS_RECONNECT_DELAY = 5         # Initial reconnect delay (seconds)
 WS_RECONNECT_JITTER = 0.25            # Jitter factor for reconnect delays (0.0 to 1.0)
 WS_RECONNECT_MAX_DELAY = 300           # Max reconnect delay (seconds)
 WS_PROTOCOL = "echo-protocol"          # WebSocket sub-protocol
-WS_POLL_INTERVAL = 60                  # Safety net poll interval when WS connected
+WS_POLL_INTERVAL = 120                 # Safety net poll interval when WS connected
+POLL_DETAIL_MAX_IN_FLIGHT = 8          # Concurrent per-instance detail GETs during a poll
 WS_HEARTBEAT_INTERVAL = 30             # WebSocket heartbeat/ping interval (seconds)
 WS_DEFAULT_REQUEST_TIMEOUT = 10.0      # Default timeout for WS RPC requests (seconds)
 WS_SUBSCRIBE_REQUEST_TIMEOUT = 30.0    # Timeout for subscription requests (many devices)

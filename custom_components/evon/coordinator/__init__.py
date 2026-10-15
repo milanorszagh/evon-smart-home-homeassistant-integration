@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -45,12 +45,12 @@ from ..const import (
     ENTITY_TYPE_SWITCHES,
     ENTITY_TYPE_VALVES,
     ENTITY_TYPE_WEATHER,
-    EVON_CLASS_PHYSICAL_BUTTON,
-    EVON_CLASS_SCENE,
+    POLL_DETAIL_MAX_IN_FLIGHT,
     REPAIR_CONNECTION_FAILED,
     REPAIR_WEBSOCKET_DISCONNECTED,
     WS_POLL_INTERVAL,
 )
+from ..ws_mappings import get_entity_type, get_ws_mapped_keys, get_ws_updatable_keys
 from .button_press import ButtonPressDetector
 from .processors import (
     process_air_quality,
@@ -75,6 +75,35 @@ if TYPE_CHECKING:
     from ..ws_client import EvonWsClient
 
 _LOGGER = logging.getLogger(__name__)
+
+
+SEASON_MODE_INSTANCE_ID = "Base.ehThermostat"
+
+
+def select_instances_for_detail_fetch(instances: list[dict[str, Any]]) -> list[str]:
+    """Return the instance IDs the poll fetches details for.
+
+    A controller lists hundreds of objects (logic blocks, notifications, rooms,
+    configuration ...) but the processors only read details of *named* instances
+    of the classes that become entities — 63 of 930 on the reference system
+    (every processor skips unnamed instances: templates and unused channels).
+    Buttons are WS-only and scenes are fire-and-forget, so neither needs details
+    either. Fetching all 930 in parallel saturated the controller for ~20 s per
+    poll and starved the camera snapshot requests (see AGENTS.md → Note #7).
+    ``Base.ehThermostat`` (season mode) is always included.
+    """
+    ids: list[str] = []
+    for inst in instances:
+        inst_id = inst.get("ID", "")
+        if not inst_id or not inst.get("Name"):
+            continue
+        entity_type = get_entity_type(inst.get("ClassName", ""))
+        if entity_type is None or entity_type == ENTITY_TYPE_BUTTON_EVENTS:
+            continue
+        ids.append(inst_id)
+    if SEASON_MODE_INSTANCE_ID not in ids:
+        ids.append(SEASON_MODE_INSTANCE_ID)
+    return ids
 
 
 class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -143,6 +172,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # that appears later is picked up (the heavy proxy listing only runs when a
         # Home Connect instance exists). Poll-only, read via the Home Connect proxy.
         self._weather_sources: list[tuple[str, str, str | None]] | None = None
+        # Safety-net poll statistics, exposed on the WebSocket status sensor so
+        # the poll's cost and usefulness can be judged from real data (see
+        # _record_poll_corrections).
+        self.poll_count = 0
+        self.last_poll_duration: float | None = None
+        self.last_poll_instances_fetched: int | None = None
+        self.poll_correction_count = 0
+        self.last_poll_correction: str | None = None
+        self.last_poll_correction_at: datetime | None = None
 
         # WebSocket support
         self._use_websocket = use_websocket
@@ -200,29 +238,23 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._sync_areas:
                 await self._fetch_rooms()
 
-            # Prefetch all instance details in parallel (eliminates N+1 API calls)
-            # Scenes don't need detail fetch; buttons are WS-only (no HTTP detail needed)
-            instance_ids_to_fetch = []
-            for inst in instances:
-                class_name = inst.get("ClassName", "")
-                inst_id = inst.get("ID", "")
-                if not inst_id:
-                    continue
-                if class_name not in (EVON_CLASS_SCENE, EVON_CLASS_PHYSICAL_BUTTON):
-                    instance_ids_to_fetch.append(inst_id)
-
-            # Also fetch Base.ehThermostat for season mode
-            if "Base.ehThermostat" not in instance_ids_to_fetch:
-                instance_ids_to_fetch.append("Base.ehThermostat")
+            # Prefetch the details the processors read (only entity classes, see
+            # select_instances_for_detail_fetch) with bounded concurrency: the
+            # controller answers one GET in ~100 ms when idle, but an unbounded
+            # burst backs it up for 20 s+ and starves the camera snapshot requests.
+            instance_ids_to_fetch = select_instances_for_detail_fetch(instances)
+            detail_semaphore = asyncio.Semaphore(POLL_DETAIL_MAX_IN_FLIGHT)
 
             async def _safe_get_instance(iid: str) -> tuple[str, dict[str, Any] | None]:
-                try:
-                    return iid, await self.api.get_instance(iid)
-                except EvonApiError as err:
-                    _LOGGER.warning("Failed to fetch instance %s: %s", iid, err)
-                    return iid, None
+                async with detail_semaphore:
+                    try:
+                        return iid, await self.api.get_instance(iid)
+                    except EvonApiError as err:
+                        _LOGGER.warning("Failed to fetch instance %s: %s", iid, err)
+                        return iid, None
 
             results = await asyncio.gather(*[_safe_get_instance(iid) for iid in instance_ids_to_fetch])
+            self.last_poll_instances_fetched = len(instance_ids_to_fetch)
             instance_details: dict[str, dict[str, Any]] = {
                 iid: details for iid, details in results if details is not None
             }
@@ -236,7 +268,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             weather_raw = await self._poll_weather_stations()
 
             # Extract season mode from prefetched data
-            thermostat_details = instance_details.get("Base.ehThermostat", {})
+            thermostat_details = instance_details.get(SEASON_MODE_INSTANCE_ID, {})
             season_mode = self._extract_season_mode(thermostat_details)
 
             # Process all device types (synchronous - just dict lookups now)
@@ -310,6 +342,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # poll's result and must not be overwritten by it (see
             # _merge_ws_updates_into_poll_result for the rationale).
             # INVARIANT: no `await` between here and `return result` — see above.
+            self._record_poll_corrections(result, poll_start_time)
             self._merge_ws_updates_into_poll_result(result, poll_start_time)
 
             # Build O(1) lookup index
@@ -331,6 +364,8 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for meter in smart_meters:
                 self._maybe_import_energy_statistics(meter["id"], meter)
 
+            self.poll_count += 1
+            self.last_poll_duration = round(time.monotonic() - poll_start_time, 2)
             return result
 
         except EvonRateLimitError as err:
@@ -553,11 +588,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         T+1s, then the poll completes at T+22s and reverts the cached state to
         is_on=False because its REST snapshot predates the WS event).
 
-        Smart meters are excluded because the poll computes
-        ``energy_today_calculated`` and ``energy_this_month_calculated`` from
-        HA statistics. Letting the poll win for smart meters keeps those
-        derived values accurate; the next WS event for power/voltage/current
-        will refresh the real-time fields immediately afterwards.
+        Smart meters get a field-level merge instead of a plain replacement: the
+        WS entity has the fresher readings and the ``total_increasing`` counters
+        (a poll snapshot taken 20 s earlier regressed ``energy`` once and made
+        the recorder flag the sensor), while the poll just computed
+        ``energy_today_calculated`` / ``energy_this_month_calculated`` from HA
+        statistics and read the poll-only inputs (``feed_in`` ...). WS-updatable
+        keys come from the WS entity, everything else from the poll.
         """
         if not self._ws_update_timestamps:
             return
@@ -566,8 +603,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if ws_ts < poll_start_time:
                 continue
             entity_type, instance_id = index_key
-            if entity_type == ENTITY_TYPE_SMART_METERS:
-                continue
             ws_entity = self._data_index.get(index_key)
             if ws_entity is None:
                 continue
@@ -576,7 +611,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             for idx, e in enumerate(entities_list):
                 if e.get("id") == instance_id:
-                    entities_list[idx] = ws_entity
+                    if entity_type == ENTITY_TYPE_SMART_METERS:
+                        # New dict: readers may still hold either input.
+                        merged = dict(e)
+                        merged.update({k: ws_entity[k] for k in get_ws_updatable_keys(entity_type) if k in ws_entity})
+                        entities_list[idx] = merged
+                    else:
+                        entities_list[idx] = ws_entity
                     _LOGGER.debug(
                         "Poll-WS merge: preserved WS update for %s/%s (WS at %.3fs, poll started %.3fs ago)",
                         entity_type,
@@ -585,6 +626,58 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         time.monotonic() - poll_start_time,
                     )
                     break
+
+    def _record_poll_corrections(self, result: dict[str, Any], poll_start_time: float) -> int:
+        """Count values this poll changed that the WebSocket should have delivered.
+
+        For every WS-covered entity that received *no* WS event during the poll,
+        compare the poll's snapshot with the current, WS-maintained state on the
+        keys mapped 1:1 from a WS property (derived values such as the meter's
+        summed ``power`` differ by float rounding alone and are skipped). A
+        difference means the device changed without a WS event — the safety-net
+        poll was actually needed. The
+        counters feed the WebSocket status sensor's attributes so the poll's
+        usefulness (and interval) can be judged from real data. Only counted
+        while the WebSocket is connected; without it the poll is the primary
+        source and every change is expected.
+
+        Returns:
+            The number of corrected values in this poll.
+        """
+        if not self._ws_connected:
+            return 0
+        corrections: list[str] = []
+        for entity_type, entities in result.items():
+            if not isinstance(entities, list):
+                continue
+            ws_keys = get_ws_mapped_keys(entity_type)
+            if not ws_keys:
+                continue
+            for poll_entity in entities:
+                instance_id = poll_entity.get("id")
+                if not instance_id:
+                    continue
+                index_key = (entity_type, instance_id)
+                current = self._data_index.get(index_key)
+                if current is None:
+                    continue
+                ws_ts = self._ws_update_timestamps.get(index_key)
+                if ws_ts is not None and ws_ts >= poll_start_time:
+                    continue  # WS is fresher; the merge keeps it
+                for key in sorted(ws_keys):
+                    if key in poll_entity and key in current and poll_entity[key] != current[key]:
+                        corrections.append(
+                            f"{entity_type}/{instance_id} {key}: {current[key]!r} -> {poll_entity[key]!r}"
+                        )
+        if corrections:
+            self.poll_correction_count += len(corrections)
+            self.last_poll_correction = corrections[-1]
+            self.last_poll_correction_at = dt_util.utcnow()
+            shown = "; ".join(corrections[:5])
+            if len(corrections) > 5:
+                shown += f"; ... ({len(corrections) - 5} more)"
+            _LOGGER.info("Poll corrected %d value(s) the WebSocket did not deliver: %s", len(corrections), shown)
+        return len(corrections)
 
     def get_entity_data(self, entity_type: str, instance_id: str) -> dict[str, Any] | None:
         """Get data for a specific entity via O(1) index lookup.

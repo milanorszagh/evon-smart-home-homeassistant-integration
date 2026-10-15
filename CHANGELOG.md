@@ -14,6 +14,11 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Added
 
+- **Poll statistics on the WebSocket status sensor.** Attributes `poll_count`,
+  `last_poll_duration_seconds`, `last_poll_instances_fetched`, `poll_corrections`,
+  `last_poll_correction` and `last_poll_correction_at` show how often the safety-net poll
+  runs, how long it takes and whether it ever corrected a value the WebSocket missed
+  (also logged at INFO and included in the diagnostics export).
 - **Weather station support.** A weather station (`Weather.ProxyStation`) on a shared
   controller is now discovered and polled through the apartment's Home Connect proxy, and
   exposed as one device per station with individual sensors (temperature, wind speed,
@@ -41,6 +46,11 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Changed
 
+- **Cheaper, rarer safety-net poll.** With the WebSocket connected, the poll now runs every
+  2 minutes instead of every minute, fetches details only for named instances that become
+  entities (64 instead of 930 on the reference system) and sends at most 8 requests at a
+  time. It takes about 5 s instead of 20–25 s; the controller was saturated for a third of
+  every minute before.
 - **`evon.all_lights_off` sends one command.** The action (and the MCP server's
   `light_control_all` tool) now uses the controller's own group command
   `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
@@ -57,6 +67,15 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Fixed
 
+- **Camera live view froze for ~15 s every minute.** Each safety-net poll backed the
+  controller up so far that the camera's snapshot request timed out (109 of 109 timeouts
+  in a 26-hour log fell inside a poll). Fixed by the cheaper poll above; the timeout is now
+  logged at debug level with its cause instead of as an empty "Unexpected error".
+- **Energy total could step backwards by one reading.** A poll finishing after a
+  WebSocket meter update overwrote the fresher counter with its older snapshot, and the
+  recorder flagged `sensor.*_energy_total` as "not strictly increasing". Smart meters now
+  keep the WebSocket readings and take only the poll-computed daily/monthly values and
+  poll-only inputs from the poll.
 - **Clean shutdown on Home Assistant restart.** Home Assistant does not unload config
   entries when it stops, so the integration kept its WebSocket loop and polling alive
   until HA closed its shared HTTP session. Every restart then logged three

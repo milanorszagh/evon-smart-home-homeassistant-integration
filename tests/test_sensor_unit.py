@@ -413,6 +413,66 @@ class TestWsStatusSensor:
         assert attrs["messages_received"] == 100
         assert attrs["connection_uptime_seconds"] == 3600.0
 
+    def test_ws_status_sensor_reports_poll_diagnostics(self):
+        """The safety-net poll's usage is visible: how often it runs, how long it takes,
+        and whether it ever corrected a value the WebSocket missed."""
+        from custom_components.evon.sensor import EvonWebSocketStatusSensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = MagicMock()
+        coordinator.ws_client.is_connected = True
+        coordinator.ws_client.reconnect_count = 0
+        coordinator.ws_client.messages_received = 1
+        coordinator.ws_client.requests_sent = 1
+        coordinator.ws_client.pending_request_count = 0
+        coordinator.ws_client.avg_response_time_ms = None
+        coordinator.ws_client.last_error = None
+        coordinator.ws_client.connection_uptime = 10.0
+        coordinator.poll_count = 12
+        coordinator.last_poll_duration = 1.4
+        coordinator.last_poll_instances_fetched = 89
+        coordinator.poll_correction_count = 2
+        coordinator.last_poll_correction = "lights/L1 is_on: False -> True"
+        coordinator.last_poll_correction_at = None
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        attrs = EvonWebSocketStatusSensor(coordinator, entry).extra_state_attributes
+
+        assert attrs["poll_count"] == 12
+        assert attrs["last_poll_duration_seconds"] == 1.4
+        assert attrs["last_poll_instances_fetched"] == 89
+        assert attrs["poll_corrections"] == 2
+        assert attrs["last_poll_correction"] == "lights/L1 is_on: False -> True"
+        assert attrs["last_poll_correction_at"] is None
+        assert attrs["reconnect_count"] == 0
+
+    def test_ws_status_sensor_poll_diagnostics_without_ws_client(self):
+        """HTTP-only mode still reports the poll statistics, just no WS metrics."""
+        from custom_components.evon.sensor import EvonWebSocketStatusSensor
+
+        coordinator = MagicMock()
+        coordinator.data = {}
+        coordinator.last_update_success = True
+        coordinator.ws_client = None
+        coordinator.poll_count = 3
+        coordinator.last_poll_duration = 0.8
+        coordinator.last_poll_instances_fetched = 20
+        coordinator.poll_correction_count = 0
+        coordinator.last_poll_correction = None
+        coordinator.last_poll_correction_at = None
+
+        entry = MagicMock()
+        entry.entry_id = "test_entry"
+
+        attrs = EvonWebSocketStatusSensor(coordinator, entry).extra_state_attributes
+
+        assert attrs["poll_count"] == 3
+        assert "reconnect_count" not in attrs
+
     def test_ws_status_sensor_disconnected(self):
         """WS status sensor should show 'disconnected' when WS is not connected."""
         from custom_components.evon.sensor import EvonWebSocketStatusSensor

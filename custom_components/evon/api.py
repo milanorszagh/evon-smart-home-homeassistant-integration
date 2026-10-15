@@ -1017,7 +1017,11 @@ class EvonApi:
                 _LOGGER.debug("Failed to fetch image: %s", err)
             except EvonConnectionError:
                 _LOGGER.debug("Failed to fetch image: session error")
+            except TimeoutError:
+                # Routine when the controller is busy (e.g. serving a poll); not "unexpected".
+                _LOGGER.debug("Image fetch timed out after %ss", IMAGE_FETCH_TIMEOUT)
             except Exception as err:
-                _LOGGER.warning("Unexpected error fetching image: %s", err)
+                # %r: str() of many exceptions is empty, which hid what happened.
+                _LOGGER.warning("Unexpected error fetching image: %r", err)
             break
         return None

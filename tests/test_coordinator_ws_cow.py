@@ -321,27 +321,44 @@ class TestPollWsMerge:
         assert result["lights"][0]["name"] == "Fresh Poll"
         assert result["lights"][0]["is_on"] is True
 
-    def test_merge_excludes_smart_meters(self):
-        """Smart meters skip the merge so the poll's energy_today_calculated stays accurate."""
+    def test_merge_smart_meter_keeps_ws_counters_and_poll_derived_values(self):
+        """Smart meters: WS-delivered fields win (the poll's snapshot is older — it
+        would regress the total_increasing energy counter), poll-only inputs and
+        poll-derived values come from the poll, which just computed them."""
         from custom_components.evon.const import ENTITY_TYPE_SMART_METERS
 
         coord = self._make_coordinator()
         poll_start = 100.0
-        # Poll calculated fresh energy_today
-        result = {ENTITY_TYPE_SMART_METERS: [{"id": "m1", "power": 200, "energy_today_calculated": 5.5}]}
-        # WS-updated meter has fresh power but stale energy_today_calculated
-        coord._data_index[(ENTITY_TYPE_SMART_METERS, "m1")] = {
+        poll_meter = {
             "id": "m1",
+            "name": "Meter",
+            "power": 200,
+            "energy": 2697.4,
+            "feed_in": 12,
+            "energy_today_calculated": 5.5,
+        }
+        result = {ENTITY_TYPE_SMART_METERS: [poll_meter]}
+        ws_meter = {
+            "id": "m1",
+            "name": "Meter",
             "power": 195,
+            "energy": 2697.5,
+            "feed_in": 10,
             "energy_today_calculated": 4.0,
         }
+        coord._data_index[(ENTITY_TYPE_SMART_METERS, "m1")] = ws_meter
         coord._ws_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = poll_start + 3.0
 
         coord._merge_ws_updates_into_poll_result(result, poll_start)
 
-        # Poll wins for smart meters — energy_today_calculated stays fresh
-        assert result[ENTITY_TYPE_SMART_METERS][0]["energy_today_calculated"] == 5.5
-        assert result[ENTITY_TYPE_SMART_METERS][0]["power"] == 200
+        merged = result[ENTITY_TYPE_SMART_METERS][0]
+        assert merged["energy"] == 2697.5  # WS counter — must not regress to the poll's 2697.4
+        assert merged["power"] == 195
+        assert merged["feed_in"] == 12  # poll-only input
+        assert merged["energy_today_calculated"] == 5.5  # poll-derived
+        # Neither input is mutated: readers may still hold either dict
+        assert ws_meter["energy_today_calculated"] == 4.0
+        assert poll_meter["energy"] == 2697.4
 
     def test_merge_handles_missing_entity_in_index(self):
         """If a tracked timestamp points to an entity no longer in _data_index, skip it."""
