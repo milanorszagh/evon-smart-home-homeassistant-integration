@@ -361,6 +361,7 @@ Cameras from 2N intercoms are supported:
 
 - **Camera image**: A still image that is refreshed each time you view it — the integration asks the intercom for a fresh snapshot and fetches the resulting JPEG
 - **Error monitoring**: Shows connection status
+- **Frame time**: The `image_last_updated` attribute holds the time the currently shown picture was captured, so you can see how fresh the live view is (see [Live-Feed Age Overlay](#live-feed-age-overlay))
 - **Saved pictures**: Historical doorbell snapshots available as image entities (see [Doorbell Snapshots](#doorbell-snapshots))
 
 **Camera Recording:**
@@ -407,6 +408,23 @@ show_title: false                               # optional, hides the "Recording
 `door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds.
 
 `sip_extension` adds a **Talk** button for two-way audio with the door station. It needs an optional, self-hosted SIP stack (an Asterisk add-on, the SIP Core card, and HTTPS for microphone access, e.g. via Tailscale) that is **not** part of this integration. The full setup, requirements and config templates are in [docs/INTERCOM_AUDIO.md](docs/INTERCOM_AUDIO.md).
+
+#### Live-Feed Age Overlay
+
+The same resource also provides a small `evon-live-clock` badge for a `picture-elements` card. It shows when the picture you are looking at was captured and how old it is, for example `19:53:07 · 2s ago`. If the feed freezes, the age keeps climbing and the badge turns amber after 5 seconds and red after 15 seconds:
+
+```yaml
+type: picture-elements
+camera_image: camera.your_camera_entity
+camera_view: live
+elements:
+  - type: custom:evon-live-clock
+    entity: camera.your_camera_entity
+    style:
+      top: 6%
+      right: 2%
+      transform: none
+```
 
 ### Doorbell Snapshots
 

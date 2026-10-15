@@ -33,13 +33,18 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   call, hangs up an active one, or dials the door, through the `window.sipCore` engine.
   This drives an optional self-hosted SIP stack (Asterisk add-on + SIP Core + HTTPS such
   as Tailscale) documented in `docs/INTERCOM_AUDIO.md`; the stack itself is not part of
-  the integration. Edit the card JS and the Lovelace resource URL needs a `?v=` bump.
+  the integration.
 - **Door opener buttons.** Each 2N intercom device, and each security door linked to an
   intercom, gets an *Open door* button that pulses the door release (the controller's
   `SwitchOnFor` method, sent over WebSocket with HTTP fallback). The pulse length is a new
   integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s). The buttons are
   created disabled; enable them in the entity settings before dashboards or automations can
   open the door.
+- **Live-feed age overlay.** The camera entity has a new `image_last_updated` attribute,
+  set whenever a new frame arrives. The card's resource also provides an `evon-live-clock`
+  badge for `picture-elements` that shows the shown frame's capture time and age
+  (`19:53:07 · 2s ago`, 24-hour time), so a frozen feed is visible as a climbing age.
+  See README → *Live-Feed Age Overlay*.
 - **Recording card door button.** `evon-camera-recording-card` takes an optional
   `door_button` (one of the *Open door* button entities) and shows it next to *Record*;
   `show_title: false` hides the *Recording* heading above the buttons.
@@ -58,12 +63,6 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   the group command fails. (#26)
 - **Recording timestamps use 24-hour time.** The camera card's recording list now shows
   times like `Oct 14 at 19:53` instead of `7:53 PM`.
-- **Camera exposes the current frame's capture time.** The camera entity now has an
-  `image_last_updated` attribute, set whenever a new frame (image path) arrives. The card's
-  JS resource provides a small `evon-live-clock` element that overlays a live feed (via
-  `picture-elements`, with `entity:` set to the camera) and shows that frame's capture time
-  plus its age (`19:53:07 · 2s ago`) in 24-hour time — so a frozen feed shows the age
-  climbing, a real liveness indicator rather than a wall clock.
 
 ### Fixed
 
@@ -71,6 +70,8 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   controller up so far that the camera's snapshot request timed out (109 of 109 timeouts
   in a 26-hour log fell inside a poll). Fixed by the cheaper poll above; the timeout is now
   logged at debug level with its cause instead of as an empty "Unexpected error".
+- **Camera card buttons stay centred.** The card's action buttons (*Record*, *Open door*,
+  *Talk*) are centred and stay centred when they wrap onto a second line.
 - **Energy total could step backwards by one reading.** A poll finishing after a
   WebSocket meter update overwrote the fresher counter with its older snapshot, and the
   recorder flagged `sensor.*_energy_total` as "not strictly increasing". Smart meters now
