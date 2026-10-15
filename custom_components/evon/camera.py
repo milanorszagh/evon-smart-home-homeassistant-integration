@@ -61,6 +61,9 @@ class EvonCamera(EvonEntity, Camera):
 
     _attr_supported_features = CameraEntityFeature.ON_OFF
     _entity_type = ENTITY_TYPE_CAMERAS
+    # Changes with every frame while a live view is open; keep it out of the
+    # recorder so the other (large, otherwise unchanged) attributes deduplicate.
+    _unrecorded_attributes = frozenset({"image_last_updated"})
 
     def __init__(
         self,

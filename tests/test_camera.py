@@ -138,6 +138,12 @@ class TestEvonCamera:
         cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())
         assert "image_last_updated" not in cam.extra_state_attributes
 
+    def test_image_last_updated_is_not_recorded(self):
+        """It changes with every frame; recording it would write a new attribute
+        row (repeating recent_recordings / saved_pictures) per frame while a live
+        view is open. The overlay reads the live state, so history is not needed."""
+        assert "image_last_updated" in EvonCamera._unrecorded_attributes
+
     def test_image_last_updated_in_attributes(self):
         """The captured-at time of the current frame is exposed as ISO."""
         from datetime import UTC, datetime

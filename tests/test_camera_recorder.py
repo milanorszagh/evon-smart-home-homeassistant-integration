@@ -366,6 +366,31 @@ class TestRecentRecordings:
         assert result[1]["filename"] == "Test_Camera_20240101_120000.mp4"
         assert result[2]["filename"] == "Test_Camera_20240100_120000.mp4"
 
+    def test_timestamp_is_home_assistant_local_time(self, recorder, mock_hass, tmp_path):
+        """The card lists recordings in HA's local time (24 h), not UTC."""
+        from datetime import UTC, datetime
+        import os
+        from zoneinfo import ZoneInfo
+
+        from homeassistant.util import dt as dt_util
+
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+        f = recordings_dir / "Test_Camera_20261014_195300.mp4"
+        f.write_bytes(b"\x00" * 1024)
+        finished = datetime(2026, 10, 14, 17, 53, tzinfo=UTC).timestamp()  # 19:53 in Vienna (CEST)
+        os.utime(f, (finished, finished))
+
+        previous = dt_util.get_default_time_zone()
+        dt_util.set_default_time_zone(ZoneInfo("Europe/Vienna"))
+        try:
+            recorder._recordings_cache = recorder._scan_recordings()
+        finally:
+            dt_util.set_default_time_zone(previous)
+
+        assert recorder.get_recent_recordings()[0]["timestamp"] == "Oct 14 at 19:53"
+
     def test_respects_limit(self, recorder, mock_hass, tmp_path):
         """Test limit parameter caps the number of results."""
         recordings_dir = tmp_path / "media" / "evon_recordings"

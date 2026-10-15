@@ -111,7 +111,10 @@ class EvonCameraRecordingCard extends HTMLElement {
 
   disconnectedCallback() {
     this._stopStopwatch();
-    this._clearDoorTimeout();
+    // The pulse was already sent; cancelling the feedback timer must also end the
+    // "Opening…" state, otherwise a re-attached card (popup reopened, view switched)
+    // stays stuck and ignores every later press.
+    if (this._doorTimeout) this._setDoorOpening(false);
     if (this._onSipUpdate) {
       window.removeEventListener("sipcore-update", this._onSipUpdate);
       window.removeEventListener("sipcore-call-started", this._onSipUpdate);

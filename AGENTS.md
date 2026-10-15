@@ -410,11 +410,15 @@ during that window the controller neither delivered the camera's `image_path` WS
   may still miss one 5 s `image_path` wait inside that window — hence the 120 s interval.
   Future option if that is still too much: the WS `GetInstances` call returns every property of
   all instances of a class in one reply (docs/WEBSOCKET_API.md), i.e. ~12 calls instead of 63.
-- Smart meters are **field-merged** in `_merge_ws_updates_into_poll_result()`: WS-updatable keys
-  (`ws_mappings.get_ws_updatable_keys()`) come from the WS entity, poll-only inputs (`feed_in`, …)
-  and poll-derived values (`energy_today_calculated`, `energy_this_month_calculated`) from the
-  poll. Replacing the whole dict with the poll's snapshot regressed the `total_increasing`
-  `energy` counter by 0.1 kWh once (recorder warning "not strictly increasing", 2026-10-14).
+- Smart meters are **field-merged** in `_merge_ws_updates_into_poll_result()`: only the keys a
+  WS event updated *during the poll* come from the WS entity (per-key monotonic timestamps in
+  `_ws_key_update_timestamps`, recorded for meters only); every other key — poll-only inputs
+  (`feed_in`, …), poll-derived values (`energy_today_calculated`,
+  `energy_this_month_calculated`) and WS keys the controller did not push (e.g. the
+  `EnergyDataMonth` array shifted at midnight) — comes from the poll. Replacing the whole dict
+  with the poll's snapshot regressed the `total_increasing` `energy` counter by 0.1 kWh once
+  (recorder warning "not strictly increasing", 2026-10-14); taking *all* WS keys whenever any
+  event landed (meters push every few seconds) would stop the poll from refreshing the rest.
 - **Is the poll ever needed?** `_record_poll_corrections()` counts values the poll changed on
   WS-covered entities that had no WS event during the poll (1:1 mapped keys only — derived
   values such as the meter's summed `power` differ from HTTP by float rounding), logs them at INFO
@@ -460,11 +464,11 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
 - WebSocket: `ws_client.py` (WebSocket client), `ws_control.py` (WebSocket control mappings), `ws_mappings.py` (WebSocket property mappings)
 - Utilities: `statistics.py` (long-term energy statistics), `device_trigger.py` (device automation triggers), `diagnostics.py` (integration diagnostics), `camera_recorder.py` (snapshot→MP4 recording — a helper, not a platform), `recordings.py` (recordings folder inside HA's local media dir + one-time legacy migration, since 1.23.0), `recordings_view.py` (authenticated HTTP view serving camera recordings)
 - UI strings: `strings.json` + `translations/` (10 languages: cs, de, en, es, fr, it, pl, pt, sk, sl — `tests/test_translations.py` enforces parity); `services.yaml` (service descriptions and selectors)
-- Frontend: `www/evon-camera-recording-card.js` (custom Lovelace card, served as a static path at `/evon/evon-camera-recording-card.js`). Besides the recording UI and the optional `door_button`, it has an optional **Talk** button (config `sip_extension`) that drives `window.sipCore` (answer incoming / hang up / dial the door) for the SIP intercom-audio stack — see `docs/INTERCOM_AUDIO.md`. That stack (Asterisk add-on + SIP Core + Tailscale HTTPS) is **not** part of the integration; the card only calls the global `sipCore` engine when `sip_extension` is set. The same file also defines `evon-live-clock`, a `picture-elements` badge that reads the camera's `image_last_updated` attribute (set in `camera.py` whenever `image_path` changes, i.e. per new frame, not per HA poll) and shows that frame's time and age; it must keep using that attribute, not the wall clock or `last_updated`, or it stops revealing a frozen feed. After editing the card JS, bump the Lovelace resource URL `?v=` — the HA frontend service worker caches it even though it is served with `cache_headers=False`.
+- Frontend: `www/evon-camera-recording-card.js` (custom Lovelace card, served as a static path at `/evon/evon-camera-recording-card.js`). Besides the recording UI and the optional `door_button`, it has an optional **Talk** button (config `sip_extension`) that drives `window.sipCore` (answer incoming / hang up / dial the door) for the SIP intercom-audio stack — see `docs/INTERCOM_AUDIO.md`. That stack (Asterisk add-on + SIP Core + Tailscale HTTPS) is **not** part of the integration; the card only calls the global `sipCore` engine when `sip_extension` is set. The same file also defines `evon-live-clock`, a `picture-elements` badge that reads the camera's `image_last_updated` attribute (set in `camera.py` whenever `image_path` changes, i.e. per new frame, not per HA poll) and shows that frame's time and age; it must keep using that attribute, not the wall clock or `last_updated`, or it stops revealing a frozen feed. The attribute is in the camera's `_unrecorded_attributes`: it changes per frame, and recording it wrote a new attribute row (repeating `recent_recordings` / `saved_pictures`) for every frame of an open live view. After editing the card JS, bump the Lovelace resource URL `?v=` — the HA frontend service worker caches it even though it is served with `cache_headers=False`.
 
 ### Repository
 - Docs: `README.md`, `DEVELOPMENT.md`, `AGENTS.md`, `CHANGELOG.md`, `RELEASING.md`, `docs/` (see Documentation Structure above)
-- Tests: `tests/` (Python/pytest), `tests-mcp/` (MCP server, Node's built-in test runner — `api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`)
+- Tests: `tests/` (Python/pytest), `tests-mcp/` (Node's built-in test runner — MCP server: `api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`; Lovelace card: `card.test.js`)
 - Scripts: `scripts/ha-deploy.sh`, `scripts/ha-logs.sh` (the rest of `scripts/` is gitignored for local ad-hoc probes)
 - CI/automation: `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`, `renovate.json`
 
@@ -842,7 +846,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1445 tests), plus 23 MCP server tests in `tests-mcp/`:
+Tests are in the `tests/` directory (1450 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -902,7 +906,7 @@ Tests are in the `tests/` directory (1445 tests), plus 23 MCP server tests in `t
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
 - `test_translations.py` - strings.json ↔ translations/*.json parity, selector/enum-state translatability (no HA needed)
 
-**MCP server tests (`tests-mcp/`, 23 tests, Node's built-in test runner):** `api-client.test.js`, `index.test.js`, `registry.test.js`, `stdio.test.js`, `ws-client.test.js` — run with `npm run build && npm run test:mcp` (they exercise the compiled `dist/`).
+**Node tests (`tests-mcp/`, 25 tests, Node's built-in test runner):** MCP server — `api-client.test.js`, `index.test.js`, `registry.test.js`, `stdio.test.js`, `ws-client.test.js`, which exercise the compiled `dist/`; Lovelace card — `card.test.js`, which loads `custom_components/evon/www/evon-camera-recording-card.js` into a `node:vm` context with minimal DOM stand-ins (no browser). Run with `npm run build && npm run test:mcp`.
 
 ### Test Architecture
 
@@ -942,7 +946,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull r
 3. `mypy custom_components/evon/ --ignore-missing-imports` - **advisory only** (`continue-on-error: true`; ~100 errors remain, tracked in `docs/CODE_ANALYSIS_BACKLOG.md`) — a red mypy step never fails the build, so do not rely on CI to catch type errors
 4. `npm run lint` - TypeScript linting
 5. `npm run build` - TypeScript compilation
-6. `npm run test:mcp` - MCP server tests (23 tests)
+6. `npm run test:mcp` - MCP server and Lovelace card tests (25 tests)
 7. `npm audit --audit-level=high` - npm security audit (fails the build)
 8. `pip-audit` - Python dependency audit (advisory-only, `continue-on-error: true`; HA hard-pins its deps, so
    findings there are usually not fixable downstream)

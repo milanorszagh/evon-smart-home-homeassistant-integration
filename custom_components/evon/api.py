@@ -942,7 +942,12 @@ class EvonApi:
         if ws_attempted:
             _LOGGER.debug("WS control: SetValue Base.ehThermostat.IsCool = %s", is_cooling)
             async with self._ws_control_slots:
-                result = await self._ws_client.set_value("Base.ehThermostat", "IsCool", is_cooling)  # type: ignore[union-attr]
+                # Re-read after waiting for a slot: the WS client may have been torn
+                # down meanwhile (reconnect service, options reload, HA stop).
+                ws = self._ws_client
+                result = (
+                    await ws.set_value("Base.ehThermostat", "IsCool", is_cooling) if ws and ws.is_connected else False
+                )
             _LOGGER.debug("WS control: SetValue result = %s", result)
             if result:
                 return

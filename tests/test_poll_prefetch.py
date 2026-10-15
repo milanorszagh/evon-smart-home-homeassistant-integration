@@ -20,7 +20,7 @@ from custom_components.evon.coordinator import (
     EvonDataUpdateCoordinator,
     select_instances_for_detail_fetch,
 )
-from custom_components.evon.ws_mappings import get_ws_mapped_keys, get_ws_updatable_keys
+from custom_components.evon.ws_mappings import get_ws_mapped_keys
 
 
 def _inst(iid: str, class_name: str, name: str = "x") -> dict:
@@ -95,30 +95,25 @@ class TestSelectInstancesForDetailFetch:
         assert select_instances_for_detail_fetch([{"ClassName": "SmartCOM.Light.LightDim"}]) == ["Base.ehThermostat"]
 
 
-class TestWsUpdatableKeys:
-    """The coordinator keys the WebSocket can refresh for an entity type."""
+class TestWsMappedKeys:
+    """The coordinator keys the WebSocket delivers 1:1 for an entity type."""
 
-    def test_smart_meter_keys_include_mapped_and_computed_fields(self):
-        keys = get_ws_updatable_keys(ENTITY_TYPE_SMART_METERS)
+    def test_smart_meter_keys(self):
+        keys = get_ws_mapped_keys(ENTITY_TYPE_SMART_METERS)
 
-        assert {"energy", "feed_in_energy", "power_l1", "power"} <= keys
+        assert {"energy", "feed_in_energy", "power_l1"} <= keys
         # Poll-only inputs and poll-derived outputs are not WS keys
         assert not {"feed_in", "power_unit", "energy_today_calculated", "energy_this_month_calculated", "name"} & keys
 
-    def test_climate_keys_include_derived_setpoints(self):
-        keys = get_ws_updatable_keys(ENTITY_TYPE_CLIMATES)
-
-        assert {"current_temperature", "target_temperature", "cooling_enabled", "comfort_temp"} <= keys
-
     def test_poll_only_type_has_no_keys(self):
-        assert get_ws_updatable_keys(ENTITY_TYPE_WEATHER) == frozenset()
+        assert get_ws_mapped_keys(ENTITY_TYPE_WEATHER) == frozenset()
 
     def test_mapped_keys_exclude_values_the_websocket_derives(self):
-        """1:1 property mappings only — the summed meter ``power`` and the climate
-        setpoint summaries are computed and differ from HTTP by float rounding."""
-        assert "energy" in get_ws_mapped_keys(ENTITY_TYPE_SMART_METERS)
+        """The summed meter ``power`` and the climate setpoint summaries are
+        computed and differ from HTTP by float rounding."""
         assert "power" not in get_ws_mapped_keys(ENTITY_TYPE_SMART_METERS)
         assert "comfort_temp" not in get_ws_mapped_keys(ENTITY_TYPE_CLIMATES)
+        assert "current_temperature" in get_ws_mapped_keys(ENTITY_TYPE_CLIMATES)
 
 
 def _coordinator_for_corrections() -> MagicMock:

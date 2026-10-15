@@ -106,6 +106,25 @@ class TestParseLastRain:
         assert (result.hour, result.minute, result.second) == (14, 30, 5)
         assert result.tzinfo is not None  # device-local tz attached
 
+    def test_uses_home_assistant_zone_with_the_offset_of_that_date(self):
+        """A CEST timestamp must keep +02:00 after DST ends (and vice versa), and the
+        zone is HA's configured one, not the process TZ (Docker/venv hosts run UTC)."""
+        from datetime import timedelta
+        from zoneinfo import ZoneInfo
+
+        from homeassistant.util import dt as dt_util
+
+        previous = dt_util.get_default_time_zone()
+        dt_util.set_default_time_zone(ZoneInfo("Europe/Vienna"))
+        try:
+            summer = parse_last_rain("20.10.2026, 14:00:00")  # before DST ends on 25 Oct
+            winter = parse_last_rain("30.10.2026, 14:00:00")
+        finally:
+            dt_util.set_default_time_zone(previous)
+
+        assert summer.utcoffset() == timedelta(hours=2)
+        assert winter.utcoffset() == timedelta(hours=1)
+
     @pytest.mark.parametrize("value", ["", "   ", "not a date", "2026-10-12T14:30:05", None, 123, []])
     def test_unparseable_returns_none(self, value):
         assert parse_last_rain(value) is None

@@ -50,7 +50,7 @@ from ..const import (
     REPAIR_WEBSOCKET_DISCONNECTED,
     WS_POLL_INTERVAL,
 )
-from ..ws_mappings import get_entity_type, get_ws_mapped_keys, get_ws_updatable_keys
+from ..ws_mappings import get_entity_type, get_ws_mapped_keys
 from .button_press import ButtonPressDetector
 from .processors import (
     process_air_quality,
@@ -149,6 +149,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Used to detect entities that were updated via WS during an in-flight
         # poll, so the poll's stale snapshot doesn't overwrite confirmed state.
         self._ws_update_timestamps: dict[tuple[str, str], float] = {}
+        # Smart meters only: per-key timestamps of the last WS update. Meters push
+        # readings every few seconds, so an entity-level timestamp lands inside
+        # nearly every poll; the merge must keep only the keys the WS actually
+        # updated during the poll (see _merge_ws_updates_into_poll_result).
+        self._ws_key_update_timestamps: dict[tuple[str, str], dict[str, float]] = {}
         # Guards against a re-entrant concurrent poll (HA core does not serialize
         # _async_refresh — a recheck-triggered refresh can fire while a scheduled
         # poll is mid-flight). The flag drives the fast-path skip; the lock covers
@@ -351,6 +356,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Prune timestamps for entities that no longer exist (entity removed,
             # renamed, or otherwise absent from this poll's result).
             self._ws_update_timestamps = {k: v for k, v in self._ws_update_timestamps.items() if k in self._data_index}
+            self._ws_key_update_timestamps = {
+                k: v for k, v in self._ws_key_update_timestamps.items() if k in self._data_index
+            }
 
             # Cache successful data for use during transient failures
             self._last_successful_data = result
@@ -589,12 +597,14 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         is_on=False because its REST snapshot predates the WS event).
 
         Smart meters get a field-level merge instead of a plain replacement: the
-        WS entity has the fresher readings and the ``total_increasing`` counters
-        (a poll snapshot taken 20 s earlier regressed ``energy`` once and made
-        the recorder flag the sensor), while the poll just computed
-        ``energy_today_calculated`` / ``energy_this_month_calculated`` from HA
-        statistics and read the poll-only inputs (``feed_in`` ...). WS-updatable
-        keys come from the WS entity, everything else from the poll.
+        keys a WS event updated *during this poll* come from the WS entity (a poll
+        snapshot taken 20 s earlier regressed the ``total_increasing`` ``energy``
+        counter once and made the recorder flag the sensor); every other key
+        comes from the poll, which just computed ``energy_today_calculated`` /
+        ``energy_this_month_calculated`` and read the poll-only inputs. Meters
+        push readings every few seconds, so merging all WS keys whenever any
+        event landed would stop the poll from refreshing values the WS did not
+        push (e.g. the daily array the controller shifts at midnight).
         """
         if not self._ws_update_timestamps:
             return
@@ -612,9 +622,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for idx, e in enumerate(entities_list):
                 if e.get("id") == instance_id:
                     if entity_type == ENTITY_TYPE_SMART_METERS:
-                        # New dict: readers may still hold either input.
+                        # New dict: readers may still hold either input. Only keys
+                        # the WS updated during this poll override the poll's value.
+                        key_ts = self._ws_key_update_timestamps.get(index_key, {})
                         merged = dict(e)
-                        merged.update({k: ws_entity[k] for k in get_ws_updatable_keys(entity_type) if k in ws_entity})
+                        merged.update(
+                            {k: ws_entity[k] for k, ts in key_ts.items() if ts >= poll_start_time and k in ws_entity}
+                        )
                         entities_list[idx] = merged
                     else:
                         entities_list[idx] = ws_entity
@@ -1010,6 +1024,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Mark this entity as WS-updated so a concurrent poll's stale snapshot
         # doesn't overwrite our confirmed change when it completes.
         self._ws_update_timestamps[index_key] = time.monotonic()
+        if entity_type == ENTITY_TYPE_SMART_METERS:
+            key_ts = self._ws_key_update_timestamps.setdefault(index_key, {})
+            now = time.monotonic()
+            for key in coord_data:
+                key_ts[key] = now
 
         # Import energy statistics when smart meter data is received
         if entity_type == ENTITY_TYPE_SMART_METERS:

@@ -14,6 +14,8 @@ from datetime import datetime
 import logging
 from typing import Any
 
+from homeassistant.util import dt as dt_util
+
 from ...const import EVON_CLASS_HOME_CONNECT, EVON_CLASS_WEATHER_PROXY
 
 _LOGGER = logging.getLogger(__name__)
@@ -55,9 +57,10 @@ def find_weather_stations_in(proxy_instances: Any) -> list[dict[str, Any]]:
 def parse_last_rain(value: Any) -> datetime | None:
     """Parse LastRainDateTime into a timezone-aware datetime (controller local tz).
 
-    The controller returns local wall-clock time without an offset; we attach the
-    host's local timezone (the HA host runs in the same timezone as the controller
-    on these installs). Returns None for anything unparseable.
+    The controller returns local wall-clock time without an offset; we attach HA's
+    configured timezone (the installation's zone, same as the controller's). A zone,
+    not today's fixed offset, so a timestamp from before a DST change keeps the
+    offset valid on its own date. Returns None for anything unparseable.
     """
     if not isinstance(value, str) or not value.strip():
         return None
@@ -65,7 +68,7 @@ def parse_last_rain(value: Any) -> datetime | None:
         naive = datetime.strptime(value.strip(), _LAST_RAIN_FORMAT)
     except ValueError:
         return None
-    return naive.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return naive.replace(tzinfo=dt_util.get_default_time_zone())
 
 
 def _f(value: Any) -> float | None:

@@ -272,6 +272,18 @@ class TestCopyOnWriteWSUpdates:
         assert ts is not None
         assert before <= ts <= after
 
+    def test_ws_update_records_per_key_timestamps_for_smart_meters(self, coordinator_and_method):
+        """Meter WS events record which keys they updated, for the poll merge."""
+        coordinator = coordinator_and_method
+        meter = {"id": "m1", "name": "Meter", "power_l1": 1.0, "energy": 5.0}
+        self._setup_data(coordinator, "smart_meters", [meter])
+        coordinator._ws_key_update_timestamps = {}
+
+        coordinator._handle_ws_values_changed("m1", {"P1": 2.0})
+
+        assert set(coordinator._ws_key_update_timestamps[("smart_meters", "m1")]) >= {"power_l1"}
+        assert "energy" not in coordinator._ws_key_update_timestamps[("smart_meters", "m1")]
+
 
 class TestPollWsMerge:
     """Test that the periodic HTTP poll preserves WS updates that arrived during it."""
@@ -283,6 +295,7 @@ class TestPollWsMerge:
         obj = MagicMock(spec=EvonDataUpdateCoordinator)
         obj._data_index = {}
         obj._ws_update_timestamps = {}
+        obj._ws_key_update_timestamps = {}
         # Bind the real method we want to test
         obj._merge_ws_updates_into_poll_result = types.MethodType(
             EvonDataUpdateCoordinator._merge_ws_updates_into_poll_result, obj
@@ -348,6 +361,10 @@ class TestPollWsMerge:
         }
         coord._data_index[(ENTITY_TYPE_SMART_METERS, "m1")] = ws_meter
         coord._ws_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = poll_start + 3.0
+        coord._ws_key_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = {
+            "energy": poll_start + 3.0,
+            "power": poll_start + 3.0,
+        }
 
         coord._merge_ws_updates_into_poll_result(result, poll_start)
 
@@ -359,6 +376,37 @@ class TestPollWsMerge:
         # Neither input is mutated: readers may still hold either dict
         assert ws_meter["energy_today_calculated"] == 4.0
         assert poll_meter["energy"] == 2697.4
+
+    def test_merge_smart_meter_poll_wins_for_keys_ws_did_not_update_during_poll(self):
+        """Meters push readings every few seconds, so almost every poll sees a WS
+        event. Only the keys that event carried may override the poll; the rest
+        (e.g. the daily array the controller shifts at midnight) must come from the
+        poll, which read them more recently than the WS copy."""
+        from custom_components.evon.const import ENTITY_TYPE_SMART_METERS
+
+        coord = self._make_coordinator()
+        poll_start = 100.0
+        result = {
+            ENTITY_TYPE_SMART_METERS: [{"id": "m1", "power_l1": 100, "energy_data_month": [1, 2, 3], "energy_24h": 9.0}]
+        }
+        coord._data_index[(ENTITY_TYPE_SMART_METERS, "m1")] = {
+            "id": "m1",
+            "power_l1": 120,
+            "energy_data_month": [0, 1, 2],
+            "energy_24h": 8.0,
+        }
+        coord._ws_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = poll_start + 2.0
+        coord._ws_key_update_timestamps[(ENTITY_TYPE_SMART_METERS, "m1")] = {
+            "power_l1": poll_start + 2.0,  # pushed during the poll
+            "energy_data_month": poll_start - 50.0,  # last pushed long before the poll
+        }
+
+        coord._merge_ws_updates_into_poll_result(result, poll_start)
+
+        merged = result[ENTITY_TYPE_SMART_METERS][0]
+        assert merged["power_l1"] == 120
+        assert merged["energy_data_month"] == [1, 2, 3]
+        assert merged["energy_24h"] == 9.0
 
     def test_merge_handles_missing_entity_in_index(self):
         """If a tracked timestamp points to an entity no longer in _data_index, skip it."""

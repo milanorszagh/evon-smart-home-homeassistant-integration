@@ -405,7 +405,7 @@ class EvonCameraRecorder:
 
         results: list[dict[str, str]] = []
         for f, mtime_ts, size_bytes in file_stats:
-            mtime = dt_util.utc_from_timestamp(mtime_ts)
+            mtime = dt_util.as_local(dt_util.utc_from_timestamp(mtime_ts))  # shown in HA's time zone
             size_str = f"{size_bytes / 1_048_576:.1f} MB" if size_bytes >= 1_048_576 else f"{size_bytes / 1024:.0f} KB"
 
             results.append(

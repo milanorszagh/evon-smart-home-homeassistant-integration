@@ -468,6 +468,33 @@ class TestEvonApiWebSocketControl:
         return api
 
     @pytest.mark.asyncio
+    async def test_season_mode_falls_back_to_http_when_ws_torn_down_while_waiting(self, mock_api_with_ws):
+        """set_season_mode waits for a control slot; if the WebSocket client is
+        removed meanwhile (reconnect service, options reload, HA stop), it must fall
+        back to HTTP instead of calling set_value on None."""
+        import asyncio
+
+        from custom_components.evon.const import WS_CONTROL_MAX_IN_FLIGHT
+
+        mock_ws = MagicMock()
+        mock_ws.is_connected = True
+        mock_ws.set_value = AsyncMock(return_value=True)
+        mock_api_with_ws.set_ws_client(mock_ws)
+
+        for _ in range(WS_CONTROL_MAX_IN_FLIGHT):
+            await mock_api_with_ws._ws_control_slots.acquire()
+        task = asyncio.create_task(mock_api_with_ws.set_season_mode(True))
+        await asyncio.sleep(0)  # parked on the semaphore
+
+        mock_api_with_ws.set_ws_client(None)
+        for _ in range(WS_CONTROL_MAX_IN_FLIGHT):
+            mock_api_with_ws._ws_control_slots.release()
+        await task
+
+        mock_ws.set_value.assert_not_called()
+        mock_api_with_ws._request.assert_called_once_with("PUT", "/instances/Base.ehThermostat/IsCool", {"value": True})
+
+    @pytest.mark.asyncio
     async def test_ws_control_bounds_in_flight_requests(self, mock_api_with_ws):
         """Issue #26: the controller answers a session's CallWithReturn requests strictly
         in order and executes real switch-offs serially (0.1-1.3s each, a home-state

@@ -44,7 +44,7 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   set whenever a new frame arrives. The card's resource also provides an `evon-live-clock`
   badge for `picture-elements` that shows the shown frame's capture time and age
   (`19:53:07 · 2s ago`, 24-hour time), so a frozen feed is visible as a climbing age.
-  See README → *Live-Feed Age Overlay*.
+  The attribute is not stored in history. See README → *Live-Feed Age Overlay*.
 - **Recording card door button.** `evon-camera-recording-card` takes an optional
   `door_button` (one of the *Open door* button entities) and shows it next to *Record*;
   `show_title: false` hides the *Recording* heading above the buttons.
@@ -70,13 +70,15 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   controller up so far that the camera's snapshot request timed out (109 of 109 timeouts
   in a 26-hour log fell inside a poll). Fixed by the cheaper poll above; the timeout is now
   logged at debug level with its cause instead of as an empty "Unexpected error".
+- **Recording list showed UTC times.** The camera card listed recordings in UTC; it now
+  uses Home Assistant's time zone.
 - **Camera card buttons stay centred.** The card's action buttons (*Record*, *Open door*,
   *Talk*) are centred and stay centred when they wrap onto a second line.
 - **Energy total could step backwards by one reading.** A poll finishing after a
   WebSocket meter update overwrote the fresher counter with its older snapshot, and the
   recorder flagged `sensor.*_energy_total` as "not strictly increasing". Smart meters now
-  keep the WebSocket readings and take only the poll-computed daily/monthly values and
-  poll-only inputs from the poll.
+  keep the values the WebSocket delivered while the poll was running and take everything
+  else from the poll.
 - **Clean shutdown on Home Assistant restart.** Home Assistant does not unload config
   entries when it stops, so the integration kept its WebSocket loop and polling alive
   until HA closed its shared HTTP session. Every restart then logged three
