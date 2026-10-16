@@ -998,8 +998,8 @@ Expected: All PASS in both suites.
 **Step 2: Run linting**
 
 ```bash
-cd /Users/milan/www/evon-ha && python -m ruff check custom_components/ tests/
-cd /Users/milan/www/evon-ha && npx eslint src/
+cd evon-ha && python -m ruff check custom_components/ tests/
+cd evon-ha && npx eslint src/
 ```
 
 Expected: No new warnings/errors.

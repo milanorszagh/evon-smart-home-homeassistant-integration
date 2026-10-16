@@ -204,7 +204,7 @@ class TestGetViaHomeConnect:
 
     @pytest.fixture
     def api(self):
-        api = EvonApi(host="http://192.168.1.4", username="user", password="pass")
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
         api._token = "test_token"
         api._request = AsyncMock()
         return api

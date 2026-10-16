@@ -1241,9 +1241,9 @@ Climate modules also have Input instances, but these are **not** physical wall b
 ```javascript
 import { WebSocket } from 'ws';
 
-const ws = new WebSocket('ws://192.168.1.4/', 'echo-protocol', {
+const ws = new WebSocket('ws://192.168.1.100/', 'echo-protocol', {
   headers: {
-    'Origin': 'http://192.168.1.4',
+    'Origin': 'http://192.168.1.100',
     'Cookie': `token=${token}; x-elocs-isrelay=false; x-elocs-token_in_cookie_only=0`,
   }
 });

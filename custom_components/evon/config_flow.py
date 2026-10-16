@@ -88,10 +88,10 @@ def normalize_host(host: str) -> str:
     """Normalize host input to a proper URL.
 
     Handles various input formats:
-    - "192.168.1.4" -> "http://192.168.1.4"
-    - "192.168.1.4:8080" -> "http://192.168.1.4:8080"
-    - "http://192.168.1.4" -> "http://192.168.1.4"
-    - "http://192.168.1.4/" -> "http://192.168.1.4"
+    - "192.168.1.100" -> "http://192.168.1.100"
+    - "192.168.1.100:8080" -> "http://192.168.1.100:8080"
+    - "http://192.168.1.100" -> "http://192.168.1.100"
+    - "http://192.168.1.100/" -> "http://192.168.1.100"
 
     Raises:
         InvalidHostError: If the host URL is invalid (empty, no valid netloc, or invalid port)
@@ -164,7 +164,7 @@ def validate_engine_id(engine_id: str) -> str | None:
     if len(engine_id) < ENGINE_ID_MIN_LENGTH or len(engine_id) > ENGINE_ID_MAX_LENGTH:
         return "invalid_engine_id"
 
-    # Engine IDs are typically numeric (e.g., "985315")
+    # Engine IDs are typically numeric (e.g., "123456")
     # Allow alphanumeric for flexibility but no special characters
     if not re.match(r"^[a-zA-Z0-9]+$", engine_id):
         return "invalid_engine_id"

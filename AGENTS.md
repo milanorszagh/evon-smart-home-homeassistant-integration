@@ -65,7 +65,7 @@ Agent-critical gotchas:
 - **The remote login URL is `https://my.evon-smarthome.com/login` — at the ROOT, NOT `/{engine-id}/login`.** The Engine ID goes into the `x-elocs-relayid` header only.
 - Remote login also requires the headers `x-elocs-sessionlogin: true` and `X-Requested-With: XMLHttpRequest` (local login needs only `x-elocs-username` / `x-elocs-password`).
 - After login the Engine ID *does* appear in the path: `https://my.evon-smarthome.com/{engine-id}/api/instances/...` vs. local `http://{local-ip}/api/instances/...`.
-- Engine ID: 4–12 alphanumeric characters from the Evon system settings (e.g. `985315`); validated in both the config flow and `api.py`.
+- Engine ID: 4–12 alphanumeric characters from the Evon system settings (e.g. `123456`); validated in both the config flow and `api.py`.
 - Every remote URL (API base, WS host, Origin, login) derives from `EVON_REMOTE_HOST` in `const.py` — never hardcode the relay host.
 
 ---

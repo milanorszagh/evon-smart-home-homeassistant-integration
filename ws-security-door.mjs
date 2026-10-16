@@ -28,7 +28,7 @@ import crypto from 'crypto';
 
 config();
 
-const EVON_HOST = process.env.EVON_HOST || 'http://192.168.1.4';
+const EVON_HOST = process.env.EVON_HOST || 'http://192.168.1.100';
 const WS_HOST = EVON_HOST.replace('http://', 'ws://').replace('https://', 'wss://');
 const USERNAME = process.env.EVON_USERNAME;
 const PASSWORD = process.env.EVON_PASSWORD;
