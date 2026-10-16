@@ -396,3 +396,43 @@ class TestCoverGroupFlag:
     def test_is_group_no_data(self):
         cover = _make_cover(None)
         assert cover._is_group is False
+
+
+class TestCoverDeviceReportsTarget:
+    """_device_reports_blind_target reads device-reported data only."""
+
+    def test_matching_position_and_angle(self):
+        data = {"position": 0, "angle": 100, "is_moving": False}
+        assert _make_cover(data)._device_reports_blind_target(data, position=0, angle=100) is True
+
+    def test_position_differs(self):
+        data = {"position": 50, "angle": 100, "is_moving": False}
+        assert _make_cover(data)._device_reports_blind_target(data, position=0) is False
+
+    def test_angle_differs(self):
+        data = {"position": 0, "angle": 40, "is_moving": False}
+        assert _make_cover(data)._device_reports_blind_target(data, position=0, angle=100) is False
+
+    def test_moving_blind_never_counts(self):
+        data = {"position": 0, "angle": 100, "is_moving": True}
+        assert _make_cover(data)._device_reports_blind_target(data, position=0) is False
+
+    def test_missing_is_moving_never_counts(self):
+        data = {"position": 0, "angle": 100}
+        assert _make_cover(data)._device_reports_blind_target(data, position=0) is False
+
+    def test_no_data(self):
+        assert _make_cover(None)._device_reports_blind_target(None, position=0) is False
+
+    def test_group_never_counts(self):
+        data = {"position": 0, "angle": 100, "is_moving": False, "is_group": True}
+        cover = _make_cover(data, instance_id="blind_group_1")
+        cover._is_group = True
+        assert cover._device_reports_blind_target(data, position=0) is False
+
+    def test_optimistic_state_is_ignored(self):
+        """Optimistic position matching the target must not count."""
+        data = {"position": 50, "angle": 45, "is_moving": False}
+        cover = _make_cover(data)
+        cover._optimistic_position = 100  # HA 100 = Evon 0
+        assert cover._device_reports_blind_target(data, position=0) is False

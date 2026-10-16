@@ -552,6 +552,122 @@ class TestLightPostCommandRecheck:
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
 
+    @staticmethod
+    async def _setup(hass, entry, *, ws_connected):
+        from custom_components.evon.const import DOMAIN
+
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        coordinator._ws_connected = ws_connected
+        return coordinator
+
+    @pytest.mark.asyncio
+    async def test_reported_brightness_skips_recheck_but_still_sends(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """Device already reports 75%: the command is sent, but no recheck is armed
+        (a no-op command produces no WS event, so the recheck would always fire)."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=True)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_on",
+                {"entity_id": "light.living_room_light", "brightness": 191},
+                blocking=True,
+            )
+
+        mock_evon_api_class.set_light_brightness.assert_called_once_with("light_1", 75)
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_different_brightness_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """A brightness the device has not reported keeps the safety net."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=True)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_on",
+                {"entity_id": "light.living_room_light", "brightness": 128},
+                blocking=True,
+            )
+
+        mock_evon_api_class.set_light_brightness.assert_called_once_with("light_1", 50)
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reported_brightness_keeps_recheck_without_websocket(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """Without a connected WebSocket the reported value may be a poll interval
+        old, so the recheck stays armed even when it matches."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=False)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_on",
+                {"entity_id": "light.living_room_light", "brightness": 191},
+                blocking=True,
+            )
+
+        mock_evon_api_class.set_light_brightness.assert_called_once_with("light_1", 75)
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_turn_off_reported_off_skips_recheck_but_still_sends(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """turn_off on a light the device reports as off: sent, no recheck."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=True)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_off",
+                {"entity_id": "light.kitchen_relay"},
+                blocking=True,
+            )
+
+        mock_evon_api_class.turn_off_light.assert_called_once_with("light_2")
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_turn_off_reported_on_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """turn_off on a light the device reports as on keeps the recheck."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=True)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "light",
+                "turn_off",
+                {"entity_id": "light.living_room_light"},
+                blocking=True,
+            )
+
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_optimistic_value_is_not_treated_as_reported(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Sending 50% twice before the device reports it must arm the recheck both
+        times: only reported data counts, never the last value we sent."""
+        await self._setup(hass, mock_config_entry_v2, ws_connected=True)
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            for _ in range(2):
+                await hass.services.async_call(
+                    "light",
+                    "turn_on",
+                    {"entity_id": "light.living_room_light", "brightness": 128},
+                    blocking=True,
+                )
+
+        assert mock_evon_api_class.set_light_brightness.call_count == 2
+        assert mock_schedule.call_count == 2
+
     def test_matching_ws_during_quiesce_clears_optimistic(self):
         """If a WS event matches optimistic during the quiesce window, the comparison-clear
         runs before the early-return so the entity exits quiesce promptly instead of

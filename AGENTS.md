@@ -736,6 +736,7 @@ All controllable entities implement optimistic updates to prevent UI flicker whe
 **Implementation pattern:** the code is in [DEVELOPMENT.md → Optimistic Updates Pattern](DEVELOPMENT.md#optimistic-updates-pattern). The rules an agent must not get wrong:
 - Set the optimistic field, call `self._set_optimistic_timestamp()` and `self.async_write_ha_state()` **before** the API call; call `self._schedule_post_command_recheck()` **after** it.
 - In `_handle_coordinator_update()`: first `self._cancel_post_command_recheck_if_data_changed()`, then the comparison-clear (reset the optimistic field and `_optimistic_state_set_at` when the coordinator value matches) — this part runs **always** — and only then the quiesce early-return (`time.monotonic() - self._optimistic_state_set_at < POST_COMMAND_QUIESCE_PERIOD` → `return` before `super()._handle_coordinator_update()`).
+- A command whose target the device **already reported** (same brightness, off while off) produces no WS event, so its recheck always fired (~200 needless polls per day on the reference system, Oct 2026). Lights, covers and climate presets pass `_schedule_post_command_recheck(snapshot, device_reported_target=...)`, computed from `_get_data()` **before** the optimistic state is set: the command is still sent, the recheck is skipped only while `coordinator.ws_connected`. Never derive it from optimistic state or the last value sent — a lost command would then never be rechecked. Covers: never for groups or a blind not reported as stopped (`is_moving is False`); set-position/tilt also compare the cached angle/position that `MoveToPosition` sends along. Climate: preset/HVAC mode via `EVON_PRESET_HEATING`/`_COOLING` on the reported `mode_saved` + `is_cooling`; temperature, colour temperature and blind `Stop` always keep the recheck.
 - Call `self._cleanup_post_command_recheck()` in `async_will_remove_from_hass()` before `await super().async_will_remove_from_hass()`.
 
 **Select entity override:** `EvonHomeStateSelect` and `EvonSeasonModeSelect` read state from `coordinator.get_active_home_state()` / `get_season_mode()` rather than `_get_data()`. They override `_recheck_snapshot()` and `_recheck_data_changed()` on `EvonEntity` so the cancel-on-WS mechanism uses value equality against the right coordinator method. Selects don't apply the quiesce drop — they have no animation.
@@ -850,7 +851,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1463 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1492 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

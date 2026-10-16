@@ -290,6 +290,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_position = 100
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self._optimistic_direction = "opening"
+            device_reported_target = self._device_reports_blind_target(data, position=0)
             self._set_optimistic_timestamp()
             self.async_write_ha_state()
             try:
@@ -304,7 +305,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck(recheck_snapshot)
+            self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
@@ -360,6 +361,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_position = 0
             self._optimistic_is_moving = True  # Mark as moving so next click knows to stop
             self._optimistic_direction = "closing"
+            device_reported_target = self._device_reports_blind_target(data, position=100)
             self._set_optimistic_timestamp()
             self.async_write_ha_state()
             try:
@@ -374,7 +376,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck(recheck_snapshot)
+            self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
@@ -425,6 +427,9 @@ class EvonCover(EvonEntity, CoverEntity):
         if ATTR_POSITION in kwargs:
             # Clamp to valid range 0-100
             ha_position = max(0, min(100, int(kwargs[ATTR_POSITION])))
+            device_reported_target = self._device_reports_blind_target(
+                self._get_data(), position=100 - ha_position, angle=self._api.get_blind_angle(self._instance_id)
+            )
             # Set optimistic value immediately
             self._optimistic_position = ha_position
             self._set_optimistic_timestamp()
@@ -439,7 +444,7 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck(recheck_snapshot)
+            self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_open_cover_tilt(self, **kwargs: Any) -> None:
         """Open the cover tilt (slats horizontal, letting light through).
@@ -451,6 +456,9 @@ class EvonCover(EvonEntity, CoverEntity):
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
+        device_reported_target = self._device_reports_blind_target(
+            self._get_data(), angle=0, position=self._api.get_blind_position(self._instance_id)
+        )
         # HA tilt 100 = open (horizontal), Evon angle 0 = open
         self._optimistic_tilt = 100
         self._set_optimistic_timestamp()
@@ -463,7 +471,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_close_cover_tilt(self, **kwargs: Any) -> None:
         """Close the cover tilt (slats angled to block light).
@@ -475,6 +483,9 @@ class EvonCover(EvonEntity, CoverEntity):
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
+        device_reported_target = self._device_reports_blind_target(
+            self._get_data(), angle=100, position=self._api.get_blind_position(self._instance_id)
+        )
         # HA tilt 0 = closed (blocking), Evon angle 100 = closed
         self._optimistic_tilt = 0
         self._set_optimistic_timestamp()
@@ -487,7 +498,7 @@ class EvonCover(EvonEntity, CoverEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_set_cover_tilt_position(self, **kwargs: Any) -> None:
         """Set the cover tilt position.
@@ -506,6 +517,9 @@ class EvonCover(EvonEntity, CoverEntity):
         if ATTR_TILT_POSITION in kwargs:
             # Clamp to valid range 0-100
             ha_tilt = max(0, min(100, int(kwargs[ATTR_TILT_POSITION])))
+            device_reported_target = self._device_reports_blind_target(
+                self._get_data(), angle=100 - ha_tilt, position=self._api.get_blind_position(self._instance_id)
+            )
             self._optimistic_tilt = ha_tilt
             self._set_optimistic_timestamp()
             self.async_write_ha_state()
@@ -519,7 +533,28 @@ class EvonCover(EvonEntity, CoverEntity):
                 self._optimistic_state_set_at = None
                 self.async_write_ha_state()
                 raise
-            self._schedule_post_command_recheck(recheck_snapshot)
+            self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
+
+    def _device_reports_blind_target(
+        self,
+        data: dict[str, Any] | None,
+        *,
+        position: int | None = None,
+        angle: int | None = None,
+    ) -> bool:
+        """Return True if the device already reported the given Evon position/angle.
+
+        Reads the coordinator data (values the device reported), never the
+        optimistic state. A ``None`` position/angle is not checked — set-position
+        and set-tilt pass the cached value MoveToPosition will also send, which is
+        None only when the HTTP fallback (which sends just one value) is used.
+        Groups and moving blinds never count as "reported".
+        """
+        if self._is_group or not data or data.get("is_moving") is not False:
+            return False
+        if position is not None and data.get("position") != position:
+            return False
+        return angle is None or data.get("angle") == angle
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

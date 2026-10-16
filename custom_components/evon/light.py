@@ -225,6 +225,7 @@ class EvonLight(EvonEntity, LightEntity):
         # Check actual state from coordinator (before setting optimistic state)
         data = self._get_data()
         actual_is_on = data.get("is_on", False) if data else False
+        device_reported_target = self._device_reports_turn_on_target(data, kwargs)
 
         # Set optimistic values immediately to prevent UI flicker
         self._optimistic_is_on = True
@@ -273,7 +274,26 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
+
+    def _device_reports_turn_on_target(self, data: dict[str, Any] | None, kwargs: dict[str, Any]) -> bool:
+        """Return True if the device already reported the state turn_on would set.
+
+        Reads the coordinator data (values the device reported), never the
+        optimistic state or the last command sent. Colour-temperature changes
+        always count as "not reported", so they keep the recheck.
+        """
+        if not data or data.get("is_on") is not True:
+            return False
+        if ATTR_COLOR_TEMP_KELVIN in kwargs and self._supports_color_temp:
+            return False
+        if ATTR_BRIGHTNESS in kwargs and (self._is_dimmable or self._supports_color_temp):
+            reported = data.get("brightness")
+            if not isinstance(reported, int | float):
+                return False
+            target = max(1, min(100, round(kwargs[ATTR_BRIGHTNESS] * 100 / 255)))
+            return round(reported) == target
+        return True
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the light."""
@@ -281,6 +301,8 @@ class EvonLight(EvonEntity, LightEntity):
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
+        data = self._get_data()
+        device_reported_target = bool(data) and data.get("is_on") is False
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_is_on = False
         self._set_optimistic_timestamp()
@@ -293,7 +315,7 @@ class EvonLight(EvonEntity, LightEntity):
             self._optimistic_state_set_at = None
             self.async_write_ha_state()
             raise
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

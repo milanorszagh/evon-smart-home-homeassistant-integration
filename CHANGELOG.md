@@ -10,6 +10,18 @@ installed. The README keeps a one-line summary per version.
 
 Issue and PR numbers refer to this repository unless stated otherwise.
 
+## [Unreleased]
+
+### Fixed
+
+- **No extra poll after a command that changes nothing.** Setting a light to the
+  brightness it already has, turning off a light that is already off, opening a blind that
+  is already open, moving a blind to where it already is, or selecting the preset a room
+  already has produced no WebSocket update, so the integration fell back to a full poll
+  5 seconds later and logged `Post-command recheck firing` (about 200 times a day on the
+  reference system). The command is still sent; the fallback poll is skipped
+  only when the device itself already reported that state and the WebSocket is connected.
+
 ## [1.24.0] - 2026-10-16
 
 ### Added

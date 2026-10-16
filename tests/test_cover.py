@@ -699,3 +699,90 @@ class TestCoverQuiesceBehavior:
 
         cancel_handle.assert_called_once()
         assert cover._recheck_cancel is None
+
+
+async def _setup_ws(hass, entry, *, ws_connected=True):
+    from custom_components.evon.const import DOMAIN
+
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    coordinator._ws_connected = ws_connected
+    return coordinator
+
+
+class TestCoverReportedTargetRecheck:
+    """No-op blind commands (target already reported) are sent but arm no recheck.
+
+    Fixture blind_1 reports Position 50, Angle 45, IsMoving False.
+    """
+
+    async def _call(self, hass, service, data):
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "cover", service, {"entity_id": "cover.living_room_blind", **data}, blocking=True
+            )
+        return mock_schedule
+
+    @pytest.mark.asyncio
+    async def test_set_reported_position_skips_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await _setup_ws(hass, mock_config_entry_v2)
+        mock_evon_api_class.get_blind_angle = MagicMock(return_value=45)
+
+        mock_schedule = await self._call(hass, "set_cover_position", {"position": 50})
+
+        mock_evon_api_class.set_blind_position.assert_called_once_with("blind_1", 50)
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_reported_position_with_other_cached_angle_keeps_recheck(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """MoveToPosition also sends the cached angle; if that differs, the slats move."""
+        await _setup_ws(hass, mock_config_entry_v2)
+        mock_evon_api_class.get_blind_angle = MagicMock(return_value=80)
+
+        mock_schedule = await self._call(hass, "set_cover_position", {"position": 50})
+
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_set_new_position_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await _setup_ws(hass, mock_config_entry_v2)
+        mock_evon_api_class.get_blind_angle = MagicMock(return_value=45)
+
+        mock_schedule = await self._call(hass, "set_cover_position", {"position": 20})
+
+        mock_evon_api_class.set_blind_position.assert_called_once_with("blind_1", 80)
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_set_reported_tilt_skips_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await _setup_ws(hass, mock_config_entry_v2)
+        mock_evon_api_class.get_blind_position = MagicMock(return_value=50)
+
+        mock_schedule = await self._call(hass, "set_cover_tilt_position", {"tilt_position": 55})
+
+        mock_evon_api_class.set_blind_tilt.assert_called_once_with("blind_1", 45)
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_open_partly_open_blind_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await _setup_ws(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "open_cover", {})
+
+        mock_evon_api_class.open_blind.assert_called_once_with("blind_1")
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reported_position_keeps_recheck_without_websocket(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        await _setup_ws(hass, mock_config_entry_v2, ws_connected=False)
+        mock_evon_api_class.get_blind_angle = MagicMock(return_value=45)
+
+        mock_schedule = await self._call(hass, "set_cover_position", {"position": 50})
+
+        mock_schedule.assert_called_once()

@@ -241,6 +241,40 @@ class TestPostCommandRecheck:
         cancel_handle.assert_not_called()
         assert entity._recheck_cancel is not None
 
+    def test_device_reported_target_skips_recheck_when_ws_connected(self):
+        """A no-op command (target already reported) arms no recheck while WS is up."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity.coordinator.ws_connected = True
+
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_call_later:
+            entity._schedule_post_command_recheck(device_reported_target=True)
+
+        mock_call_later.assert_not_called()
+        assert entity._recheck_cancel is None
+
+    def test_device_reported_target_keeps_recheck_when_ws_disconnected(self):
+        """Without a connected WS the reported value may be stale: recheck stays."""
+        entity = self._make_entity_with_data({"is_on": False})
+        entity.coordinator.ws_connected = False
+
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=MagicMock()) as mock_call_later:
+            entity._schedule_post_command_recheck(device_reported_target=True)
+
+        mock_call_later.assert_called_once()
+
+    def test_device_reported_target_keeps_earlier_pending_recheck(self):
+        """A no-op command must not cancel the recheck of an earlier, unconfirmed one."""
+        entity = self._make_entity_with_data({"is_on": True})
+        entity.coordinator.ws_connected = True
+        cancel_handle = MagicMock()
+
+        with patch("custom_components.evon.base_entity.async_call_later", return_value=cancel_handle):
+            entity._schedule_post_command_recheck()
+            entity._schedule_post_command_recheck(device_reported_target=True)
+
+        cancel_handle.assert_not_called()
+        assert entity._recheck_cancel is cancel_handle
+
     def test_cancel_recheck_if_data_changed_safe_when_no_pending(self):
         """Calling with no pending recheck is a safe no-op."""
         entity = self._make_entity_with_data({"is_on": False})

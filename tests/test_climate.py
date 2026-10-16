@@ -583,3 +583,79 @@ class TestClimatePostCommandRecheck:
         # One recheck scheduled with the correct quiesce delay
         mock_schedule.assert_called_once()
         assert mock_schedule.call_args[0][1] == POST_COMMAND_QUIESCE_PERIOD
+
+
+class TestClimateReportedTargetRecheck:
+    """No-op preset commands (mode already reported) are sent but arm no recheck.
+
+    Fixture climate_1 reports ModeSaved 4 (comfort) in heating mode.
+    """
+
+    async def _setup(self, hass, entry, *, ws_connected=True):
+        from custom_components.evon.const import DOMAIN
+
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        hass.data[DOMAIN][entry.entry_id]["coordinator"]._ws_connected = ws_connected
+
+    async def _call(self, hass, service, data):
+        with patch("custom_components.evon.base_entity.async_call_later") as mock_schedule:
+            await hass.services.async_call(
+                "climate", service, {"entity_id": "climate.living_room_climate", **data}, blocking=True
+            )
+        return mock_schedule
+
+    @pytest.mark.asyncio
+    async def test_reported_preset_skips_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await self._setup(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "set_preset_mode", {"preset_mode": "comfort"})
+
+        mock_evon_api_class.set_climate_comfort_mode.assert_called_once_with("climate_1")
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_new_preset_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await self._setup(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "set_preset_mode", {"preset_mode": "away"})
+
+        mock_evon_api_class.set_climate_freeze_protection_mode.assert_called_once_with("climate_1")
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_hvac_heat_while_comfort_skips_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await self._setup(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "set_hvac_mode", {"hvac_mode": "heat"})
+
+        mock_evon_api_class.set_climate_comfort_mode.assert_called_once_with("climate_1")
+        mock_schedule.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_hvac_off_while_comfort_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        await self._setup(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "set_hvac_mode", {"hvac_mode": "off"})
+
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_reported_preset_keeps_recheck_without_websocket(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        await self._setup(hass, mock_config_entry_v2, ws_connected=False)
+
+        mock_schedule = await self._call(hass, "set_preset_mode", {"preset_mode": "comfort"})
+
+        mock_schedule.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_temperature_change_keeps_recheck(self, hass, mock_config_entry_v2, mock_evon_api_class):
+        """Temperature commands are not covered by the shortcut."""
+        await self._setup(hass, mock_config_entry_v2)
+
+        mock_schedule = await self._call(hass, "set_temperature", {"temperature": 22.0})
+
+        mock_schedule.assert_called_once()

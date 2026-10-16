@@ -243,6 +243,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
+        device_reported_target = self._device_reports_preset(
+            CLIMATE_PRESET_AWAY if hvac_mode == HVACMode.OFF else CLIMATE_PRESET_COMFORT
+        )
         # Set optimistic value immediately to prevent UI flicker
         self._optimistic_hvac_mode = hvac_mode
         self._set_optimistic_timestamp()
@@ -264,7 +267,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # WS normally pushes the state change within ~0.8s.
         # Schedule a fallback recheck — if WS doesn't push, the recheck fires
         # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature."""
@@ -299,6 +302,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # land mid-flight, and the snapshot comparison in
         # _schedule_post_command_recheck must not mistake it for silence.
         recheck_snapshot = self._recheck_snapshot()
+        device_reported_target = self._device_reports_preset(preset_mode)
         # Set optimistic preset immediately to prevent UI flicker
         # Don't set optimistic target temp - let WebSocket push the actual value
         # (Evon may clamp the temp to device min/max limits)
@@ -327,7 +331,20 @@ class EvonClimate(EvonEntity, ClimateEntity):
         # WS normally pushes the state change within ~0.8s.
         # Schedule a fallback recheck — if WS doesn't push, the recheck fires
         # after POST_COMMAND_QUIESCE_PERIOD as a self-healing safety net.
-        self._schedule_post_command_recheck(recheck_snapshot)
+        self._schedule_post_command_recheck(recheck_snapshot, device_reported_target=device_reported_target)
+
+    def _device_reports_preset(self, preset: str) -> bool:
+        """Return True if the device already reported ``preset`` as its mode.
+
+        Reads the coordinator data (device-reported ModeSaved/MainState and
+        CoolingMode), never the optimistic state; an unknown mode_saved value
+        counts as "not reported".
+        """
+        data = self._get_data()
+        if not data or not isinstance(data.get("is_cooling"), bool):
+            return False
+        preset_map = EVON_PRESET_COOLING if data["is_cooling"] else EVON_PRESET_HEATING
+        return preset_map.get(data.get("mode_saved")) == preset
 
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""

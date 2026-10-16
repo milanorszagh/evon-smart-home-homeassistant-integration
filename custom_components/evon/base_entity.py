@@ -173,7 +173,12 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
         """
         return current is not None and current != snapshot
 
-    def _schedule_post_command_recheck(self, snapshot_before_command: Any = _SNAPSHOT_UNSET) -> None:
+    def _schedule_post_command_recheck(
+        self,
+        snapshot_before_command: Any = _SNAPSHOT_UNSET,
+        *,
+        device_reported_target: bool = False,
+    ) -> None:
         """Schedule an HTTP recheck for POST_COMMAND_QUIESCE_PERIOD seconds from now.
 
         Command methods should capture ``self._recheck_snapshot()`` BEFORE
@@ -190,7 +195,23 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
 
         If a recheck is already pending, the prior one is cancelled first
         (newer command takes precedence).
+
+        ``device_reported_target`` tells it that the coordinator data — which
+        holds only values the device reported over WS or the poll, never what
+        we sent — already showed the command's target before it was sent. The
+        command is still sent, but it is a no-op on the device, so the
+        controller pushes no WS event and the recheck would always fire.
+        While the WebSocket is connected that recheck is skipped. A recheck
+        still pending from an earlier, unconfirmed command is kept, and in
+        HTTP-only mode (or with the WebSocket down) the recheck stays armed,
+        because the reported value may be a full poll interval old.
         """
+        if device_reported_target and self.coordinator.ws_connected is True:
+            _LOGGER.debug(
+                "Skipping post-command recheck for %s — device already reported the target state",
+                self._instance_id,
+            )
+            return
         if self._recheck_cancel is not None:
             self._recheck_cancel()
             self._recheck_cancel = None
