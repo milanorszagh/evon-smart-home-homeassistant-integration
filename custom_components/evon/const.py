@@ -177,6 +177,7 @@ WS_RECONNECT_JITTER = 0.25  # Jitter factor for reconnect delays (0.0 to 1.0)
 WS_RECONNECT_MAX_DELAY = 300  # Maximum reconnect delay in seconds
 WS_PROTOCOL = "echo-protocol"  # WebSocket sub-protocol
 WS_POLL_INTERVAL = 120  # Safety net poll interval when WebSocket connected (seconds); each poll saturates the controller for ~5 s, see AGENTS.md → Note #7
+WEATHER_POLL_INTERVAL = 30  # Seconds between weather-station reads (own timer, independent of the device poll)
 WEATHER_REDISCOVERY_INTERVAL = 300  # Seconds before an empty/failed weather-station discovery is retried (it lists the shared controller's whole instance tree)
 POLL_DETAIL_MAX_IN_FLIGHT = 8  # Concurrent per-instance detail GETs during a poll; an unbounded burst backs the controller up for ~20s and starves camera snapshots
 WS_HEARTBEAT_INTERVAL = 30  # Heartbeat/ping interval (seconds) — the SOLE dead-connection detector; there is deliberately no receive() timeout (see DEVELOPMENT.md)

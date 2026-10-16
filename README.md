@@ -293,7 +293,7 @@ The select entity's option values are `at_home`, `night`, `work` and `holiday` (
   - Frequency (Hz)
   - Feed-in Energy Total (kWh) - for solar/grid export tracking
 - Air quality: CO2 (ppm), Humidity (%)
-- Weather station (read via the Home Connect proxy, polled): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's min/max temperature and max wind, all-time min/max temperature and max wind (diagnostic), last rain (timestamp) and days since rain
+- Weather station (read via the Home Connect proxy every 30 seconds): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's min/max temperature and max wind, all-time min/max temperature and max wind (diagnostic), last rain (timestamp) and days since rain. On some stations *Brightness* is a dusk sensor that only covers 0–999 lx and switches together with *Twilight*; daylight is then measured by the four sun-intensity sensors
 
 **Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
 

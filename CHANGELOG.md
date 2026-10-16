@@ -24,8 +24,8 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   exposed as one device per station with individual sensors (temperature, wind speed,
   brightness, the four sun-intensity values, today's and lifetime min/max temperature and
   max wind, last rain and days since rain) and binary sensors (rain, twilight, three wind
-  alarms, plus diagnostic connected/temperature-valid/polling-active). It is poll-only (no
-  WebSocket). When auto-discovery does not find the station, two optional overrides in a new
+  alarms, plus diagnostic connected/temperature-valid/polling-active). It is read every
+  30 seconds (the station has no WebSocket updates). When auto-discovery does not find the station, two optional overrides in a new
   *Weather station* options section (Home Connect proxy ID, weather station ID) let you set
   it manually. Stations found after setup get their entities automatically.
 - **Talk button for SIP intercom audio.** The camera card takes an optional

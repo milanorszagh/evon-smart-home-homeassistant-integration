@@ -14,10 +14,11 @@ from homeassistant.components.recorder import get_instance as get_recorder_insta
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers import entity_registry as er, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -48,6 +49,7 @@ from ..const import (
     POLL_DETAIL_MAX_IN_FLIGHT,
     REPAIR_CONNECTION_FAILED,
     REPAIR_WEBSOCKET_DISCONNECTED,
+    WEATHER_POLL_INTERVAL,
     WEATHER_REDISCOVERY_INTERVAL,
     WS_POLL_INTERVAL,
 )
@@ -182,6 +184,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # only after WEATHER_REDISCOVERY_INTERVAL (the discovery lists the shared
         # controller's whole instance tree through the proxy).
         self._weather_discovered_at: float | None = None
+        # Latest processed weather-station data. The station is read on its own
+        # WEATHER_POLL_INTERVAL timer (async_start_weather_polling); the device
+        # poll reads it inline only until the first result exists and otherwise
+        # reuses this list, so the proxy is not called twice per cycle.
+        self._weather_stations: list[dict[str, Any]] | None = None
+        self._weather_poll_unsub: CALLBACK_TYPE | None = None
+        self._weather_poll_running = False
         # Safety-net poll statistics, exposed on the WebSocket status sensor so
         # the poll's cost and usefulness can be judged from real data (see
         # _record_poll_corrections).
@@ -274,8 +283,11 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._last_poll_had_partial_failures = any(details is None for _, details in results)
 
             # Weather stations live on a shared controller, read via the Home
-            # Connect proxy (poll-only; not in the apartment instance list).
-            weather_raw = await self._poll_weather_stations()
+            # Connect proxy (poll-only; not in the apartment instance list). Read
+            # inline only for the first result; afterwards the weather timer
+            # (async_start_weather_polling) keeps self._weather_stations fresh.
+            if self._weather_stations is None:
+                self._weather_stations = process_weather_stations(await self._poll_weather_stations())
 
             # Extract season mode from prefetched data
             thermostat_details = instance_details.get(SEASON_MODE_INSTANCE_ID, {})
@@ -296,7 +308,6 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             intercoms = process_intercoms(instance_details, instances, self._get_room_name)
             cameras = process_cameras(instance_details, instances, self._get_room_name)
             button_events = process_button_events(instances, self._get_room_name)
-            weather_stations = process_weather_stations(weather_raw)
 
             _LOGGER.debug(
                 "Processed entities: lights=%d, climates=%d, smart_meters=%d, blinds=%d, button_events=%d",
@@ -329,7 +340,7 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ENTITY_TYPE_INTERCOMS: intercoms,
                 ENTITY_TYPE_CAMERAS: cameras,
                 ENTITY_TYPE_BUTTON_EVENTS: button_events,
-                ENTITY_TYPE_WEATHER: weather_stations,
+                ENTITY_TYPE_WEATHER: self._weather_stations,
                 "rooms": self._rooms_cache if self._sync_areas else {},
                 "season_mode": season_mode,
             }
@@ -352,6 +363,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # poll's result and must not be overwritten by it (see
             # _merge_ws_updates_into_poll_result for the rationale).
             # INVARIANT: no `await` between here and `return result` — see above.
+            # The weather timer may have stored newer station data during the
+            # awaits above; use the latest so this poll does not overwrite it.
+            result[ENTITY_TYPE_WEATHER] = self._weather_stations or []
             self._record_poll_corrections(result, poll_start_time)
             self._merge_ws_updates_into_poll_result(result, poll_start_time)
 
@@ -525,6 +539,54 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if sources:
             _LOGGER.debug("Discovered %d weather station(s) via Home Connect", len(sources))
         return sources
+
+    @callback
+    def async_start_weather_polling(self) -> None:
+        """Read the weather station every WEATHER_POLL_INTERVAL seconds.
+
+        Independent of the device poll (120 s with the WebSocket connected):
+        weather is poll-only, and wind/temperature change on almost every
+        reading. One station read is a single proxy GET (~0.2 s), so a short
+        interval costs the controller almost nothing. Stopped by async_shutdown.
+        """
+        if self._weather_poll_unsub is None:
+            self._weather_poll_unsub = async_track_time_interval(
+                self.hass,
+                self._async_weather_tick,
+                timedelta(seconds=WEATHER_POLL_INTERVAL),
+                name="evon weather poll",
+                cancel_on_shutdown=True,
+            )
+
+    async def _async_weather_tick(self, _now: datetime) -> None:
+        """Timer callback: refresh weather data, never overlapping itself."""
+        if self._weather_poll_running or not self.data:
+            return
+        self._weather_poll_running = True
+        try:
+            stations = process_weather_stations(await self._poll_weather_stations())
+        finally:
+            self._weather_poll_running = False
+        data = self.data
+        if not data:
+            return
+        self._weather_stations = stations
+        # Same pattern as a WebSocket update: replace the list, update the index,
+        # notify listeners — without async_set_updated_data, which would reset
+        # the device poll's schedule.
+        data[ENTITY_TYPE_WEATHER] = stations
+        self._data_index = {k: v for k, v in self._data_index.items() if k[0] != ENTITY_TYPE_WEATHER}
+        for station in stations:
+            if station and "id" in station:
+                self._data_index[(ENTITY_TYPE_WEATHER, station["id"])] = station
+        self.async_update_listeners()
+
+    async def async_shutdown(self) -> None:
+        """Stop the weather timer, then the coordinator's own refresh scheduling."""
+        if self._weather_poll_unsub is not None:
+            self._weather_poll_unsub()
+            self._weather_poll_unsub = None
+        await super().async_shutdown()
 
     async def _poll_weather_stations(self) -> list[dict[str, Any]]:
         """Poll each discovered weather station through its Home Connect proxy.

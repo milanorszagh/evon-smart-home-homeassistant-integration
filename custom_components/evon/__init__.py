@@ -293,6 +293,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "last_data": dict(entry.data),
     }
 
+    # Weather station: poll-only, read on its own short timer (see coordinator)
+    coordinator.async_start_weather_polling()
+
     # Apply debug logging settings
     _apply_debug_logging(entry)
 

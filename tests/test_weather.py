@@ -484,16 +484,100 @@ class TestWeatherEntitiesAddedLater:
         mock_evon_api_class.get_via_home_connect = AsyncMock(side_effect=_proxy)
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         coordinator._weather_discovered_at = None  # skip the back-off for the test
-        await coordinator.async_refresh()
+        await coordinator._async_weather_tick(None)  # the 30 s weather timer
         await hass.async_block_till_done()
 
         assert registry.async_get_entity_id("sensor", DOMAIN, temp_uid) is not None
         assert registry.async_get_entity_id("binary_sensor", DOMAIN, rain_uid) is not None
 
-        # A further refresh must not add duplicates (HA would log an error).
+        # Further updates must not add duplicates (HA would log an error).
+        await coordinator._async_weather_tick(None)
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert (
             len([e for e in er.async_entries_for_config_entry(registry, entry.entry_id) if e.unique_id == temp_uid])
             == 1
         )
+
+
+@requires_ha_test_framework
+class TestWeatherPolling:
+    """The weather station is read on its own WEATHER_POLL_INTERVAL timer (30 s),
+    independent of the (120 s with WebSocket) device poll, which reuses the latest
+    station data instead of calling the proxy again."""
+
+    async def _setup(self, hass, mock_evon_api_class, readings):
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        from custom_components.evon.const import DOMAIN
+        from tests.conftest import MOCK_INSTANCES, TEST_HOST, TEST_PASSWORD, TEST_USERNAME
+
+        proxy = {"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}
+        mock_evon_api_class.get_instances = AsyncMock(return_value=[*MOCK_INSTANCES, proxy])
+
+        async def _proxy(hc_id, path):
+            if path == "/instances":
+                return [{"ID": "WeatherStation1525", "Name": "Dining", "ClassName": EVON_CLASS_WEATHER_PROXY}]
+            return {**FULL_WEATHER, "Temperature": readings[0]}
+
+        mock_evon_api_class.get_via_home_connect = AsyncMock(side_effect=_proxy)
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
+            options={"scan_interval": 300, "sync_areas": False},
+            entry_id="weather_poll_entry",
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        return entry, hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+    @staticmethod
+    def _station_reads(mock_api) -> int:
+        return sum(1 for c in mock_api.get_via_home_connect.call_args_list if c.args[1] != "/instances")
+
+    async def test_station_is_polled_every_weather_interval(self, hass, mock_evon_api_class):
+        from datetime import timedelta
+
+        from homeassistant.util import dt as dt_util
+        from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+        from custom_components.evon.const import WEATHER_POLL_INTERVAL
+
+        readings = [12.5]
+        await self._setup(hass, mock_evon_api_class, readings)
+        assert hass.states.get("sensor.dining_temperature").state == "12.5"
+
+        readings[0] = 13.0
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=WEATHER_POLL_INTERVAL + 1))
+        await hass.async_block_till_done(wait_background_tasks=True)  # interval jobs run as background tasks
+
+        assert hass.states.get("sensor.dining_temperature").state == "13.0"
+
+    async def test_device_poll_reuses_latest_station_data(self, hass, mock_evon_api_class):
+        readings = [12.5]
+        _, coordinator = await self._setup(hass, mock_evon_api_class, readings)
+        reads_after_setup = self._station_reads(mock_evon_api_class)
+
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        assert self._station_reads(mock_evon_api_class) == reads_after_setup
+        assert hass.states.get("sensor.dining_temperature").state == "12.5"
+
+    async def test_weather_timer_stops_on_shutdown(self, hass, mock_evon_api_class):
+        from datetime import timedelta
+
+        from homeassistant.util import dt as dt_util
+        from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+        from custom_components.evon.const import WEATHER_POLL_INTERVAL
+
+        _, coordinator = await self._setup(hass, mock_evon_api_class, [12.5])
+        await coordinator.async_shutdown()
+        reads = self._station_reads(mock_evon_api_class)
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=WEATHER_POLL_INTERVAL * 3))
+        await hass.async_block_till_done(wait_background_tasks=True)
+
+        assert self._station_reads(mock_evon_api_class) == reads
