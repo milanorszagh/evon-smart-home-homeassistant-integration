@@ -520,7 +520,7 @@ class EvonLiveClock extends HTMLElement {
     const age = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
     const ageStr = age < 60 ? `${age}s` : `${Math.floor(age / 60)}m ${age % 60}s`;
     this._root.textContent = `${t} · ${ageStr} ago`;
-    // Green when fresh, amber then red as it goes stale.
+    // White when fresh, amber after 5 s, red after 15 s.
     this._root.style.color = age <= 5 ? "#fff" : age <= 15 ? "#ffd54f" : "#ff8a80";
   }
 }

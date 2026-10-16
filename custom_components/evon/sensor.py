@@ -679,6 +679,24 @@ class EvonWebSocketStatusSensor(CoordinatorEntity[EvonDataUpdateCoordinator], Se
     # Enum so the three states are translated (entity.sensor.websocket_status.state)
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ["connected", "disconnected", "disabled"]
+    # Counters that change with every poll or message: keep them out of the
+    # recorder (a new attribute row every poll otherwise). reconnect_count and
+    # last_error change rarely and stay recorded.
+    _unrecorded_attributes = frozenset(
+        {
+            "poll_count",
+            "last_poll_duration_seconds",
+            "last_poll_instances_fetched",
+            "poll_corrections",
+            "last_poll_correction",
+            "last_poll_correction_at",
+            "connection_uptime_seconds",
+            "messages_received",
+            "requests_sent",
+            "pending_requests",
+            "avg_response_time_ms",
+        }
+    )
 
     def __init__(
         self,

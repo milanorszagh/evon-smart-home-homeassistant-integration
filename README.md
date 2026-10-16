@@ -25,13 +25,13 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 | **Home State** | Switch between home modes (At Home, Night, Work, Holiday) |
 | **Smart Meter** | Power consumption, energy usage, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
-| **Weather Station** | Temperature, wind, brightness, sun intensity, rain and wind alarms (read via the Home Connect gateway) |
+| **Weather Station** | Temperature, wind, brightness, sun intensity, rain and wind alarms (read via the Home Connect proxy) |
 | **Valves** | Climate valve open/closed state |
 | **Temperature Sensors** | Room temperature readings |
 | **Relay Outputs** | On/off light entities for relay modules (L1144, L1244) |
 | **Bathroom Radiators** | Electric heater control with timer |
 | **Scenes** | Trigger scenes defined in your evon system from Home Assistant |
-| **Security Doors** | Door open/closed state, call in progress indicator |
+| **Security Doors** | Door open/closed state, call in progress indicator, door opener button (disabled by default, via the linked intercom) |
 | **Intercoms** | Door open/closed state, doorbell events, connection status, door opener button (disabled by default) |
 | **Cameras** | Camera image from 2N intercoms (still image, refreshed when viewed), snapshot-based video recording |
 | **Doorbell Snapshots** | Historical snapshots from doorbell events (image entities) |
@@ -134,11 +134,11 @@ After installation, configure via **Settings** → **Devices & Services** → **
 |--------|-------------|
 | **Door open pulse (seconds)** | How long the *Open door* buttons release the door (1–30 seconds, default: 2). |
 
-**Weather Station** (collapsible section, shown when the controller has a Home Connect gateway):
+**Weather Station** (collapsible section, shown when the controller has a Home Connect proxy):
 
 | Option | Description |
 |--------|-------------|
-| **Home Connect proxy ID** / **Weather station ID** | Manual override for when automatic discovery does not find your weather station. Set both or neither; clear both to return to automatic discovery. |
+| **Home Connect proxy ID** / **Weather station ID** | Manual override for when automatic discovery does not find your weather station, using the IDs as shown in the evon system (e.g. `evonHomeConnect4939` / `WeatherStation1525`). Set both or neither; clear both to return to automatic discovery. |
 
 Settings of a section that is currently hidden (for example while the controller is offline) are kept when you save the form.
 
@@ -293,7 +293,7 @@ The select entity's option values are `at_home`, `night`, `work` and `holiday` (
   - Frequency (Hz)
   - Feed-in Energy Total (kWh) - for solar/grid export tracking
 - Air quality: CO2 (ppm), Humidity (%)
-- Weather station (read via the Home Connect gateway, polled): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's and all-time min/max temperature and max wind, last rain (timestamp) and days since rain
+- Weather station (read via the Home Connect proxy, polled): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's min/max temperature and max wind, all-time min/max temperature and max wind (diagnostic), last rain (timestamp) and days since rain
 
 **Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
 
@@ -335,12 +335,17 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Security door call in progress
 - Intercom door state (open/closed)
 - Intercom connection status
-- Door opener: an **Open door** button on each 2N intercom, and on each security door that is linked to an intercom, pulses the door release (2 seconds by default, adjustable under the integration's options → *Door opener*). The buttons are created **disabled** — enable them under the entity's settings before dashboards or automations can open the door
 - **WebSocket connection status** (diagnostic) - shows if real-time updates are active
+
+### Buttons
+
+- Scenes: one button per evon scene
+- Light identify (configuration): makes a light flash so you can find it
+- Door opener: an **Open door** button on each 2N intercom, and on each security door that is linked to an intercom, pulses the door release (2 seconds by default, adjustable under the integration's options → *Door opener*). The buttons are created **disabled** — enable them under the entity's settings before dashboards or automations can open the door
 
 ### Diagnostic Sensors
 
-- **WebSocket Status** - Connection state (connected/disconnected/disabled) with detailed attributes (reconnect count, messages received, uptime, pending requests, last error)
+- **WebSocket Status** - Connection state (connected/disconnected/disabled) with detailed attributes (reconnect count, messages received, uptime, pending requests, last error), plus safety-net poll statistics (poll count, last poll duration, devices fetched, corrections)
 - **WebSocket Latency** - Average response time in milliseconds for WebSocket commands (supports HA long-term statistics)
 
 ### Device Triggers
@@ -375,7 +380,7 @@ Cameras from 2N intercoms are supported:
 
 - **Camera image**: A still image that is refreshed each time you view it — the integration asks the intercom for a fresh snapshot and fetches the resulting JPEG
 - **Error monitoring**: Shows connection status
-- **Frame time**: The `image_last_updated` attribute holds the time the currently shown picture was captured, so you can see how fresh the live view is (see [Live-Feed Age Overlay](#live-feed-age-overlay))
+- **Frame time**: The `image_last_updated` attribute holds the time the current picture arrived, so you can see how fresh the live view is (see [Live-Feed Age Overlay](#live-feed-age-overlay))
 - **Saved pictures**: Historical doorbell snapshots available as image entities (see [Doorbell Snapshots](#doorbell-snapshots))
 
 **Camera Recording:**

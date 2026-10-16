@@ -450,6 +450,20 @@ class TestWsStatusSensor:
         assert attrs["last_poll_correction_at"] is None
         assert attrs["reconnect_count"] == 0
 
+    def test_ws_status_sensor_volatile_attributes_not_recorded(self):
+        """Poll statistics and connection counters change every poll / message;
+        recording them would write a new attribute row every couple of minutes."""
+        from custom_components.evon.sensor import EvonWebSocketStatusSensor
+
+        unrecorded = EvonWebSocketStatusSensor._unrecorded_attributes
+        assert {
+            "poll_count",
+            "last_poll_duration_seconds",
+            "last_poll_correction_at",
+            "messages_received",
+            "connection_uptime_seconds",
+        } <= unrecorded
+
     def test_ws_status_sensor_poll_diagnostics_without_ws_client(self):
         """HTTP-only mode still reports the poll statistics, just no WS metrics."""
         from custom_components.evon.sensor import EvonWebSocketStatusSensor

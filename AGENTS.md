@@ -29,7 +29,7 @@ Integrations:
 | **DEVELOPMENT.md** | Developers | Architecture, API reference, device classes, methods, code patterns, testing, MCP server setup |
 | **AGENTS.md** | AI agents | Critical API knowledge, debugging tips, gotchas, implementation patterns |
 | **RELEASING.md** | Maintainers | The release recipe: regular release from `main`, hotfix release from a previous tag, HACS compatibility, version numbering, release checklist |
-| **docs/*.md** | Developers | Deep dives: `BLIND_TILT_BEHAVIOR.md`, `ENERGY_STATISTICS.md`, `WEBSOCKET_API.md` (reverse-engineered WS protocol), `INTERCOM_AUDIO.md` (optional SIP two-way-audio + doorbell-notification setup, not integration code), `CODE_ANALYSIS_BACKLOG.md` (open analysis/mypy findings); `docs/plans/` and `docs/superpowers/` are historical 2026 design plans/specs, not current guidance |
+| **docs/*.md** | Developers | Deep dives: `BLIND_TILT_BEHAVIOR.md`, `ENERGY_STATISTICS.md`, `WEBSOCKET_API.md` (reverse-engineered WS protocol), `INTERCOM_AUDIO.md` (user-facing setup guide, linked from the README: optional SIP two-way-audio + doorbell-notification setup, not integration code), `CODE_ANALYSIS_BACKLOG.md` (open analysis/mypy findings); `docs/plans/` and `docs/superpowers/` are historical 2026 design plans/specs, not current guidance |
 
 ### What Goes Where
 
@@ -378,7 +378,7 @@ already off ~5 ms. A burst of 16 light commands after a home-state change theref
 the last requests past the 10 s timer; they then "fail", fall back to HTTP (which succeeds
 only because the queued WS commands are executing anyway) and their late replies are
 logged as unknown sequence ids. `EvonApi` bounds WS control requests with
-`asyncio.Semaphore(WS_CONTROL_MAX_IN_FLIGHT)` (2) around `_try_ws_control()` and the
+`asyncio.Semaphore(WS_CONTROL_MAX_IN_FLIGHT)` (2) around `_try_ws_control()`, the door-opener `SwitchOnFor` and the
 season-mode `SetValue`; subscriptions and `GetInstances` are not bounded. Raising the
 limit does not speed anything up (the controller is the bottleneck); it only brings the
 timeouts back. The HTTP fallback after a WS timeout re-sends the command — harmless for
@@ -391,8 +391,7 @@ app's button sends) and only falls back to the per-light loop when that call rai
 ### Note #7: The Safety-Net Poll Is Cheap by Design
 
 With the WebSocket connected the coordinator still polls every `WS_POLL_INTERVAL` (120 s since
-October 2026, 60 s before). Until
-October 2026 that poll fetched the details of **every** instance on the controller (930 on the
+October 2026, 60 s before). Before that that poll fetched the details of **every** instance on the controller (930 on the
 reference system, up to 100 in parallel through HA's shared aiohttp session) and took 20–25 s;
 during that window the controller neither delivered the camera's `image_path` WS event within
 5 s nor served the snapshot GET within 10 s, so the live view froze for ~15 s of every minute
@@ -400,7 +399,7 @@ during that window the controller neither delivered the camera's `image_path` WS
 
 - `select_instances_for_detail_fetch()` (`coordinator/__init__.py`) fetches details only for
   **named** instances of classes that `ws_mappings.get_entity_type()` maps to an entity type
-  (minus WS-only buttons) plus `Base.ehThermostat` — 64 instances instead of 930. Rooms, scenes,
+  (minus WS-only buttons) plus `Base.ehThermostat` — 63 entity instances + `Base.ehThermostat` = 64 instead of 930. Rooms, scenes,
   `System.Notification`, `Logic.*`, unnamed templates/channels etc. are never fetched. A new
   device class must therefore be in `CLASS_TO_TYPE` (or the substring rules in
   `get_entity_type`) **before** its processor can see any details, and every processor must
@@ -411,7 +410,7 @@ during that window the controller neither delivered the camera's `image_path` WS
   so a poll costs ~5 s of controller saturation and a wider semaphore buys nothing. The camera
   may still miss one 5 s `image_path` wait inside that window — hence the 120 s interval.
   Future option if that is still too much: the WS `GetInstances` call returns every property of
-  all instances of a class in one reply (docs/WEBSOCKET_API.md), i.e. ~12 calls instead of 63.
+  all instances of a class in one reply (docs/WEBSOCKET_API.md), i.e. ~12 calls instead of 64.
 - Smart meters are **field-merged** in `_merge_ws_updates_into_poll_result()`: only the keys a
   WS event updated *during the poll* come from the WS entity (per-key monotonic timestamps in
   `_ws_key_update_timestamps`, recorded for meters only); every other key — poll-only inputs
@@ -460,7 +459,7 @@ Tests documenting these findings are in `tests/test_ws_client.py` under `TestWeb
   - Main coordinator: `coordinator/__init__.py`
   - Button press detector: `coordinator/button_press.py` (standalone state machine, no HA dependencies)
   - Device processors: `coordinator/processors/` (lights, blinds, climate, switches, smart_meters, air_quality, valves, home_states, bathroom_radiators, scenes, security_doors, intercoms, cameras, button_events, weather)
-- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py`, `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms), `button.py` (scenes), `camera.py`, `image.py` (doorbell snapshots), `event.py` (physical buttons, doorbell)
+- Platforms: `light.py`, `cover.py`, `climate.py`, `sensor.py` (temperature, energy, air quality, weather station, WS diagnostics incl. poll statistics), `switch.py`, `select.py`, `binary_sensor.py` (valves, security doors, intercoms, weather station, WS status), `button.py` (scenes, light identify, door openers for intercoms and linked security doors), `camera.py`, `image.py` (doorbell snapshots), `event.py` (physical buttons, doorbell)
 - Config flow: `config_flow.py` (includes options and reconfigure flows)
 - Repairs: `repairs.py` (`async_create_fix_flow` for the fixable stale-entities / relay-migrated issues — HA discovers fix flows only from this `<domain>/repairs.py` module, not from `config_flow.py`)
 - WebSocket: `ws_client.py` (WebSocket client), `ws_control.py` (WebSocket control mappings), `ws_mappings.py` (WebSocket property mappings)
@@ -813,7 +812,7 @@ Configure via Claude Code's `~/.claude.json`:
 
 ## Adding New Device Types
 
-Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md#adding-new-device-types). Agent checklist: class-name constant in `const.py` → processor in `coordinator/processors/` (exported from its `__init__.py`, called from `coordinator/__init__.py` `_async_update_data()`) → entity sets `_entity_type` and reads via `_get_data()` → platform listed in `PLATFORMS` (`__init__.py`) → tests in `tests/test_<device>.py`. For WebSocket push updates also add the class to `CLASS_TO_TYPE` / `SUBSCRIBE_PROPERTIES` / `PROPERTY_MAPPINGS` in `ws_mappings.py`, and for WS control to `CLASS_CONTROL_MAPPINGS` in `ws_control.py`.
+Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md#adding-new-device-types). Agent checklist: class-name constant in `const.py` → processor in `coordinator/processors/` (exported from its `__init__.py`, called from `coordinator/__init__.py` `_async_update_data()`) → entity sets `_entity_type` and reads via `_get_data()` → platform listed in `PLATFORMS` (`__init__.py`) → tests in `tests/test_<device>.py`. Add the class to `CLASS_TO_TYPE` in `ws_mappings.py` (or a substring rule in `get_entity_type()`) — **required even for poll-only devices**: the poll fetches details only for named instances of mapped classes (Note #7). For WebSocket push updates also add `SUBSCRIBE_PROPERTIES` / `PROPERTY_MAPPINGS`, and for WS control `CLASS_CONTROL_MAPPINGS` in `ws_control.py`.
 
 ## Integration Features
 
@@ -822,7 +821,7 @@ Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md
 - **Select Entities**: Season mode (heating/cooling), Home state (At Home, Holiday, Night, Work)
 - **Switch Entity**: Bathroom radiators with timer functionality
 - **Climate**: Heating/cooling modes, preset modes (comfort, eco, away), season mode
-- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging, camera recording settings, button double-click delay, door-opener pulse length
+- **Options Flow**: Configure poll interval (5-300 seconds), area sync, non-dimmable lights, HTTP-only mode toggle, debug logging, camera recording settings, button double-click delay, door-opener pulse length, weather-station override (Home Connect proxy ID / station ID)
 - **Non-dimmable Lights**: Mark lights as on/off only (useful for LED strips with PWM controllers)
 - **Reconfigure Flow**: Change host/credentials without removing integration
 - **Reload Support**: Reload without HA restart
@@ -851,7 +850,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1459 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1460 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -892,6 +891,7 @@ Tests are in the `tests/` directory (1459 tests), plus 25 Node tests in `tests-m
 - `test_optimistic_state.py` - Optimistic state update tests
 - `test_options_flow.py` - Options flow integration tests
 - `test_options_flow_handler.py` - Options flow handler unit tests
+- `test_weather.py` - Weather station: Home Connect proxy read, discovery and back-off, processor, sensors/binary sensors, stations added after setup
 - `test_poll_prefetch.py` - Safety-net poll: detail prefetch selection, WS-updatable keys, poll-correction diagnostics (no HA needed)
 - `test_reconnect_delay.py` - WebSocket reconnect delay tests
 - `test_recording_services.py` - Recording service tests

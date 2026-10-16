@@ -5,8 +5,8 @@ opener) and **two-way audio** with a 2N door station **inside Home Assistant**.
 
 This is an optional, self-hosted setup that sits *alongside* the Evon integration.
 The integration itself only contributes two things here: the **door-opener button**
-(`EvonIntercomDoorButton`, see [AGENTS.md → Physical Buttons / door opener] and
-[WEBSOCKET_API.md → Door opener]) and the **Talk button** on the camera card
+(`EvonIntercomDoorButton`, see [AGENTS.md → What Works via WebSocket](../AGENTS.md#what-works-via-websocket) and
+[WEBSOCKET_API.md → Security Doors & Intercoms](WEBSOCKET_API.md#security-doors--intercoms)) and the **Talk button** on the camera card
 (`www/evon-camera-recording-card.js`, config key `sip_extension`). Everything else
 is Home Assistant add-ons and config, not integration code, so none of it is
 installed automatically.
@@ -47,7 +47,7 @@ works whether or not a call is up.
 | **Asterisk add-on** (`hassio-addons`, `TECH7Fox/asterisk-hass-addons`) | The PBX that registers to Evon and bridges audio. |
 | **SIP Core** integration + card (`TECH7Fox/sip-hass-card`, built, dropped into `custom_components/sip_core`) | The browser WebRTC client (`window.sipCore`) and the call popup. |
 | **HTTPS** to Home Assistant | Microphone needs a secure context. The easiest self-hosted route is the **Tailscale add-on** with `share_homeassistant: serve` (free, trusted cert, also replaces a VPN). Nabu Casa works too. |
-| A doorbell `event` entity + a door-opener `button` | Provided by the Evon integration for 2N intercoms. |
+| A doorbell `event` entity + a door-opener `button` | Provided by the Evon integration for 2N intercoms (the *Open door* button is created disabled — enable it in the entity settings). |
 
 ## Setup
 
@@ -58,7 +58,7 @@ works whether or not a call is up.
 2. Put three files in `/addon_configs/<asterisk-slug>/asterisk/custom/` (create the
    `custom/` folder next to the generated `default/`):
    - `pjsip_custom.conf` — the **trunk** to Evon (registration + endpoint + identify).
-     The pulse length / SIP password is yours; see the template below.
+     The SIP user/password are yours; see the template below.
    - `extensions.conf` — the **dialplan**: an outbound route to the door
      (`exten => 8001 → Dial(PJSIP/<door-sip-user>@evon_endpoint)`) and an inbound
      context that rings the handset extensions **without auto-answering** (so the
@@ -102,9 +102,9 @@ works whether or not a call is up.
 ### 4. The card button + notifications
 
 - Add `sip_extension: "8001"` to the Evon camera card (`custom:evon-camera-recording-card`)
-  so the **Talk** button appears next to "Open door". It answers an incoming call,
+  so the **Talk** button appears next to *Record* (and *Open door*, if `door_button` is set). It answers an incoming call,
   hangs up an active one, or dials the door when idle, via `window.sipCore`.
-- Two automations (see your automations, documented there):
+- Two automations:
   - **doorbell → notification:** on the intercom's `event.*_doorbell`, send a
     high-priority notification with a fresh camera snapshot, a `clickAction` that
     deep-links to the door popup (e.g. `/dashboard-home#door-camera`), and an

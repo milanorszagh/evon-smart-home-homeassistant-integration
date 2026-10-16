@@ -468,8 +468,8 @@
               "weather_station_id": "ID meteostanice"
             },
             "data_description": {
-              "weather_home_connect_id": "Voliteľné. Nastavte iba vtedy, ak sa meteostanica nenájde automaticky. ID inštancie proxy Home Connect (napr. evonHomeConnect4939).",
-              "weather_station_id": "Voliteľné. Nastavte iba vtedy, ak sa meteostanica nenájde automaticky. ID inštancie meteostanice (napr. WeatherStation1525)."
+              "weather_home_connect_id": "Voliteľné. Nastavte iba vtedy, ak sa meteostanica nenájde automaticky. ID inštancie proxy Home Connect (napr. evonHomeConnect4939). Vyplňte obe ID; ponechajte obe prázdne pre automatické vyhľadanie.",
+              "weather_station_id": "Voliteľné. Nastavte iba vtedy, ak sa meteostanica nenájde automaticky. ID inštancie meteostanice (napr. WeatherStation1525). Vyplňte obe ID; ponechajte obe prázdne pre automatické vyhľadanie."
             }
           }
         }

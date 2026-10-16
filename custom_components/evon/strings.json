@@ -468,8 +468,8 @@
               "weather_station_id": "Weather station ID"
             },
             "data_description": {
-              "weather_home_connect_id": "Optional. Only set this if the weather station is not found automatically. The ID of the Home Connect proxy instance (e.g. evonHomeConnect4939).",
-              "weather_station_id": "Optional. Only set this if the weather station is not found automatically. The ID of the weather station instance (e.g. WeatherStation1525)."
+              "weather_home_connect_id": "Optional. Only set this if the weather station is not found automatically. The ID of the Home Connect proxy instance (e.g. evonHomeConnect4939). Set both IDs; leave both empty to use automatic discovery.",
+              "weather_station_id": "Optional. Only set this if the weather station is not found automatically. The ID of the weather station instance (e.g. WeatherStation1525). Set both IDs; leave both empty to use automatic discovery."
             }
           }
         }

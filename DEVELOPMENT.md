@@ -39,21 +39,22 @@ custom_components/evon/
 │       ├── security_doors.py
 │       ├── intercoms.py
 │       ├── cameras.py
-│       └── button_events.py
+│       ├── button_events.py
+│       └── weather.py
 ├── light.py             # Light platform
 ├── cover.py             # Cover/blind platform
 ├── climate.py           # Climate platform
-├── sensor.py            # Sensor platform (temperature, energy, air quality, WS diagnostics)
+├── sensor.py            # Sensor platform (temperature, energy, air quality, weather station, WS diagnostics incl. poll statistics)
 ├── switch.py            # Switch platform (bathroom radiators, camera recording toggles)
 ├── select.py            # Select platform (home state, season mode)
-├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms)
-├── button.py            # Button platform (scenes)
+├── binary_sensor.py     # Binary sensor platform (valves, security doors, intercoms, weather station, WS status)
+├── button.py            # Button platform (scenes, light identify, door openers)
 ├── camera.py            # Camera platform (2N intercoms)
 ├── camera_recorder.py   # Camera recording manager (snapshot → MP4)
 ├── recordings.py        # Recordings folder: HA local media dir + one-time legacy migration (new in 1.23.0)
 ├── recordings_view.py   # Authenticated HomeAssistantView serving recordings at /evon/recordings/{filename}
 ├── www/                 # Frontend assets (static path /evon/evon-camera-recording-card.js; add as a dashboard resource manually)
-│   └── evon-camera-recording-card.js  # Custom Lovelace card for recording UI
+│   └── evon-camera-recording-card.js  # Recording card (+ optional door/Talk buttons) and the evon-live-clock picture-elements badge
 ├── image.py             # Image platform (doorbell snapshots)
 ├── event.py             # Event platform (doorbell ring, physical button press events)
 ├── device_trigger.py    # Device triggers (doorbell, button single/double/long press)
@@ -924,6 +925,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 2. Create a processor in `coordinator/processors/` (e.g., `new_device.py`)
 3. Export processor from `coordinator/processors/__init__.py`
 4. Call processor in `coordinator/__init__.py` `_async_update_data()`
+   - Map the class in `ws_mappings.CLASS_TO_TYPE` (or `get_entity_type()`): the poll fetches details only for named instances of mapped classes (`select_instances_for_detail_fetch`), so an unmapped class gets no data even without WebSocket support
 5. Create platform file or extend existing one — set `_entity_type` class attribute on the entity class (data is accessed via `self._get_data()` which calls `coordinator.get_entity_data()`)
 6. Use `EntityData` descriptors for simple properties (see "Entity Data Descriptor" below)
 7. Register platform in `__init__.py` PLATFORMS list
@@ -1207,10 +1209,12 @@ Test files:
 - `test_service_invalid_params.py` - Service invalid parameter tests
 - `test_stale_entities.py` - Stale entity cleanup tests
 - `test_ws_reconnect.py` - WebSocket reconnect tests
+- `test_weather.py` - Weather station (proxy read, discovery/back-off, processor, entities, stations added after setup)
+- `test_poll_prefetch.py` - Safety-net poll: detail prefetch selection, WS-mapped keys, poll-correction diagnostics
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1337 Python + 23 MCP tests at v1.23.0); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1460 Python + 25 Node tests at v1.24.0); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

@@ -35,12 +35,11 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   as Tailscale) documented in `docs/INTERCOM_AUDIO.md`; the stack itself is not part of
   the integration.
 - **Door opener buttons.** Each 2N intercom device, and each security door linked to an
-  intercom, gets an *Open door* button that pulses the door release (the controller's
-  `SwitchOnFor` method, sent over WebSocket with HTTP fallback; a pulse whose WebSocket
-  reply is late is reported as failed instead of being sent a second time). The pulse length is a new
-  integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s). The buttons are
-  created disabled; enable them in the entity settings before dashboards or automations can
-  open the door.
+  intercom, gets an *Open door* button that pulses the door release; a pulse whose
+  confirmation is late is reported as failed instead of being sent a second time. The pulse
+  length is a new integration option (*Door opener → Door open pulse*, 1–30 s, default 2 s).
+  The buttons are created disabled; enable them in the entity settings before dashboards or
+  automations can open the door.
 - **Live-feed age overlay.** The camera entity has a new `image_last_updated` attribute,
   set whenever a new frame arrives. The card's resource also provides an `evon-live-clock`
   badge for `picture-elements` that shows the shown frame's capture time and age
@@ -52,16 +51,22 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Changed
 
-- **Cheaper, rarer safety-net poll.** With the WebSocket connected, the poll now runs every
-  2 minutes instead of every minute, fetches details only for named instances that become
-  entities (64 instead of 930 on the reference system) and sends at most 8 requests at a
-  time. It takes about 5 s instead of 20–25 s; the controller was saturated for a third of
+- **Cheaper, rarer safety-net poll.** The poll now fetches details only for named instances
+  that become entities (64 instead of 930 on the reference system) and sends at most 8
+  requests at a time; with the WebSocket connected it runs every 2 minutes instead of every
+  minute. It takes about 5 s instead of 20–25 s; the controller was saturated for a third of
   every minute before.
 - **`evon.all_lights_off` sends one command.** The action (and the MCP server's
-  `light_control_all` tool) now uses the controller's own group command
-  `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
+  `light_control_all` tool, which also sends `Base.ehLight.SwitchAllOn` for "on") now uses
+  the controller's own group command `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
   sends, instead of one request per light; the per-light loop remains as fallback when
   the group command fails. (#26)
+- **Camera card *Record* button is centred.** With the new *Open door* / *Talk* buttons the
+  row stays centred when it wraps onto a second line.
+- **WebSocket status counters are no longer stored in history.** The fast-changing
+  attributes of the *WebSocket Status* sensor (messages received, uptime, pending requests,
+  average response time and the new poll statistics) stay visible on the entity but are no
+  longer written to the recorder; reconnect count and last error are still recorded.
 - **Recording timestamps use 24-hour time.** The camera card's recording list now shows
   times like `Oct 14 at 19:53` instead of `7:53 PM`.
 
@@ -74,14 +79,12 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - **One slow request no longer makes every device unavailable.** A device request that
   timed out aborted the whole poll; it is now handled like any other transient failure
   and the other devices keep their state.
-- **Saving the options form kept hidden settings.** Sections such as camera recording or
+- **Saving the options form deleted hidden settings.** Sections such as camera recording or
   physical buttons are shown only while the controller reports those devices; saving the
   form while one was hidden (for example with the controller offline) deleted its
   settings. They are now kept.
 - **Recording list showed UTC times.** The camera card listed recordings in UTC; it now
   uses Home Assistant's time zone.
-- **Camera card buttons stay centred.** The card's action buttons (*Record*, *Open door*,
-  *Talk*) are centred and stay centred when they wrap onto a second line.
 - **Energy total could step backwards by one reading.** A poll finishing after a
   WebSocket meter update overwrote the fresher counter with its older snapshot, and the
   recorder flagged `sensor.*_energy_total` as "not strictly increasing". Smart meters now

@@ -468,8 +468,8 @@
               "weather_station_id": "ID de la station météo"
             },
             "data_description": {
-              "weather_home_connect_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance du proxy Home Connect (par ex. evonHomeConnect4939).",
-              "weather_station_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance de la station météo (par ex. WeatherStation1525)."
+              "weather_home_connect_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance du proxy Home Connect (par ex. evonHomeConnect4939). Renseignez les deux ID ; laissez les deux vides pour la détection automatique.",
+              "weather_station_id": "Facultatif. À définir uniquement si la station météo n'est pas détectée automatiquement. L'ID de l'instance de la station météo (par ex. WeatherStation1525). Renseignez les deux ID ; laissez les deux vides pour la détection automatique."
             }
           }
         }

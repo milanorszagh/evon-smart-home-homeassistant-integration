@@ -468,8 +468,8 @@
               "weather_station_id": "ID vremenske postaje"
             },
             "data_description": {
-              "weather_home_connect_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance proxyja Home Connect (npr. evonHomeConnect4939).",
-              "weather_station_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance vremenske postaje (npr. WeatherStation1525)."
+              "weather_home_connect_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance proxyja Home Connect (npr. evonHomeConnect4939). Nastavite oba ID-ja; pustite oba prazna za samodejno zaznavanje.",
+              "weather_station_id": "Izbirno. Nastavite samo, če vremenska postaja ni samodejno zaznana. ID instance vremenske postaje (npr. WeatherStation1525). Nastavite oba ID-ja; pustite oba prazna za samodejno zaznavanje."
             }
           }
         }
