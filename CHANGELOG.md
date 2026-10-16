@@ -10,7 +10,7 @@ installed. The README keeps a one-line summary per version.
 
 Issue and PR numbers refer to this repository unless stated otherwise.
 
-## [Unreleased]
+## [1.24.0] - 2026-10-16
 
 ### Added
 
@@ -25,9 +25,10 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   brightness, the four sun-intensity values, today's and lifetime min/max temperature and
   max wind, last rain and days since rain) and binary sensors (rain, twilight, three wind
   alarms, plus diagnostic connected/temperature-valid/polling-active). It is read every
-  30 seconds (the station has no WebSocket updates). When auto-discovery does not find the station, two optional overrides in a new
-  *Weather station* options section (Home Connect proxy ID, weather station ID) let you set
-  it manually. Stations found after setup get their entities automatically.
+  30 seconds (the station has no WebSocket updates). When auto-discovery does not find the
+  station, two optional overrides in a new *Weather station* options section (Home Connect
+  proxy ID, weather station ID) let you set it manually. Stations found after setup get
+  their entities automatically.
 - **Talk button for SIP intercom audio.** The camera card takes an optional
   `sip_extension`; when set it shows a **Talk** button that answers an incoming door
   call, hangs up an active one, or dials the door, through the `window.sipCore` engine.
@@ -42,7 +43,7 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   automations can open the door.
 - **Live-feed age overlay.** The camera entity has a new `image_last_updated` attribute,
   set whenever a new frame arrives. The card's resource also provides an `evon-live-clock`
-  badge for `picture-elements` that shows the shown frame's capture time and age
+  badge for `picture-elements` that shows when the current frame arrived and its age
   (`19:53:07 · 2s ago`, 24-hour time), so a frozen feed is visible as a climbing age.
   The attribute is not stored in history. See README → *Live-Feed Age Overlay*.
 - **Recording card door button.** `evon-camera-recording-card` takes an optional
@@ -56,11 +57,11 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   requests at a time; with the WebSocket connected it runs every 2 minutes instead of every
   minute. It takes about 5 s instead of 20–25 s; the controller was saturated for a third of
   every minute before.
-- **`evon.all_lights_off` sends one command.** The action (and the MCP server's
-  `light_control_all` tool, which also sends `Base.ehLight.SwitchAllOn` for "on") now uses
-  the controller's own group command `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights off" button
-  sends, instead of one request per light; the per-light loop remains as fallback when
-  the group command fails. (#26)
+- **`evon.all_lights_off` sends one command.** The action now uses the controller's own
+  group command `Base.ehLight.SwitchAllOff`, the same request the Evon app's "all lights
+  off" button sends, instead of one request per light; the per-light loop remains as
+  fallback when the group command fails. The MCP server's `light_control_all` tool uses
+  the group commands too (`SwitchAllOn` / `SwitchAllOff`). (#26)
 - **Camera card *Record* button is centred.** With the new *Open door* / *Talk* buttons the
   row stays centred when it wraps onto a second line.
 - **WebSocket status counters are no longer stored in history.** The fast-changing
@@ -770,7 +771,7 @@ No GitHub release was published for this tag.
 
 - Initial release with lights, blinds and climate support.
 
-[Unreleased]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.23.0...HEAD
+[1.24.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.23.0...v1.24.0
 [1.23.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.1...v1.23.0
 [1.22.1]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.22.0...v1.22.1
 [1.22.0]: https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/compare/v1.21.0...v1.22.0
