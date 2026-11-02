@@ -160,6 +160,7 @@ LOGIN_BACKOFF_BASE = 2  # Exponential backoff base (2^failures seconds)
 # Camera/Image fetch settings
 CAMERA_IMAGE_UPDATE_TIMEOUT = 5.0  # seconds to wait for WS image_path update after ImageRequest
 IMAGE_FETCH_TIMEOUT = 10  # seconds timeout for fetching images from Evon server
+IMAGE_FETCH_MAX_BYTES = 5 * 1024 * 1024  # snapshots are ~40 KB; anything larger is not a camera frame
 
 # Quiesce period after a control command (seconds).
 # During this window:
@@ -230,6 +231,7 @@ DEFAULT_MAX_RECORDING_DURATION = 300  # seconds (5 minutes)
 MIN_RECORDING_DURATION = 30  # seconds
 MAX_RECORDING_DURATION = 3600  # seconds (1 hour)
 MAX_RECORDING_FRAMES = 7200  # Cap frame buffer (1hr at 2fps)
+MIN_RECORDING_FREE_DISK_BYTES = 1024**3  # refuse to start a recording with < 1 GiB free
 RECORDING_MEDIA_DIR = "evon_recordings"
 RECORDING_OUTPUT_MP4 = "mp4"
 RECORDING_OUTPUT_MP4_AND_FRAMES = "mp4_and_frames"

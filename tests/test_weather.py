@@ -243,7 +243,23 @@ class TestGetViaHomeConnect:
         assert result is None
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("path", ["bad", "/foo", "instances", ""])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "bad",
+            "/foo",
+            "instances",
+            "",
+            "/instancesFoo",
+            "/instances/",
+            "/instances/..",
+            "/instances/../apps",
+            "/instances/a?b",
+            "/instances/a/b",
+            "/instances/a#b",
+            None,
+        ],
+    )
     async def test_invalid_path_raises(self, api, path):
         with pytest.raises(ValueError):
             await api.get_via_home_connect("evonHomeConnect4939", path)
@@ -292,6 +308,35 @@ class TestDiscoverWeatherSources:
         sources = await coord._discover_weather_sources()
         assert sources == [("evonHomeConnect4939", "WeatherStation1525", None)]
         api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_options_override_is_ignored(self):
+        api = AsyncMock()
+        coord = _StubCoordinator(
+            api,
+            options={
+                CONF_WEATHER_HOME_CONNECT_ID: "evonHomeConnect4939",
+                CONF_WEATHER_STATION_ID: "../apps",
+            },
+        )
+        assert await coord._discover_weather_sources() == []
+        api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_discovery_skips_stations_with_invalid_ids(self):
+        """Station ids come from the shared controller and end up in a request path."""
+        api = AsyncMock()
+        api.get_via_home_connect.return_value = [
+            {"ID": "../apps", "Name": "Evil", "ClassName": EVON_CLASS_WEATHER_PROXY},
+            {"ID": "a?b", "Name": "Evil 2", "ClassName": EVON_CLASS_WEATHER_PROXY},
+            {"ID": "WeatherStation1525", "Name": "Dining", "ClassName": EVON_CLASS_WEATHER_PROXY},
+        ]
+        coord = _StubCoordinator(
+            api,
+            instances=[{"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}],
+        )
+        sources = await coord._discover_weather_sources()
+        assert sources == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
 
     @pytest.mark.asyncio
     async def test_auto_discovery_finds_station(self):

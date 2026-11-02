@@ -23,6 +23,8 @@ from .const import (
     DOMAIN,
     ENTITY_TYPE_CAMERAS,
     ENTITY_TYPE_SECURITY_DOORS,
+    MAX_RECORDING_DURATION,
+    MIN_RECORDING_DURATION,
     RECORDING_OUTPUT_MP4,
 )
 from .coordinator import EvonDataUpdateCoordinator
@@ -263,6 +265,9 @@ class EvonCamera(EvonEntity, Camera):
             duration: Optional max duration in seconds. Uses config value if None.
         """
         max_dur = duration or self._entry.options.get(CONF_MAX_RECORDING_DURATION, DEFAULT_MAX_RECORDING_DURATION)
+        # Defence in depth: the service schema already enforces this range, but the
+        # method is also reachable from other code paths.
+        max_dur = max(MIN_RECORDING_DURATION, min(int(max_dur), MAX_RECORDING_DURATION))
         output_fmt = self._entry.options.get(CONF_RECORDING_OUTPUT_FORMAT, RECORDING_OUTPUT_MP4)
         await self._recorder.async_start(max_duration=max_dur, output_format=output_fmt)
         self.async_write_ha_state()

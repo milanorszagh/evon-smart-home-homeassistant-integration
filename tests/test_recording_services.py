@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import voluptuous as vol
 
 from custom_components.evon import _find_camera_entity
 from custom_components.evon.const import DOMAIN
@@ -164,13 +165,14 @@ class TestRecordingServicesIntegration:
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
         await hass.async_block_till_done()
 
-        # Should not raise — just logs an error
-        await hass.services.async_call(
-            DOMAIN,
-            "start_recording",
-            {},
-            blocking=True,
-        )
+        # Rejected by the service schema before the handler runs
+        with pytest.raises(vol.Invalid):
+            await hass.services.async_call(
+                DOMAIN,
+                "start_recording",
+                {},
+                blocking=True,
+            )
 
     @pytest.mark.asyncio
     async def test_stop_recording_missing_entity_id(self, hass, mock_config_entry_v2, mock_evon_api_class):
@@ -179,13 +181,61 @@ class TestRecordingServicesIntegration:
         await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
         await hass.async_block_till_done()
 
-        # Should not raise
+        with pytest.raises(vol.Invalid):
+            await hass.services.async_call(
+                DOMAIN,
+                "stop_recording",
+                {},
+                blocking=True,
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("duration", [0, -5, 29, 3601, 10**9, "abc"])
+    async def test_start_recording_rejects_out_of_range_duration(
+        self, hass, mock_config_entry_v2, mock_evon_api_class, duration
+    ):
+        """The services.yaml range (30-3600 s) is enforced for direct service calls too."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        mock_camera = MagicMock()
+        mock_camera.entity_id = "camera.evon_intercom_camera"
+        mock_camera.async_start_recording = AsyncMock()
+        hass.data[DOMAIN][mock_config_entry_v2.entry_id]["cameras"] = {"intercom_1.Cam": mock_camera}
+        hass.states.async_set("camera.evon_intercom_camera", "idle")
+
+        with pytest.raises(vol.Invalid):
+            await hass.services.async_call(
+                DOMAIN,
+                "start_recording",
+                {"entity_id": "camera.evon_intercom_camera", "duration": duration},
+                blocking=True,
+            )
+        mock_camera.async_start_recording.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_start_recording_coerces_numeric_string_duration(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """A duration sent as a string (e.g. from YAML templates) is coerced to int."""
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        mock_camera = MagicMock()
+        mock_camera.entity_id = "camera.evon_intercom_camera"
+        mock_camera.async_start_recording = AsyncMock()
+        hass.data[DOMAIN][mock_config_entry_v2.entry_id]["cameras"] = {"intercom_1.Cam": mock_camera}
+        hass.states.async_set("camera.evon_intercom_camera", "idle")
+
         await hass.services.async_call(
             DOMAIN,
-            "stop_recording",
-            {},
+            "start_recording",
+            {"entity_id": "camera.evon_intercom_camera", "duration": "120"},
             blocking=True,
         )
+        mock_camera.async_start_recording.assert_called_once_with(duration=120)
 
     @pytest.mark.asyncio
     async def test_start_recording_camera_not_found(self, hass, mock_config_entry_v2, mock_evon_api_class):

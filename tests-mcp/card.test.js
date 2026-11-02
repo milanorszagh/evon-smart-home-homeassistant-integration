@@ -74,3 +74,34 @@ test("double tap during the feedback window is still ignored", async () => {
   assert.equal(presses, 1);
   card.disconnectedCallback();
 });
+
+test("recording metadata is HTML-escaped before it reaches innerHTML", () => {
+  const Card = loadCard()["evon-camera-recording-card"];
+  const card = new Card();
+  card.shadowRoot = {
+    innerHTML: "",
+    querySelector: () => ({ addEventListener() {} }),
+    querySelectorAll: () => [],
+  };
+  card.setConfig({ entity: "camera.door" });
+  const evil = '/evon/recordings/Door_x" onmouseover="alert(1)" x=".mp4';
+  card._expandedVideo = evil;
+  card._resolvedUrl = '/signed"><img src=x onerror=alert(2)>';
+  card._hass = {
+    states: {
+      "camera.door": {
+        state: "idle",
+        attributes: {
+          recent_recordings: [{ url: evil, timestamp: "<script>alert(3)</script>", size: "<b>1 KB</b>" }],
+        },
+      },
+    },
+  };
+  card._render();
+  const html = card.shadowRoot.innerHTML;
+  assert.ok(!html.includes("onmouseover="), "the URL must not be written into an attribute raw");
+  assert.ok(!html.includes("<script>"), "the timestamp must be escaped");
+  assert.ok(!html.includes("<b>1 KB</b>"), "the size must be escaped");
+  assert.ok(!html.includes("<img src=x"), "the signed URL must be escaped");
+  assert.ok(html.includes("&lt;script&gt;alert(3)&lt;/script&gt;"));
+});

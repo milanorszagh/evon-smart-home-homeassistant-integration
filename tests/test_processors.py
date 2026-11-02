@@ -213,7 +213,9 @@ class TestApiImageFetch:
         # Create a proper async context manager for the response
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.read = AsyncMock(return_value=b"\xff\xd8\xff\xe0JPEG")
+        mock_response.content_type = "image/jpeg"
+        mock_response.content_length = 8
+        mock_response.content.read = AsyncMock(return_value=b"\xff\xd8\xff\xe0JPEG")
 
         @asynccontextmanager
         async def mock_get(*args, **kwargs):

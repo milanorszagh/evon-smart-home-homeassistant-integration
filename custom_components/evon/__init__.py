@@ -11,8 +11,14 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er, issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import voluptuous as vol
 
 from .api import EvonApi, EvonAuthError, EvonRateLimitError, validate_instance_id
 from .const import (
@@ -53,6 +59,8 @@ from .const import (
     ENTITY_TYPE_VALVES,
     EVON_REMOTE_HOST,
     HOME_STATE_MAP,
+    MAX_RECORDING_DURATION,
+    MIN_RECORDING_DURATION,
     REPAIR_CONFIG_MIGRATION,
     REPAIR_CONNECTION_FAILED,
     REPAIR_RELAY_MIGRATED,
@@ -72,6 +80,19 @@ from .const import (
     SERVICE_STOP_RECORDING,
 )
 from .coordinator import EvonDataUpdateCoordinator
+
+# Recording services are callable by every HA user (not only admins), so the
+# duration range from services.yaml is enforced here as well: the selector only
+# limits the UI, not direct service calls.
+START_RECORDING_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Optional("duration"): vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_RECORDING_DURATION, max=MAX_RECORDING_DURATION)
+        ),
+    }
+)
+STOP_RECORDING_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -508,19 +529,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def handle_start_recording(call: ServiceCall) -> None:
             """Handle the start recording service call."""
-            entity_id = call.data.get("entity_id")
+            # entity_id and duration are validated by START_RECORDING_SCHEMA.
+            entity_id = call.data["entity_id"]
             duration = call.data.get("duration")
-            if duration is not None:
-                try:
-                    duration = int(duration)
-                    if duration <= 0:
-                        raise ValueError("duration must be positive")
-                except TypeError, ValueError:
-                    _LOGGER.error("Invalid recording duration: %r", duration)
-                    return
-            if not entity_id:
-                _LOGGER.error("entity_id is required for start_recording")
-                return
             entity = hass.states.get(entity_id)
             if not entity:
                 _LOGGER.error("Entity %s not found", entity_id)
@@ -534,10 +545,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def handle_stop_recording(call: ServiceCall) -> None:
             """Handle the stop recording service call."""
-            entity_id = call.data.get("entity_id")
-            if not entity_id:
-                _LOGGER.error("entity_id is required for stop_recording")
-                return
+            entity_id = call.data["entity_id"]  # validated by STOP_RECORDING_SCHEMA
             camera_entity = _find_camera_entity(hass, entity_id)
             if camera_entity:
                 await camera_entity.async_stop_recording()
@@ -554,8 +562,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_COMFORT, handle_all_climate_comfort)
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_ECO, handle_all_climate_eco)
         hass.services.async_register(DOMAIN, SERVICE_ALL_CLIMATE_AWAY, handle_all_climate_away)
-        hass.services.async_register(DOMAIN, SERVICE_START_RECORDING, handle_start_recording)
-        hass.services.async_register(DOMAIN, SERVICE_STOP_RECORDING, handle_stop_recording)
+        hass.services.async_register(
+            DOMAIN, SERVICE_START_RECORDING, handle_start_recording, schema=START_RECORDING_SCHEMA
+        )
+        hass.services.async_register(
+            DOMAIN, SERVICE_STOP_RECORDING, handle_stop_recording, schema=STOP_RECORDING_SCHEMA
+        )
 
     # Register frontend card static path + authenticated recordings view
     # (once per HA instance).
