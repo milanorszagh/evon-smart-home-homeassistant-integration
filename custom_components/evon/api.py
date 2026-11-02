@@ -1040,11 +1040,17 @@ class EvonApi:
         if resp.content_length is not None and resp.content_length > IMAGE_FETCH_MAX_BYTES:
             _LOGGER.warning("Refusing image of %d bytes (limit %d)", resp.content_length, IMAGE_FETCH_MAX_BYTES)
             return None
-        data = await resp.content.read(IMAGE_FETCH_MAX_BYTES + 1)
-        if len(data) > IMAGE_FETCH_MAX_BYTES:
-            _LOGGER.warning("Refusing image larger than %d bytes", IMAGE_FETCH_MAX_BYTES)
-            return None
-        return data
+        # Read to EOF in chunks: StreamReader.read(n) returns only what is buffered
+        # (up to n bytes), which truncated the frame (verified live 2026-11-02).
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in resp.content.iter_chunked(64 * 1024):
+            total += len(chunk)
+            if total > IMAGE_FETCH_MAX_BYTES:
+                _LOGGER.warning("Refusing image larger than %d bytes", IMAGE_FETCH_MAX_BYTES)
+                return None
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     async def fetch_image(self, image_path: str) -> bytes | None:
         """Fetch an image from the Evon server.

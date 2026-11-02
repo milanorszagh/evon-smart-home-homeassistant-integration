@@ -1008,8 +1008,15 @@ def _image_resp(status=200, body=b"jpegdata", content_type="image/jpeg", content
     resp.status = status
     resp.content_type = content_type
     resp.content_length = content_length
-    resp.content.read = AsyncMock(side_effect=lambda n=-1: body if n < 0 else body[:n])
+    resp.content.iter_chunked = MagicMock(side_effect=lambda size: _async_chunks(body, size))
     return resp
+
+
+async def _async_chunks(body, size):
+    # Small pieces, like a real stream: a single read() would not return the whole body.
+    step = min(size, 1000)
+    for i in range(0, len(body), step):
+        yield body[i : i + step]
 
 
 def _image_session(*responses):
@@ -1050,7 +1057,15 @@ class TestFetchImageResponseChecks:
         resp = _image_resp(content_length=IMAGE_FETCH_MAX_BYTES + 1)
         api._session = _image_session(resp)
         assert await api.fetch_image("/temp/snapshot.jpg") is None
-        resp.content.read.assert_not_called()
+        resp.content.iter_chunked.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_body_arriving_in_pieces_is_read_completely(self):
+        """A frame delivered in many chunks is returned whole, not just the first piece."""
+        api = self._api()
+        body = bytes(range(256)) * 160  # 40 KB, like a real snapshot
+        api._session = _image_session(_image_resp(body=body))
+        assert await api.fetch_image("/temp/snapshot.jpg") == body
 
     @pytest.mark.asyncio
     async def test_oversized_body_without_length_rejected(self):
