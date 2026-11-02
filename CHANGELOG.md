@@ -22,6 +22,18 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   reference system). The command is still sent; the fallback poll is skipped
   only when the device itself already reported that state and the WebSocket is connected.
 
+### Security
+
+- **MCP server dependencies updated** (`zod` 4.6.7 and, through `npm audit fix`, the
+  `body-parser`, `qs`, `fast-uri` and `@hono/node-server` versions pulled in by the MCP
+  SDK), clearing all `npm audit` advisories. The MCP server now asks for Node.js 24.22.1 or
+  newer (the October 2026 security release).
+
+### Project
+
+- CI installs the newest Node.js 24 patch on every run (`check-latest`) instead of the
+  runner's cached version.
+
 ## [1.24.0] - 2026-10-16
 
 ### Added
