@@ -1249,8 +1249,10 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
   install outright rather than silently resolving to an ancient HA release —
   which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
   lower that floor.
-- Node.js (MCP): 24+ (CI uses Node.js 24 LTS; `@types/node` is kept in step so
-  the type-checker cannot green-light APIs the runtime does not have)
+- Node.js (MCP): 24.22.1+ (`engines`, the October 2026 security release; CI uses
+  Node.js 24 LTS with `check-latest: true`, so every run gets the newest 24.x patch rather
+  than whatever the runner image cached; `@types/node` is kept in step so the
+  type-checker cannot green-light APIs the runtime does not have)
 
 ---
 
