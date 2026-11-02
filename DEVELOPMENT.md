@@ -912,9 +912,9 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS (Node.js 24), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
+| **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS + MCP tests + `npm audit` on Node.js 24 and 26 (`check-latest`), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
-| **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, patch automerge; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
+| **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, patch automerge; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, Node majors in the CI matrix, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
 
 ---
 
@@ -1215,7 +1215,7 @@ Test files:
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1463 Python + 25 Node tests at v1.24.0); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1492 Python + 25 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
@@ -1249,10 +1249,11 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
   install outright rather than silently resolving to an ancient HA release —
   which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
   lower that floor.
-- Node.js (MCP): 24.22.1+ (`engines`, the October 2026 security release; CI uses
-  Node.js 24 LTS with `check-latest: true`, so every run gets the newest 24.x patch rather
-  than whatever the runner image cached; `@types/node` is kept in step so the
-  type-checker cannot green-light APIs the runtime does not have)
+- Node.js (MCP): 24.22.1+ (`engines`, the October 2026 security release). CI runs the
+  TypeScript job on Node.js 24 (the floor) and 26 (current LTS) with `check-latest: true`,
+  so every run gets the newest patch rather than whatever the runner image cached.
+  `@types/node` stays on the floor's major so the type-checker cannot green-light APIs the
+  oldest supported runtime does not have
 
 ---
 
@@ -1264,7 +1265,7 @@ Dependencies are kept up to date via [Renovate](https://docs.renovatebot.com/). 
 - **Grouping**: npm deps, npm devDeps, pip deps, and GitHub Actions are grouped into separate PRs
 - **Automerge**: Patch-level updates automerge when CI passes
 - **Labels**: All dependency PRs get the `dependencies` label
-- **Holds**: TypeScript major updates are disabled until typescript-eslint supports TS 7 (minors/patches still flow); `@types/node` is held `<25` to match the Node 24 runtime floor; the CI `python` github-actions dependency is disabled — bump it by hand together with the HA floor
+- **Holds**: TypeScript major updates are disabled until typescript-eslint supports TS 7 (minors/patches still flow); `@types/node` is held `<25` to match the Node 24 runtime floor; Node majors in the CI matrix are disabled — change them by hand together with `engines`; the CI `python` github-actions dependency is disabled — bump it by hand together with the HA floor
 - **Dashboard**: Renovate's Dependency Dashboard is issue #21
 
 ---

@@ -43,7 +43,13 @@ jobs:
         continue-on-error: true  # ~100 errors remain under mypy 2.x (100 at v1.23.0); tracked in docs/CODE_ANALYSIS_BACKLOG.md
 
   lint-typescript:
-    name: Lint TypeScript
+    name: Lint TypeScript (Node ${{ matrix.node-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # 24 = the runtime floor in package.json engines; 26 = the current LTS.
+        # Majors are picked by hand (Renovate rule); check-latest pulls the newest patch.
+        node-version: ["24", "26"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,7 +57,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node-version }}
           check-latest: true
           cache: "npm"
 
