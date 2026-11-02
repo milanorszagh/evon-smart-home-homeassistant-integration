@@ -4,6 +4,13 @@ import assert from "node:assert/strict";
 
 const HELPERS_URL = new URL("../dist/helpers.js", import.meta.url);
 
+// dist/config.js reads these once, when helpers.js (via api-client.js) is first
+// imported, so they must be set before the first test imports anything. Locally a
+// developer .env hides a missing value; CI has none.
+process.env.EVON_HOST = "http://example.com";
+process.env.EVON_USERNAME = "user";
+process.env.EVON_PASSWORD = "pass";
+
 test("sanitizeId accepts real Evon IDs", async () => {
   const { sanitizeId } = await import(HELPERS_URL);
   for (const id of ["SC1_M01.Light3", "Intercom2N1000.Cam", "BathroomRadiator9506", "Base.ehThermostat", "a-b_c.D9"]) {
@@ -31,9 +38,6 @@ test("deviceKindOf maps controllable classes and nothing else", async () => {
 });
 
 test("requireDevice refuses door relays, wrong kinds, templates and unknown IDs", async () => {
-  process.env.EVON_HOST = "http://example.com";
-  process.env.EVON_USERNAME = "user";
-  process.env.EVON_PASSWORD = "pass";
   const instances = [
     { ID: "SC1_M01.Light3", ClassName: "SmartCOM.Light.LightDim", Name: "Kitchen", Group: "" },
     { ID: "Intercom2N1000.DoorSwitch", ClassName: "Base.bSwitch", Name: "Door", Group: "" },
