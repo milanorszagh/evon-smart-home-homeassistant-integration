@@ -343,6 +343,8 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Light identify (configuration): makes a light flash so you can find it
 - Door opener: an **Open door** button on each 2N intercom, and on each security door that is linked to an intercom, pulses the door release (2 seconds by default, adjustable under the integration's options → *Door opener*). The buttons are created **disabled** — enable them under the entity's settings before dashboards or automations can open the door
 
+> **Who can open the door:** Home Assistant has no per-user permissions for entities. Once an *Open door* button is enabled, **every** Home Assistant user can press it — including non-admin, guest and wall-tablet accounts, anyone holding a long-lived access token, and any voice assistant (Assist, Alexa, Google) the entity is exposed to. Only enable the button if everyone with a Home Assistant login may open your door, and do not expose it to voice assistants.
+
 ### Diagnostic Sensors
 
 - **WebSocket Status** - Connection state (connected/disconnected/disabled) with detailed attributes (reconnect count, messages received, uptime, pending requests, last error), plus safety-net poll statistics (poll count, last poll duration, devices fetched, corrections)
@@ -424,7 +426,7 @@ sip_extension: "8001"                           # optional, adds a "Talk" button
 show_title: false                               # optional, hides the "Recording" heading (default: true)
 ```
 
-`door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds.
+`door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds. Hiding the card from a user does not stop them from opening the door — see [who can open the door](#buttons).
 
 `sip_extension` adds a **Talk** button for two-way audio with the door station. It needs an optional, self-hosted SIP stack (an Asterisk add-on, the SIP Core card, and HTTPS for microphone access, e.g. via Tailscale) that is **not** part of this integration. The full setup, requirements and config templates are in [docs/INTERCOM_AUDIO.md](docs/INTERCOM_AUDIO.md).
 

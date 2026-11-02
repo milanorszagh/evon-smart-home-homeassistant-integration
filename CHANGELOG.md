@@ -28,6 +28,10 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   `body-parser`, `qs`, `fast-uri` and `@hono/node-server` versions pulled in by the MCP
   SDK), clearing all `npm audit` advisories. The MCP server now asks for Node.js 24.22.1 or
   newer (the October 2026 security release).
+- **Docs warn who can open the door.** README and `docs/INTERCOM_AUDIO.md` now state that
+  an enabled *Open door* button can be pressed by every Home Assistant user (including
+  non-admin and kiosk accounts, access tokens and exposed voice assistants), and by any
+  device that receives the doorbell notification's open-door action.
 
 ### Project
 
