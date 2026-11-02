@@ -863,7 +863,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1527 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1528 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

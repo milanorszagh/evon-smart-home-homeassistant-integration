@@ -1215,7 +1215,7 @@ Test files:
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1527 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1528 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
