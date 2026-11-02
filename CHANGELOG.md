@@ -31,8 +31,14 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Project
 
-- CI installs the newest Node.js 24 patch on every run (`check-latest`) instead of the
-  runner's cached version.
+- CI runs the MCP server lint, build, tests and `npm audit` on Node.js 24 and 26, and
+  installs the newest patch release on every run (`check-latest`) instead of the runner's
+  cached version. Renovate no longer proposes Node majors for CI.
+- npm updates: `@modelcontextprotocol/sdk` 1.32.2, `dotenv` 18.0.9, `ws` 8.22.1,
+  `eslint` 10.14.0, `typescript-eslint` 8.72.1, `@types/node` 24.19.2, `@types/ws` 8.18.2
+  (#31, #32, #34).
+- Docs and example scripts use placeholders instead of a real Engine ID, LAN IP and local
+  paths.
 
 ## [1.24.0] - 2026-10-16
 

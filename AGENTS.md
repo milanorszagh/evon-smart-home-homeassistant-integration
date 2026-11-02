@@ -950,7 +950,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull r
 1. `ruff check` - Python linting (custom_components/evon/ and tests/)
 2. `ruff format --check` - Python formatting
 3. `mypy custom_components/evon/ --ignore-missing-imports` - **advisory only** (`continue-on-error: true`; ~100 errors remain, tracked in `docs/CODE_ANALYSIS_BACKLOG.md`) — a red mypy step never fails the build, so do not rely on CI to catch type errors
-4. `npm run lint` - TypeScript linting
+4. `npm run lint` - TypeScript linting. Steps 4–7 run in the "Lint TypeScript" job on a Node **24 + 26** matrix (24 = the `engines` floor `>=24.22.1`, 26 = current LTS) with `check-latest: true`, so each run gets the newest patch release rather than the runner's cached Node
 5. `npm run build` - TypeScript compilation
 6. `npm run test:mcp` - MCP server and Lovelace card tests (25 tests)
 7. `npm audit --audit-level=high` - npm security audit (fails the build)
@@ -965,7 +965,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull r
 
 Additional workflows:
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security scanning for Python and JavaScript/TypeScript on push, PRs, and weekly schedule. Results in the repo's Security tab.
-- **Renovate** (`renovate.json`) - Active (the Mend Renovate app ran in silent mode until 2026-10-12, which is why no PRs appeared before then): schedule `every weekend` (Europe/Vienna), updates grouped into npm deps / npm devDeps / pip / GitHub Actions PRs, patch updates automerge on green CI, the TypeScript major is held (typescript-eslint does not support TS 7 yet), `@types/node` is pinned `<25` (Node 24 floor) and the CI `python` version is excluded (bumped by hand with the HA floor); the Dependency Dashboard is issue #21.
+- **Renovate** (`renovate.json`) - Active (the Mend Renovate app ran in silent mode until 2026-10-12, which is why no PRs appeared before then): schedule `every weekend` (Europe/Vienna), updates grouped into npm deps / npm devDeps / pip / GitHub Actions PRs, patch updates automerge on green CI, the TypeScript major is held (typescript-eslint does not support TS 7 yet), `@types/node` is pinned `<25` (Node 24 floor), Node majors in the CI matrix are disabled (change them by hand together with `engines`) and the CI `python` version is excluded (bumped by hand with the HA floor); the Dependency Dashboard is issue #21.
 
 ### Pending Home Assistant Deprecations
 

@@ -40,6 +40,19 @@
       "enabled": false
     },
     {
+      "description": "CI tests Node 24 (engines floor) and 26 (current LTS); check-latest pulls patches, so Node majors in CI are changed by hand together with the engines floor",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Group all npm production dependency updates",
       "matchManagers": [
         "npm"
