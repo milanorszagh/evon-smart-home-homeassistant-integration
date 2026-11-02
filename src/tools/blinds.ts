@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callMethod } from "../api-client.js";
 import { DEVICE_CLASSES, BLIND_METHODS } from "../constants.js";
-import { getInstances, filterByClass, controlAllDevices, fetchBlindsWithState, sanitizeId } from "../helpers.js";
+import { getInstances, filterByClass, controlAllDevices, fetchBlindsWithState, requireDevice } from "../helpers.js";
 
 export function registerBlindTools(server: McpServer): void {
   server.tool(
@@ -31,7 +31,7 @@ export function registerBlindTools(server: McpServer): void {
       angle: z.number().min(0).max(100).optional().describe("Slat angle (0-100)"),
     },
     async ({ blind_id, action, position, angle }) => {
-      const id = sanitizeId(blind_id);
+      const id = (await requireDevice(blind_id, ["blind"])).ID;
       if (action === "position" && position == null) throw new Error("position parameter is required for position action");
       if (action === "angle" && angle == null) throw new Error("angle parameter is required for angle action");
 

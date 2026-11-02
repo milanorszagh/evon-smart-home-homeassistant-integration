@@ -18,12 +18,65 @@ import type {
   RadiatorWithState,
 } from "./types.js";
 
-/** Validate instance_id to prevent path traversal (must be alphanumeric with dots/underscores). */
+const ID_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Validate an instance ID (or property/method name) before it goes into a URL path.
+ *
+ * Dot-separated segments of letters, digits, "_" and "-" (the same charset as the
+ * HA integration). Every segment must be non-empty, so "", ".", ".." and "a..b"
+ * are rejected: fetch() normalises a literal ".." path segment, which would let
+ * `/instances/${id}` reach other endpoints on the controller.
+ */
 export function sanitizeId(id: string): string {
-  if (!/^[\w.]+$/.test(id)) {
-    throw new Error(`Invalid instance ID: ${id}`);
+  if (typeof id !== "string" || id.length === 0 || id.length > 128 || !id.split(".").every((s) => ID_SEGMENT.test(s))) {
+    throw new Error(`Invalid instance ID: ${JSON.stringify(id)}`);
   }
   return id;
+}
+
+/** Device families the control tools may act on. */
+export type DeviceKind = "light" | "blind" | "climate" | "radiator";
+
+export function deviceKindOf(className: string): DeviceKind | null {
+  switch (className) {
+    case DEVICE_CLASSES.LIGHT_DIM:
+    case DEVICE_CLASSES.LIGHT_RELAY:
+    case DEVICE_CLASSES.LIGHT_RGBW:
+    case DEVICE_CLASSES.LIGHT_GROUP:
+      return "light";
+    case DEVICE_CLASSES.BLIND:
+    case DEVICE_CLASSES.BLIND_GROUP:
+      return "blind";
+    case DEVICE_CLASSES.CLIMATE:
+    case DEVICE_CLASSES.CLIMATE_UNIVERSAL:
+      return "climate";
+    case DEVICE_CLASSES.BATHROOM_RADIATOR:
+      return "radiator";
+    default:
+      return className.endsWith(`.${DEVICE_CLASSES.CLIMATE_UNIVERSAL}`) ? "climate" : null;
+  }
+}
+
+/**
+ * Resolve a model-supplied instance ID to a device of one of the given kinds.
+ *
+ * The control tools send methods such as SwitchOn or Switch. Without this check a
+ * confused or prompt-injected model could send them to any instance, e.g. an
+ * intercom's door-relay sub-instance or a security/logic object.
+ */
+export async function requireDevice(id: string, kinds: readonly DeviceKind[]): Promise<EvonInstance> {
+  const safeId = sanitizeId(id);
+  // Unnamed instances are class templates, not devices.
+  const instance = (await getInstances()).find((i) => i.ID === safeId && i.Name);
+  if (!instance) {
+    throw new Error(`Unknown instance: ${safeId}`);
+  }
+  const kind = deviceKindOf(instance.ClassName);
+  if (kind === null || !kinds.includes(kind)) {
+    throw new Error(`Instance ${safeId} (${instance.ClassName}) is not a ${kinds.join(" or ")} and cannot be controlled with this tool`);
+  }
+  return instance;
 }
 
 // Short-lived cache for getInstances() to avoid redundant API calls

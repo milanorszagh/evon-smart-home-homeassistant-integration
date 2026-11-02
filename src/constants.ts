@@ -14,6 +14,7 @@ export const DEVICE_CLASSES = {
   // Group object whose SwitchAllOff/SwitchAllOn the web app's "all lights" buttons call
   LIGHT_ALL: "Base.ehLight",
   BLIND: "SmartCOM.Blind.Blind",
+  BLIND_GROUP: "SmartCOM.Blind.BlindGroup",
   CLIMATE: "SmartCOM.Clima.ClimateControl",
   CLIMATE_UNIVERSAL: "ClimateControlUniversal",
   HOME_STATE: "System.HomeState",

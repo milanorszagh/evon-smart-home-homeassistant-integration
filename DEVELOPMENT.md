@@ -255,7 +255,7 @@ The server auto-detects plain text or encoded passwords: an 88-character Base64 
 | `list_instances` | List all instances (devices, sensors, logic blocks) with optional filter |
 | `get_instance` | Get detailed properties of a specific instance |
 | `get_property` | Get a specific property value of an instance |
-| `call_method` | Call a method on an instance (use specific tools for common operations) |
+| `call_method` | Call an allowed method on a light, blind, climate or bathroom-radiator instance (other device classes are refused; use specific tools for common operations) |
 | `list_lights` | List all lights with current state |
 | `light_control` | Control a single light (on/off/brightness) |
 | `light_control_all` | Control all lights at once |
@@ -914,7 +914,7 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 |----------|------|---------|-------------|
 | **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS + MCP tests + `npm audit` on Node.js 24 and 26 (`check-latest`), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
 | **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
-| **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, patch automerge; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, Node majors in the CI matrix, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
+| **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, 3-day `minimumReleaseAge`, patch automerge, GitHub Actions digest-pinned; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, Node majors in the CI matrix, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
 
 ---
 
@@ -1215,7 +1215,7 @@ Test files:
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1492 Python + 25 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1527 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { callMethod } from "../api-client.js";
 import { CLIMATE_METHODS } from "../constants.js";
-import { getInstances, filterClimateDevices, controlAllDevices, fetchClimateWithState, sanitizeId } from "../helpers.js";
+import { getInstances, filterClimateDevices, controlAllDevices, fetchClimateWithState, requireDevice } from "../helpers.js";
 
 export function registerClimateTools(server: McpServer): void {
   server.tool(
@@ -30,7 +30,7 @@ export function registerClimateTools(server: McpServer): void {
       temperature: z.number().min(5).max(40).optional().describe("Target temperature in °C, 5-40 (for set_temperature action)"),
     },
     async ({ climate_id, action, temperature }) => {
-      const id = sanitizeId(climate_id);
+      const id = (await requireDevice(climate_id, ["climate"])).ID;
       const method = CLIMATE_METHODS[action];
       if (action === "set_temperature" && temperature == null) {
         throw new Error("temperature parameter is required for set_temperature action");

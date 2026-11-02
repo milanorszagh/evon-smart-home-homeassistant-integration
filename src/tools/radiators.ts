@@ -5,7 +5,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
-import { fetchRadiatorsWithState, sanitizeId } from "../helpers.js";
+import { fetchRadiatorsWithState, requireDevice } from "../helpers.js";
 import type { BathroomRadiatorState } from "../types.js";
 
 export function registerRadiatorTools(server: McpServer): void {
@@ -29,7 +29,7 @@ export function registerRadiatorTools(server: McpServer): void {
       action: z.enum(["on", "off", "toggle"]).describe("Action to perform"),
     },
     async ({ radiator_id, action }) => {
-      const id = sanitizeId(radiator_id);
+      const id = (await requireDevice(radiator_id, ["radiator"])).ID;
       // NOTE: Race condition (mirrors Python integration P-M1).
       // There is a TOCTOU window between reading the current state and
       // calling Switch(): another caller could toggle the radiator in
