@@ -42,7 +42,7 @@ JOURNAL_LINES="${HA_LOG_JOURNAL_LINES:-300000}"
 # HAOS), so only plain numbers are accepted. The text filter is applied locally
 # below and never reaches the remote shell.
 if ! [[ "$LINES" =~ ^[0-9]+$ ]] || ! [[ "$JOURNAL_LINES" =~ ^[0-9]+$ ]]; then
-    echo "Error: lines and HA_LOG_JOURNAL_LINES must be positive integers" >&2
+    echo "Error: lines and HA_LOG_JOURNAL_LINES must be whole numbers" >&2
     exit 1
 fi
 

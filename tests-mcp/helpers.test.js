@@ -37,10 +37,10 @@ test("deviceKindOf maps controllable classes and nothing else", async () => {
   }
 });
 
-test("requireDevice refuses door relays, wrong kinds, templates and unknown IDs", async () => {
+test("requireDevice refuses intercom sub-instances, wrong kinds, templates and unknown IDs", async () => {
   const instances = [
     { ID: "SC1_M01.Light3", ClassName: "SmartCOM.Light.LightDim", Name: "Kitchen", Group: "" },
-    { ID: "Intercom2N1000.DoorSwitch", ClassName: "Base.bSwitch", Name: "Door", Group: "" },
+    { ID: "Intercom2N1000.DoorSwitch", ClassName: "Base.bSwitch", Name: "Doorbell button", Group: "" },
     { ID: "SmartCOM.Light.LightDim", ClassName: "SmartCOM.Light.LightDim", Name: "", Group: "" },
   ];
   const originalFetch = global.fetch;

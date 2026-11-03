@@ -20,7 +20,6 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - **No reauth prompt for a network blip.** A connection or rate-limit error while logging in
   again after an expired session was reported as wrong credentials and opened the
   re-authentication dialog.
-
 - **No extra poll after a command that changes nothing.** Setting a light to the
   brightness it already has, turning off a light that is already off, opening a blind that
   is already open, moving a blind to where it already is, or selecting the preset a room
@@ -47,7 +46,7 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - **Weather station:** only the two read paths are forwarded through the Home Connect proxy,
   and station IDs reported by the shared controller are validated.
 - **MCP server:** control tools and `call_method` act only on lights, blinds, climate and
-  bathroom radiators (an intercom's door relay was reachable through `call_method`),
+  bathroom radiators (the intercom's doorbell-button input was reachable through `call_method`),
   `SetValue` was removed from `call_method`, and instance IDs with empty or `..` segments
   are rejected.
 - **Docs warn who can open the door.** README and `docs/INTERCOM_AUDIO.md` now state that

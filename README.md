@@ -394,6 +394,7 @@ Since the cameras are snapshot-based (no video stream), the integration provides
 - **Timestamp overlay**: Each frame includes a burned-in timestamp
 - **Configurable output**: MP4 only, or MP4 + individual JPEG frames
 - **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings. The `evon_recording_finished` event fires when a recording has been saved.
+- **Free space check**: A recording does not start when less than 1 GB is free in the recordings folder. Old recordings are never deleted automatically.
 - **Storage location**: Recordings are saved in Home Assistant's local media folder — `/media/evon_recordings` on Home Assistant OS and Docker, `<config>/media/evon_recordings` on venv installs. Recordings made with versions before 1.23.0 are moved there automatically.
 - **Media browser**: Recordings appear in Home Assistant's media browser under **My media → evon_recordings** (requires the `media_source` integration, part of `default_config`)
 - **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, a list of recent recordings with inline video playback, a link to the media browser, and an optional **Open door** button for the intercom's door opener

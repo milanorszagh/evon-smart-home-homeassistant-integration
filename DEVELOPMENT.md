@@ -912,8 +912,8 @@ ruff check custom_components/evon/ tests/ && ruff format --check custom_componen
 
 | Workflow | File | Trigger | What it does |
 |----------|------|---------|-------------|
-| **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS + MCP tests + `npm audit` on Node.js 24 and 26 (`check-latest`), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
-| **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities |
+| **CI** | `ci.yml` | Push to `main`, PRs, `v*` tags | Read-only `GITHUB_TOKEN`, actions pinned by commit SHA, ruff/pip-audit from `requirements-lint.txt`. Lint (ruff, eslint; mypy advisory-only via `continue-on-error`), build TS + MCP tests + `npm audit` on Node.js 24 and 26 (`check-latest`), run tests (Python 3.14 on Ubuntu + macOS), MCP tests (`npm run test:mcp`), pip-audit security scanning (advisory-only), npm audit security scanning, HACS validation, hassfest validation (also on `v*` tags), Codecov upload (`--cov-fail-under=76`) |
+| **CodeQL** | `codeql.yml` | Push, PR, weekly | Security scanning for Python and JavaScript/TypeScript vulnerabilities (jobs get `security-events: write`, everything else read-only) |
 | **Renovate** | `renovate.json` | Every weekend (Europe/Vienna) | Dependency update PRs grouped by ecosystem, 3-day `minimumReleaseAge`, patch automerge, GitHub Actions digest-pinned; holds: TypeScript majors (until typescript-eslint supports TS 7), `@types/node <25`, Node majors in the CI matrix, the CI `python` github-actions dep; Dependency Dashboard is issue #21 |
 
 ---
@@ -1213,9 +1213,9 @@ Test files:
 - `test_weather.py` - Weather station (proxy read, discovery/back-off, processor, entities, stations added after setup)
 - `test_poll_prefetch.py` - Safety-net poll: detail prefetch selection, WS-mapped keys, poll-correction diagnostics
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
-- `tests-mcp/` - MCP server tests (`api-client`, `index`, `registry`, `stdio`, `ws-client` `.test.js`); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
+- `tests-mcp/` - MCP server tests (`api-client`, `helpers`, `index`, `registry`, `stdio`, `ws-client` `.test.js`; `helpers.test.js` covers instance-ID validation and the device-class check of the control tools); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1528 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1529 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 

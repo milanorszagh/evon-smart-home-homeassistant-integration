@@ -9,6 +9,7 @@ Assistant runtime is required).
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -290,6 +291,7 @@ class _StubCoordinator:
         self._instances_cache = instances or []
         self._weather_sources = None
         self._weather_discovered_at = None
+        self._invalid_weather_override = None
 
 
 class TestDiscoverWeatherSources:
@@ -321,6 +323,21 @@ class TestDiscoverWeatherSources:
         )
         assert await coord._discover_weather_sources() == []
         api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_options_override_warns_once(self, caplog):
+        """Discovery re-runs on every 30 s weather tick while it finds nothing."""
+        coord = _StubCoordinator(
+            AsyncMock(),
+            options={
+                CONF_WEATHER_HOME_CONNECT_ID: "evonHomeConnect4939",
+                CONF_WEATHER_STATION_ID: "../apps",
+            },
+        )
+        with caplog.at_level(logging.WARNING):
+            for _ in range(3):
+                assert await coord._discover_weather_sources() == []
+        assert sum("Ignoring weather station override" in r.message for r in caplog.records) == 1
 
     @pytest.mark.asyncio
     async def test_discovery_skips_stations_with_invalid_ids(self):

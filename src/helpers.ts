@@ -63,7 +63,7 @@ export function deviceKindOf(className: string): DeviceKind | null {
  *
  * The control tools send methods such as SwitchOn or Switch. Without this check a
  * confused or prompt-injected model could send them to any instance, e.g. an
- * intercom's door-relay sub-instance or a security/logic object.
+ * intercom's doorbell-button input (DoorSwitch) or a security/logic object.
  */
 export async function requireDevice(id: string, kinds: readonly DeviceKind[]): Promise<EvonInstance> {
   const safeId = sanitizeId(id);

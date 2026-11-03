@@ -548,7 +548,7 @@ The Evon MCP server is configured in `~/.claude.json` under `mcpServers.evon` (e
 |------|---------|
 | `get_instance` | Get all properties of a specific device instance |
 | `get_property` | Get a specific property value |
-| `call_method` | Call an allowed method (no `SetValue`, no `SwitchOnFor`) on a named light, blind, climate or bathroom-radiator instance — other classes (intercom door relays such as `Intercom2N1000.DoorSwitch`, security, logic) are refused; use `curl` (below) for anything else |
+| `call_method` | Call an allowed method (no `SetValue`, no `SwitchOnFor`) on a named light, blind, climate or bathroom-radiator instance — other classes (e.g. the intercom's doorbell-button input `Intercom2N1000.DoorSwitch`, security, logic) are refused; use `curl` (below) for anything else |
 | `list_climate` | List all climate devices with current state |
 | `list_lights` | List all lights with current state |
 
@@ -689,7 +689,7 @@ The API client implements several security measures:
 - Password must be non-empty
 - Host port validated: 1-65535
 - Host URL must not contain `user:pass@` (the netloc would otherwise carry them into the entry title and the device's configuration URL)
-- Home Connect proxy paths: `get_via_home_connect()` accepts only `/instances` and `/instances/<validated id>`; station IDs from the shared controller (and the options override) are validated before use
+- Home Connect proxy paths: `get_via_home_connect()` accepts only `/instances` and `/instances/<validated id>`; station IDs from the shared controller (and the options override) are validated before use; an invalid override is ignored with one warning per value (discovery re-runs on every 30 s weather tick while it finds nothing)
 - Services: `evon.start_recording` / `stop_recording` have `vol` schemas — the `services.yaml` selector range (30–3600 s) only limits the UI, every HA user (not only admins) can call services directly. The camera entity clamps the duration again
 - **Door opener: no access control of its own.** HA has no per-user entity permissions, so an enabled *Open door* button is usable by every HA user, token and exposed voice assistant (documented in README and `docs/INTERCOM_AUDIO.md`). Do not add services that reach the opener without thinking about this
 
@@ -770,7 +770,7 @@ These are intentional design choices. Do NOT flag them as bugs or attempt to "fi
 
 2. **HVAC COOL and HEAT both call comfort mode (climate.py)**: Correct behavior. The heating/cooling distinction is controlled by the global Season Mode (per-system `Base.ehThermostat.IsCool`), not per-room HVAC mode. Setting any non-OFF mode restores the comfort preset.
 
-3. **`ENTITY_TYPE_SWITCHES` entries in `SUBSCRIBE_PROPERTIES`/`PROPERTY_MAPPINGS` (ws_mappings.py)**: Retained for future switch classes but currently unreachable — no class in `CLASS_TO_TYPE` maps to this entity type. `Base.bSwitch` sub-instances (intercom door relays, template objects) are silently skipped by `get_entity_type()` — they were never processed into entities even when mapped. `SmartCOM.Light.Light` relay outputs are on the light platform.
+3. **`ENTITY_TYPE_SWITCHES` entries in `SUBSCRIBE_PROPERTIES`/`PROPERTY_MAPPINGS` (ws_mappings.py)**: Retained for future switch classes but currently unreachable — no class in `CLASS_TO_TYPE` maps to this entity type. `Base.bSwitch` sub-instances (e.g. `Intercom2N1000.DoorSwitch`, the intercom's doorbell push-button input — named "Haupteingang Klingeltaste" on the reference system, verified 2026-11-03; the door itself is opened by `SwitchOnFor` on the intercom — and template objects) are silently skipped by `get_entity_type()` — they were never processed into entities even when mapped. `SmartCOM.Light.Light` relay outputs are on the light platform.
 
 4. **Duplicate WebSocket status sensors (binary_sensor.py + sensor.py)**: Intentional — the binary sensor provides simple on/off for automations, while the text sensor provides rich diagnostics (uptime, latency, reconnect count). Both serve different use cases.
 
@@ -863,7 +863,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1528 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests

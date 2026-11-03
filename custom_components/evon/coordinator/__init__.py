@@ -184,6 +184,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # only after WEATHER_REDISCOVERY_INTERVAL (the discovery lists the shared
         # controller's whole instance tree through the proxy).
         self._weather_discovered_at: float | None = None
+        # The invalid weather override last warned about. Discovery runs on every
+        # weather tick while it finds nothing, so the warning is logged once per value.
+        self._invalid_weather_override: tuple[str, str] | None = None
         # Latest processed weather-station data. The station is read on its own
         # WEATHER_POLL_INTERVAL timer (async_start_weather_polling); the device
         # poll reads it inline only until the first result exists and otherwise
@@ -507,11 +510,13 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 validate_instance_id(hc_override)
                 validate_instance_id(station_override)
             except ValueError:
-                _LOGGER.warning(
-                    "Ignoring weather station override: invalid Home Connect or station ID %r / %r",
-                    hc_override,
-                    station_override,
-                )
+                if self._invalid_weather_override != (hc_override, station_override):
+                    self._invalid_weather_override = (hc_override, station_override)
+                    _LOGGER.warning(
+                        "Ignoring weather station override: invalid Home Connect or station ID %r / %r",
+                        hc_override,
+                        station_override,
+                    )
                 self._weather_sources = []
                 return self._weather_sources
             self._weather_sources = [(hc_override, station_override, None)]
