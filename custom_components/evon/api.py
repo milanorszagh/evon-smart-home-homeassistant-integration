@@ -27,6 +27,7 @@ from .const import (
     ENGINE_ID_MIN_LENGTH,
     EVON_CLASS_LIGHT_EH,
     EVON_REMOTE_HOST,
+    IMAGE_FETCH_MAX_BYTES,
     IMAGE_FETCH_TIMEOUT,
     LOGIN_BACKOFF_BASE,
     LOGIN_MAX_BACKOFF,
@@ -494,9 +495,16 @@ class EvonApi:
                             self._token = None
                             self._token_timestamp = 0.0
                             await self.login()
-                        return await self._request(method, endpoint, data, retry=False)
-                    except (EvonAuthError, EvonConnectionError) as err:
+                    except EvonRateLimitError, EvonConnectionError:
+                        # Transient: keep the type so callers retry later instead of
+                        # raising ConfigEntryAuthFailed (a reauth dialog for an outage).
+                        raise
+                    except EvonAuthError as err:
                         raise EvonAuthError(f"Re-authentication failed: {err}") from err
+                    # Outside the try: an error of the retried request is reported as
+                    # itself (e.g. a timeout stays a connection error), not as an
+                    # authentication failure.
+                    return await self._request(method, endpoint, data, retry=False)
 
                 # Handle specific error status codes
                 reason = response.reason or "Unknown"
@@ -569,8 +577,17 @@ class EvonApi:
             "/instances"), or None if the nested payload is absent.
         """
         _validate_instance_id(home_connect_id)
-        if not isinstance(path, str) or not path.startswith("/instances"):
+        # Only the two read paths the integration uses. The path is forwarded to a
+        # shared (building-level) controller, and a station id from that
+        # controller's own listing must not steer it anywhere else
+        # ("/instances/../x", "/instancesFoo", "/instances/a?b").
+        if not isinstance(path, str):
             raise ValueError(f"Invalid Home Connect path: {path!r}")
+        if path != "/instances":
+            prefix = "/instances/"
+            if not path.startswith(prefix):
+                raise ValueError(f"Invalid Home Connect path: {path!r}")
+            _validate_instance_id(path[len(prefix) :])
         result = await self._request("POST", f"/instances/{home_connect_id}/Get", [path, {}, False])
         if not isinstance(result, dict):
             return None
@@ -1013,6 +1030,28 @@ class EvonApi:
         except TimeoutError as err:
             raise EvonConnectionError(f"Connection timeout: {err}") from err
 
+    @staticmethod
+    async def _read_image_body(resp: aiohttp.ClientResponse) -> bytes | None:
+        """Return the body of a snapshot response, or None if it is not a sane image."""
+        content_type = resp.content_type or ""
+        if not content_type.startswith("image/"):
+            _LOGGER.debug("Image fetch returned non-image content type %r", content_type)
+            return None
+        if resp.content_length is not None and resp.content_length > IMAGE_FETCH_MAX_BYTES:
+            _LOGGER.warning("Refusing image of %d bytes (limit %d)", resp.content_length, IMAGE_FETCH_MAX_BYTES)
+            return None
+        # Read to EOF in chunks: StreamReader.read(n) returns only what is buffered
+        # (up to n bytes), which truncated the frame (verified live 2026-11-02).
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in resp.content.iter_chunked(64 * 1024):
+            total += len(chunk)
+            if total > IMAGE_FETCH_MAX_BYTES:
+                _LOGGER.warning("Refusing image larger than %d bytes", IMAGE_FETCH_MAX_BYTES)
+                return None
+            chunks.append(chunk)
+        return b"".join(chunks)
+
     async def fetch_image(self, image_path: str) -> bytes | None:
         """Fetch an image from the Evon server.
 
@@ -1041,9 +1080,13 @@ class EvonApi:
                 cookies = {"token": token}
                 timeout = aiohttp.ClientTimeout(total=IMAGE_FETCH_TIMEOUT)
 
-                async with session.get(url, cookies=cookies, timeout=timeout) as resp:
+                # No redirects: an expired token is answered with 302 -> /login, which
+                # must trigger the re-login below (following it returned the login
+                # page as "image"), and a redirect must never take the request (and
+                # the HA-served bytes) to another host.
+                async with session.get(url, cookies=cookies, timeout=timeout, allow_redirects=False) as resp:
                     if resp.status == 200:
-                        return await resp.read()
+                        return await self._read_image_body(resp)
                     if resp.status in (302, 401) and attempt == 0:
                         _LOGGER.debug("Image fetch got %d, refreshing token and retrying", resp.status)
                         async with self._token_lock:

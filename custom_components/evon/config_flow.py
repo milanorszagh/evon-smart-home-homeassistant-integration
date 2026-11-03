@@ -116,6 +116,12 @@ def normalize_host(host: str) -> str:
     if not parsed.netloc:
         raise InvalidHostError("Invalid host URL: No valid host found")
 
+    # Credentials belong in the username/password fields. In the URL they would be
+    # kept in the netloc and shown in the entry title and the device's
+    # configuration URL.
+    if parsed.username is not None or parsed.password is not None or "@" in parsed.netloc:
+        raise InvalidHostError("Host must not contain a username or password")
+
     # Extract hostname without port
     hostname = parsed.hostname or ""
 

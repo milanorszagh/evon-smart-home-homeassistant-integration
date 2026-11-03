@@ -7,29 +7,34 @@ on:
   pull_request:
     branches: [main]
 
+# Every job only reads the repository. Without this block the GITHUB_TOKEN gets the
+# repository default, which can be read/write, while the jobs run third-party code
+# (npm/pip installs, hacs/action, codecov-action).
+permissions:
+  contents: read
+
 jobs:
   lint-python:
     name: Lint Python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.14"
 
-      - name: Install ruff
-        run: pip install ruff
+      - name: Install ruff and pip-audit
+        # Pinned in requirements-lint.txt (kept current by Renovate) instead of
+        # installing whatever is newest on PyPI at run time.
+        run: pip install -r requirements-lint.txt
 
       - name: Run ruff check
         run: ruff check custom_components/evon/ tests/
 
       - name: Run ruff format check
         run: ruff format --check custom_components/evon/ tests/
-
-      - name: Install pip-audit
-        run: pip install pip-audit
 
       - name: Run pip-audit
         run: pip-audit -r requirements-test.txt
@@ -52,10 +57,10 @@ jobs:
         node-version: ["24", "26"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node-version }}
           check-latest: true
@@ -80,7 +85,7 @@ jobs:
     name: HACS Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # HACS cuts no releases (latest tag is from 2022) — pin main by SHA
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main 2026-06-08
         with:
@@ -90,7 +95,7 @@ jobs:
     name: Hassfest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # home-assistant/actions publishes no releases — pin master by SHA
       - uses: home-assistant/actions/hassfest@a7c616ce81ccda50150bf1595786c71b1883fabb # master 2026-08-03
 
@@ -107,10 +112,10 @@ jobs:
             python-version: "3.14"
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
@@ -126,7 +131,7 @@ jobs:
           pytest tests/ -v --cov=custom_components/evon --cov-report=xml --cov-report=term-missing --cov-fail-under=76
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: ./coverage.xml
           fail_ci_if_error: true

@@ -14,6 +14,12 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Fixed
 
+- **Camera snapshot after the session expired.** The snapshot request followed the
+  controller's redirect to its login page and showed that page's bytes as the image; it
+  now logs in again and retries.
+- **No reauth prompt for a network blip.** A connection or rate-limit error while logging in
+  again after an expired session was reported as wrong credentials and opened the
+  re-authentication dialog.
 - **No extra poll after a command that changes nothing.** Setting a light to the
   brightness it already has, turning off a light that is already off, opening a blind that
   is already open, moving a blind to where it already is, or selecting the preset a room
@@ -28,9 +34,33 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   `body-parser`, `qs`, `fast-uri` and `@hono/node-server` versions pulled in by the MCP
   SDK), clearing all `npm audit` advisories. The MCP server now asks for Node.js 24.22.1 or
   newer (the October 2026 security release).
+- **Recording list in the camera card could run injected script.** A file with a crafted
+  name in the recordings folder (for example uploaded through the media browser) was put
+  into the card's HTML unescaped. The card now escapes everything it shows, and only files
+  named exactly like the integration's recordings are listed.
+- **`evon.start_recording` enforces the 30–3600 s range** for direct service calls, not only
+  in the UI, and refuses to start with less than 1 GB free in the recordings folder.
+- **Camera snapshots:** no redirects followed, only image responses up to 5 MB accepted.
+- **Host URLs with `user:password@` are rejected** in the config flow (the credentials were
+  kept in the entry title and the device link).
+- **Weather station:** only the two read paths are forwarded through the Home Connect proxy,
+  and station IDs reported by the shared controller are validated.
+- **MCP server:** control tools and `call_method` act only on lights, blinds, climate and
+  bathroom radiators (the intercom's doorbell-button input was reachable through `call_method`),
+  `SetValue` was removed from `call_method`, and instance IDs with empty or `..` segments
+  are rejected.
+- **Docs warn who can open the door.** README and `docs/INTERCOM_AUDIO.md` now state that
+  an enabled *Open door* button can be pressed by every Home Assistant user (including
+  non-admin and kiosk accounts, access tokens and exposed voice assistants), and by any
+  device that receives the doorbell notification's open-door action.
 
 ### Project
 
+- CI hardening: workflows run with a read-only `GITHUB_TOKEN`, every action is pinned by
+  commit SHA, ruff and pip-audit come from a pinned `requirements-lint.txt`, and Renovate
+  waits 3 days after a release before proposing (or automerging) it.
+- `scripts/ha-logs.sh` no longer passes its arguments to the remote shell (the line count
+  must be a number, the text filter is applied locally).
 - CI runs the MCP server lint, build, tests and `npm audit` on Node.js 24 and 26, and
   installs the newest patch release on every run (`check-latest`) instead of the runner's
   cached version. Renovate no longer proposes Node majors for CI.

@@ -38,6 +38,14 @@ FILTER="${2:-}"
 # whole journal of the current boot before filtering for evon.
 JOURNAL_LINES="${HA_LOG_JOURNAL_LINES:-300000}"
 
+# Both values end up in the command line that runs on the HA host (as root on
+# HAOS), so only plain numbers are accepted. The text filter is applied locally
+# below and never reaches the remote shell.
+if ! [[ "$LINES" =~ ^[0-9]+$ ]] || ! [[ "$JOURNAL_LINES" =~ ^[0-9]+$ ]]; then
+    echo "Error: lines and HA_LOG_JOURNAL_LINES must be whole numbers" >&2
+    exit 1
+fi
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -53,14 +61,20 @@ ssh_cmd() {
 echo -e "${GREEN}Fetching Evon-related logs from Home Assistant...${NC}"
 echo ""
 
-# On HA OS, logs are accessed via 'ha core logs' command
-# Filter for evon-related entries
+# On HA OS, logs are accessed via 'ha core logs' command.
+# The remote command contains only validated numbers; colour codes are stripped
+# and evon lines selected there to keep the transfer small.
+REMOTE_CMD="ha core logs -n ${JOURNAL_LINES} 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -i evon"
+
+set -o pipefail
 if [[ -n "$FILTER" ]]; then
     echo -e "${YELLOW}Filter: evon AND ${FILTER}${NC}"
     echo ""
-    ssh_cmd "ha core logs -n ${JOURNAL_LINES} 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -i evon | grep -i '${FILTER}' | tail -${LINES}" || \
+    # Matched locally (basic regex, as before), so quotes or ; in the filter
+    # are just characters to search for.
+    ssh_cmd "$REMOTE_CMD" | grep -i -- "$FILTER" | tail -n "$LINES" || \
     echo "No matching log entries found."
 else
-    ssh_cmd "ha core logs -n ${JOURNAL_LINES} 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -i evon | tail -${LINES}" || \
+    ssh_cmd "$REMOTE_CMD" | tail -n "$LINES" || \
     echo "No evon-related log entries found."
 fi

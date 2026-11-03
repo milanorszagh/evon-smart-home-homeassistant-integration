@@ -343,6 +343,8 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 - Light identify (configuration): makes a light flash so you can find it
 - Door opener: an **Open door** button on each 2N intercom, and on each security door that is linked to an intercom, pulses the door release (2 seconds by default, adjustable under the integration's options → *Door opener*). The buttons are created **disabled** — enable them under the entity's settings before dashboards or automations can open the door
 
+> **Who can open the door:** Home Assistant has no per-user permissions for entities. Once an *Open door* button is enabled, **every** Home Assistant user can press it — including non-admin, guest and wall-tablet accounts, anyone holding a long-lived access token, and any voice assistant (Assist, Alexa, Google) the entity is exposed to. Only enable the button if everyone with a Home Assistant login may open your door, and do not expose it to voice assistants.
+
 ### Diagnostic Sensors
 
 - **WebSocket Status** - Connection state (connected/disconnected/disabled) with detailed attributes (reconnect count, messages received, uptime, pending requests, last error), plus safety-net poll statistics (poll count, last poll duration, devices fetched, corrections)
@@ -392,6 +394,7 @@ Since the cameras are snapshot-based (no video stream), the integration provides
 - **Timestamp overlay**: Each frame includes a burned-in timestamp
 - **Configurable output**: MP4 only, or MP4 + individual JPEG frames
 - **Auto-stop**: Configurable max duration (default: 5 minutes) prevents forgotten recordings. The `evon_recording_finished` event fires when a recording has been saved.
+- **Free space check**: A recording does not start when less than 1 GB is free in the recordings folder. Old recordings are never deleted automatically.
 - **Storage location**: Recordings are saved in Home Assistant's local media folder — `/media/evon_recordings` on Home Assistant OS and Docker, `<config>/media/evon_recordings` on venv installs. Recordings made with versions before 1.23.0 are moved there automatically.
 - **Media browser**: Recordings appear in Home Assistant's media browser under **My media → evon_recordings** (requires the `media_source` integration, part of `default_config`)
 - **Custom Lovelace card**: `evon-camera-recording-card` provides an inline recording UI with record button, live stopwatch, a list of recent recordings with inline video playback, a link to the media browser, and an optional **Open door** button for the intercom's door opener
@@ -424,7 +427,7 @@ sip_extension: "8001"                           # optional, adds a "Talk" button
 show_title: false                               # optional, hides the "Recording" heading (default: true)
 ```
 
-`door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds.
+`door_button` takes one of the integration's *Open door* button entities (created disabled — enable it in the entity settings first). Pressing it pulses the door release and shows *Opening…* for a few seconds. Hiding the card from a user does not stop them from opening the door — see [who can open the door](#buttons).
 
 `sip_extension` adds a **Talk** button for two-way audio with the door station. It needs an optional, self-hosted SIP stack (an Asterisk add-on, the SIP Core card, and HTTPS for microphone access, e.g. via Tailscale) that is **not** part of this integration. The full setup, requirements and config templates are in [docs/INTERCOM_AUDIO.md](docs/INTERCOM_AUDIO.md).
 

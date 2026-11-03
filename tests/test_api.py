@@ -993,21 +993,99 @@ class TestFetchImagePathValidation:
         api._token = "test_token"
         api._token_timestamp = time.monotonic()
 
-        resp = AsyncMock()
-        resp.status = 200
-        resp.read = AsyncMock(return_value=b"jpegdata")
-        cm = AsyncMock()
-        cm.__aenter__ = AsyncMock(return_value=resp)
-        cm.__aexit__ = AsyncMock(return_value=False)
-        mock_session = MagicMock()
-        mock_session.closed = False
-        mock_session.get = MagicMock(return_value=cm)
+        mock_session = _image_session(_image_resp(body=b"jpegdata"))
         api._session = mock_session
 
         result = await api.fetch_image("/temp/snapshot.jpg")
         assert result == b"jpegdata"
         mock_session.get.assert_called_once()
         assert mock_session.get.call_args[0][0] == "http://192.168.1.100/temp/snapshot.jpg"
+        assert mock_session.get.call_args.kwargs["allow_redirects"] is False
+
+
+def _image_resp(status=200, body=b"jpegdata", content_type="image/jpeg", content_length=None):
+    resp = MagicMock()
+    resp.status = status
+    resp.content_type = content_type
+    resp.content_length = content_length
+    resp.content.iter_chunked = MagicMock(side_effect=lambda size: _async_chunks(body, size))
+    return resp
+
+
+async def _async_chunks(body, size):
+    # Small pieces, like a real stream: a single read() would not return the whole body.
+    step = min(size, 1000)
+    for i in range(0, len(body), step):
+        yield body[i : i + step]
+
+
+def _image_session(*responses):
+    cms = []
+    for resp in responses:
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=resp)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        cms.append(cm)
+    session = MagicMock()
+    session.closed = False
+    session.get = MagicMock(side_effect=cms)
+    return session
+
+
+class TestFetchImageResponseChecks:
+    """Only real, bounded images are returned; a 302 to /login re-authenticates."""
+
+    def _api(self):
+        import time
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "test_token"
+        api._token_timestamp = time.monotonic()
+        return api
+
+    @pytest.mark.asyncio
+    async def test_non_image_content_type_rejected(self):
+        api = self._api()
+        api._session = _image_session(_image_resp(body=b"<html>login</html>", content_type="text/html"))
+        assert await api.fetch_image("/temp/snapshot.jpg") is None
+
+    @pytest.mark.asyncio
+    async def test_oversized_content_length_rejected(self):
+        from custom_components.evon.const import IMAGE_FETCH_MAX_BYTES
+
+        api = self._api()
+        resp = _image_resp(content_length=IMAGE_FETCH_MAX_BYTES + 1)
+        api._session = _image_session(resp)
+        assert await api.fetch_image("/temp/snapshot.jpg") is None
+        resp.content.iter_chunked.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_body_arriving_in_pieces_is_read_completely(self):
+        """A frame delivered in many chunks is returned whole, not just the first piece."""
+        api = self._api()
+        body = bytes(range(256)) * 160  # 40 KB, like a real snapshot
+        api._session = _image_session(_image_resp(body=body))
+        assert await api.fetch_image("/temp/snapshot.jpg") == body
+
+    @pytest.mark.asyncio
+    async def test_oversized_body_without_length_rejected(self):
+        from custom_components.evon.const import IMAGE_FETCH_MAX_BYTES
+
+        api = self._api()
+        api._session = _image_session(_image_resp(body=b"x" * (IMAGE_FETCH_MAX_BYTES + 10)))
+        assert await api.fetch_image("/temp/snapshot.jpg") is None
+
+    @pytest.mark.asyncio
+    async def test_redirect_to_login_triggers_relogin_and_retry(self):
+        api = self._api()
+        api._session = _image_session(
+            _image_resp(status=302, body=b"", content_type="text/plain"),
+            _image_resp(body=b"fresh-jpeg"),
+        )
+        api.login = AsyncMock(side_effect=lambda: setattr(api, "_token", "new_token") or "new_token")
+        assert await api.fetch_image("/temp/snapshot.jpg") == b"fresh-jpeg"
+        api.login.assert_awaited_once()
+        assert api._session.get.call_count == 2
 
 
 class TestFetchImageErrorLogging:
@@ -2282,8 +2360,12 @@ class TestRequestAuthRetry:
     """Tests for safe auth retry in _request()."""
 
     @pytest.mark.asyncio
-    async def test_request_401_login_failure_raises_auth_error(self):
-        """When 401 triggers re-login that fails, should raise EvonAuthError cleanly."""
+    async def test_request_401_login_connection_failure_stays_connection_error(self):
+        """A network failure during re-login is transient, not a credentials problem.
+
+        Reported as EvonAuthError it became ConfigEntryAuthFailed and opened a
+        reauth dialog for a brief outage.
+        """
         import time
 
         api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
@@ -2306,8 +2388,58 @@ class TestRequestAuthRetry:
         mock_session.post = MagicMock(return_value=mock_post_cm)
         api._session = mock_session
 
-        with pytest.raises(EvonAuthError, match="Re-authentication failed"):
+        with pytest.raises(EvonConnectionError) as exc_info:
             await api._request("GET", "/test")
+        assert not isinstance(exc_info.value, EvonAuthError)
+
+    def _api_with_401_then(self, *responses):
+        import time
+
+        api = EvonApi(host="http://192.168.1.100", username="user", password="pass")
+        api._token = "old_token"
+        api._token_timestamp = time.monotonic()
+        cms = []
+        for r in responses:
+            if isinstance(r, BaseException):
+                cm = AsyncMock()
+                cm.__aenter__ = AsyncMock(side_effect=r)
+                cm.__aexit__ = AsyncMock(return_value=False)
+            else:
+                cm = AsyncMock()
+                cm.status = r
+                cm.reason = "x"
+                cm.__aenter__ = AsyncMock(return_value=cm)
+                cm.__aexit__ = AsyncMock(return_value=False)
+            cms.append(cm)
+        session = MagicMock()
+        session.closed = False
+        session.request = MagicMock(side_effect=cms)
+        api._session = session
+        return api
+
+    @pytest.mark.asyncio
+    async def test_request_401_login_rate_limited_keeps_rate_limit_type(self):
+        api = self._api_with_401_then(401)
+        api.login = AsyncMock(side_effect=EvonRateLimitError("too many logins"))
+        with pytest.raises(EvonRateLimitError):
+            await api._request("GET", "/test")
+
+    @pytest.mark.asyncio
+    async def test_request_401_login_bad_credentials_is_auth_error(self):
+        api = self._api_with_401_then(401)
+        api.login = AsyncMock(side_effect=EvonAuthError("invalid credentials"))
+        with pytest.raises(EvonAuthError, match="Re-authentication failed") as exc_info:
+            await api._request("GET", "/test")
+        assert not isinstance(exc_info.value, EvonRateLimitError)
+
+    @pytest.mark.asyncio
+    async def test_request_401_retry_timeout_is_connection_error(self):
+        """Re-login works but the retried request times out: not an auth problem."""
+        api = self._api_with_401_then(401, TimeoutError())
+        api.login = AsyncMock(side_effect=lambda: setattr(api, "_token", "new") or "new")
+        with pytest.raises(EvonConnectionError) as exc_info:
+            await api._request("GET", "/test")
+        assert not isinstance(exc_info.value, EvonAuthError)
 
     @pytest.mark.asyncio
     async def test_request_401_login_failure_does_not_leave_none_token(self):
@@ -2332,7 +2464,7 @@ class TestRequestAuthRetry:
         mock_session.post = MagicMock(return_value=mock_post_cm)
         api._session = mock_session
 
-        with pytest.raises(EvonAuthError):
+        with pytest.raises(EvonConnectionError):
             await api._request("GET", "/test")
 
         # Backoff should be set, preventing immediate retry storm

@@ -548,7 +548,7 @@ The Evon MCP server is configured in `~/.claude.json` under `mcpServers.evon` (e
 |------|---------|
 | `get_instance` | Get all properties of a specific device instance |
 | `get_property` | Get a specific property value |
-| `call_method` | Call any method on an instance to test behavior |
+| `call_method` | Call an allowed method (no `SetValue`, no `SwitchOnFor`) on a named light, blind, climate or bathroom-radiator instance — other classes (e.g. the intercom's doorbell-button input `Intercom2N1000.DoorSwitch`, security, logic) are refused; use `curl` (below) for anything else |
 | `list_climate` | List all climate devices with current state |
 | `list_lights` | List all lights with current state |
 
@@ -640,6 +640,7 @@ Body: ["<path>", {}, false]
 The payload is nested at `response["data"]["Data"]["data"]`. `EvonApi.get_via_home_connect(home_connect_id, path)` does this and returns that inner payload.
 - Path `/instances` → the shared controller's full instance list; filter `ClassName == "Weather.ProxyStation"` with a non-empty `Name` to find stations (e.g. `WeatherStation1525`, "Wetterstation Dining").
 - Path `/instances/<station_id>` → the weather dict for one station.
+- No other path is accepted (`ValueError`), and `<station_id>` must pass `validate_instance_id` — it comes from the shared, building-level controller.
 
 Flow: the coordinator discovers sources once (`_discover_weather_sources` → cached in `_weather_sources`; an empty result — no station, or the proxy failed — is retried after `WEATHER_REDISCOVERY_INTERVAL` (300 s), never on every poll, because discovery lists the shared controller's whole instance tree), then reads each station on its own `WEATHER_POLL_INTERVAL` (30 s) timer (`async_start_weather_polling` → `_async_weather_tick` → `_poll_weather_stations`, tolerant of per-station failure; updates `data`/`_data_index` like a WS event and calls `async_update_listeners()`, so the device poll's schedule is untouched; cancelled in the coordinator's `async_shutdown`). The device poll reads the station inline only until the first result exists and otherwise reuses `_weather_stations`. `Brightness` on the reference station is a dusk sensor: 0–999 lx, jumping with `Twilight`; daylight is in `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLx). `process_weather_stations` shapes the dict; `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`); a coordinator listener (`_add_new_weather_stations`) adds the entities of stations that first appear after setup, so a slow proxy during the first refresh no longer needs a reload. Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override auto-discovery when both are set.
 
@@ -681,12 +682,16 @@ The API client implements several security measures:
 - Login redirect URLs sanitized in logs (only path shown)
 
 ### Input Validation
-- Instance IDs validated against pattern `^[a-zA-Z0-9._-]+$` (prevents path traversal)
+- Instance IDs validated against pattern `^[a-zA-Z0-9._-]+$` plus at least one alphanumeric character (prevents path traversal; dot-only IDs such as `..` are rejected)
 - Method names validated against pattern `^[a-zA-Z][a-zA-Z0-9]*$`
 - Engine ID validated: 4-12 alphanumeric characters (validated in both config flow and API)
 - Username must be non-empty (whitespace stripped)
 - Password must be non-empty
 - Host port validated: 1-65535
+- Host URL must not contain `user:pass@` (the netloc would otherwise carry them into the entry title and the device's configuration URL)
+- Home Connect proxy paths: `get_via_home_connect()` accepts only `/instances` and `/instances/<validated id>`; station IDs from the shared controller (and the options override) are validated before use; an invalid override is ignored with one warning per value (discovery re-runs on every 30 s weather tick while it finds nothing)
+- Services: `evon.start_recording` / `stop_recording` have `vol` schemas — the `services.yaml` selector range (30–3600 s) only limits the UI, every HA user (not only admins) can call services directly. The camera entity clamps the duration again
+- **Door opener: no access control of its own.** HA has no per-user entity permissions, so an enabled *Open door* button is usable by every HA user, token and exposed voice assistant (documented in README and `docs/INTERCOM_AUDIO.md`). Do not add services that reach the opener without thinking about this
 
 ### Token Management
 - Token TTL tracking (1 hour default)
@@ -702,12 +707,17 @@ The API client implements several security measures:
 - Accepts 200, 201, 204 as success codes
 - Unexpected redirects rejected (not logged with full URL)
 - Session creation error handling
+- `fetch_image` sends `allow_redirects=False` (an expired token gets `302 → /login`, verified 2026-11-02; following it returned the login page as the "image"), requires an `image/*` content type and caps the body at `IMAGE_FETCH_MAX_BYTES` (5 MB; real snapshots are ~40 KB)
+- Re-login after a 401 inside `_request()`: `EvonRateLimitError` and `EvonConnectionError` from `login()` are re-raised unchanged and the retried request runs outside that `try` — only a real credential failure becomes `EvonAuthError` (→ `ConfigEntryAuthFailed` / reauth dialog). Wrapping everything turned a network blip during re-login into a reauth prompt
+- Known gap: `_request()` itself still follows redirects (aiohttp default), so its `302` branch only fires if the controller ever answers an API call with a redirect it does not follow
 
 ### Camera Recordings
 - Files live in HA's local media directory, in `evon_recordings` under `hass.config.media_dirs["local"]` — `/media/evon_recordings` on HAOS and Docker, `<config>/media/evon_recordings` on venv installs — resolved by `recordings.py` (`recordings_dir()`), so the card's "All Recordings" link (`media-source://media_source/local/evon_recordings`) finds them. Versions before 1.23.0 always wrote to `<config>/media/evon_recordings`; on HAOS that is a different folder, so `prepare_recordings_dir()` (run in an executor at setup) creates the new folder and moves existing files once, skipping names that already exist at the target.
 - Served through an authenticated `HomeAssistantView` (`recordings_view.py`, `requires_auth=True`) at `/evon/recordings/{filename}`, **not** a static path. Static paths registered via `async_register_static_paths` bypass HA auth (like `www/`), which would let anyone who can reach the HA HTTP port download footage — including over a Nabu Casa remote URL or reverse proxy.
 - The Lovelace card plays recordings inline via `auth/sign_path` signed URLs, which the authenticated view validates; the media browser (`media_source`) is likewise auth-gated.
 - Filenames are validated (no `/`, `\`, or dot-segments) and the resolved path is confined to the recordings directory before serving.
+- `recent_recordings` lists only regular files named exactly `<safe camera name>_YYYYMMDD_HHMMSS.mp4` (`_scan_recordings`). Anyone who can upload to `/media` chooses the rest of a glob match, and the names go into the card; the card additionally HTML-escapes every interpolated value (`escapeHtml()`) and looks recording URLs up by index instead of reading them back from a `data-` attribute. Keep both when touching either side.
+- A recording does not start with less than `MIN_RECORDING_FREE_DISK_BYTES` (1 GiB) free in the recordings folder (`HomeAssistantError`). There is no automatic retention: old recordings are never deleted by the integration.
 
 ## Optimistic Updates
 
@@ -760,7 +770,7 @@ These are intentional design choices. Do NOT flag them as bugs or attempt to "fi
 
 2. **HVAC COOL and HEAT both call comfort mode (climate.py)**: Correct behavior. The heating/cooling distinction is controlled by the global Season Mode (per-system `Base.ehThermostat.IsCool`), not per-room HVAC mode. Setting any non-OFF mode restores the comfort preset.
 
-3. **`ENTITY_TYPE_SWITCHES` entries in `SUBSCRIBE_PROPERTIES`/`PROPERTY_MAPPINGS` (ws_mappings.py)**: Retained for future switch classes but currently unreachable — no class in `CLASS_TO_TYPE` maps to this entity type. `Base.bSwitch` sub-instances (intercom door relays, template objects) are silently skipped by `get_entity_type()` — they were never processed into entities even when mapped. `SmartCOM.Light.Light` relay outputs are on the light platform.
+3. **`ENTITY_TYPE_SWITCHES` entries in `SUBSCRIBE_PROPERTIES`/`PROPERTY_MAPPINGS` (ws_mappings.py)**: Retained for future switch classes but currently unreachable — no class in `CLASS_TO_TYPE` maps to this entity type. `Base.bSwitch` sub-instances (e.g. `Intercom2N1000.DoorSwitch`, the intercom's doorbell push-button input — named "Haupteingang Klingeltaste" on the reference system, verified 2026-11-03; the door itself is opened by `SwitchOnFor` on the intercom — and template objects) are silently skipped by `get_entity_type()` — they were never processed into entities even when mapped. `SmartCOM.Light.Light` relay outputs are on the light platform.
 
 4. **Duplicate WebSocket status sensors (binary_sensor.py + sensor.py)**: Intentional — the binary sensor provides simple on/off for automations, while the text sensor provides rich diagnostics (uptime, latency, reconnect count). Both serve different use cases.
 
@@ -843,6 +853,8 @@ Step-by-step recipe: [DEVELOPMENT.md → Adding New Device Types](DEVELOPMENT.md
 
 ## MCP Resources
 
+**MCP input checks:** `sanitizeId()` (`src/helpers.ts`) accepts dot-separated segments of `[A-Za-z0-9_-]` only — no empty, `.` or `..` segments, because `fetch()` normalises `..` and `/instances/..` would reach other controller endpoints. `requireDevice(id, kinds)` resolves the ID against the instance list and refuses unnamed templates and any class outside lights/blinds/climate/radiators; every control tool and `call_method` go through it.
+
 Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_state`, `evon://bathroom_radiators`, `evon://summary`) read device state without calling tools; the tool and resource tables are in [DEVELOPMENT.md → Available Resources](DEVELOPMENT.md#available-resources). The MCP server has **no scene feature** (`grep -ri scene src/` is empty) — scenes exist only as HA button entities.
 
 ## Linting
@@ -851,7 +863,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1492 tests), plus 25 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -912,7 +924,7 @@ Tests are in the `tests/` directory (1492 tests), plus 25 Node tests in `tests-m
 - `test_instance_id_extraction.py` - Instance ID extraction from unique_id tests
 - `test_translations.py` - strings.json ↔ translations/*.json parity, selector/enum-state translatability (no HA needed)
 
-**Node tests (`tests-mcp/`, 25 tests, Node's built-in test runner):** MCP server — `api-client.test.js`, `index.test.js`, `registry.test.js`, `stdio.test.js`, `ws-client.test.js`, which exercise the compiled `dist/`; Lovelace card — `card.test.js`, which loads `custom_components/evon/www/evon-camera-recording-card.js` into a `node:vm` context with minimal DOM stand-ins (no browser). Run with `npm run build && npm run test:mcp`.
+**Node tests (`tests-mcp/`, 30 tests, Node's built-in test runner):** MCP server — `api-client.test.js`, `helpers.test.js` (ID validation, device-class checks), `index.test.js`, `registry.test.js`, `stdio.test.js`, `ws-client.test.js`, which exercise the compiled `dist/`; Lovelace card — `card.test.js`, which loads `custom_components/evon/www/evon-camera-recording-card.js` into a `node:vm` context with minimal DOM stand-ins (no browser). Run with `npm run build && npm run test:mcp`.
 
 ### Test Architecture
 
@@ -947,17 +959,19 @@ pytest -v
 ### CI Checks
 
 The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull requests and on `v*` tags (the whole workflow, not just hassfest):
+Every action is pinned by commit SHA with a `# vX.Y.Z` comment (Renovate's `helpers:pinGitHubActionDigests` keeps them current), both workflows set `permissions: contents: read` at the top (CodeQL jobs add `security-events: write`), and ruff/pip-audit come from the pinned `requirements-lint.txt`.
+
 1. `ruff check` - Python linting (custom_components/evon/ and tests/)
 2. `ruff format --check` - Python formatting
 3. `mypy custom_components/evon/ --ignore-missing-imports` - **advisory only** (`continue-on-error: true`; ~100 errors remain, tracked in `docs/CODE_ANALYSIS_BACKLOG.md`) — a red mypy step never fails the build, so do not rely on CI to catch type errors
 4. `npm run lint` - TypeScript linting. Steps 4–7 run in the "Lint TypeScript" job on a Node **24 + 26** matrix (24 = the `engines` floor `>=24.22.1`, 26 = current LTS) with `check-latest: true`, so each run gets the newest patch release rather than the runner's cached Node
 5. `npm run build` - TypeScript compilation
-6. `npm run test:mcp` - MCP server and Lovelace card tests (25 tests)
+6. `npm run test:mcp` - MCP server and Lovelace card tests (30 tests)
 7. `npm audit --audit-level=high` - npm security audit (fails the build)
 8. `pip-audit` - Python dependency audit (advisory-only, `continue-on-error: true`; HA hard-pins its deps, so
    findings there are usually not fixable downstream)
 9. `pytest tests/ --cov=custom_components/evon --cov-fail-under=76` - Python tests (matrix: Python 3.14, Ubuntu + macOS); coverage below 76% fails the build; Codecov upload with `fail_ci_if_error: true`
-10. HACS validation - Custom component structure check (`hacs/action`, pinned by SHA)
+10. HACS validation - Custom component structure check (`hacs/action`)
 11. hassfest - Home Assistant's own integration validator (manifest keys and ordering, declared
     `dependencies`/`after_dependencies` for every imported component, translation key format
     `[a-z0-9-_]+`, services, config flow). Run it locally before pushing:
@@ -965,7 +979,7 @@ The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `main`, on pull r
 
 Additional workflows:
 - **CodeQL** (`.github/workflows/codeql.yml`) - Security scanning for Python and JavaScript/TypeScript on push, PRs, and weekly schedule. Results in the repo's Security tab.
-- **Renovate** (`renovate.json`) - Active (the Mend Renovate app ran in silent mode until 2026-10-12, which is why no PRs appeared before then): schedule `every weekend` (Europe/Vienna), updates grouped into npm deps / npm devDeps / pip / GitHub Actions PRs, patch updates automerge on green CI, the TypeScript major is held (typescript-eslint does not support TS 7 yet), `@types/node` is pinned `<25` (Node 24 floor), Node majors in the CI matrix are disabled (change them by hand together with `engines`) and the CI `python` version is excluded (bumped by hand with the HA floor); the Dependency Dashboard is issue #21.
+- **Renovate** (`renovate.json`) - Active (the Mend Renovate app ran in silent mode until 2026-10-12, which is why no PRs appeared before then): schedule `every weekend` (Europe/Vienna), updates grouped into npm deps / npm devDeps / pip / GitHub Actions PRs, nothing is proposed before it is 3 days old (`minimumReleaseAge`, so a hijacked release is usually yanked first), patch updates automerge on green CI, GitHub Actions stay digest-pinned, the TypeScript major is held (typescript-eslint does not support TS 7 yet), `@types/node` is pinned `<25` (Node 24 floor), Node majors in the CI matrix are disabled (change them by hand together with `engines`) and the CI `python` version is excluded (bumped by hand with the HA floor); the Dependency Dashboard is issue #21.
 
 ### Pending Home Assistant Deprecations
 

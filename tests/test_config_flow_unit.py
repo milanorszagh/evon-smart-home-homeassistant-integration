@@ -65,6 +65,20 @@ class TestNormalizeHost:
         with pytest.raises(InvalidHostError, match="Host cannot be empty"):
             normalize_host("   ")
 
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "http://admin:secret@192.168.1.100",
+            "admin:secret@192.168.1.100",
+            "https://admin@evon.local:8080",
+            "http://:secret@192.168.1.100",
+        ],
+    )
+    def test_normalize_rejects_credentials_in_url(self, host):
+        """Credentials in the URL would end up in the entry title and configuration URL."""
+        with pytest.raises(InvalidHostError, match="username or password"):
+            normalize_host(host)
+
     def test_normalize_scheme_only_raises(self):
         """Test that scheme-only URL raises InvalidHostError."""
         with pytest.raises(InvalidHostError, match="No valid host found"):

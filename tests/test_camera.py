@@ -105,6 +105,18 @@ class TestEvonCamera:
         cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())
         assert cam.recorder is not None
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("duration", "expected"), [(None, 300), (5, 30), (120, 120), (10**9, 3600)])
+    async def test_start_recording_clamps_duration(self, duration, expected):
+        """The recording length stays within 30-3600 s whatever the caller passes."""
+        coord = _make_coordinator(cam_data=[SAMPLE_CAM])
+        cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())
+        cam._recorder = MagicMock()
+        cam._recorder.async_start = AsyncMock()
+        cam.async_write_ha_state = MagicMock()
+        await cam.async_start_recording(duration=duration)
+        assert cam._recorder.async_start.call_args.kwargs["max_duration"] == expected
+
     def test_get_saved_pictures_finds_linked_door(self):
         coord = _make_coordinator(cam_data=[SAMPLE_CAM], door_data=[SAMPLE_DOOR])
         cam = EvonCamera(coord, "Intercom1.Cam", "Intercom Camera", "Hallway", _make_entry())

@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
 import { DEVICE_CLASSES } from "../constants.js";
-import { getInstances, filterLightDevices, controlAllDevices, fetchLightsWithState, sanitizeId } from "../helpers.js";
+import { getInstances, filterLightDevices, controlAllDevices, fetchLightsWithState, requireDevice } from "../helpers.js";
 import type { LightState } from "../types.js";
 
 export function registerLightTools(server: McpServer): void {
@@ -31,7 +31,7 @@ export function registerLightTools(server: McpServer): void {
       brightness: z.number().min(0).max(100).optional().describe("Brightness level (0-100)"),
     },
     async ({ light_id, action, brightness }) => {
-      const id = sanitizeId(light_id);
+      const id = (await requireDevice(light_id, ["light"])).ID;
       let method: string;
       let params: unknown[] = [];
 

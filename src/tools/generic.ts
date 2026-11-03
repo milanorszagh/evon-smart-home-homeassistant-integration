@@ -5,14 +5,18 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { apiRequest, callMethod } from "../api-client.js";
-import { getInstances, sanitizeId } from "../helpers.js";
+import { getInstances, requireDevice, sanitizeId } from "../helpers.js";
 
-/** Allowed methods for the call_method tool to prevent arbitrary code execution. */
+/**
+ * Allowed methods for the call_method tool. Together with the device-class check
+ * below (lights, blinds, climate, bathroom radiators only) this keeps the model
+ * away from door openers, alarm and logic objects. SetValue (a raw property write)
+ * is deliberately not allowed.
+ */
 const ALLOWED_METHODS = new Set([
   "Switch",
   "SwitchOn",
   "SwitchOff",
-  "SetValue",
   "GetValue",
   "Toggle",
   "Open",
@@ -96,7 +100,7 @@ export function registerGenericTools(server: McpServer): void {
 
   server.tool(
     "call_method",
-    "Call a method on an instance. Use specific tools (light_control, blind_control, climate_control) for common operations.",
+    "Call a method on a light, blind, climate or bathroom-radiator instance. Use specific tools (light_control, blind_control, climate_control) for common operations.",
     {
       instance_id: z.string().describe("The instance ID"),
       method: z.string().describe("The method name"),
@@ -109,7 +113,8 @@ export function registerGenericTools(server: McpServer): void {
           `Method "${method}" is not allowed. Allowed methods: ${allowed}`
         );
       }
-      const result = await callMethod(sanitizeId(instance_id), sanitizeId(method), params);
+      const device = await requireDevice(instance_id, ["light", "blind", "climate", "radiator"]);
+      const result = await callMethod(device.ID, sanitizeId(method), params);
       return {
         content: [{ type: "text", text: `Method ${method} called on ${instance_id}: ${result.statusText}` }],
       };

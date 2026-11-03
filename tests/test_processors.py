@@ -204,7 +204,7 @@ class TestApiImageFetch:
         """Test fetch_image returns image bytes on success."""
         from contextlib import asynccontextmanager
         import time
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import MagicMock
 
         from custom_components.evon.api import EvonApi
 
@@ -213,7 +213,13 @@ class TestApiImageFetch:
         # Create a proper async context manager for the response
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.read = AsyncMock(return_value=b"\xff\xd8\xff\xe0JPEG")
+        mock_response.content_type = "image/jpeg"
+        mock_response.content_length = 8
+
+        async def _chunks(size):
+            yield b"\xff\xd8\xff\xe0JPEG"
+
+        mock_response.content.iter_chunked = MagicMock(side_effect=_chunks)
 
         @asynccontextmanager
         async def mock_get(*args, **kwargs):

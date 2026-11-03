@@ -15,6 +15,8 @@ import enum
 import io
 import logging
 from pathlib import Path
+import re
+import shutil
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +28,7 @@ from .const import (
     DEFAULT_MAX_RECORDING_DURATION,
     DOMAIN,
     MAX_RECORDING_FRAMES,
+    MIN_RECORDING_FREE_DISK_BYTES,
     RECORDING_OUTPUT_MP4_AND_FRAMES,
 )
 from .recordings import recordings_dir
@@ -109,6 +112,17 @@ class EvonCameraRecorder:
         if self._state != RecordingState.IDLE:
             _LOGGER.warning("Recording already in progress for %s", self._camera.entity_id)
             return
+
+        free_bytes = await self._hass.async_add_executor_job(_free_disk_bytes, recordings_dir(self._hass))
+        if free_bytes is not None and free_bytes < MIN_RECORDING_FREE_DISK_BYTES:
+            _LOGGER.warning(
+                "Not starting recording for %s: only %d MB free in the recordings folder",
+                self._camera.entity_id,
+                free_bytes // 1_048_576,
+            )
+            raise HomeAssistantError(
+                f"Not enough free disk space to record (need {MIN_RECORDING_FREE_DISK_BYTES // 1_048_576} MB)"
+            )
 
         if max_duration is not None:
             self._max_duration = max_duration
@@ -392,9 +406,17 @@ class EvonCameraRecorder:
         camera_name = self._camera.name or "camera"
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in camera_name)
 
+        # Only list files with exactly the name this recorder writes. Anyone who can
+        # upload to the media folder chooses the rest of a matching glob, and the
+        # names end up in the dashboard card; the exact shape also keeps camera
+        # "Door" from listing camera "Door Garden"'s recordings.
+        name_re = re.compile(re.escape(safe_name) + r"_\d{8}_\d{6}\.mp4")
+
         # Collect files with stat info, skipping any deleted between glob and stat
         file_stats: list[tuple[Path, float, int]] = []
         for f in media_dir.glob(f"{safe_name}_*.mp4"):
+            if not name_re.fullmatch(f.name) or not f.is_file() or f.is_symlink():
+                continue
             try:
                 stat = f.stat()
             except FileNotFoundError:
@@ -430,6 +452,17 @@ class EvonCameraRecorder:
         if self._last_recording_path:
             attrs["last_recording_path"] = self._last_recording_path
         return attrs
+
+
+def _free_disk_bytes(path: Path) -> int | None:
+    """Return free bytes on the filesystem holding *path* (or its nearest existing parent)."""
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            try:
+                return shutil.disk_usage(candidate).free
+            except OSError:
+                return None
+    return None
 
 
 def _get_timestamp_font(image_height: int) -> Any:

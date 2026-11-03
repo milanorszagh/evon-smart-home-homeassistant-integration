@@ -2,6 +2,18 @@
 // The door release pulse itself is configured in the integration options.
 const DOOR_FEEDBACK_MS = 3000;
 
+// Escape a value for interpolation into innerHTML (text or a quoted attribute).
+// Recording metadata is derived from filenames in the media folder, which any
+// user able to upload media can choose, so it must never be inserted raw.
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 class EvonCameraRecordingCard extends HTMLElement {
   constructor() {
     super();
@@ -310,17 +322,17 @@ class EvonCameraRecordingCard extends HTMLElement {
       recordingsHtml = `<div class="recordings-list">${recordings
         .map(
           (rec, i) => `
-        <div class="recording-item ${this._expandedVideo === rec.url ? "active" : ""}" data-url="${rec.url}" data-idx="${i}">
+        <div class="recording-item ${this._expandedVideo === rec.url ? "active" : ""}" data-idx="${i}">
           <ha-icon icon="mdi:file-video-outline"></ha-icon>
           <div class="recording-info">
-            <div class="recording-timestamp">${rec.timestamp}</div>
-            <div class="recording-size">${rec.size}</div>
+            <div class="recording-timestamp">${escapeHtml(rec.timestamp)}</div>
+            <div class="recording-size">${escapeHtml(rec.size)}</div>
           </div>
           <ha-icon icon="${this._expandedVideo === rec.url ? "mdi:chevron-up" : "mdi:chevron-down"}"></ha-icon>
         </div>
         ${
           this._expandedVideo === rec.url && this._resolvedUrl
-            ? `<div class="video-container"><video controls autoplay playsinline><source src="${this._resolvedUrl}" type="video/mp4"></video></div>`
+            ? `<div class="video-container"><video controls autoplay playsinline><source src="${escapeHtml(this._resolvedUrl)}" type="video/mp4"></video></div>`
             : ""
         }`
         )
@@ -436,9 +448,13 @@ class EvonCameraRecordingCard extends HTMLElement {
       .querySelector("#rec-btn")
       .addEventListener("click", () => this._toggleRecording());
     this.shadowRoot.querySelectorAll(".recording-item").forEach((el) => {
-      el.addEventListener("click", () =>
-        this._toggleVideo(el.dataset.url)
-      );
+      // Look the URL up by index rather than reading it back from the DOM:
+      // recording URLs come from filenames in the media folder and are never
+      // put into HTML attributes.
+      const rec = recordings[Number(el.dataset.idx)];
+      if (rec && typeof rec.url === "string") {
+        el.addEventListener("click", () => this._toggleVideo(rec.url));
+      }
     });
     this.shadowRoot
       .querySelector("#all-rec-btn")

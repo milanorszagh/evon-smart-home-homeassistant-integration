@@ -129,6 +129,25 @@ class TestRecorderState:
         assert recorder._frames  # not cleared by the skipped call
 
     @pytest.mark.asyncio
+    async def test_start_refused_when_disk_nearly_full(self, recorder):
+        """A recording is not started when the recordings folder has < 1 GiB free."""
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.evon.camera_recorder import RecordingState
+
+        with (
+            patch("custom_components.evon.camera_recorder._free_disk_bytes", return_value=10 * 1_048_576),
+            pytest.raises(HomeAssistantError),
+        ):
+            await recorder.async_start(max_duration=60)
+        assert recorder.state == RecordingState.IDLE
+
+    def test_free_disk_bytes_uses_nearest_existing_parent(self, tmp_path):
+        from custom_components.evon.camera_recorder import _free_disk_bytes
+
+        assert _free_disk_bytes(tmp_path / "does" / "not" / "exist") is not None
+
+    @pytest.mark.asyncio
     async def test_double_start_prevented(self, recorder, mock_camera):
         """Test starting recording twice is prevented."""
         from custom_components.evon.camera_recorder import RecordingState
@@ -421,6 +440,35 @@ class TestRecentRecordings:
         result = recorder.get_recent_recordings()
         assert len(result) == 1
         assert result[0]["filename"] == "Test_Camera_20240101_120000.mp4"
+
+    def test_ignores_files_not_written_by_the_recorder(self, recorder, mock_hass, tmp_path):
+        """Only exact `<camera>_YYYYMMDD_HHMMSS.mp4` regular files are listed.
+
+        Names are shown by the dashboard card, and anyone who can upload media
+        chooses them; a camera whose name extends this one's ("Test Camera Garden")
+        must not show up either.
+        """
+        recordings_dir = tmp_path / "media" / "evon_recordings"
+        recordings_dir.mkdir(parents=True)
+        mock_hass.config.path = MagicMock(side_effect=lambda *args: str(tmp_path / "/".join(args)))
+
+        good = recordings_dir / "Test_Camera_20240101_120000.mp4"
+        good.write_bytes(b"\x00" * 2048)
+        for name in (
+            'Test_Camera_x" onmouseover="alert(1)" x=".mp4',
+            "Test_Camera_<img src=x onerror=alert(1)>.mp4",
+            "Test_Camera_Garden_20240101_120000.mp4",
+            "Test_Camera_20240101_120000_extra.mp4",
+        ):
+            (recordings_dir / name).write_bytes(b"\x00" * 2048)
+        outside = tmp_path / "outside.mp4"
+        outside.write_bytes(b"\x00" * 2048)
+        (recordings_dir / "Test_Camera_20240102_120000.mp4").symlink_to(outside)
+        (recordings_dir / "Test_Camera_20240103_120000.mp4").mkdir()
+
+        recorder._recordings_cache = recorder._scan_recordings()
+        result = recorder.get_recent_recordings()
+        assert [r["filename"] for r in result] == [good.name]
 
     def test_field_contents(self, recorder, mock_hass, tmp_path):
         """Test returned dict fields have correct contents."""

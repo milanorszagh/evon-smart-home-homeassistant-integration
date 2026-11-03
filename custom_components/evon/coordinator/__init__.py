@@ -22,7 +22,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from ..api import EvonApi, EvonApiError, EvonAuthError, EvonRateLimitError
+from ..api import EvonApi, EvonApiError, EvonAuthError, EvonRateLimitError, validate_instance_id
 from ..const import (
     CONF_WEATHER_HOME_CONNECT_ID,
     CONF_WEATHER_STATION_ID,
@@ -184,6 +184,9 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # only after WEATHER_REDISCOVERY_INTERVAL (the discovery lists the shared
         # controller's whole instance tree through the proxy).
         self._weather_discovered_at: float | None = None
+        # The invalid weather override last warned about. Discovery runs on every
+        # weather tick while it finds nothing, so the warning is logged once per value.
+        self._invalid_weather_override: tuple[str, str] | None = None
         # Latest processed weather-station data. The station is read on its own
         # WEATHER_POLL_INTERVAL timer (async_start_weather_polling); the device
         # poll reads it inline only until the first result exists and otherwise
@@ -503,6 +506,19 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hc_override = (options.get(CONF_WEATHER_HOME_CONNECT_ID) or "").strip()
         station_override = (options.get(CONF_WEATHER_STATION_ID) or "").strip()
         if hc_override and station_override:
+            try:
+                validate_instance_id(hc_override)
+                validate_instance_id(station_override)
+            except ValueError:
+                if self._invalid_weather_override != (hc_override, station_override):
+                    self._invalid_weather_override = (hc_override, station_override)
+                    _LOGGER.warning(
+                        "Ignoring weather station override: invalid Home Connect or station ID %r / %r",
+                        hc_override,
+                        station_override,
+                    )
+                self._weather_sources = []
+                return self._weather_sources
             self._weather_sources = [(hc_override, station_override, None)]
             _LOGGER.debug(
                 "Weather station source from options: proxy=%s station=%s",
@@ -533,7 +549,15 @@ class EvonDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("Weather discovery via proxy %s failed: %s", hc_id, err)
                 continue
             for station in find_weather_stations_in(remote):
-                sources.append((hc_id, station["id"], station.get("name")))
+                station_id = station.get("id")
+                # The id comes from the shared controller and becomes part of a
+                # request path and of entity unique_ids.
+                try:
+                    validate_instance_id(station_id)
+                except TypeError, ValueError:
+                    _LOGGER.debug("Skipping weather station with invalid id %r", station_id)
+                    continue
+                sources.append((hc_id, station_id, station.get("name")))
 
         self._weather_sources = sources
         if sources:

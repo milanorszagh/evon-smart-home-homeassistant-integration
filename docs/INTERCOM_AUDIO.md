@@ -197,6 +197,15 @@ files replace the default of the same name, so copy the default and add to it.)
 
 ## Security note
 
+**The door opener has no access control of its own.** Home Assistant has no per-user
+entity permissions, so once the *Open door* button is enabled, every Home Assistant user
+can press it — non-admin, guest and kiosk/wall-tablet accounts, long-lived access tokens,
+and voice assistants the entity is exposed to. The same applies to the
+`EVON_OPEN_DOOR` notification action: any device that receives the doorbell
+notification can open the door. Send the notification only to trusted devices, don't
+expose the button to Assist/Alexa/Google, and enable it only if everyone with an HA
+login may open the door.
+
 Evon's API returns **secrets in cleartext** to any authenticated user, including the
 2N device admin password, the SIP passwords, and the alarm code (via
 `GET /api/instances/<id>`). Treat the SIP credentials you place in `pjsip_custom.conf`

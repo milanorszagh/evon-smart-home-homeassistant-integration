@@ -2,12 +2,14 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended",
-    ":semanticCommitTypeAll(chore)"
+    ":semanticCommitTypeAll(chore)",
+    "helpers:pinGitHubActionDigests"
   ],
   "schedule": [
     "every weekend"
   ],
   "timezone": "Europe/Vienna",
+  "minimumReleaseAge": "3 days",
   "labels": [
     "dependencies"
   ],
@@ -87,7 +89,7 @@
       "groupName": "github actions"
     },
     {
-      "description": "Automerge patch updates that pass CI",
+      "description": "Automerge patch updates that pass CI (only after the global 3-day minimumReleaseAge, so a hijacked patch release is usually yanked before it lands)",
       "matchUpdateTypes": [
         "patch"
       ],
