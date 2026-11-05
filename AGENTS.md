@@ -863,7 +863,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1532 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -987,11 +987,12 @@ Known upcoming HA changes that touch this integration but are not actionable yet
 
 | HA change | Affects | Warns from | Removed in | Action |
 |-----------|---------|------------|------------|--------|
-| Climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_target_temperature`, `native_current_temperature`) | `climate.py` (`_attr_temperature_unit`, `target_temperature`, `current_temperature`) | 2026.11 | 2027.11 | Rename once the HA floor is ≥ 2026.11 ([HA developer blog, 2026-10-08](https://developers.home-assistant.io/blog/2026/10/08/climate-native-temperature)) |
 | Standard button event types (`ButtonEventType`) | `event.py` (`single_press`/`double_press`/`long_press`) | — (optional) | — | Optional; custom event types stay valid |
 | *(own deprecation)* legacy raw Evon IDs accepted by the home-state select's `async_handle_select_option` | `select.py` | v1.23.0 (warning) | v1.25.0 (planned) | Remove the shim and its tests |
 
-Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
+Already handled (v1.25.0, HA floor 2026.11): climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_current_temperature`, `native_target_temperature` — `min_temp`/`max_temp` keep their names), `DeviceInfo` built with keyword arguments only (dataclass since 2026.11; never `info["key"] = …`, link devices to the hub with `**hub_link(self.coordinator)` from `base_entity.py`, which omits the key while the hub is unknown so it stays `UNDEFINED` — an explicit `via_device_id=None` would unlink the hub), entry functions return `None` and raise `ConfigEntryError` (`async_unload_platforms_or_raise`), repair issues pass `config_entry_id=`. Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
+
+**Test harness lag (November 2026):** the integration's floor is HA 2026.11, but `pytest-homeassistant-custom-component` ships each HA release a few days late. Until a harness for 2026.11 exists, the HA-backed tests (`requires_ha_test_framework`) fail on the 2026.10 harness (it still requires a `bool` from `async_setup_entry`/`async_unload_entry`/`async_migrate_entry`), and the 2026.10 harness cannot import with `homeassistant==2026.11` installed. Interim check: a venv with `homeassistant==2026.11.0` and **without** the harness runs every test that does not need it. As soon as the harness is released, raise the floor in `requirements-test.txt` to it and run the full suite before merging.
 
 **Before committing:** run the one-line check from the Pre-Commit Checklist below.
 

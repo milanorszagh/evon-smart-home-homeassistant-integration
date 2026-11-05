@@ -72,9 +72,9 @@ class EvonClimate(EvonEntity, ClimateEntity):
 
     _attr_icon = "mdi:thermostat"
     _entity_type = ENTITY_TYPE_CLIMATES
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
 
-    current_temperature = EntityData("current_temperature")
+    native_current_temperature = EntityData("current_temperature")
     min_temp = EntityData("min_temp", default=DEFAULT_MIN_TEMP)
     max_temp = EntityData("max_temp", default=DEFAULT_MAX_TEMP)
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
@@ -170,7 +170,7 @@ class EvonClimate(EvonEntity, ClimateEntity):
     current_humidity = EntityData("humidity", transform=lambda v: int(v) if v is not None else None)
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the target temperature.
 
         Note: Evon may store temperatures outside the device's min/max range

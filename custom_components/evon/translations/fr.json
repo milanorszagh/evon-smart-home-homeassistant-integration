@@ -475,5 +475,10 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "config_migration_failed": {
+      "message": "Cette configuration Evon a été créée par une version plus récente de l'intégration (version de configuration {current_version} ; cette version prend en charge jusqu'à {supported_version}). Mettez à jour l'intégration Evon Smart Home."
+    }
   }
 }

@@ -1215,7 +1215,7 @@ Test files:
 - `test_translations.py` - Translation consistency tests (all 10 languages in lock-step with `en.json`, no HA dependency)
 - `tests-mcp/` - MCP server tests (`api-client`, `helpers`, `index`, `registry`, `stdio`, `ws-client` `.test.js`; `helpers.test.js` covers instance-ID validation and the device-class check of the control tools); `stdio.test.js` pins the dotenv-quiet fix (no `injecting env` line on stdout). `card.test.js` tests the Lovelace card JS in a `node:vm` context with DOM stand-ins
 
-Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1529 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
+Run `pytest tests/ --collect-only -q | tail -1` to see the current test count (1532 Python + 30 Node tests in November 2026); CI enforces `--cov-fail-under=76`.
 
 Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/evon-smart-home-homeassistant-integration) on every CI run.
 
@@ -1241,14 +1241,20 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
 
 ## Version Compatibility
 
-- Home Assistant: 2026.8.0+ (pinned by `hacs.json`; hassfest does not allow the
-  key in `manifest.json`). 2026.8 is the first release whose `DeviceInfo`
-  accepts `via_device_id`, which replaced the deprecated `via_device` tuple.
+- Home Assistant: 2026.11.0+ (pinned by `hacs.json`; hassfest does not allow the
+  key in `manifest.json`). 2026.11 is the first release with the climate
+  `native_*` temperature properties (`native_current_temperature`,
+  `native_target_temperature`, `_attr_native_temperature_unit`), repair issues
+  tied to a config entry (`config_entry_id=`) and
+  `async_unload_platforms_or_raise`.
 - Python: 3.14+ (HA 2026.x requires >=3.14.2). The `>=0.13.372` floor on
   `pytest-homeassistant-custom-component` makes an older interpreter fail the
   install outright rather than silently resolving to an ancient HA release —
   which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
-  lower that floor.
+  lower that floor. Keep it at a harness that ships the integration's minimum HA
+  (`hacs.json`): since the minimum became 2026.11 it has to move to the first
+  harness release for 2026.11 (not published yet when the floor was raised) —
+  the 2026.10 harness rejects the `None` return of the config-entry functions.
 - Node.js (MCP): 24.22.1+ (`engines`, the October 2026 security release). CI runs the
   TypeScript job on Node.js 24 (the floor) and 26 (current LTS) with `check-latest: true`,
   so every run gets the newest patch rather than whatever the runner image cached.

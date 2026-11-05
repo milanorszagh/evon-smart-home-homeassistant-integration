@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1219,7 +1219,7 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         assert config_entry.version == 3
         assert versions == [2, 3]
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
@@ -1245,7 +1245,7 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         assert config_entry.version == 3
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
 
@@ -1260,21 +1260,28 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         hass.config_entries.async_update_entry.assert_not_called()
 
     async def test_migration_future_version_fails(self):
-        """Test that future version returns False."""
+        """A future version raises a translated ConfigEntryError tied to the entry."""
+        from homeassistant.exceptions import ConfigEntryError
+
         from custom_components.evon.__init__ import async_migrate_entry
 
         hass = MagicMock()
 
         config_entry = MagicMock()
         config_entry.version = 99
+        config_entry.entry_id = "entry99"
 
-        result = await async_migrate_entry(hass, config_entry)
+        with patch("custom_components.evon.__init__.ir") as mock_ir, pytest.raises(ConfigEntryError) as exc_info:
+            await async_migrate_entry(hass, config_entry)
 
-        assert result is False
+        assert exc_info.value.translation_key == "config_migration_failed"
+        assert exc_info.value.translation_placeholders == {"current_version": "99", "supported_version": "3"}
+        assert mock_ir.async_create_issue.call_args.args[2] == "config_migration_failed_entry99"
+        assert mock_ir.async_create_issue.call_args.kwargs["config_entry_id"] == "entry99"
 
 
 class TestSelectEntitiesInheritance:

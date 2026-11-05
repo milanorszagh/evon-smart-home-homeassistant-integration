@@ -216,3 +216,37 @@ class TestBaseEntityLogic:
         entity = EvonEntity(coordinator, "device_1", "Device", "", entry, api=mock_api)
 
         assert entity._api is mock_api
+
+    def test_hub_link_omits_key_until_hub_registered(self, setup_mocks):
+        """hub_link() must omit via_device_id while the hub is unknown.
+
+        An explicit via_device_id=None would unlink the device from the hub; an
+        omitted key stays UNDEFINED in the DeviceInfo dataclass (HA 2026.11+).
+        """
+        from custom_components.evon.base_entity import hub_link
+
+        coordinator = MagicMock()
+        coordinator.hub_device_id = None
+        assert hub_link(coordinator) == {}
+
+        coordinator.hub_device_id = "hub123"
+        assert hub_link(coordinator) == {"via_device_id": "hub123"}
+
+    def test_build_device_info_links_hub_and_area(self, setup_mocks):
+        """_build_device_info passes via_device_id and suggested_area only when known."""
+        from custom_components.evon.base_entity import EvonEntity
+
+        coordinator = MagicMock()
+        coordinator.hub_device_id = None
+        entry = MagicMock()
+        entity = EvonEntity(coordinator, "light_1", "Test Light", "", entry)
+
+        info = entity._build_device_info("Dimmer")
+        assert "via_device_id" not in info
+        assert "suggested_area" not in info
+
+        coordinator.hub_device_id = "hub123"
+        entity._room_name = "Kitchen"
+        info = entity._build_device_info("Dimmer")
+        assert info["via_device_id"] == "hub123"
+        assert info["suggested_area"] == "Kitchen"

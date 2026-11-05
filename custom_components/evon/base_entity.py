@@ -23,6 +23,18 @@ _LOGGER = logging.getLogger(__name__)
 _SNAPSHOT_UNSET: Any = object()
 
 
+def hub_link(coordinator: EvonDataUpdateCoordinator) -> dict[str, Any]:
+    """Return the DeviceInfo keyword that links a device to the Evon hub device.
+
+    Empty until the hub device is registered: passing ``via_device_id=None``
+    explicitly would unlink the device from the hub, while an omitted key stays
+    ``UNDEFINED`` and leaves the registry entry alone. Use as ``DeviceInfo(..., **hub_link(coordinator))``.
+    """
+    if (hub_device_id := coordinator.hub_device_id) is not None:
+        return {"via_device_id": hub_device_id}
+    return {}
+
+
 class EntityData:
     """Descriptor that reads a field from coordinator entity data.
 
@@ -117,18 +129,16 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
 
     def _build_device_info(self, model: str) -> DeviceInfo:
         """Build device info dictionary."""
-        info = DeviceInfo(
+        optional = hub_link(self.coordinator)
+        if self._room_name:
+            optional["suggested_area"] = self._room_name
+        return DeviceInfo(
             identifiers={(DOMAIN, self._instance_id)},
             name=self._device_name,
             manufacturer="Evon",
             model=model,
+            **optional,
         )
-        # Omit rather than pass None: an explicit None would unlink the device from the hub.
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        if self._room_name:
-            info["suggested_area"] = self._room_name
-        return info
 
     def _clear_optimistic_state_if_expired(self) -> None:
         """Clear optimistic state if the 30s backstop timeout has expired."""
