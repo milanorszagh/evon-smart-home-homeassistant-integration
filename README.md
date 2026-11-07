@@ -4,9 +4,9 @@
 
 [![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![CI](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![HA Version](https://img.shields.io/badge/Home_Assistant-2026.8+-blue.svg)](https://www.home-assistant.io/)
+[![HA Version](https://img.shields.io/badge/Home_Assistant-2026.11+-blue.svg)](https://www.home-assistant.io/)
 
 Home Assistant custom integration for [evon Smart Home](https://building.schrack.at/evon-smarthome-partner/) systems.
 
@@ -43,20 +43,21 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 
 ### Requirements
 
-- Home Assistant 2026.8.0 or newer
+- Home Assistant 2026.11.0 or newer (older Home Assistant versions are offered the last release that supports them)
 - The **Energy Today** / **Energy This Month** sensors and the energy statistics import need the `recorder` integration; the media browser for camera recordings needs the `media_source` integration. Both are part of `default_config`.
 
-### Via HACS (Recommended)
+### Via the Marketplace (Recommended)
 
-1. Make sure [HACS](https://hacs.xyz/) is installed
-2. Add this repository to HACS by clicking the button below:
+Since Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace** (**Settings** → **Marketplace**). If you installed this integration through HACS before, nothing to do: Home Assistant moved it to the Marketplace during the upgrade and it keeps receiving updates.
 
-   [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
+1. Open this repository in the Marketplace by clicking the button below:
 
-   Or manually: open **HACS** → **⋮** (top right) → **Custom repositories**, paste `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`, choose the type **Integration** and click **Add**
+   [![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 
-3. Search for **Evon Smart Home** in HACS, click **Download** and restart Home Assistant
-4. Add the integration:
+   Or manually: **Settings** → **Marketplace** → **Add from link**, paste `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration` and choose the type **Integration**. Adding a repository by link asks you to connect GitHub once (device sign-in; it only reads public information).
+
+2. Accept the community-project notice and click **Install**. A first install needs no restart; updates do (the Marketplace offers a restart button)
+3. Add the integration (the Marketplace may open the setup directly):
 
    [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=evon)
 

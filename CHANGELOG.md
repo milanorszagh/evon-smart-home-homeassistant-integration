@@ -12,6 +12,22 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [Unreleased]
 
+### Breaking changes
+
+- **Requires Home Assistant 2026.11 or newer.** Older Home Assistant versions are offered
+  the last release that supports them (1.24.0).
+
+### Changed
+
+- **Climate temperatures use Home Assistant 2026.11's `native_*` properties.** Removes the
+  three deprecation warnings logged at every start ("will stop working in Home Assistant
+  2027.11").
+- **Clearer errors when an entry cannot be migrated or unloaded.** A configuration created by
+  a newer integration version now shows a translated reason on the integration card instead
+  of a generic failure.
+- **Repair issues belong to their config entry**, so Home Assistant removes them together
+  with the entry.
+
 ### Fixed
 
 - **Camera snapshot after the session expired.** The snapshot request followed the
@@ -56,6 +72,12 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Project
 
+- **Marketplace.** README install steps now use the Home Assistant Marketplace (which
+  replaced HACS in 2026.11) and its `marketplace_repository` link; `manifest.json` declares
+  `categories` for Marketplace browsing; `hacs.json` minimum HA is 2026.11.0.
+- `DeviceInfo` is built with keyword arguments only (it became a dataclass in 2026.11; the
+  dict-style writes ran through a compatibility layer). `async_setup_entry`,
+  `async_unload_entry` and `async_migrate_entry` return `None` and raise `ConfigEntryError`.
 - CI hardening: workflows run with a read-only `GITHUB_TOKEN`, every action is pinned by
   commit SHA, ruff and pip-audit come from a pinned `requirements-lint.txt`, and Renovate
   waits 3 days after a release before proposing (or automerging) it.

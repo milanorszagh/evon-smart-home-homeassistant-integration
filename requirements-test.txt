@@ -1,7 +1,9 @@
 pytest>=8.3.4
 pytest-asyncio>=0.24.0
 pytest-cov>=6.0.0
-# Pins homeassistant==2026.10.1 and requires Python >=3.14. Keep this floor at or
+# Pins homeassistant==2026.10.1 and requires Python >=3.14.
+# TODO: the integration needs HA 2026.11 — raise this to the first harness release that
+# pins homeassistant 2026.11.x as soon as it is published (HA-backed tests fail until then). Keep this floor at or
 # above the integration's declared minimum HA version — a lower floor lets pip
 # silently backtrack to an ancient harness (see: 0.13.205 resolved HA 2025.1.4
 # under Python 3.12, so tests never exercised the supported HA).

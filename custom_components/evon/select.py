@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
-from .base_entity import EvonEntity
+from .base_entity import EvonEntity, hub_link
 from .const import DOMAIN, HOME_STATE_MAP, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -147,15 +147,13 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for home state."""
-        info = DeviceInfo(
+        return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_home_state")},
             name="Evon Home State",
             manufacturer="Evon",
             model="Home State",
+            **hub_link(self.coordinator),
         )
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        return info
 
     @property
     def current_option(self) -> str | None:
@@ -288,15 +286,13 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for season mode."""
-        info = DeviceInfo(
+        return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_season_mode")},
             name="Evon Season Mode",
             manufacturer="Evon",
             model="Season Mode",
+            **hub_link(self.coordinator),
         )
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        return info
 
     @property
     def current_option(self) -> str | None:

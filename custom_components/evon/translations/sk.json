@@ -475,5 +475,10 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "config_migration_failed": {
+      "message": "Táto konfigurácia Evon bola vytvorená novšou verziou integrácie (verzia konfigurácie {current_version}; táto verzia podporuje najviac {supported_version}). Aktualizujte integráciu Evon Smart Home."
+    }
   }
 }

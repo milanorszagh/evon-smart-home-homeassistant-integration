@@ -368,6 +368,8 @@ class TestServiceIntegration:
         """
         from unittest.mock import AsyncMock, patch
 
+        from homeassistant.exceptions import ConfigEntryError
+
         from custom_components.evon import async_unload_entry
 
         mock_config_entry_v2.add_to_hass(hass)
@@ -376,15 +378,50 @@ class TestServiceIntegration:
 
         entry_data = hass.data["evon"][mock_config_entry_v2.entry_id]
 
-        with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=False)):
-            result = await async_unload_entry(hass, mock_config_entry_v2)
+        with (
+            patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=False)),
+            pytest.raises(ConfigEntryError),
+        ):
+            await async_unload_entry(hass, mock_config_entry_v2)
 
-        assert result is False
         # Entry must still be present and usable.
         assert mock_config_entry_v2.entry_id in hass.data["evon"]
         # API/WS must NOT have been torn down (credentials intact for continued use).
         mock_evon_api_class.close.assert_not_called()
         # unloading flag must be reset so services don't skip the entry forever.
+        assert entry_data.get("unloading") is False
+
+    async def test_platform_unload_exception_does_not_leave_zombie(
+        self, hass, mock_config_entry_v2, mock_evon_api_class
+    ):
+        """An exception other than ConfigEntryError from a platform unload must also roll back.
+
+        The entry stays loaded, so the unloading flag must be reset and the API kept.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from homeassistant.exceptions import HomeAssistantError
+
+        from custom_components.evon import async_unload_entry
+
+        mock_config_entry_v2.add_to_hass(hass)
+        await hass.config_entries.async_setup(mock_config_entry_v2.entry_id)
+        await hass.async_block_till_done()
+
+        entry_data = hass.data["evon"][mock_config_entry_v2.entry_id]
+
+        with (
+            patch.object(
+                hass.config_entries,
+                "async_unload_platforms_or_raise",
+                AsyncMock(side_effect=HomeAssistantError("boom")),
+            ),
+            pytest.raises(HomeAssistantError),
+        ):
+            await async_unload_entry(hass, mock_config_entry_v2)
+
+        assert mock_config_entry_v2.entry_id in hass.data["evon"]
+        mock_evon_api_class.close.assert_not_called()
         assert entry_data.get("unloading") is False
 
     @pytest.mark.asyncio

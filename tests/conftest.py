@@ -102,6 +102,25 @@ if not importlib.util.find_spec("homeassistant"):
         """Mock HomeAssistantError."""
 
     mock_exceptions.HomeAssistantError = _HomeAssistantError
+
+    class _ConfigEntryError(_HomeAssistantError):
+        """Mock ConfigEntryError (keeps translation_* like the real one)."""
+
+        def __init__(self, *args, translation_domain=None, translation_key=None, translation_placeholders=None):
+            super().__init__(*args)
+            self.translation_domain = translation_domain
+            self.translation_key = translation_key
+            self.translation_placeholders = translation_placeholders
+
+    class _ConfigEntryNotReady(_ConfigEntryError):
+        """Mock ConfigEntryNotReady."""
+
+    class _ConfigEntryAuthFailed(_ConfigEntryError):
+        """Mock ConfigEntryAuthFailed."""
+
+    mock_exceptions.ConfigEntryError = _ConfigEntryError
+    mock_exceptions.ConfigEntryNotReady = _ConfigEntryNotReady
+    mock_exceptions.ConfigEntryAuthFailed = _ConfigEntryAuthFailed
     mock_ha.exceptions = mock_exceptions
     mock_ha.util = MagicMock()
     # Provide real dt_util functions so camera_recorder gets real datetimes
