@@ -1,4 +1,4 @@
 # CI lint/audit tools, pinned so CI does not run whatever is newest on PyPI.
 # Renovate keeps these current (pip dependencies group).
-ruff==0.17.3
+ruff==0.17.4
 pip-audit==2.10.1
