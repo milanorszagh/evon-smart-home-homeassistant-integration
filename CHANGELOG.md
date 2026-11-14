@@ -81,6 +81,9 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 - CI hardening: workflows run with a read-only `GITHUB_TOKEN`, every action is pinned by
   commit SHA, ruff and pip-audit come from a pinned `requirements-lint.txt`, and Renovate
   waits 3 days after a release before proposing (or automerging) it.
+- Tests run on `pytest-homeassistant`, Home Assistant core's own test package, against
+  HA 2026.11; `pytest-homeassistant-custom-component` stopped at HA 2026.10 and is no
+  longer maintained. Tests no longer open network sockets or write into the repository.
 - `scripts/ha-logs.sh` no longer passes its arguments to the remote shell (the line count
   must be a number, the text filter is applied locally).
 - CI runs the MCP server lint, build, tests and `npm audit` on Node.js 24 and 26, and

@@ -14,7 +14,7 @@ from tests.conftest import (
 
 if HAS_HA_TEST_FRAMEWORK:
     from homeassistant.core import HomeAssistant
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.diagnostics import async_get_config_entry_diagnostics
 
@@ -37,6 +37,7 @@ class TestDiagnostics:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_diagnostics_entry",
         )

@@ -18,7 +18,7 @@ from tests.conftest import (
 if HAS_HA_TEST_FRAMEWORK:
     from homeassistant.const import EVENT_HOMEASSISTANT_STOP
     from homeassistant.core import CoreState, HomeAssistant
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import DOMAIN
 
@@ -41,6 +41,7 @@ class TestCoordinatorGetters:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_coordinator_entry",
         )
@@ -325,6 +326,7 @@ class TestCoordinatorUpdateInterval:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_interval_entry",
         )
@@ -385,6 +387,7 @@ class TestCoordinatorEntityData:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_entity_data_entry",
         )
@@ -970,6 +973,7 @@ class TestDoorbellEventTransition:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_doorbell_entry",
         )
@@ -1543,6 +1547,7 @@ class TestPollDetailPrefetch:
             options={
                 "scan_interval": 30,
                 "sync_areas": False,
+                "http_only": True,  # the WebSocket client is not mocked here
             },
             entry_id="test_prefetch_entry",
         )

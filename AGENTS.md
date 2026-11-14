@@ -933,7 +933,7 @@ Tests are in the `tests/` directory (1532 tests), plus 30 Node tests in `tests-m
 | Situation | What happens |
 |-----------|--------------|
 | `homeassistant` not importable | The top of `conftest.py` builds `MagicMock` stand-ins (with real string constants for the climate/light enums) and registers them in `sys.modules` **globally, before** anything imports `custom_components.evon` |
-| `pytest-homeassistant-custom-component` not installed | Tests that need the real HA runtime carry the `requires_ha_test_framework` marker (`conftest.py`, a `pytest.mark.skipif`) and are skipped |
+| `pytest-homeassistant` not installed | Tests that need the real HA runtime carry the `requires_ha_test_framework` marker (`conftest.py`, a `pytest.mark.skipif`) and are skipped |
 | Full environment (`requirements-test.txt`, Python 3.14) | Everything runs; `hass` and the other fixtures come from the plugin |
 
 - `test_api.py`, `test_translations.py`, `test_ws_*.py`, `test_constants.py`, … simply `from custom_components.evon... import ...` — they do **not** mock HA themselves; when HA is absent they run on the conftest stand-ins.
@@ -946,7 +946,7 @@ Tests are in the `tests/` directory (1532 tests), plus 30 Node tests in `tests-m
 
 ```bash
 # Install test dependencies (Python 3.14 required — an older interpreter fails with
-# "No matching distribution found for pytest-homeassistant-custom-component")
+# "No matching distribution found for pytest-homeassistant")
 pip install -r requirements-test.txt
 
 # Run all tests (HA-dependent tests will be skipped if HA not installed)
@@ -992,7 +992,7 @@ Known upcoming HA changes that touch this integration but are not actionable yet
 
 Already handled (v1.25.0, HA floor 2026.11): climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_current_temperature`, `native_target_temperature` — `min_temp`/`max_temp` keep their names), `DeviceInfo` built with keyword arguments only (dataclass since 2026.11; never `info["key"] = …`, link devices to the hub with `**hub_link(self.coordinator)` from `base_entity.py`, which omits the key while the hub is unknown so it stays `UNDEFINED` — an explicit `via_device_id=None` would unlink the hub), entry functions return `None` and raise `ConfigEntryError` (`async_unload_platforms_or_raise`), repair issues pass `config_entry_id=`. Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
 
-**Test harness lag (November 2026):** the integration's floor is HA 2026.11, but `pytest-homeassistant-custom-component` ships each HA release a few days late. Until a harness for 2026.11 exists, the HA-backed tests (`requires_ha_test_framework`) fail on the 2026.10 harness (it still requires a `bool` from `async_setup_entry`/`async_unload_entry`/`async_migrate_entry`), and the 2026.10 harness cannot import with `homeassistant==2026.11` installed. Interim check: a venv with `homeassistant==2026.11.0` and **without** the harness runs every test that does not need it. As soon as the harness is released, raise the floor in `requirements-test.txt` to it and run the full suite before merging.
+**Test package (November 2026):** the HA-backed tests run on `pytest-homeassistant`, Home Assistant core's own test package. `pytest-homeassistant-custom-component` stopped at HA 2026.10.4 and is officially broken (its README, 2026-11-03) — do not go back to it, and never install both (overlapping fixtures). Each `pytest-homeassistant` release pins `homeassistant==` the same version; keep its floor in `requirements-test.txt` at the integration's minimum HA. Traps the package brings, all handled in `pytest.ini` / `tests/conftest.py` (details in DEVELOPMENT.md → Unit Tests): `-p no:respx` (HA's `httpx2` alias must load before `httpx`), `hass_config_dir` overridden with a fresh temp dir and `media_dirs["local"]` re-pointed into it (the package hard-codes the shared `tests/testing_config/media`, and the integration creates `evon_recordings` there at setup — a `tests/testing_config/` folder appearing in `git status` means this broke), and blocked sockets: an entry a test sets up needs `http_only: True` in its options (or the `no_websocket` fixture in `test_config_flow.py` for flow-created entries), else the run warns `A test tried to use socket.socket`.
 
 **Before committing:** run the one-line check from the Pre-Commit Checklist below.
 

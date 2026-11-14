@@ -214,10 +214,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-# Load pytest_homeassistant_custom_component plugin if available
-# This must be at module level for pytest to pick it up
-if importlib.util.find_spec("pytest_homeassistant_custom_component"):
-    pytest_plugins = ["pytest_homeassistant_custom_component"]
+# pytest-homeassistant (Home Assistant core's own test package, which replaced
+# pytest-homeassistant-custom-component in November 2026) registers its plugin
+# through a pytest11 entry point, so it needs no `pytest_plugins` declaration.
 
 # Test constants - these are placeholders, not real credentials
 TEST_HOST = "http://192.168.1.100"
@@ -225,41 +224,29 @@ TEST_USERNAME = "testuser"
 TEST_PASSWORD = "testpass"
 TEST_ENTRY_ID = "test_entry_id"
 
-# Check if pytest-homeassistant-custom-component is available
-HAS_HA_TEST_FRAMEWORK = importlib.util.find_spec("pytest_homeassistant_custom_component") is not None
+# Check if pytest-homeassistant is available
+HAS_HA_TEST_FRAMEWORK = importlib.util.find_spec("pytest_homeassistant") is not None
 
 # Skip marker for tests requiring the HA test framework
 requires_ha_test_framework = pytest.mark.skipif(
     not HAS_HA_TEST_FRAMEWORK,
-    reason="Test requires pytest-homeassistant-custom-component",
+    reason="Test requires pytest-homeassistant",
 )
 
 
-# Import pytest-homeassistant-custom-component fixtures if available
+# Import pytest-homeassistant fixtures if available
 if HAS_HA_TEST_FRAMEWORK:
     import asyncio
     import contextlib
     import logging
     import threading
 
-    from pytest_homeassistant_custom_component.common import (
-        INSTANCES,
-        MockConfigEntry,
-        get_scheduled_timer_handles,
-    )
+    from pytest_homeassistant.common import INSTANCES, MockConfigEntry
+    from pytest_homeassistant.plugins import long_repr_strings
     from homeassistant.core import HassJob
+    from homeassistant.util.async_ import get_scheduled_timer_handles
 
     _LOGGER = logging.getLogger(__name__)
-
-    # long_repr_strings may not be available in older versions
-    try:
-        from pytest_homeassistant_custom_component.common import long_repr_strings
-    except ImportError:
-
-        @contextlib.contextmanager
-        def long_repr_strings():
-            """Fallback no-op context manager."""
-            yield
 
     @pytest.fixture(autouse=True)
     def verify_cleanup(
@@ -268,7 +255,7 @@ if HAS_HA_TEST_FRAMEWORK:
     ) -> Generator[None]:
         """Verify that the test has cleaned up resources correctly.
 
-        This overrides the fixture from pytest-homeassistant-custom-component
+        This overrides the fixture from pytest-homeassistant
         to also allow _run_safe_shutdown_loop threads which are created by
         asyncio during event loop handling.
         """
@@ -397,6 +384,18 @@ if HAS_HA_TEST_FRAMEWORK:
         mock_api.get_blind_angle = lambda instance_id: mock_api._blind_angles.get(instance_id)
         return mock_api
 
+    @pytest.fixture
+    def hass_config_dir(tmp_path_factory: pytest.TempPathFactory) -> str:
+        """Give every test its own temporary HA config directory.
+
+        pytest-homeassistant points `hass` at the shared tests/testing_config by
+        default without copying it, and HA creates media/evon_recordings there
+        (the recordings folder), which would leave files in the repo. Not the
+        package's `hass_tmp_config_dir`: that is the test's own `tmp_path`, which
+        the recorder tests use for their own media/evon_recordings.
+        """
+        return str(tmp_path_factory.mktemp("hass_config"))
+
     @pytest.fixture(autouse=True)
     def fail_on_ha_deprecation_report(caplog):
         """Fail any test during which HA reports deprecated API usage by this integration.
@@ -422,6 +421,11 @@ if HAS_HA_TEST_FRAMEWORK:
         """
         import homeassistant.loader as loader
 
+        # pytest-homeassistant hard-codes media_dirs["local"] to the shared
+        # tests/testing_config/media; the integration creates evon_recordings there
+        # at setup. Keep it inside this test's own config dir (see hass_config_dir).
+        hass.config.media_dirs = {"local": hass.config.path("media")}
+
         # Get the path to our custom_components directory
         custom_components_path = REPO_ROOT / "custom_components"
 
@@ -430,7 +434,7 @@ if HAS_HA_TEST_FRAMEWORK:
             del hass.data[loader.DATA_CUSTOM_COMPONENTS]
 
         # Ensure custom_components module is available in sys.modules with correct path
-        # This is critical for pytest-homeassistant-custom-component to find our integration
+        # This is critical for pytest-homeassistant to find our integration
         if "custom_components" in sys.modules:
             # Extend the path to include our custom_components
             existing_module = sys.modules["custom_components"]
@@ -449,7 +453,7 @@ if HAS_HA_TEST_FRAMEWORK:
         yield
 
         # Cleanup: Unload any evon config entries to stop coordinator tasks
-        # This prevents "lingering tasks" errors from pytest-homeassistant-custom-component
+        # This prevents "lingering tasks" errors from pytest-homeassistant
         for entry in list(hass.config_entries.async_entries("evon")):
             with contextlib.suppress(Exception):
                 await hass.config_entries.async_unload(entry.entry_id)
@@ -481,7 +485,7 @@ if HAS_HA_TEST_FRAMEWORK:
         """Fixture that patches EvonApi class and returns a mock instance.
 
         This fixture depends on hass to ensure the custom_components paths are set up
-        by pytest-homeassistant-custom-component before we try to patch.
+        by pytest-homeassistant before we try to patch.
         """
         global _MOCK_API_INSTANCE
         # Create fresh mock for each test to reset call counts

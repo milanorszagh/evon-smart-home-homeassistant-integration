@@ -1133,11 +1133,24 @@ node ws-switch-listener.mjs [mode]
 
 ### Unit Tests
 
-**Python 3.14 is required.** `pytest-homeassistant-custom-component` pins the exact
-Home Assistant version it tests against, and the release matching HA 2026.x needs
-3.14. On an older interpreter the install fails outright with
-`No matching distribution found for pytest-homeassistant-custom-component>=0.13.372`
-— that is the version floor doing its job, not a broken requirements file.
+**Python 3.14 is required.** The tests run on `pytest-homeassistant`, Home Assistant
+core's own test package (it replaced `pytest-homeassistant-custom-component`, which
+stopped at HA 2026.10 and is officially broken since November 2026). Each release pins
+the exact Home Assistant version it matches (`pytest-homeassistant==2026.11.1` →
+`homeassistant==2026.11.1`) and needs Python >= 3.14.2; on an older interpreter the
+install fails with `No matching distribution found for pytest-homeassistant` — that is
+the version floor doing its job, not a broken requirements file.
+
+Test-setup rules that come from the package (all in `pytest.ini` / `tests/conftest.py`):
+- `addopts = -p no:respx` — HA >= 2026.11 aliases `httpx` to `httpx2` on import and fails
+  if `httpx` was imported first, which respx's pytest plugin does.
+- `hass` defaults to the shared, uncopied `tests/testing_config` and `media_dirs["local"]`
+  is hard-coded to `tests/testing_config/media`. `conftest.py` overrides
+  `hass_config_dir` with a fresh temp dir and points `media_dirs` into it, so the
+  recordings folder the integration creates at setup never lands in the repo.
+- Network sockets are blocked (`pytest-socket`): an entry set up in a test needs
+  `http_only: True` in its options (or a patched `EvonWsClient`), otherwise the WebSocket
+  client tries to connect and the run logs `A test tried to use socket.socket`.
 
 ```bash
 python3.14 -m venv .venv
@@ -1247,14 +1260,12 @@ Coverage reports are uploaded to [Codecov](https://codecov.io/gh/milanorszagh/ev
   `native_target_temperature`, `_attr_native_temperature_unit`), repair issues
   tied to a config entry (`config_entry_id=`) and
   `async_unload_platforms_or_raise`.
-- Python: 3.14+ (HA 2026.x requires >=3.14.2). The `>=0.13.372` floor on
-  `pytest-homeassistant-custom-component` makes an older interpreter fail the
-  install outright rather than silently resolving to an ancient HA release —
-  which is what used to happen, leaving the suite testing HA 2025.1.4. Do not
-  lower that floor. Keep it at a harness that ships the integration's minimum HA
-  (`hacs.json`): since the minimum became 2026.11 it has to move to the first
-  harness release for 2026.11 (not published yet when the floor was raised) —
-  the 2026.10 harness rejects the `None` return of the config-entry functions.
+- Python: 3.14+ (HA 2026.x requires >=3.14.2). The floor on `pytest-homeassistant`
+  (`>=2026.11.0`, the integration's minimum HA from `hacs.json`) makes an older
+  interpreter fail the install outright rather than silently resolving to an ancient
+  HA release — which is what the old `pytest-homeassistant-custom-component` once did,
+  leaving the suite testing HA 2025.1.4. Do not lower that floor, and raise it together
+  with the minimum HA version.
 - Node.js (MCP): 24.22.1+ (`engines`, the October 2026 security release). CI runs the
   TypeScript job on Node.js 24 (the floor) and 26 (current LTS) with `check-latest: true`,
   so every run gets the newest patch rather than whatever the runner image cached.
