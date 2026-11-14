@@ -735,6 +735,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **1.25.0** | Unreleased | HA 2026.11 compatibility (no more climate deprecation warnings), Marketplace install, failed unloads keep the connection alive, camera snapshot after session expiry fixed, security hardening. **Breaking:** minimum HA 2026.11.0; Home State select no longer accepts the old Evon IDs (`HomeStateNight`, …); MCP server: `call_method` only for lights/blinds/climate/radiators (no `SetValue`), Node.js 24.22.1+ |
 | **1.24.0** | 2026-10-16 | Weather station via Home Connect (30-second updates), door opener buttons, live-feed age overlay, Talk button for SIP intercom audio, 2-minute safety-net poll (no more camera freezes), clean shutdown |
 | **1.23.0** | 2026-10-12 | HA 2026.10 compatibility, recordings in the media folder, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select options are now `at_home` / `night` / `work` / `holiday` |
 | **1.22.1** | 2026-08-24 | Quiet systems no longer disconnect every 3 minutes |
