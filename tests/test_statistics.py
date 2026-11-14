@@ -323,7 +323,7 @@ class TestImportEnergyStatisticsFull:
 
 
 # =============================================================================
-# Integration tests (require pytest-homeassistant-custom-component)
+# Integration tests (require pytest-homeassistant)
 # =============================================================================
 
 if HAS_HA_TEST_FRAMEWORK:

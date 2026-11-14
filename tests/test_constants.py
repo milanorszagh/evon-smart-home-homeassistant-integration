@@ -298,7 +298,6 @@ class TestRepairConstants:
     def test_repair_issue_ids(self):
         """Test repair issue ID constants."""
         from custom_components.evon.const import (
-            REPAIR_CONFIG_MIGRATION,
             REPAIR_CONNECTION_FAILED,
             REPAIR_RELAY_MIGRATED,
             REPAIR_STALE_ENTITIES_CLEANED,
@@ -307,7 +306,6 @@ class TestRepairConstants:
 
         assert REPAIR_CONNECTION_FAILED == "connection_failed"
         assert REPAIR_STALE_ENTITIES_CLEANED == "stale_entities_cleaned"
-        assert REPAIR_CONFIG_MIGRATION == "config_migration_failed"
         assert REPAIR_RELAY_MIGRATED == "relay_migrated_to_light"
         assert REPAIR_WEBSOCKET_DISCONNECTED == "websocket_disconnected"
 

@@ -599,7 +599,7 @@ class TestRecordingsCache:
 @pytest.mark.asyncio
 async def test_recording_switch_setup(hass, mock_config_entry_v2, mock_evon_api_class):
     """Test recording switch entity is created for cameras."""
-    if not pytest.importorskip("pytest_homeassistant_custom_component", reason="Needs HA test framework"):
+    if not pytest.importorskip("pytest_homeassistant", reason="Needs HA test framework"):
         return
 
     mock_config_entry_v2.add_to_hass(hass)

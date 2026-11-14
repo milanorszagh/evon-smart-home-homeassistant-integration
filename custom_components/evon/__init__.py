@@ -61,7 +61,6 @@ from .const import (
     HOME_STATE_MAP,
     MAX_RECORDING_DURATION,
     MIN_RECORDING_DURATION,
-    REPAIR_CONFIG_MIGRATION,
     REPAIR_CONNECTION_FAILED,
     REPAIR_RELAY_MIGRATED,
     REPAIR_STALE_ENTITIES_CLEANED,
@@ -225,7 +224,7 @@ def _async_register_hass_stop(hass: HomeAssistant, coordinator: EvonDataUpdateCo
     return _async_unsub
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Set up Evon Smart Home from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
@@ -619,8 +618,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Stop polling and the WebSocket on HA shutdown (entries are not unloaded then)
     entry.async_on_unload(_async_register_hass_stop(hass, coordinator))
 
-    return True
-
 
 def _extract_instance_id_from_unique_id(unique_id: str, entry_id: str) -> str | None:
     """Extract the Evon instance ID from an entity's unique_id.
@@ -842,6 +839,7 @@ async def _async_cleanup_stale_entities(
             hass,
             DOMAIN,
             f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}",
+            config_entry_id=entry.entry_id,
             is_fixable=True,
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
@@ -866,6 +864,7 @@ async def _async_cleanup_stale_entities(
             hass,
             DOMAIN,
             f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}",
+            config_entry_id=entry.entry_id,
             is_fixable=True,
             is_persistent=False,
             severity=ir.IssueSeverity.WARNING,
@@ -907,7 +906,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             entry_data["last_options"] = dict(entry.options)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Unload a config entry."""
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
 
@@ -917,16 +916,19 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry_data is not None:
         entry_data["unloading"] = True
 
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-
-    if not unload_ok:
-        # Platform unload failed — the entry stays loaded. Do NOT tear down the
-        # WS/API or blank credentials; restore the unloading flag so services
-        # keep working. Otherwise the entry becomes a permanent zombie (dead WS,
-        # wiped credentials, unloading stuck True) until an HA restart.
+    try:
+        await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)
+    except Exception:
+        # Any unload failure (ConfigEntryError for a platform that did not unload,
+        # or an exception from a platform's own unload): HA logs the re-raised
+        # exception and marks the entry FAILED_UNLOAD — it cannot be reloaded until
+        # an HA restart, and platforms that did unload have lost their entities.
+        # Keep the WS/API and credentials and clear the unloading flag, so the
+        # entities that are still there keep getting updates and the services keep
+        # working until that restart instead of a dead WS with wiped credentials.
         if entry_data is not None:
             entry_data["unloading"] = False
-        return False
+        raise
 
     # Platform unload succeeded — now it's safe to tear down the connection.
     if entry_data is not None:
@@ -958,8 +960,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass.services.async_remove(DOMAIN, service_name)
             _LOGGER.debug("Unregistered all Evon services (last entry removed)")
 
-    return unload_ok
-
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle removal of a config entry.
@@ -974,7 +974,9 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         device_registry.async_remove_device(device_id)
         _LOGGER.debug("Removed device %s for config entry %s", device_id, entry.entry_id)
 
-    # Clean up any repair issues for this entry
+    # Clean up any repair issues for this entry. Issues created since 1.25.0 carry
+    # config_entry_id and HA deletes them itself; this also covers issues an older
+    # version created without it.
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_STALE_ENTITIES_CLEANED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_CONNECTION_FAILED}_{entry.entry_id}")
@@ -983,8 +985,13 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 
 
-async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Migrate old config entry to new version."""
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+    """Migrate old config entry to new version.
+
+    Home Assistant itself refuses an entry whose version is newer than
+    `EvonConfigFlow.VERSION` (MIGRATION_ERROR) before calling this, so only
+    older versions arrive here.
+    """
     _LOGGER.debug("Migrating Evon config entry from version %s", config_entry.version)
 
     while config_entry.version < 3:
@@ -1004,26 +1011,3 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             _LOGGER.info("Migration to version 3 successful")
         else:
             break
-
-    if config_entry.version > 3:
-        # Future version - can't migrate forward
-        _LOGGER.error(
-            "Cannot migrate Evon config entry from version %s (current integration supports up to version 3)",
-            config_entry.version,
-        )
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            REPAIR_CONFIG_MIGRATION,
-            is_fixable=False,
-            is_persistent=True,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=REPAIR_CONFIG_MIGRATION,
-            translation_placeholders={
-                "current_version": str(config_entry.version),
-                "supported_version": "3",
-            },
-        )
-        return False
-
-    return True

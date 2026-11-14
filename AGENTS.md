@@ -228,7 +228,7 @@ The `System.HomeState` class controls home-wide modes. Key points:
 2. **Reading active state**: Check the `Active` property on each state instance
 3. **Changing state**: Call `Activate` method on the desired state instance
 4. **State IDs are fixed**: `HomeStateAtHome`, `HomeStateHoliday`, `HomeStateNight`, `HomeStateWork`
-5. **HA select options are lowercase keys, not the Evon IDs** (since v1.23.0): the `home_state` select exposes `at_home`, `night`, `work`, `holiday` — the keys of `HOME_STATE_MAP` in `const.py` — because hassfest requires translation keys to match `[a-z0-9-_]+`. `select.py` maps keys ↔ Evon IDs (`home_state_option_for_id()` derives a key for unknown IDs, e.g. `HomeStateMyParty` → `my_party`). The raw Evon IDs are still accepted with a deprecation warning — but only via the `async_handle_select_option` override (the `select.select_option` service entry point): HA validates the option against `options` there, *before* `async_select_option` runs, so a shim inside `async_select_option` is unreachable (review finding, Oct 2026). Planned removal of the shim: v1.25.0. Do not "fix" the select back to raw IDs.
+5. **HA select options are lowercase keys, not the Evon IDs** (since v1.23.0): the `home_state` select exposes `at_home`, `night`, `work`, `holiday` — the keys of `HOME_STATE_MAP` in `const.py` — because hassfest requires translation keys to match `[a-z0-9-_]+`. `select.py` maps keys ↔ Evon IDs (`home_state_option_for_id()` derives a key for unknown IDs, e.g. `HomeStateMyParty` → `my_party`). The raw Evon IDs were accepted with a deprecation warning from v1.23.0 to v1.24.x; v1.25.0 removed that shim, so `select.select_option` with `HomeStateNight` now fails HA's option validation like any invalid value (`ServiceValidationError`). Do not "fix" the select back to raw IDs, and do not bring the shim back.
 
 ```javascript
 // Example: Switch to night mode
@@ -863,7 +863,7 @@ Resources (`evon://lights`, `evon://blinds`, `evon://climate`, `evon://home_stat
 
 ## Unit Tests
 
-Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
+Tests are in the `tests/` directory (1532 tests), plus 30 Node tests in `tests-mcp/` (MCP server and Lovelace card):
 
 **Platform tests:**
 - `test_light.py` - Light entity tests
@@ -933,7 +933,7 @@ Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-m
 | Situation | What happens |
 |-----------|--------------|
 | `homeassistant` not importable | The top of `conftest.py` builds `MagicMock` stand-ins (with real string constants for the climate/light enums) and registers them in `sys.modules` **globally, before** anything imports `custom_components.evon` |
-| `pytest-homeassistant-custom-component` not installed | Tests that need the real HA runtime carry the `requires_ha_test_framework` marker (`conftest.py`, a `pytest.mark.skipif`) and are skipped |
+| `pytest-homeassistant` not installed | Tests that need the real HA runtime carry the `requires_ha_test_framework` marker (`conftest.py`, a `pytest.mark.skipif`) and are skipped |
 | Full environment (`requirements-test.txt`, Python 3.14) | Everything runs; `hass` and the other fixtures come from the plugin |
 
 - `test_api.py`, `test_translations.py`, `test_ws_*.py`, `test_constants.py`, … simply `from custom_components.evon... import ...` — they do **not** mock HA themselves; when HA is absent they run on the conftest stand-ins.
@@ -946,7 +946,7 @@ Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-m
 
 ```bash
 # Install test dependencies (Python 3.14 required — an older interpreter fails with
-# "No matching distribution found for pytest-homeassistant-custom-component")
+# "No matching distribution found for pytest-homeassistant")
 pip install -r requirements-test.txt
 
 # Run all tests (HA-dependent tests will be skipped if HA not installed)
@@ -987,11 +987,11 @@ Known upcoming HA changes that touch this integration but are not actionable yet
 
 | HA change | Affects | Warns from | Removed in | Action |
 |-----------|---------|------------|------------|--------|
-| Climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_target_temperature`, `native_current_temperature`) | `climate.py` (`_attr_temperature_unit`, `target_temperature`, `current_temperature`) | 2026.11 | 2027.11 | Rename once the HA floor is ≥ 2026.11 ([HA developer blog, 2026-10-08](https://developers.home-assistant.io/blog/2026/10/08/climate-native-temperature)) |
 | Standard button event types (`ButtonEventType`) | `event.py` (`single_press`/`double_press`/`long_press`) | — (optional) | — | Optional; custom event types stay valid |
-| *(own deprecation)* legacy raw Evon IDs accepted by the home-state select's `async_handle_select_option` | `select.py` | v1.23.0 (warning) | v1.25.0 (planned) | Remove the shim and its tests |
 
-Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
+Already handled (v1.25.0, HA floor 2026.11): climate `native_*` temperature properties (`_attr_native_temperature_unit`, `native_current_temperature`, `native_target_temperature` — `min_temp`/`max_temp` keep their names), `DeviceInfo` built with keyword arguments only (dataclass since 2026.11; never `info["key"] = …`, link devices to the hub with `**hub_link(self.coordinator)` from `base_entity.py`, which omits the key while the hub is unknown so it stays `UNDEFINED` — an explicit `via_device_id=None` would unlink the hub), entry functions return `None` and unload failures raise `ConfigEntryError` (`async_unload_platforms_or_raise`; HA then marks the entry FAILED_UNLOAD until a restart — the rollback only keeps WS/services alive meanwhile; an entry *newer* than `EvonConfigFlow.VERSION` is refused by HA before `async_migrate_entry` runs, so do not add a "newer version" branch there), repair issues pass `config_entry_id=`. Already handled (v1.23.0): `via_device` → `via_device_id`, `DeviceEntry.config_entries` → `DeviceEntry.config_entry_id`, `CONCENTRATION_PARTS_PER_MILLION` → `UnitOfRatio.PARTS_PER_MILLION`, `async_update_reload_and_abort` with an update listener → `async_update_entry` + listener-driven reload. The autouse fixture `fail_on_ha_deprecation_report` (tests/conftest.py) turns any new HA deprecation report into a test failure, so new ones surface as soon as the harness moves to the HA release that introduces them.
+
+**Test package (November 2026):** the HA-backed tests run on `pytest-homeassistant`, Home Assistant core's own test package. `pytest-homeassistant-custom-component` stopped at HA 2026.10.4 and is officially broken (its README, 2026-11-03) — do not go back to it, and never install both (overlapping fixtures). Each `pytest-homeassistant` release pins `homeassistant==` the same version; keep its floor in `requirements-test.txt` at the integration's minimum HA. Traps the package brings, all handled in `pytest.ini` / `tests/conftest.py` (details in DEVELOPMENT.md → Unit Tests): `-p no:respx` (HA's `httpx2` alias must load before `httpx`), `hass_config_dir` overridden with a fresh temp dir and `media_dirs["local"]` re-pointed into it (the package hard-codes the shared `tests/testing_config/media`, and the integration creates `evon_recordings` there at setup — a `tests/testing_config/` folder appearing in `git status` means this broke), and blocked sockets: an entry a test sets up needs `http_only: True` in its options (or the `no_websocket` fixture in `test_config_flow.py` for flow-created entries), else the run warns `A test tried to use socket.socket`.
 
 **Before committing:** run the one-line check from the Pre-Commit Checklist below.
 

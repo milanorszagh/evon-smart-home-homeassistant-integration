@@ -132,7 +132,6 @@ DEFAULT_DEBUG_COORDINATOR = False
 # Repair issue IDs
 REPAIR_CONNECTION_FAILED = "connection_failed"
 REPAIR_STALE_ENTITIES_CLEANED = "stale_entities_cleaned"
-REPAIR_CONFIG_MIGRATION = "config_migration_failed"
 REPAIR_RELAY_MIGRATED = "relay_migrated_to_light"
 REPAIR_WEBSOCKET_DISCONNECTED = "websocket_disconnected"
 

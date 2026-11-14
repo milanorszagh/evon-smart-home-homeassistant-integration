@@ -299,7 +299,7 @@ class TestEvonIdentifyButton:
 
 
 # =============================================================================
-# Integration tests (require pytest-homeassistant-custom-component)
+# Integration tests (require pytest-homeassistant)
 # =============================================================================
 
 
