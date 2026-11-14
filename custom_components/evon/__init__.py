@@ -10,7 +10,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError, ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import (
     config_validation as cv,
     device_registry as dr,
@@ -61,7 +61,6 @@ from .const import (
     HOME_STATE_MAP,
     MAX_RECORDING_DURATION,
     MIN_RECORDING_DURATION,
-    REPAIR_CONFIG_MIGRATION,
     REPAIR_CONNECTION_FAILED,
     REPAIR_RELAY_MIGRATED,
     REPAIR_STALE_ENTITIES_CLEANED,
@@ -921,11 +920,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         await hass.config_entries.async_unload_platforms_or_raise(entry, PLATFORMS)
     except Exception:
         # Any unload failure (ConfigEntryError for a platform that did not unload,
-        # or an exception from a platform's own unload) leaves the entry loaded:
-        # do NOT tear down the WS/API or blank credentials, and restore the
-        # unloading flag so services keep working. Otherwise the entry becomes a
-        # permanent zombie (dead WS, wiped credentials, unloading stuck True)
-        # until an HA restart. HA logs the re-raised exception.
+        # or an exception from a platform's own unload): HA logs the re-raised
+        # exception and marks the entry FAILED_UNLOAD — it cannot be reloaded until
+        # an HA restart, and platforms that did unload have lost their entities.
+        # Keep the WS/API and credentials and clear the unloading flag, so the
+        # entities that are still there keep getting updates and the services keep
+        # working until that restart instead of a dead WS with wiped credentials.
         if entry_data is not None:
             entry_data["unloading"] = False
         raise
@@ -981,16 +981,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_RELAY_MIGRATED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_CONNECTION_FAILED}_{entry.entry_id}")
     ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_WEBSOCKET_DISCONNECTED}_{entry.entry_id}")
-    ir.async_delete_issue(hass, DOMAIN, f"{REPAIR_CONFIG_MIGRATION}_{entry.entry_id}")
-    # Before 1.25.0 the migration issue had one global id shared by all entries.
-    if not hass.config_entries.async_entries(DOMAIN):
-        ir.async_delete_issue(hass, DOMAIN, REPAIR_CONFIG_MIGRATION)
 
     _LOGGER.info("Cleaned up %d devices for removed config entry", len(devices_to_remove))
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Migrate old config entry to new version."""
+    """Migrate old config entry to new version.
+
+    Home Assistant itself refuses an entry whose version is newer than
+    `EvonConfigFlow.VERSION` (MIGRATION_ERROR) before calling this, so only
+    older versions arrive here.
+    """
     _LOGGER.debug("Migrating Evon config entry from version %s", config_entry.version)
 
     while config_entry.version < 3:
@@ -1010,33 +1011,3 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             _LOGGER.info("Migration to version 3 successful")
         else:
             break
-
-    if config_entry.version > 3:
-        # Future version - can't migrate forward
-        _LOGGER.error(
-            "Cannot migrate Evon config entry from version %s (current integration supports up to version 3)",
-            config_entry.version,
-        )
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            f"{REPAIR_CONFIG_MIGRATION}_{config_entry.entry_id}",
-            config_entry_id=config_entry.entry_id,
-            is_fixable=False,
-            is_persistent=True,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=REPAIR_CONFIG_MIGRATION,
-            translation_placeholders={
-                "current_version": str(config_entry.version),
-                "supported_version": "3",
-            },
-        )
-        # Raising (instead of returning False) shows the user why the entry failed.
-        raise ConfigEntryError(
-            translation_domain=DOMAIN,
-            translation_key=REPAIR_CONFIG_MIGRATION,
-            translation_placeholders={
-                "current_version": str(config_entry.version),
-                "supported_version": "3",
-            },
-        )

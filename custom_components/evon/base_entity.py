@@ -129,7 +129,7 @@ class EvonEntity(CoordinatorEntity[EvonDataUpdateCoordinator]):
 
     def _build_device_info(self, model: str) -> DeviceInfo:
         """Build device info dictionary."""
-        optional = hub_link(self.coordinator)
+        optional = {**hub_link(self.coordinator)}
         if self._room_name:
             optional["suggested_area"] = self._room_name
         return DeviceInfo(

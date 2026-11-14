@@ -57,7 +57,7 @@ def setup_select_mocks():
             pass
 
     class MockSelectEntity:
-        """Mirror the part of HA's SelectEntity the shim builds on."""
+        """Mirror the option validation of HA's SelectEntity service handler."""
 
         async def async_handle_select_option(self, option):
             if option not in self._attr_options:
@@ -342,16 +342,15 @@ class TestHomeStateSelectOptionKeys:
         select._api.activate_home_state.assert_awaited_once_with("HomeStateNight")
         assert select._optimistic_option == "night"
 
-    async def test_service_handler_accepts_legacy_evon_id_with_warning(self, caplog):
-        """The shim must sit in the service handler: HA validates options before async_select_option."""
+    async def test_service_handler_rejects_raw_evon_id(self):
+        """The raw Evon IDs (options before v1.23.0) are no longer accepted since v1.25.0."""
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
         select = _make_controllable_home_state_select(states, "HomeStateAtHome")
-        await select.async_handle_select_option("HomeStateNight")
-        select._api.activate_home_state.assert_awaited_once_with("HomeStateNight")
-        assert select._optimistic_option == "night"
-        assert "deprecated" in caplog.text.lower()
+        with pytest.raises(ValueError):
+            await select.async_handle_select_option("HomeStateNight")
+        select._api.activate_home_state.assert_not_awaited()
 
-    async def test_service_handler_still_rejects_unknown_values(self):
+    async def test_service_handler_rejects_unknown_values(self):
         states = [{"id": "HomeStateAtHome"}, {"id": "HomeStateNight"}]
         select = _make_controllable_home_state_select(states, "HomeStateAtHome")
         with pytest.raises(ValueError):

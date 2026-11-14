@@ -115,10 +115,6 @@
     "websocket_disconnected": {
       "title": "WebSocket Evon desconectado",
       "description": "A conexão WebSocket com o seu sistema Evon foi perdida. As atualizações em tempo real estão temporariamente indisponíveis e a integração está a utilizar sondagem HTTP como alternativa.\n\nA conexão será restabelecida automaticamente quando disponível. Se o problema persistir, tente chamar o serviço `evon.reconnect_websocket`."
-    },
-    "config_migration_failed": {
-      "title": "Falha na migração da configuração Evon",
-      "description": "A sua configuração Evon Smart Home foi criada com uma versão mais recente da integração (versão {current_version}) e não pode ser usada com a versão atual (suporta até versão {supported_version}).\n\nPor favor atualize a integração Evon Smart Home para a versão mais recente, ou remova e adicione novamente a integração."
     }
   },
   "entity": {
@@ -474,11 +470,6 @@
           }
         }
       }
-    }
-  },
-  "exceptions": {
-    "config_migration_failed": {
-      "message": "Esta configuração Evon foi criada por uma versão mais recente da integração (versão de configuração {current_version}; esta versão suporta até {supported_version}). Atualize a integração Evon Smart Home."
     }
   }
 }

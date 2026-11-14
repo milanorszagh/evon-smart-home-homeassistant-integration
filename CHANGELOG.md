@@ -16,15 +16,18 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 - **Requires Home Assistant 2026.11 or newer.** Older Home Assistant versions are offered
   the last release that supports them (1.24.0).
+- **The Home State select no longer accepts the old Evon IDs** (`HomeStateNight`, ...) as
+  `select.select_option` values; use `at_home`, `night`, `work` or `holiday`. They were
+  deprecated in 1.23.0 and logged a warning since then.
 
 ### Changed
 
 - **Climate temperatures use Home Assistant 2026.11's `native_*` properties.** Removes the
   three deprecation warnings logged at every start ("will stop working in Home Assistant
   2027.11").
-- **Clearer errors when an entry cannot be migrated or unloaded.** A configuration created by
-  a newer integration version now shows a translated reason on the integration card instead
-  of a generic failure.
+- **A failed unload no longer leaves a dead connection behind.** If any part of an unload
+  fails, the connection and services keep running until the next Home Assistant restart
+  instead of being torn down halfway.
 - **Repair issues belong to their config entry**, so Home Assistant removes them together
   with the entry.
 
@@ -77,7 +80,9 @@ Issue and PR numbers refer to this repository unless stated otherwise.
   `categories` for Marketplace browsing; `hacs.json` minimum HA is 2026.11.0.
 - `DeviceInfo` is built with keyword arguments only (it became a dataclass in 2026.11; the
   dict-style writes ran through a compatibility layer). `async_setup_entry`,
-  `async_unload_entry` and `async_migrate_entry` return `None` and raise `ConfigEntryError`.
+  `async_unload_entry` and `async_migrate_entry` return `None`; unload failures raise
+  `ConfigEntryError`. Removed the never-reachable "configuration from a newer version"
+  repair issue: Home Assistant refuses such an entry itself before the integration runs.
 - CI hardening: workflows run with a read-only `GITHUB_TOKEN`, every action is pinned by
   commit SHA, ruff and pip-audit come from a pinned `requirements-lint.txt`, and Renovate
   waits 3 days after a release before proposing (or automerging) it.

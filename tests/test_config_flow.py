@@ -886,3 +886,30 @@ async def test_config_flow_reauth_loaded_entry_unchanged_data_still_reloads(
     detected = [r.getMessage() for r in caplog.records if "Detected that custom integration 'evon'" in r.getMessage()]
     assert detected == []
     assert hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"] is not coordinator_before
+
+
+@pytest.mark.asyncio
+async def test_entry_from_newer_version_is_refused_by_home_assistant(hass, mock_evon_api_class):
+    """HA refuses an entry newer than the flow's VERSION before async_migrate_entry runs.
+
+    That is why async_migrate_entry has no "newer version" branch (it was unreachable).
+    """
+    from homeassistant.config_entries import ConfigEntryState
+    from pytest_homeassistant.common import MockConfigEntry
+
+    from custom_components.evon.config_flow import EvonConfigFlow
+    from custom_components.evon.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=EvonConfigFlow.VERSION + 1,
+        data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
+        options={"http_only": True},
+    )
+    entry.add_to_hass(hass)
+
+    with patch("custom_components.evon.async_migrate_entry") as mock_migrate:
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
+    mock_migrate.assert_not_called()

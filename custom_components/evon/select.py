@@ -178,24 +178,6 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         attrs["evon_id"] = active_id
         return attrs
 
-    async def async_handle_select_option(self, option: str) -> None:
-        """Service entry point for `select.select_option`.
-
-        HA validates `option` against `options` in this method, BEFORE
-        `async_select_option` is ever called, so the pre-v1.23.0 compatibility
-        shim has to live here: raw Evon IDs ("HomeStateNight") are translated to
-        their option key first. Planned removal: v1.25.0.
-        """
-        if option not in self._option_to_id and option in self._id_to_option:
-            legacy_option, option = option, self._id_to_option[option]
-            _LOGGER.warning(
-                "Option %r for %s is deprecated; use %r instead and update your automations/dashboards",
-                legacy_option,
-                self.entity_id,
-                option,
-            )
-        await super().async_handle_select_option(option)
-
     async def async_select_option(self, option: str) -> None:
         """Change the selected option (option key such as "night")."""
         # Capture WS-liveness BEFORE the command await: a confirmation can

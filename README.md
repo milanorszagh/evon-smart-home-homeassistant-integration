@@ -281,7 +281,7 @@ These states trigger automations in the evon system and can be used in Home Assi
 
 The select entity's option values are `at_home`, `night`, `work` and `holiday` (the same names the `evon.set_home_state` action uses). The raw evon state ID is still available in the entity's `evon_id` attribute.
 
-> **Upgrading from 1.22 or earlier:** the options used to be the raw evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Those values are still accepted by the `select.select_option` action for now (with a warning in the log; planned removal in 1.25), but state conditions and dashboards that compare against the old values need to be updated.
+> **Upgrading from 1.22 or earlier:** the options used to be the raw evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Since 1.25 those values are no longer accepted by the `select.select_option` action (1.23 and 1.24 still accepted them with a warning in the log), so update any automation, script or dashboard that still uses them — including state conditions that compare against the old values.
 
 ### Sensors
 
