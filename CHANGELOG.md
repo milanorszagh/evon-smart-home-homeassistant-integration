@@ -14,11 +14,33 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Breaking changes
 
-- **Requires Home Assistant 2026.11 or newer.** Older Home Assistant versions are offered
-  the last release that supports them (1.24.0).
-- **The Home State select no longer accepts the old Evon IDs** (`HomeStateNight`, ...) as
-  `select.select_option` values; use `at_home`, `night`, `work` or `holiday`. They were
-  deprecated in 1.23.0 and logged a warning since then.
+Check these before updating:
+
+- **Requires Home Assistant 2026.11 or newer.**
+  *Who:* everyone on Home Assistant 2026.10 or older.
+  *What to do:* update Home Assistant first. Until then the Marketplace/HACS keeps offering
+  1.24.0, which keeps working.
+- **The Home State select no longer accepts the old Evon IDs.** `select.select_option` with
+  `HomeStateAtHome`, `HomeStateNight`, `HomeStateWork` or `HomeStateHoliday` now fails
+  with an "invalid option" error, so an automation or script that still sends them stops at
+  that step.
+  *Who:* anyone whose automations, scripts or dashboards were set up before 1.23.0 and
+  never changed. 1.23 and 1.24 still accepted these values and logged
+  `Option 'HomeState…' for select.… is deprecated` — if that warning is in your log, you
+  are affected.
+  *What to do:* replace them with `at_home`, `night`, `work` and `holiday`. State
+  conditions that compare against the old values already stopped matching in 1.23.0; the
+  Evon ID itself is still in the select's `evon_id` attribute. The `evon.set_home_state`
+  action is unchanged.
+- **MCP server: `call_method` and the control tools only act on lights, blinds, climate and
+  bathroom radiators, and `call_method` no longer offers `SetValue`.**
+  *Who:* only people who use the bundled MCP server (for AI assistants) to call methods on
+  other devices (intercom, security, logic objects) or to write raw property values.
+  *What to do:* use the dedicated tools, or the Evon web app for anything else.
+- **MCP server: requires Node.js 24.22.1 or newer** (the October 2026 security release;
+  1.24.0 accepted any Node.js 24).
+  *Who:* only MCP server users on an older Node.js 24.
+  *What to do:* update Node.js.
 
 ### Changed
 
