@@ -619,18 +619,22 @@ When filtering devices from the API, use these class names:
 | Camera (2N) | `Security.Intercom.2N.Intercom2NCam` | Yes (trigger image capture) |
 | Air Quality | `System.Location.AirQuality` | No (sensor only, CO2=-999 means no sensor) |
 | Climate Valve | `SmartCOM.Clima.Valve` | No (sensor only) |
-| Weather Station | `Weather.ProxyStation` | No (sensor only, poll-only via Home Connect proxy) |
+| Weather Station | `Weather.ProxyStation` (shared controller) / `Apps.WeatherStation` (local) | No (sensor only, poll-only) |
 | Home Connect proxy | `Rest.evonHomeConnect.evonHomeConnect` | No (gateway to a shared controller) |
 | Room/Area | `System.Location.Room` | No (used for area sync) |
 
-### Weather Station (proxy) - CRITICAL
+### Weather Station (local and proxy) - CRITICAL
 
-The weather station is **not** in the apartment controller's instance list. It lives on a
-shared controller and is read through the apartment's **Home Connect proxy** (class
-`Rest.evonHomeConnect.evonHomeConnect`, a named non-template instance, e.g.
-`evonHomeConnect4939`). It is **poll-only** — there is no WebSocket subscription.
+Two station shapes exist, and both are **poll-only** (no WebSocket subscription):
 
-Read via the proxy's `Get` method (verified on the LOCAL API, no relay):
+| Shape | Where it lives | How it is read |
+|-------|----------------|----------------|
+| `Apps.WeatherStation` | In the apartment controller's own instance list (a station wired to this controller; the class template has an empty `Name`) | `GET /api/instances/<station_id>` |
+| `Weather.ProxyStation` | On a **shared** controller, not in the apartment's instance list | Through the apartment's Home Connect proxy (below) |
+
+The proxy shape is read through a named, non-template **Home Connect proxy**
+instance (class `Rest.evonHomeConnect.evonHomeConnect`, e.g. `evonHomeConnect4939`)
+via the proxy's `Get` method (verified on the LOCAL API, no relay):
 
 ```
 POST /api/instances/<home_connect_id>/Get
@@ -642,7 +646,7 @@ The payload is nested at `response["data"]["Data"]["data"]`. `EvonApi.get_via_ho
 - Path `/instances/<station_id>` → the weather dict for one station.
 - No other path is accepted (`ValueError`), and `<station_id>` must pass `validate_instance_id` — it comes from the shared, building-level controller.
 
-Flow: the coordinator discovers sources once (`_discover_weather_sources` → cached in `_weather_sources`; an empty result — no station, or the proxy failed — is retried after `WEATHER_REDISCOVERY_INTERVAL` (300 s), never on every poll, because discovery lists the shared controller's whole instance tree), then reads each station on its own `WEATHER_POLL_INTERVAL` (30 s) timer (`async_start_weather_polling` → `_async_weather_tick` → `_poll_weather_stations`, tolerant of per-station failure; updates `data`/`_data_index` like a WS event and calls `async_update_listeners()`, so the device poll's schedule is untouched; cancelled in the coordinator's `async_shutdown`). The device poll reads the station inline only until the first result exists and otherwise reuses `_weather_stations`. `Brightness` on the reference station is a dusk sensor: 0–999 lx, jumping with `Twilight`; daylight is in `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLx). `process_weather_stations` shapes the dict; `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`); a coordinator listener (`_add_new_weather_stations`) adds the entities of stations that first appear after setup, so a slow proxy during the first refresh no longer needs a reload. Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override auto-discovery when both are set.
+Flow: `_discover_weather_sources` returns one source dict per station — `{"station_id", "name", "home_connect_id", "proxied"}` — where `home_connect_id` is `None` for a local station (read with `api.get_instance()`) and set for a proxy one. Local stations are looked up in the cached instance list on every tick (`find_local_weather_stations`, no request); proxy sources are discovered by `_discover_proxy_weather_sources`, cached in `_weather_sources`, and an empty result — no station, or the proxy failed — is retried after `WEATHER_REDISCOVERY_INTERVAL` (300 s), never on every poll, because that discovery lists the shared controller's whole instance tree. Each station is then read on its own `WEATHER_POLL_INTERVAL` (30 s) timer (`async_start_weather_polling` → `_async_weather_tick` → `_poll_weather_stations`, tolerant of per-station failure; updates `data`/`_data_index` like a WS event and calls `async_update_listeners()`, so the device poll's schedule is untouched; cancelled in the coordinator's `async_shutdown`). The device poll reads the station inline only until the first result exists and otherwise reuses `_weather_stations`. `Brightness` on the reference station is a dusk sensor: 0–999 lx, jumping with `Twilight`; daylight is in `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLx). `process_weather_stations` shapes the dict (and strips the controller's trailing space in `Name`); `sensor.py` / `binary_sensor.py` build one HA device per station (`_build_device_info("Weather Station")`, unique_id `evon_weather_<station_id>_<field>`); a coordinator listener (`_add_new_weather_stations`) adds the entities of stations that first appear after setup, so a slow proxy during the first refresh no longer needs a reload. `Connected`/`PollingActivated` are reported by the proxy shape only, so the `weather_proxy_only` binary-sensor descriptions (`connected`, `polling_activated`) are skipped for a local station instead of showing up permanently unknown. Two options (`CONF_WEATHER_HOME_CONNECT_ID` / `CONF_WEATHER_STATION_ID`) override proxy auto-discovery when both are set; they never affect local stations.
 
 Weather dict keys (not all are available on every model): `Temperature`/`TemperatureValid`, `WindSpeed`, `Brightness` (Lux), `SunNorth`/`SunEast`/`SunSouth`/`SunWest` (kLux), `Rain`(bool), `Twilight`(bool), `WindAlarm`/`WindAlarm1`/`WindAlarm2`(bool), `Connected`/`PollingActivated`(bool), `MinTemp`/`MaxTemp`/`MinTempToday`/`MaxTempToday`(°C), `MaxWind`/`MaxWindToday`(km/h), `LastRainDateTime` ("dd.mm.YYYY, HH:MM:SS", controller-local), `LastRainInDays`. Not available: humidity, pressure, wind direction, rain amount, forecast.
 
@@ -904,7 +908,7 @@ Tests are in the `tests/` directory (1529 tests), plus 30 Node tests in `tests-m
 - `test_optimistic_state.py` - Optimistic state update tests
 - `test_options_flow.py` - Options flow integration tests
 - `test_options_flow_handler.py` - Options flow handler unit tests
-- `test_weather.py` - Weather station: Home Connect proxy read, discovery and back-off, processor, sensors/binary sensors, stations added after setup
+- `test_weather.py` - Weather station: local `Apps.WeatherStation` discovery/poll, Home Connect proxy read, discovery and back-off, processor, sensors/binary sensors, stations added after setup
 - `test_poll_prefetch.py` - Safety-net poll: detail prefetch selection, WS-updatable keys, poll-correction diagnostics (no HA needed)
 - `test_reconnect_delay.py` - WebSocket reconnect delay tests
 - `test_recording_services.py` - Recording service tests

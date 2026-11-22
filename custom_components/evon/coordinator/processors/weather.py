@@ -1,11 +1,17 @@
 """Weather-station processor for Evon Smart Home coordinator.
 
-The weather station is a ``Weather.ProxyStation`` that lives on a shared
-controller, not on the apartment controller. It is read through the apartment's
-Home Connect proxy (class ``Rest.evonHomeConnect.evonHomeConnect``) with a
-``Get`` method call, so it is poll-only (no WebSocket subscription) and does not
-appear in the apartment's own instance list. See docs/INTERCOM_AUDIO.md's sibling
-note and AGENTS.md "Weather station (proxy)".
+Two station shapes exist:
+
+* ``Apps.WeatherStation`` — a station wired to this controller. It is part of the
+  apartment's own instance list (``/api/instances``) and read with a plain
+  ``GET /api/instances/<id>``. Poll-only: the station has no WebSocket updates.
+* ``Weather.ProxyStation`` — a station on a shared (building) controller, not in
+  the apartment's instance list. It is read through the apartment's Home Connect
+  proxy (class ``Rest.evonHomeConnect.evonHomeConnect``) with a ``Get`` method
+  call, so it is poll-only as well.
+
+Both expose the same measurement fields; the proxy path additionally reports
+``Connected``/``PollingActivated`` (see ``proxied`` in the processed dict).
 """
 
 from __future__ import annotations
@@ -16,7 +22,11 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from ...const import EVON_CLASS_HOME_CONNECT, EVON_CLASS_WEATHER_PROXY
+from ...const import (
+    EVON_CLASS_HOME_CONNECT,
+    EVON_CLASS_WEATHER_PROXY,
+    EVON_CLASS_WEATHER_STATION,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +41,7 @@ def _named(instances: list[dict[str, Any]], class_name: str) -> list[dict[str, A
     skipped (same convention as the other processors).
     """
     out = []
-    for i in instances:
+    for i in instances or []:
         if i.get("ClassName") != class_name:
             continue
         if not i.get("Name"):
@@ -45,6 +55,15 @@ def _named(instances: list[dict[str, Any]], class_name: str) -> list[dict[str, A
 def find_home_connect_instances(instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Find the named Home Connect proxy instances in the apartment instance list."""
     return _named(instances, EVON_CLASS_HOME_CONNECT)
+
+
+def find_local_weather_stations(instances: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Find the named local weather stations in the apartment instance list.
+
+    Only installed stations carry a Name; the ``Apps.WeatherStation`` class
+    template object has an empty one and is skipped by ``_named``.
+    """
+    return _named(instances, EVON_CLASS_WEATHER_STATION)
 
 
 def find_weather_stations_in(proxy_instances: Any) -> list[dict[str, Any]]:
@@ -95,13 +114,14 @@ def process_weather_stations(
     """Shape polled weather-station data into entity dicts.
 
     Args:
-        stations_raw: list of {"id", "name", "data"} where data is the weather
-            dict read via the Home Connect proxy (``.data.Data.data``).
-        get_room_name: unused (proxy stations have no apartment room); accepted
+        stations_raw: list of {"id", "name", "data", "proxied"} where data is the
+            weather dict read from the controller (``.data`` of the instance GET)
+            or from the Home Connect proxy (``.data.Data.data``).
+        get_room_name: unused (stations have no apartment room); accepted
             to match the processor call signature.
 
     Returns:
-        One dict per station with "id", "name", "room_name" and the fields.
+        One dict per station with "id", "name", "room_name", "proxied" and the fields.
     """
     stations = []
     for entry in stations_raw:
@@ -115,8 +135,12 @@ def process_weather_stations(
         stations.append(
             {
                 "id": ws_id,
-                "name": entry.get("name") or data.get("Name") or "Weather Station",
+                # The controller stores the station name with a trailing space
+                # ("Terrasse Wetterstation "); strip it so entity/device IDs stay clean.
+                "name": (entry.get("name") or data.get("Name") or "Weather Station").strip(),
                 "room_name": "",
+                # Only the proxy path reports the connectivity diagnostics.
+                "proxied": bool(entry.get("proxied", True)),
                 "temperature": _f(data.get("Temperature")),
                 "temperature_valid": _b(data.get("TemperatureValid")),
                 "wind_speed": _f(data.get("WindSpeed")),

@@ -619,6 +619,7 @@ wraps this. See AGENTS.md → "Weather Station (proxy)" for the full field list.
 | `Energy.SmartMeter*` | Smart meter | No (sensor) |
 | `System.Location.AirQuality` | Air quality | No (sensor) |
 | `SmartCOM.Clima.Valve` | Climate valve | No (sensor) |
+| `Apps.WeatherStation` | Weather station wired to this controller | No (sensor, poll-only via a plain instance GET) |
 | `Weather.ProxyStation` | Weather station on a shared controller | No (sensor, poll-only via the Home Connect proxy) |
 | `Rest.evonHomeConnect.evonHomeConnect` | Home Connect proxy to a shared controller | No (gateway; read via its `Get` method) |
 | `Security.Door` | Security Door | Yes (open-door button via the linked intercom's `SwitchOnFor`) |

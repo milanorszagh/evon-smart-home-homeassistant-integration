@@ -1,10 +1,11 @@
 """Tests for Evon weather-station support (processor, API read, discovery, poll).
 
-The weather station lives on a shared controller and is read through the
-apartment's Home Connect proxy. These tests cover the pure processor/helpers, the
-``EvonApi.get_via_home_connect`` read, and the coordinator discovery/poll
-orchestration (exercised via bound methods on a lightweight stub, so no Home
-Assistant runtime is required).
+Two station shapes are covered: a local ``Apps.WeatherStation`` wired to this
+controller (plain instance GET) and a ``Weather.ProxyStation`` on a shared
+controller, read through the apartment's Home Connect proxy. These tests cover the
+pure processor/helpers, the ``EvonApi.get_via_home_connect`` read, and the
+coordinator discovery/poll orchestration (exercised via bound methods on a
+lightweight stub, so no Home Assistant runtime is required).
 """
 
 from __future__ import annotations
@@ -21,10 +22,12 @@ from custom_components.evon.const import (
     CONF_WEATHER_STATION_ID,
     EVON_CLASS_HOME_CONNECT,
     EVON_CLASS_WEATHER_PROXY,
+    EVON_CLASS_WEATHER_STATION,
 )
 from custom_components.evon.coordinator import EvonDataUpdateCoordinator
 from custom_components.evon.coordinator.processors.weather import (
     find_home_connect_instances,
+    find_local_weather_stations,
     find_weather_stations_in,
     parse_last_rain,
     process_weather_stations,
@@ -61,6 +64,34 @@ FULL_WEATHER = {
     "MaxWindToday": 20.0,
 }
 
+# A local station as returned by GET /api/instances/<id> (.data). The controller
+# stores the name with a trailing space, and Connected/PollingActivated exist on
+# the proxy path only.
+LOCAL_WEATHER = {
+    **{k: v for k, v in FULL_WEATHER.items() if k not in ("Connected", "PollingActivated", "ClassName")},
+    "ID": "WeatherStation9118",
+    "Name": "Terrasse Wetterstationen ",
+    "ClassName": EVON_CLASS_WEATHER_STATION,
+}
+
+
+def _proxy_source(station_id: str, name: str | None, hc_id: str = "evonHomeConnect4939") -> dict:
+    """Discovery source for a station read through a Home Connect proxy."""
+    return {"station_id": station_id, "name": name, "home_connect_id": hc_id, "proxied": True}
+
+
+def _local_source(station_id: str, name: str | None) -> dict:
+    """Discovery source for a station wired to this controller."""
+    return {"station_id": station_id, "name": name, "home_connect_id": None, "proxied": False}
+
+
+LOCAL_STATION_ENTRY = {
+    "ID": "WeatherStation9118",
+    "Name": "Terrasse Wetterstationen ",
+    "ClassName": EVON_CLASS_WEATHER_STATION,
+}
+PROXY_ENTRY = {"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}
+
 
 class TestFindHomeConnectInstances:
     """find_home_connect_instances filters named proxy instances."""
@@ -96,6 +127,24 @@ class TestFindWeatherStationsIn:
         assert find_weather_stations_in(None) == []
         assert find_weather_stations_in({"not": "a list"}) == []
         assert find_weather_stations_in("string") == []
+
+
+class TestFindLocalWeatherStations:
+    """find_local_weather_stations filters named Apps.WeatherStation instances."""
+
+    def test_finds_named_local_station(self):
+        instances = [
+            LOCAL_STATION_ENTRY,
+            {"ID": "Apps.WeatherStation", "Name": "", "ClassName": EVON_CLASS_WEATHER_STATION},  # class template
+            {"ID": "WeatherStation1525", "Name": "Proxy", "ClassName": EVON_CLASS_WEATHER_PROXY},
+        ]
+        assert find_local_weather_stations(instances) == [
+            {"id": "WeatherStation9118", "name": "Terrasse Wetterstationen "}
+        ]
+
+    def test_empty_and_missing(self):
+        assert find_local_weather_stations([]) == []
+        assert find_local_weather_stations([{"ID": "", "Name": "x", "ClassName": EVON_CLASS_WEATHER_STATION}]) == []
 
 
 class TestParseLastRain:
@@ -196,6 +245,26 @@ class TestProcessWeatherStations:
         assert out[0]["id"] == "WeatherStation1525"
         assert out[0]["name"] == "Wetterstation Dining"
 
+    def test_proxied_defaults_to_true(self):
+        """Entries from before the local-station support are proxy reads."""
+        out = process_weather_stations([{"id": "WS1", "name": "X", "data": {"ID": "WS1"}}])
+        assert out[0]["proxied"] is True
+
+    def test_local_station_is_marked_not_proxied(self):
+        out = process_weather_stations(
+            [{"id": "WeatherStation9118", "name": LOCAL_WEATHER["Name"], "data": LOCAL_WEATHER, "proxied": False}]
+        )
+        s = out[0]
+        assert s["proxied"] is False
+        # The controller stores the name with a trailing space; it must not leak
+        # into the entity/device name.
+        assert s["name"] == "Terrasse Wetterstationen"
+        # The local path does not report the proxy diagnostics.
+        assert s["connected"] is None
+        assert s["polling_activated"] is None
+        assert s["temperature"] == 12.5
+        assert s["last_rain"] is not None
+
     def test_empty_input(self):
         assert process_weather_stations([]) == []
 
@@ -282,6 +351,7 @@ class _StubCoordinator:
     """
 
     _discover_weather_sources = EvonDataUpdateCoordinator._discover_weather_sources
+    _discover_proxy_weather_sources = EvonDataUpdateCoordinator._discover_proxy_weather_sources
     _poll_weather_stations = EvonDataUpdateCoordinator._poll_weather_stations
     has_home_connect_proxy = EvonDataUpdateCoordinator.has_home_connect_proxy
 
@@ -289,7 +359,7 @@ class _StubCoordinator:
         self.api = api
         self.config_entry = SimpleNamespace(options=options or {})
         self._instances_cache = instances or []
-        self._weather_sources = None
+        self._weather_sources: list[dict] | None = None
         self._weather_discovered_at = None
         self._invalid_weather_override = None
 
@@ -308,7 +378,7 @@ class TestDiscoverWeatherSources:
             },
         )
         sources = await coord._discover_weather_sources()
-        assert sources == [("evonHomeConnect4939", "WeatherStation1525", None)]
+        assert sources == [_proxy_source("WeatherStation1525", None)]
         api.get_via_home_connect.assert_not_called()
 
     @pytest.mark.asyncio
@@ -353,7 +423,7 @@ class TestDiscoverWeatherSources:
             instances=[{"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}],
         )
         sources = await coord._discover_weather_sources()
-        assert sources == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+        assert sources == [_proxy_source("WeatherStation1525", "Dining")]
 
     @pytest.mark.asyncio
     async def test_auto_discovery_finds_station(self):
@@ -366,7 +436,7 @@ class TestDiscoverWeatherSources:
             instances=[{"ID": "evonHomeConnect4939", "Name": "Allgemein", "ClassName": EVON_CLASS_HOME_CONNECT}],
         )
         sources = await coord._discover_weather_sources()
-        assert sources == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+        assert sources == [_proxy_source("WeatherStation1525", "Dining")]
         api.get_via_home_connect.assert_awaited_once_with("evonHomeConnect4939", "/instances")
 
     @pytest.mark.asyncio
@@ -392,9 +462,9 @@ class TestDiscoverWeatherSources:
     async def test_non_empty_cache_is_reused(self):
         api = AsyncMock()
         coord = _StubCoordinator(api)
-        coord._weather_sources = [("hc", "ws", "Name")]
+        coord._weather_sources = [_proxy_source("ws", "Name", "hc")]
         sources = await coord._discover_weather_sources()
-        assert sources == [("hc", "ws", "Name")]
+        assert sources == [_proxy_source("ws", "Name", "hc")]
         api.get_via_home_connect.assert_not_called()
 
     @pytest.mark.asyncio
@@ -409,7 +479,7 @@ class TestDiscoverWeatherSources:
         )
         coord._weather_sources = []  # empty: re-discover
         sources = await coord._discover_weather_sources()
-        assert sources == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+        assert sources == [_proxy_source("WeatherStation1525", "Dining")]
         api.get_via_home_connect.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -446,7 +516,49 @@ class TestDiscoverWeatherSources:
         coord._weather_sources = []
         coord._weather_discovered_at = time.monotonic() - WEATHER_REDISCOVERY_INTERVAL - 1
 
-        assert await coord._discover_weather_sources() == [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+        assert await coord._discover_weather_sources() == [_proxy_source("WeatherStation1525", "Dining")]
+
+    @pytest.mark.asyncio
+    async def test_local_station_is_discovered_without_a_proxy(self):
+        """A station wired to this controller needs no Home Connect proxy at all."""
+        api = AsyncMock()
+        coord = _StubCoordinator(api, instances=[LOCAL_STATION_ENTRY])
+        sources = await coord._discover_weather_sources()
+        assert sources == [_local_source("WeatherStation9118", "Terrasse Wetterstationen ")]
+        api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_local_and_proxy_stations_coexist(self):
+        api = AsyncMock()
+        api.get_via_home_connect.return_value = [
+            {"ID": "WeatherStation1525", "Name": "Dining", "ClassName": EVON_CLASS_WEATHER_PROXY},
+        ]
+        coord = _StubCoordinator(api, instances=[LOCAL_STATION_ENTRY, PROXY_ENTRY])
+        sources = await coord._discover_weather_sources()
+        assert sources == [
+            _local_source("WeatherStation9118", "Terrasse Wetterstationen "),
+            _proxy_source("WeatherStation1525", "Dining"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_empty_proxy_cache_does_not_hide_a_local_station(self):
+        """The proxy back-off cache must not suppress the always-cheap local lookup."""
+        api = AsyncMock()
+        coord = _StubCoordinator(api, instances=[LOCAL_STATION_ENTRY])
+        coord._weather_sources = []  # proxy discovery already ran and found nothing
+        sources = await coord._discover_weather_sources()
+        assert sources == [_local_source("WeatherStation9118", "Terrasse Wetterstationen ")]
+        api.get_via_home_connect.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_local_station_is_skipped_while_it_has_no_name(self):
+        """An uninstalled station is the class template with an empty Name."""
+        api = AsyncMock()
+        coord = _StubCoordinator(
+            api,
+            instances=[{"ID": "Apps.WeatherStation", "Name": "", "ClassName": EVON_CLASS_WEATHER_STATION}],
+        )
+        assert await coord._discover_weather_sources() == []
 
     def test_has_home_connect_proxy_property(self):
         coord = _StubCoordinator(
@@ -474,9 +586,9 @@ class TestPollWeatherStations:
         api = AsyncMock()
         api.get_via_home_connect.return_value = FULL_WEATHER
         coord = _StubCoordinator(api)
-        coord._weather_sources = [("evonHomeConnect4939", "WeatherStation1525", "Dining")]
+        coord._weather_sources = [_proxy_source("WeatherStation1525", "Dining")]
         result = await coord._poll_weather_stations()
-        assert result == [{"id": "WeatherStation1525", "name": "Dining", "data": FULL_WEATHER}]
+        assert result == [{"id": "WeatherStation1525", "name": "Dining", "data": FULL_WEATHER, "proxied": True}]
         api.get_via_home_connect.assert_awaited_once_with("evonHomeConnect4939", "/instances/WeatherStation1525")
 
     @pytest.mark.asyncio
@@ -491,18 +603,36 @@ class TestPollWeatherStations:
         api.get_via_home_connect.side_effect = _get
         coord = _StubCoordinator(api)
         coord._weather_sources = [
-            ("hc", "WeatherStationBroken", "Broken"),
-            ("hc", "WeatherStation1525", "Dining"),
+            _proxy_source("WeatherStationBroken", "Broken", "hc"),
+            _proxy_source("WeatherStation1525", "Dining", "hc"),
         ]
         result = await coord._poll_weather_stations()
         assert [r["id"] for r in result] == ["WeatherStation1525"]
+
+    @pytest.mark.asyncio
+    async def test_local_station_is_polled_with_a_plain_instance_get(self):
+        api = AsyncMock()
+        api.get_instance.return_value = LOCAL_WEATHER
+        coord = _StubCoordinator(api)
+        coord._weather_sources = [_local_source("WeatherStation9118", "Terrasse Wetterstationen ")]
+        result = await coord._poll_weather_stations()
+        assert result == [
+            {
+                "id": "WeatherStation9118",
+                "name": "Terrasse Wetterstationen ",
+                "data": LOCAL_WEATHER,
+                "proxied": False,
+            }
+        ]
+        api.get_instance.assert_awaited_once_with("WeatherStation9118")
+        api.get_via_home_connect.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_non_dict_response_skipped(self):
         api = AsyncMock()
         api.get_via_home_connect.return_value = None
         coord = _StubCoordinator(api)
-        coord._weather_sources = [("hc", "WeatherStation1525", "Dining")]
+        coord._weather_sources = [_proxy_source("WeatherStation1525", "Dining", "hc")]
         result = await coord._poll_weather_stations()
         assert result == []
 
@@ -560,6 +690,49 @@ class TestWeatherEntitiesAddedLater:
             len([e for e in er.async_entries_for_config_entry(registry, entry.entry_id) if e.unique_id == temp_uid])
             == 1
         )
+
+
+@requires_ha_test_framework
+class TestLocalWeatherStation:
+    """A station wired to this controller (``Apps.WeatherStation``) is set up like a
+    proxy station, minus the proxy-only connectivity diagnostics."""
+
+    async def test_local_station_gets_entities(self, hass, mock_evon_api_class, monkeypatch):
+        from homeassistant.helpers import device_registry as dr
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        from custom_components.evon.const import DOMAIN
+        from tests import conftest
+        from tests.conftest import MOCK_INSTANCES, TEST_HOST, TEST_PASSWORD, TEST_USERNAME
+
+        monkeypatch.setitem(conftest.MOCK_INSTANCE_DETAILS, "WeatherStation9118", LOCAL_WEATHER)
+        mock_evon_api_class.get_instances = AsyncMock(return_value=[*MOCK_INSTANCES, LOCAL_STATION_ENTRY])
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
+            options={"scan_interval": 30, "sync_areas": False},
+            entry_id="weather_local_entry",
+        )
+        entry.add_to_hass(hass)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        # The trailing space in the controller's station name must not leak into IDs.
+        temp = hass.states.get("sensor.terrasse_wetterstationen_temperature")
+        assert temp is not None
+        assert temp.state == "12.5"
+        assert hass.states.get("binary_sensor.terrasse_wetterstationen_rain").state == "off"
+        assert hass.states.get("sensor.terrasse_wetterstationen_wind_speed").state == "8.0"
+
+        # Proxy-only diagnostics are not created for a local station.
+        assert hass.states.get("binary_sensor.terrasse_wetterstationen_connected") is None
+        assert hass.states.get("binary_sensor.terrasse_wetterstationen_polling_activated") is None
+
+        device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, "WeatherStation9118"), entry.entry_id)
+        assert device is not None
+        assert device.name == "Terrasse Wetterstationen"
+        assert device.model == "Weather Station"
 
 
 @requires_ha_test_framework

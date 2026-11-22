@@ -34,6 +34,11 @@ class EvonBinarySensorEntityDescription(BinarySensorEntityDescription):
     ``key`` doubles as the coordinator data field to read and the unique_id suffix.
     """
 
+    # Weather stations only: the field exists on a station read through a Home
+    # Connect proxy, not on a station wired to this controller — such entities are
+    # skipped for local stations instead of showing up permanently unknown.
+    weather_proxy_only: bool = False
+
 
 # Weather-station binary sensors. ``key`` is the coordinator data field.
 WEATHER_BINARY_SENSORS: tuple[EvonBinarySensorEntityDescription, ...] = (
@@ -67,6 +72,7 @@ WEATHER_BINARY_SENSORS: tuple[EvonBinarySensorEntityDescription, ...] = (
         translation_key="weather_connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        weather_proxy_only=True,
     ),
     EvonBinarySensorEntityDescription(
         key="temperature_valid",
@@ -77,6 +83,7 @@ WEATHER_BINARY_SENSORS: tuple[EvonBinarySensorEntityDescription, ...] = (
         key="polling_activated",
         translation_key="weather_polling_activated",
         entity_category=EntityCategory.DIAGNOSTIC,
+        weather_proxy_only=True,
     ),
 )
 
@@ -186,6 +193,9 @@ async def async_setup_entry(
                     description,
                 )
                 for description in WEATHER_BINARY_SENSORS
+                # The connectivity diagnostics come from the Home Connect proxy path
+                # only; a local station does not report them at all.
+                if not (description.weather_proxy_only and not station.get("proxied", True))
             )
         if new_entities:
             async_add_entities(new_entities)

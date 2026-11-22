@@ -12,6 +12,17 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [Unreleased]
 
+### Added
+
+- **Local weather stations.** A station wired to this controller (`Apps.WeatherStation`,
+  e.g. `WeatherStation9118`) is now discovered in the apartment's own instance list and
+  read with a plain instance GET every 30 seconds — no Home Connect proxy needed. Until
+  now only `Weather.ProxyStation` on a shared controller was supported, so a system with
+  its own station got no weather entities at all. Both shapes expose the same sensors;
+  `Connected`/`PollingActivated` are reported by the proxy shape only, so those two
+  diagnostic binary sensors are skipped for a local station instead of staying unknown.
+  The station name the controller stores with a trailing space is now stripped.
+
 ### Fixed
 
 - **Camera snapshot after the session expired.** The snapshot request followed the
