@@ -25,7 +25,7 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 | **Home State** | Switch between home modes (At Home, Night, Work, Holiday) |
 | **Smart Meter** | Power consumption, energy usage, voltage per phase |
 | **Air Quality** | CO2 levels, humidity (if available) |
-| **Weather Station** | Temperature, wind, brightness, sun intensity, rain and wind alarms (read via the Home Connect proxy) |
+| **Weather Station** | Temperature, wind, brightness, sun intensity, rain and wind alarms (local station, or via the Home Connect proxy on a shared controller) |
 | **Valves** | Climate valve open/closed state |
 | **Temperature Sensors** | Room temperature readings |
 | **Relay Outputs** | On/off light entities for relay modules (L1144, L1244) |
@@ -293,7 +293,7 @@ The select entity's option values are `at_home`, `night`, `work` and `holiday` (
   - Frequency (Hz)
   - Feed-in Energy Total (kWh) - for solar/grid export tracking
 - Air quality: CO2 (ppm), Humidity (%)
-- Weather station (read via the Home Connect proxy every 30 seconds): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's min/max temperature and max wind, all-time min/max temperature and max wind (diagnostic), last rain (timestamp) and days since rain. On some stations *Brightness* is a dusk sensor that only covers 0–999 lx and switches together with *Twilight*; daylight is then measured by the four sun-intensity sensors
+- Weather station (read every 30 seconds — a local `Apps.WeatherStation`, or a shared one via the Home Connect proxy): temperature (°C), wind speed (km/h), brightness (lx), sun intensity north/east/south/west (kLx), today's min/max temperature and max wind, all-time min/max temperature and max wind (diagnostic), last rain (timestamp) and days since rain. On some stations *Brightness* is a dusk sensor that only covers 0–999 lx and switches together with *Twilight*; daylight is then measured by the four sun-intensity sensors
 
 **Note:** For the Energy Dashboard, use `sensor.*_energy_total` (not the 24h rolling sensor). The "Energy (24h Rolling)" sensor from evon is a rolling 24-hour window that can decrease during the day, which is not suitable for HA's energy tracking.
 
@@ -330,7 +330,7 @@ For detailed documentation, see [Energy Statistics](docs/ENERGY_STATISTICS.md).
 ### Binary Sensors
 
 - Climate valve state (open/closed)
-- Weather station: rain, twilight, three wind alarms, plus diagnostic connected / temperature-valid / polling-active
+- Weather station: rain, twilight, three wind alarms, plus diagnostic temperature-valid (and connected / polling-active on a station read through the Home Connect proxy)
 - Security door state (open/closed)
 - Security door call in progress
 - Intercom door state (open/closed)

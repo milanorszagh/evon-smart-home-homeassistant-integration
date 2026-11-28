@@ -92,6 +92,7 @@ EVON_CLASS_SECURITY_DOOR = "Security.Door"
 EVON_CLASS_INTERCOM_2N = "Security.Intercom.2N.Intercom2N"
 EVON_CLASS_INTERCOM_2N_CAM = "Security.Intercom.2N.Intercom2NCam"
 EVON_CLASS_WEATHER_PROXY = "Weather.ProxyStation"  # Weather station, read via the Home Connect proxy (poll-only)
+EVON_CLASS_WEATHER_STATION = "Apps.WeatherStation"  # Weather station wired to this controller (poll-only)
 EVON_CLASS_HOME_CONNECT = "Rest.evonHomeConnect.evonHomeConnect"  # Home Connect proxy to a shared controller
 
 # Entity type keys (used in coordinator.data dictionary)
