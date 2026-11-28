@@ -1,10 +1,21 @@
 {
   "domain": "evon",
   "name": "Evon Smart Home",
-  "after_dependencies": ["recorder"],
-  "codeowners": ["@milanorszagh"],
+  "after_dependencies": [
+    "recorder"
+  ],
+  "categories": [
+    "hubs_protocols.building_automation",
+    "lighting.lighting_systems",
+    "climate.thermostats_heating"
+  ],
+  "codeowners": [
+    "@milanorszagh"
+  ],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": [
+    "http"
+  ],
   "documentation": "https://github.com/milanorszagh/evon-smart-home-homeassistant-integration",
   "integration_type": "hub",
   "iot_class": "local_push",

@@ -1219,7 +1219,7 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         assert config_entry.version == 3
         assert versions == [2, 3]
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
@@ -1245,7 +1245,7 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         assert config_entry.version == 3
         assert config_entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_LOCAL
 
@@ -1260,21 +1260,8 @@ class TestMigrationChain:
 
         result = await async_migrate_entry(hass, config_entry)
 
-        assert result is True
+        assert result is None
         hass.config_entries.async_update_entry.assert_not_called()
-
-    async def test_migration_future_version_fails(self):
-        """Test that future version returns False."""
-        from custom_components.evon.__init__ import async_migrate_entry
-
-        hass = MagicMock()
-
-        config_entry = MagicMock()
-        config_entry.version = 99
-
-        result = await async_migrate_entry(hass, config_entry)
-
-        assert result is False
 
 
 class TestSelectEntitiesInheritance:

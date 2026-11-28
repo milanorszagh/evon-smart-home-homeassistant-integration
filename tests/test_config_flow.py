@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,8 +16,23 @@ from tests.conftest import (
 pytestmark = requires_ha_test_framework
 
 
+@pytest.fixture
+def no_websocket():
+    """Stop the integration setup that follows a finished flow from opening a WebSocket.
+
+    Entries created by a flow carry no options, so `http_only` cannot be set there.
+    """
+    ws_client = MagicMock()
+    ws_client.start = AsyncMock()
+    ws_client.stop = AsyncMock()
+    ws_client.subscribe_instances = AsyncMock()
+    ws_client.is_connected = False
+    with patch("custom_components.evon.ws_client.EvonWsClient", return_value=ws_client):
+        yield ws_client
+
+
 @pytest.mark.asyncio
-async def test_config_flow_user_success(hass):
+async def test_config_flow_user_success(hass, mock_evon_api_class, no_websocket):
     """Test successful config flow from user step."""
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -98,7 +113,7 @@ async def test_config_flow_remote_success(hass):
 
 
 @pytest.mark.asyncio
-async def test_config_flow_host_normalization(hass):
+async def test_config_flow_host_normalization(hass, mock_evon_api_class, no_websocket):
     """Test that host URL is normalized correctly."""
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -248,7 +263,7 @@ async def test_config_flow_test_connection_false(hass):
 @pytest.mark.asyncio
 async def test_config_flow_already_configured(hass):
     """Test config flow aborts when already configured."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -290,13 +305,13 @@ async def test_config_flow_already_configured(hass):
 
 
 @pytest.mark.asyncio
-async def test_config_flow_reconfigure(hass, mock_evon_api_class):
+async def test_config_flow_reconfigure(hass, mock_evon_api_class, no_websocket):
     """Test reconfiguration flow.
 
     Uses mock_evon_api_class fixture so the entry reload after reconfigure
     uses the mocked API instead of the real one.
     """
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -360,7 +375,7 @@ async def test_config_flow_reconfigure(hass, mock_evon_api_class):
 @pytest.mark.asyncio
 async def test_config_flow_reconfigure_auth_error(hass):
     """Test reconfigure flow handles auth error."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.api import EvonAuthError
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
@@ -457,7 +472,7 @@ async def test_config_flow_invalid_host_whitespace(hass):
 @pytest.mark.asyncio
 async def test_config_flow_reconfigure_invalid_host(hass):
     """Test reconfigure flow handles invalid host URL."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -626,7 +641,7 @@ async def test_options_flow_http_only(
 @pytest.mark.asyncio
 async def test_config_flow_reauth_local_success(hass, mock_evon_api_class):
     """Test reauth flow succeeds for a local connection entry."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
 
@@ -638,6 +653,7 @@ async def test_config_flow_reauth_local_success(hass, mock_evon_api_class):
             "username": TEST_USERNAME,
             "password": "oldpass",
         },
+        options={"http_only": True},  # the reload after reauth must not open a real WebSocket
         unique_id=f"local_{TEST_HOST}",
     )
     entry.add_to_hass(hass)
@@ -669,7 +685,7 @@ async def test_config_flow_reauth_local_success(hass, mock_evon_api_class):
 @pytest.mark.asyncio
 async def test_config_flow_reauth_remote_success(hass, mock_evon_api_class):
     """Test reauth flow succeeds for a remote connection entry."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.const import CONNECTION_TYPE_REMOTE, DOMAIN
 
@@ -712,7 +728,7 @@ async def test_config_flow_reauth_remote_success(hass, mock_evon_api_class):
 @pytest.mark.asyncio
 async def test_config_flow_reauth_invalid_auth(hass):
     """Test reauth flow shows invalid_auth error when credentials are rejected."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.api import EvonAuthError
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
@@ -725,6 +741,7 @@ async def test_config_flow_reauth_invalid_auth(hass):
             "username": TEST_USERNAME,
             "password": "oldpass",
         },
+        options={"http_only": True},  # the reload after reauth must not open a real WebSocket
         unique_id=f"local_{TEST_HOST}",
     )
     entry.add_to_hass(hass)
@@ -753,7 +770,7 @@ async def test_config_flow_reauth_invalid_auth(hass):
 @pytest.mark.asyncio
 async def test_config_flow_reauth_cannot_connect(hass):
     """Test reauth flow shows cannot_connect error on API failure."""
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from pytest_homeassistant.common import MockConfigEntry
 
     from custom_components.evon.api import EvonApiError
     from custom_components.evon.const import CONNECTION_TYPE_LOCAL, DOMAIN
@@ -766,6 +783,7 @@ async def test_config_flow_reauth_cannot_connect(hass):
             "username": TEST_USERNAME,
             "password": "oldpass",
         },
+        options={"http_only": True},  # the reload after reauth must not open a real WebSocket
         unique_id=f"local_{TEST_HOST}",
     )
     entry.add_to_hass(hass)
@@ -868,3 +886,30 @@ async def test_config_flow_reauth_loaded_entry_unchanged_data_still_reloads(
     detected = [r.getMessage() for r in caplog.records if "Detected that custom integration 'evon'" in r.getMessage()]
     assert detected == []
     assert hass.data[DOMAIN][mock_config_entry_v2.entry_id]["coordinator"] is not coordinator_before
+
+
+@pytest.mark.asyncio
+async def test_entry_from_newer_version_is_refused_by_home_assistant(hass, mock_evon_api_class):
+    """HA refuses an entry newer than the flow's VERSION before async_migrate_entry runs.
+
+    That is why async_migrate_entry has no "newer version" branch (it was unreachable).
+    """
+    from homeassistant.config_entries import ConfigEntryState
+    from pytest_homeassistant.common import MockConfigEntry
+
+    from custom_components.evon.config_flow import EvonConfigFlow
+    from custom_components.evon.const import DOMAIN
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=EvonConfigFlow.VERSION + 1,
+        data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
+        options={"http_only": True},
+    )
+    entry.add_to_hass(hass)
+
+    with patch("custom_components.evon.async_migrate_entry") as mock_migrate:
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR
+    mock_migrate.assert_not_called()

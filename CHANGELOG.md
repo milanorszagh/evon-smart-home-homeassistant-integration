@@ -12,6 +12,47 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ## [Unreleased]
 
+### Breaking changes
+
+Check these before updating:
+
+- **Requires Home Assistant 2026.11 or newer.**
+  *Who:* everyone on Home Assistant 2026.10 or older.
+  *What to do:* update Home Assistant first. Until then the Marketplace/HACS keeps offering
+  1.24.0, which keeps working.
+- **The Home State select no longer accepts the old Evon IDs.** `select.select_option` with
+  `HomeStateAtHome`, `HomeStateNight`, `HomeStateWork` or `HomeStateHoliday` now fails
+  with an "invalid option" error, so an automation or script that still sends them stops at
+  that step.
+  *Who:* anyone whose automations, scripts or dashboards were set up before 1.23.0 and
+  never changed. 1.23 and 1.24 still accepted these values and logged
+  `Option 'HomeState…' for select.… is deprecated` — if that warning is in your log, you
+  are affected.
+  *What to do:* replace them with `at_home`, `night`, `work` and `holiday`. State
+  conditions that compare against the old values already stopped matching in 1.23.0; the
+  Evon ID itself is still in the select's `evon_id` attribute. The `evon.set_home_state`
+  action is unchanged.
+- **MCP server: `call_method` and the control tools only act on lights, blinds, climate and
+  bathroom radiators, and `call_method` no longer offers `SetValue`.**
+  *Who:* only people who use the bundled MCP server (for AI assistants) to call methods on
+  other devices (intercom, security, logic objects) or to write raw property values.
+  *What to do:* use the dedicated tools, or the Evon web app for anything else.
+- **MCP server: requires Node.js 24.22.1 or newer** (the October 2026 security release;
+  1.24.0 accepted any Node.js 24).
+  *Who:* only MCP server users on an older Node.js 24.
+  *What to do:* update Node.js.
+
+### Changed
+
+- **Climate temperatures use Home Assistant 2026.11's `native_*` properties.** Removes the
+  three deprecation warnings logged at every start ("will stop working in Home Assistant
+  2027.11").
+- **A failed unload no longer leaves a dead connection behind.** If any part of an unload
+  fails, the connection and services keep running until the next Home Assistant restart
+  instead of being torn down halfway.
+- **Repair issues belong to their config entry**, so Home Assistant removes them together
+  with the entry.
+
 ### Fixed
 
 - **Camera snapshot after the session expired.** The snapshot request followed the
@@ -56,9 +97,20 @@ Issue and PR numbers refer to this repository unless stated otherwise.
 
 ### Project
 
+- **Marketplace.** README install steps now use the Home Assistant Marketplace (which
+  replaced HACS in 2026.11) and its `marketplace_repository` link; `manifest.json` declares
+  `categories` for Marketplace browsing; `hacs.json` minimum HA is 2026.11.0.
+- `DeviceInfo` is built with keyword arguments only (it became a dataclass in 2026.11; the
+  dict-style writes ran through a compatibility layer). `async_setup_entry`,
+  `async_unload_entry` and `async_migrate_entry` return `None`; unload failures raise
+  `ConfigEntryError`. Removed the never-reachable "configuration from a newer version"
+  repair issue: Home Assistant refuses such an entry itself before the integration runs.
 - CI hardening: workflows run with a read-only `GITHUB_TOKEN`, every action is pinned by
   commit SHA, ruff and pip-audit come from a pinned `requirements-lint.txt`, and Renovate
   waits 3 days after a release before proposing (or automerging) it.
+- Tests run on `pytest-homeassistant`, Home Assistant core's own test package, against
+  HA 2026.11; `pytest-homeassistant-custom-component` stopped at HA 2026.10 and is no
+  longer maintained. Tests no longer open network sockets or write into the repository.
 - `scripts/ha-logs.sh` no longer passes its arguments to the remote shell (the line count
   must be a number, the text filter is applied locally).
 - CI runs the MCP server lint, build, tests and `npm audit` on Node.js 24 and 26, and

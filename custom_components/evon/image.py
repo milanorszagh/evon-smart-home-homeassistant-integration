@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .base_entity import hub_link
 from .const import DOMAIN, ENTITY_TYPE_SECURITY_DOORS
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -98,15 +99,13 @@ class EvonDoorbellSnapshot(CoordinatorEntity[EvonDataUpdateCoordinator], ImageEn
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info - create a dedicated snapshots device."""
-        info = DeviceInfo(
+        return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_snapshots_{self._door_id}")},
             name=f"{self._door_name} Snapshots",
             manufacturer="Evon",
             model="Doorbell Snapshots",
+            **hub_link(self.coordinator),
         )
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        return info
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

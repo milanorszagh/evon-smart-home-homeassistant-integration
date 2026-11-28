@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import EvonApi, EvonApiError
-from .base_entity import EvonEntity
+from .base_entity import EvonEntity, hub_link
 from .const import DOMAIN, HOME_STATE_MAP, SEASON_MODE_COOLING, SEASON_MODE_HEATING
 from .coordinator import EvonDataUpdateCoordinator
 
@@ -147,15 +147,13 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for home state."""
-        info = DeviceInfo(
+        return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_home_state")},
             name="Evon Home State",
             manufacturer="Evon",
             model="Home State",
+            **hub_link(self.coordinator),
         )
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        return info
 
     @property
     def current_option(self) -> str | None:
@@ -179,24 +177,6 @@ class EvonHomeStateSelect(EvonEntity, SelectEntity):
         active_id = self.coordinator.get_active_home_state()
         attrs["evon_id"] = active_id
         return attrs
-
-    async def async_handle_select_option(self, option: str) -> None:
-        """Service entry point for `select.select_option`.
-
-        HA validates `option` against `options` in this method, BEFORE
-        `async_select_option` is ever called, so the pre-v1.23.0 compatibility
-        shim has to live here: raw Evon IDs ("HomeStateNight") are translated to
-        their option key first. Planned removal: v1.25.0.
-        """
-        if option not in self._option_to_id and option in self._id_to_option:
-            legacy_option, option = option, self._id_to_option[option]
-            _LOGGER.warning(
-                "Option %r for %s is deprecated; use %r instead and update your automations/dashboards",
-                legacy_option,
-                self.entity_id,
-                option,
-            )
-        await super().async_handle_select_option(option)
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option (option key such as "night")."""
@@ -288,15 +268,13 @@ class EvonSeasonModeSelect(EvonEntity, SelectEntity):
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info for season mode."""
-        info = DeviceInfo(
+        return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_season_mode")},
             name="Evon Season Mode",
             manufacturer="Evon",
             model="Season Mode",
+            **hub_link(self.coordinator),
         )
-        if (hub_device_id := self.coordinator.hub_device_id) is not None:
-            info["via_device_id"] = hub_device_id
-        return info
 
     @property
     def current_option(self) -> str | None:

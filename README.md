@@ -4,9 +4,9 @@
 
 [![GitHub Release](https://img.shields.io/github/release/milanorszagh/evon-smart-home-homeassistant-integration.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/releases)
 [![CI](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/milanorszagh/evon-smart-home-homeassistant-integration/actions/workflows/ci.yml)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![HA Version](https://img.shields.io/badge/Home_Assistant-2026.8+-blue.svg)](https://www.home-assistant.io/)
+[![HA Version](https://img.shields.io/badge/Home_Assistant-2026.11+-blue.svg)](https://www.home-assistant.io/)
 
 Home Assistant custom integration for [evon Smart Home](https://building.schrack.at/evon-smarthome-partner/) systems.
 
@@ -43,20 +43,21 @@ Home Assistant custom integration for [evon Smart Home](https://building.schrack
 
 ### Requirements
 
-- Home Assistant 2026.8.0 or newer
+- Home Assistant 2026.11.0 or newer (older Home Assistant versions are offered the last release that supports them)
 - The **Energy Today** / **Energy This Month** sensors and the energy statistics import need the `recorder` integration; the media browser for camera recordings needs the `media_source` integration. Both are part of `default_config`.
 
-### Via HACS (Recommended)
+### Via the Marketplace (Recommended)
 
-1. Make sure [HACS](https://hacs.xyz/) is installed
-2. Add this repository to HACS by clicking the button below:
+Since Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace** (**Settings** → **Marketplace**). If you installed this integration through HACS before, nothing to do: Home Assistant moved it to the Marketplace during the upgrade and it keeps receiving updates.
 
-   [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
+1. Open this repository in the Marketplace by clicking the button below:
 
-   Or manually: open **HACS** → **⋮** (top right) → **Custom repositories**, paste `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration`, choose the type **Integration** and click **Add**
+   [![Open your Home Assistant instance and open a repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=milanorszagh&repository=evon-smart-home-homeassistant-integration&category=integration)
 
-3. Search for **Evon Smart Home** in HACS, click **Download** and restart Home Assistant
-4. Add the integration:
+   Or manually: **Settings** → **Marketplace** → **Add from link**, paste `https://github.com/milanorszagh/evon-smart-home-homeassistant-integration` and choose the type **Integration**. Adding a repository by link asks you to connect GitHub once (device sign-in; it only reads public information).
+
+2. Accept the community-project notice and click **Install**. A first install needs no restart; updates do (the Marketplace offers a restart button)
+3. Add the integration (the Marketplace may open the setup directly):
 
    [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=evon)
 
@@ -280,7 +281,7 @@ These states trigger automations in the evon system and can be used in Home Assi
 
 The select entity's option values are `at_home`, `night`, `work` and `holiday` (the same names the `evon.set_home_state` action uses). The raw evon state ID is still available in the entity's `evon_id` attribute.
 
-> **Upgrading from 1.22 or earlier:** the options used to be the raw evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Those values are still accepted by the `select.select_option` action for now (with a warning in the log; planned removal in 1.25), but state conditions and dashboards that compare against the old values need to be updated.
+> **Upgrading from 1.22 or earlier:** the options used to be the raw evon IDs (`HomeStateAtHome`, `HomeStateNight`, ...). Since 1.25 those values are no longer accepted by the `select.select_option` action (1.23 and 1.24 still accepted them with a warning in the log), so update any automation, script or dashboard that still uses them — including state conditions that compare against the old values.
 
 ### Sensors
 
@@ -734,6 +735,7 @@ Every version is described in detail in [CHANGELOG.md](CHANGELOG.md). Highlights
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **1.25.0** | Unreleased | HA 2026.11 compatibility (no more climate deprecation warnings), Marketplace install, failed unloads keep the connection alive, camera snapshot after session expiry fixed, security hardening. **Breaking:** minimum HA 2026.11.0; Home State select no longer accepts the old Evon IDs (`HomeStateNight`, …); MCP server: `call_method` only for lights/blinds/climate/radiators (no `SetValue`), Node.js 24.22.1+ |
 | **1.24.0** | 2026-10-16 | Weather station via Home Connect (30-second updates), door opener buttons, live-feed age overlay, Talk button for SIP intercom audio, 2-minute safety-net poll (no more camera freezes), clean shutdown |
 | **1.23.0** | 2026-10-12 | HA 2026.10 compatibility, recordings in the media folder, hassfest in CI, MCP heartbeat, translated action dropdowns. **Breaking:** minimum HA 2026.8.0; Home State select options are now `at_home` / `night` / `work` / `holiday` |
 | **1.22.1** | 2026-08-24 | Quiet systems no longer disconnect every 3 minutes |

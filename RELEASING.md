@@ -86,13 +86,16 @@ git branch -D release/vX.Y.Z
 # Either cherry-pick or manually apply the changes
 ```
 
-## HACS Compatibility
+## Marketplace (HACS) Compatibility
 
-HACS automatically picks up releases based on:
+Since Home Assistant 2026.11, HACS is built into Home Assistant as the **Marketplace**. It reads the same
+catalog and the same `hacs.json` as HACS did, and picks up releases based on:
 - **GitHub releases** (not branches)
-- **Tags** matching the version in `manifest.json`
+- **Tags** matching the version in `manifest.json` — the Marketplace refuses to install a manifest without a `version`
 
-The `hacs.json` file in the repo root configures HACS behavior.
+`hacs.json` (repo root) sets the minimum Home Assistant version (`homeassistant`); users on an older HA are
+offered the last release that supports them. Raise it whenever a release needs a newer HA. Publisher docs:
+<https://contributors.home-assistant.io/marketplace/>.
 
 ## Version Numbering
 
@@ -131,4 +134,4 @@ Before releasing:
 After releasing:
 - [ ] GitHub release created with release notes
 - [ ] Release branch deleted (for hotfixes)
-- [ ] Verify release appears in HACS
+- [ ] Verify the release appears in the Marketplace (Settings → Marketplace → Evon Smart Home)

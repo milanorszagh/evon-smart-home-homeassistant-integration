@@ -270,7 +270,7 @@ class TestEvonCameraTurnOnOff:
 
 
 # =============================================================================
-# Integration tests (require pytest-homeassistant-custom-component)
+# Integration tests (require pytest-homeassistant)
 # =============================================================================
 
 

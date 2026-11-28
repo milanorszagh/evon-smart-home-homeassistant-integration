@@ -514,7 +514,7 @@ class TestWeatherEntitiesAddedLater:
 
     async def test_station_discovered_after_setup_gets_entities(self, hass, mock_evon_api_class):
         from homeassistant.helpers import entity_registry as er
-        from pytest_homeassistant_custom_component.common import MockConfigEntry
+        from pytest_homeassistant.common import MockConfigEntry
 
         from custom_components.evon.const import DOMAIN
         from tests.conftest import MOCK_INSTANCES, TEST_HOST, TEST_PASSWORD, TEST_USERNAME
@@ -526,7 +526,7 @@ class TestWeatherEntitiesAddedLater:
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
-            options={"scan_interval": 30, "sync_areas": False},
+            options={"scan_interval": 30, "sync_areas": False, "http_only": True},
             entry_id="weather_late_entry",
         )
         entry.add_to_hass(hass)
@@ -569,7 +569,7 @@ class TestWeatherPolling:
     station data instead of calling the proxy again."""
 
     async def _setup(self, hass, mock_evon_api_class, readings):
-        from pytest_homeassistant_custom_component.common import MockConfigEntry
+        from pytest_homeassistant.common import MockConfigEntry
 
         from custom_components.evon.const import DOMAIN
         from tests.conftest import MOCK_INSTANCES, TEST_HOST, TEST_PASSWORD, TEST_USERNAME
@@ -586,7 +586,7 @@ class TestWeatherPolling:
         entry = MockConfigEntry(
             domain=DOMAIN,
             data={"host": TEST_HOST, "username": TEST_USERNAME, "password": TEST_PASSWORD},
-            options={"scan_interval": 300, "sync_areas": False},
+            options={"scan_interval": 300, "sync_areas": False, "http_only": True},
             entry_id="weather_poll_entry",
         )
         entry.add_to_hass(hass)
@@ -602,7 +602,7 @@ class TestWeatherPolling:
         from datetime import timedelta
 
         from homeassistant.util import dt as dt_util
-        from pytest_homeassistant_custom_component.common import async_fire_time_changed
+        from pytest_homeassistant.common import async_fire_time_changed
 
         from custom_components.evon.const import WEATHER_POLL_INTERVAL
 
@@ -631,7 +631,7 @@ class TestWeatherPolling:
         from datetime import timedelta
 
         from homeassistant.util import dt as dt_util
-        from pytest_homeassistant_custom_component.common import async_fire_time_changed
+        from pytest_homeassistant.common import async_fire_time_changed
 
         from custom_components.evon.const import WEATHER_POLL_INTERVAL
 
